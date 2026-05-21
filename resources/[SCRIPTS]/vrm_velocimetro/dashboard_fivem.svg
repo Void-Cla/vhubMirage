@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500">
+<defs>
+  <radialGradient id="faceSpeed" cx="50%" cy="35%" r="65%">
+    <stop offset="0%"   stop-color="#2a2a2a"/>
+    <stop offset="55%"  stop-color="#0f0f0f"/>
+    <stop offset="100%" stop-color="#020202"/>
+  </radialGradient>
+  <radialGradient id="faceRpm" cx="50%" cy="35%" r="65%">
+    <stop offset="0%"   stop-color="#252525"/>
+    <stop offset="55%"  stop-color="#0d0d0d"/>
+    <stop offset="100%" stop-color="#020202"/>
+  </radialGradient>
+  <radialGradient id="faceFuel" cx="50%" cy="35%" r="65%">
+    <stop offset="0%"   stop-color="#202020"/>
+    <stop offset="100%" stop-color="#030303"/>
+  </radialGradient>
+  <linearGradient id="bezel" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#5a5a5a"/>
+    <stop offset="20%"  stop-color="#2a2a2a"/>
+    <stop offset="50%"  stop-color="#1a1a1a"/>
+    <stop offset="80%"  stop-color="#3a3a3a"/>
+    <stop offset="100%" stop-color="#0a0a0a"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.10"/>
+    <stop offset="35%"  stop-color="#ffffff" stop-opacity="0.02"/>
+    <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+
+  <!-- Clip RPM: hide whatever sits behind the Speedo circle -->
+  <clipPath id="clipRpm" clipPathUnits="userSpaceOnUse">
+    <path fill-rule="evenodd"
+      d="M -10000,-10000 H 10000 V 10000 H -10000 Z
+         M 650,255 m -220,0 a 220,220 0 1,0 440,0 a 220,220 0 1,0 -440,0 Z"/>
+  </clipPath>
+
+  <!-- Clip Fuel: hide whatever sits behind the RPM circle -->
+  <clipPath id="clipFuel" clipPathUnits="userSpaceOnUse">
+    <path fill-rule="evenodd"
+      d="M -10000,-10000 H 10000 V 10000 H -10000 Z
+         M 320,290 m -170,0 a 170,170 0 1,0 340,0 a 170,170 0 1,0 -340,0 Z"/>
+  </clipPath>
+</defs>
+  <!-- FUEL (clipped by RPM bezel) -->
+  <g clip-path="url(#clipFuel)">
+    <g transform="translate(96,390)">
+      <circle r="78" fill="url(#bezel)"/>
+      <circle r="73" fill="url(#faceFuel)" stroke="#000" stroke-width="1"/>
+      <line x1="-55.43" y1="32.00" x2="-43.30" y2="25.00" stroke="#ff4400" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-59.95" y1="22.41" x2="-52.45" y2="19.61" stroke="#ff4400" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-62.82" y1="12.21" x2="-54.97" y2="10.69" stroke="#ff4400" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-63.98" y1="1.68" x2="-55.98" y2="1.47" stroke="#ff4400" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-63.38" y1="-8.91" x2="-55.46" y2="-7.79" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-61.04" y1="-19.25" x2="-47.69" y2="-15.04" stroke="#bbbbbb" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-57.02" y1="-29.06" x2="-49.90" y2="-25.42" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-51.45" y1="-38.07" x2="-45.02" y2="-33.31" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-44.46" y1="-46.04" x2="-38.90" y2="-40.28" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-36.25" y1="-52.74" x2="-31.72" y2="-46.15" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-27.05" y1="-58.00" x2="-21.13" y2="-45.32" stroke="#bbbbbb" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-17.10" y1="-61.67" x2="-14.97" y2="-53.96" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="-6.69" y1="-63.65" x2="-5.85" y2="-55.69" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="3.91" y1="-63.88" x2="3.42" y2="-55.90" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="14.40" y1="-62.36" x2="12.60" y2="-54.56" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="24.49" y1="-59.13" x2="19.13" y2="-46.19" stroke="#bbbbbb" stroke-width="2" stroke-linecap="round"/>
+      <line x1="33.91" y1="-54.28" x2="29.68" y2="-47.49" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="42.41" y1="-47.93" x2="37.11" y2="-41.94" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="49.74" y1="-40.28" x2="43.52" y2="-35.24" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="55.70" y1="-31.52" x2="48.74" y2="-27.58" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="60.14" y1="-21.89" x2="46.98" y2="-17.10" stroke="#bbbbbb" stroke-width="2" stroke-linecap="round"/>
+      <text x="-32.91" y="19.00" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="12" fill="#ff4400" font-weight="900">E</text>
+      <text x="-16.06" y="-34.44" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="12" fill="#888888" font-weight="900">½</text>
+      <text x="35.71" y="-13.00" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="12" fill="#00cc44" font-weight="900">F</text>
+      <text x="0" y="46" text-anchor="middle" font-family="Arial Black,Arial" font-size="9" fill="#3a3a3a" letter-spacing="1.5">FUEL</text>
+      <circle r="9" fill="#0a0a0a" stroke="#444" stroke-width="1"/>
+      <circle r="3" fill="#1a1a1a"/>
+      <circle r="73" fill="url(#glass)" pointer-events="none"/>
+    </g>
+  </g>
+  <!-- RPM (clipped by Speedo bezel) -->
+  <g clip-path="url(#clipRpm)">
+    <g transform="translate(320,290)">
+      <circle r="170" fill="url(#bezel)"/>
+      <circle r="163" fill="url(#faceRpm)" stroke="#000" stroke-width="1"/>
+      <path d="M -32.926,-141.212 A 145,145 0 0,1 28.288,-142.214" fill="none" stroke="#cc6600" stroke-width="6" opacity="0.45"/>
+      <path d="M 28.288,-142.214 A 145,145 0 0,1 125.574,-72.500"   fill="none" stroke="#cc1a00" stroke-width="6" opacity="0.65"/>
+      <line x1="-109.60" y1="109.60" x2="-97.58" y2="97.58" stroke="#bbbbbb" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-130.27" y1="83.99" x2="-122.71" y2="79.12" stroke="#444444" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="-145.07" y1="54.60" x2="-129.16" y2="48.61" stroke="#bbbbbb" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-153.32" y1="22.74" x2="-144.42" y2="21.42" stroke="#444444" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="-154.67" y1="-10.14" x2="-137.70" y2="-9.03" stroke="#bbbbbb" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-149.04" y1="-42.56" x2="-140.39" y2="-40.09" stroke="#444444" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="-136.70" y1="-73.07" x2="-121.71" y2="-65.05" stroke="#bbbbbb" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-118.19" y1="-100.28" x2="-111.33" y2="-94.46" stroke="#444444" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="-94.36" y1="-122.97" x2="-84.01" y2="-109.48" stroke="#bbbbbb" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-66.27" y1="-140.12" x2="-62.42" y2="-131.98" stroke="#444444" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="-35.20" y1="-150.95" x2="-31.34" y2="-134.40" stroke="#ffaa00" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="-2.54" y1="-154.98" x2="-2.39" y2="-145.98" stroke="#ffaa00" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="30.24" y1="-152.02" x2="26.92" y2="-135.35" stroke="#ff3300" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="61.65" y1="-142.21" x2="58.07" y2="-133.95" stroke="#ff3300" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="90.28" y1="-125.99" x2="80.38" y2="-112.17" stroke="#ff3300" stroke-width="2.4" stroke-linecap="round"/>
+      <line x1="114.85" y1="-104.09" x2="108.18" y2="-98.05" stroke="#ff3300" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="134.23" y1="-77.50" x2="119.51" y2="-69.00" stroke="#ff3300" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="-83.44" y="83.44" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#bbbbbb">0</text>
+      <text x="-110.44" y="41.57" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#bbbbbb">1</text>
+      <text x="-117.75" y="-7.72" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#bbbbbb">2</text>
+      <text x="-104.07" y="-55.62" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#bbbbbb">3</text>
+      <text x="-71.83" y="-93.62" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#bbbbbb">4</text>
+      <text x="-26.79" y="-114.92" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#ffaa00">5</text>
+      <text x="23.02" y="-115.73" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#ffaa00">6</text>
+      <text x="68.73" y="-95.92" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#ff3300">7</text>
+      <text x="102.19" y="-59.00" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="14" fill="#ff3300">8</text>
+      <text x="0" y="-40" text-anchor="middle" font-family="Arial Black,Arial" font-size="12" fill="#4a4a4a" letter-spacing="4">RPM</text>
+      <text x="0" y="-24" text-anchor="middle" font-family="Arial" font-size="9" fill="#2e2e2e">&#xD7;1000</text>
+      <rect x="-22" y="38" width="44" height="34" rx="3" fill="#020202" stroke="#cc4400" stroke-width="1.2"/>
+      
+      <circle r="14" fill="#0a0a0a" stroke="#cc2200" stroke-width="2"/>
+      <circle r="6"  fill="#1a1a1a" stroke="#ff5500" stroke-width="1.2"/>
+      <circle r="163" fill="url(#glass)" pointer-events="none"/>
+    </g>
+  </g>
+  <!-- SPEEDOMETER (top layer, full circle) -->
+  <g transform="translate(650,255)">
+    <circle r="220" fill="url(#bezel)"/>
+    <circle r="213" fill="url(#faceSpeed)" stroke="#000" stroke-width="1"/>
+    <path d="M 177.385,-73.475 A 192,192 0 0,1 188.311,37.457" fill="none" stroke="#cc6600" stroke-width="8" opacity="0.4"/>
+    <path d="M 188.311,37.457 A 192,192 0 0,1 135.765,135.765"   fill="none" stroke="#cc1a00" stroke-width="8" opacity="0.5"/>
+    <line x1="-144.96" y1="144.96" x2="-128.69" y2="128.69" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="-160.99" y1="126.91" x2="-152.35" y2="120.10" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-174.79" y1="107.11" x2="-165.41" y2="101.36" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-186.17" y1="85.83" x2="-176.18" y2="81.22" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-194.97" y1="63.35" x2="-184.50" y2="59.95" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-201.06" y1="39.99" x2="-178.50" y2="35.51" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="-204.37" y1="16.08" x2="-193.40" y2="15.22" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-204.84" y1="-8.05" x2="-193.85" y2="-7.62" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-202.48" y1="-32.07" x2="-191.61" y2="-30.35" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-197.30" y1="-55.65" x2="-186.72" y2="-52.66" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-189.40" y1="-78.45" x2="-168.15" y2="-69.65" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="-178.86" y1="-100.17" x2="-169.26" y2="-94.79" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-165.85" y1="-120.50" x2="-156.95" y2="-114.03" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-150.54" y1="-139.15" x2="-142.46" y2="-131.69" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-133.14" y1="-155.88" x2="-125.99" y2="-147.52" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-113.89" y1="-170.45" x2="-101.11" y2="-151.33" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="-93.07" y1="-182.66" x2="-88.07" y2="-172.86" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-70.95" y1="-192.33" x2="-67.15" y2="-182.01" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-47.86" y1="-199.34" x2="-45.29" y2="-188.64" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="-24.10" y1="-203.58" x2="-22.80" y2="-192.66" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="0.00" y1="-205.00" x2="0.00" y2="-182.00" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="24.10" y1="-203.58" x2="22.80" y2="-192.66" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="47.86" y1="-199.34" x2="45.29" y2="-188.64" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="70.95" y1="-192.33" x2="67.15" y2="-182.01" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="93.07" y1="-182.66" x2="88.07" y2="-172.86" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="113.89" y1="-170.45" x2="101.11" y2="-151.33" stroke="#cccccc" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="133.14" y1="-155.88" x2="125.99" y2="-147.52" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="150.54" y1="-139.15" x2="142.46" y2="-131.69" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="165.85" y1="-120.50" x2="156.95" y2="-114.03" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="178.86" y1="-100.17" x2="169.26" y2="-94.79" stroke="#444444" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="189.40" y1="-78.45" x2="168.15" y2="-69.65" stroke="#ffaa00" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="197.30" y1="-55.65" x2="186.72" y2="-52.66" stroke="#ffaa00" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="202.48" y1="-32.07" x2="191.61" y2="-30.35" stroke="#ffaa00" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="204.84" y1="-8.05" x2="193.85" y2="-7.62" stroke="#ffaa00" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="204.37" y1="16.08" x2="193.40" y2="15.22" stroke="#ffaa00" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="201.06" y1="39.99" x2="178.50" y2="35.51" stroke="#ff3300" stroke-width="2.6" stroke-linecap="round"/>
+      <line x1="194.97" y1="63.35" x2="184.50" y2="59.95" stroke="#ff3300" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="186.17" y1="85.83" x2="176.18" y2="81.22" stroke="#ff3300" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="174.79" y1="107.11" x2="165.41" y2="101.36" stroke="#ff3300" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="160.99" y1="126.91" x2="152.35" y2="120.10" stroke="#ff3300" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="144.96" y1="144.96" x2="128.69" y2="128.69" stroke="#ff3300" stroke-width="2.6" stroke-linecap="round"/>
+    <text x="-111.72" y="111.72" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">0</text>
+      <text x="-154.96" y="30.82" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">50</text>
+      <text x="-145.97" y="-60.46" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">100</text>
+      <text x="-87.78" y="-131.37" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">150</text>
+      <text x="0.00" y="-158.00" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">200</text>
+      <text x="87.78" y="-131.37" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#bbbbbb">250</text>
+      <text x="145.97" y="-60.46" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#ffaa00">300</text>
+      <text x="154.96" y="30.82" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#ff3300">350</text>
+      <text x="111.72" y="111.72" text-anchor="middle" dominant-baseline="middle" font-family="Arial Black,Arial" font-size="16" fill="#ff3300">400</text>
+    <text x="0" y="-58" text-anchor="middle" font-family="Arial Black,Arial" font-size="14" fill="#3a3a3a" letter-spacing="6">KM/H</text>
+    <!-- Digital speed (#speed updated by script) -->
+    <rect x="-62" y="36" width="124" height="54" rx="5" fill="#040000" stroke="#cc4400" stroke-width="1.5"/>
+    
+    <!-- Odometer (#odo-d0..d5 updated by script) -->
+    <g transform="translate(0,110)">
+      <rect x="-72" y="-13" width="144" height="26" rx="3" fill="#020202" stroke="#2a2a2a" stroke-width="1"/>
+      <text x="-64" y="0" dominant-baseline="middle" font-family="Courier New,monospace" font-size="9" fill="#555">ODO</text>
+      <rect x="-42" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+        <rect x="-25" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+        <rect x="-8" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+        <rect x="9" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+        <rect x="26" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+        <rect x="43" y="-10" width="14" height="20" rx="1.5" fill="#0a0a0a" stroke="#2a2a2a" stroke-width="0.8"/>
+        
+      <text x="68" y="0" text-anchor="end" dominant-baseline="middle" font-family="Courier New,monospace" font-size="8" fill="#555">km</text>
+    </g>
+    <!-- Hub -->
+    <circle r="22" fill="#0a0a0a" stroke="#cc2200" stroke-width="2.4"/>
+    <circle r="12" fill="#1a1a1a" stroke="#ff5500" stroke-width="1.8"/>
+    <circle r="5"  fill="#ff3300"/>
+    <circle r="213" fill="url(#glass)" pointer-events="none"/>
+  </g>
+</svg>

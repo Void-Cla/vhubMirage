@@ -1,0 +1,21 @@
+# FXServer
+build/
+cache/
+
+# Exemplos e bases de referência
+exemplos de base/
+
+# Logs
+*.log
+log.txt
+
+# Histórico de CLI
+.replxx_history
+
+# Node (recursos com webpack/vite)
+node_modules/
+dist/
+
+# Variáveis de ambiente
+.env
+*.env

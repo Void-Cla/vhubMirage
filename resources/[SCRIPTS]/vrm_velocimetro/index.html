@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velocimetro Void-Hub</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="velocimetro-oculto">
+    <!-- Container raiz: o CSS fixa o velocimetro no canto inferior direito. -->
+    <main id="velocimetro" class="velocimetro-container">
+        <div class="speedometerShell">
+            <!-- Fundo calibravel: troque o src ao substituir images/velo.png. -->
+            <img src="dashboard_fivem.svg" class="velo-bg" alt="velocimetro">
+            <!-- Ponteiros calibraveis: os ids sao usados pelo JS para rotacao e pivo. -->
+            <div class="needle speed-needle" id="speed-needle" aria-hidden="true"></div>
+            <div class="needle rpm-needle" id="rpm-needle" aria-hidden="true"></div>
+
+            <!-- Overlay absoluto: leitura digital deve ser ajustada no CSS. -->
+            <div class="speedometerOverlay">
+                <div class="gearReadout" aria-label="Marcha atual">
+                    <strong id="vehicle-gear">N</strong>
+                </div>
+
+                <div class="speedReadout">
+                    <h1 class="velo">
+                        <span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span>
+                    </h1>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Render NUI: recebe velocimetro:update e aplica texto/ponteiros. -->
+    <script src="script.js"></script>
+</body>
+</html>
