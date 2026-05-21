@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub Garage</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- backdrop  vhub-bg -->
+  <div id="vhub-bg" class="hidden"></div>
+
+  <!-- Toast (notifica  o flutuante) -->
+  <div id="vhub-toast" class="vhub-toast hidden"></div>
+
+  <!-- VIEW: GARAGE -->
+  <section id="view-garage" class="vhub-view hidden">
+    <header class="vhub-header">
+      <div class="vhub-logo">
+        <i class="fa-solid fa-warehouse"></i>
+        <span>vHub <strong>Garagem</strong></span>
+      </div>
+      <div class="vhub-actions">
+        <button class="btn ghost" id="g-store"><i class="fa-solid fa-square-parking"></i> Estacionar</button>
+        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i> Sair</button>
+      </div>
+    </header>
+    <div class="vhub-body">
+      <aside class="vhub-side">
+        <div class="vhub-cat-title">Categorias</div>
+        <button class="cat active" data-cat="all"><i class="fa-solid fa-list"></i> Todos</button>
+        <button class="cat" data-cat="car"><i class="fa-solid fa-car"></i> Carros</button>
+        <button class="cat" data-cat="bike"><i class="fa-solid fa-motorcycle"></i> Motos</button>
+        <button class="cat" data-cat="plane"><i class="fa-solid fa-plane"></i> Avi es</button>
+        <button class="cat" data-cat="heli"><i class="fa-solid fa-helicopter"></i> Helic pteros</button>
+        <button class="cat" data-cat="boat"><i class="fa-solid fa-ship"></i> Barcos</button>
+        <button class="cat" data-cat="truck"><i class="fa-solid fa-truck"></i> Vans/Caminh es</button>
+      </aside>
+      <main class="vhub-list" id="g-list"></main>
+      <section class="vhub-detail" id="g-detail">
+        <div class="empty"><i class="fa-solid fa-car"></i><br />Selecione um ve culo</div>
+      </section>
+    </div>
+  </section>
+
+  <!-- VIEW: DEALERSHIP -->
+  <section id="view-dealer" class="vhub-view hidden">
+    <header class="vhub-header">
+      <div class="vhub-logo">
+        <i class="fa-solid fa-store"></i>
+        <span>vHub <strong>Concession ria</strong></span>
+        <small id="d-conc-name"></small>
+      </div>
+      <div class="vhub-actions">
+        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i> Sair</button>
+      </div>
+    </header>
+    <div class="vhub-body">
+      <aside class="vhub-side">
+        <div class="vhub-cat-title">Tipo</div>
+        <button class="cat active" data-cat="all"><i class="fa-solid fa-list"></i> Todos</button>
+        <button class="cat" data-cat="car"><i class="fa-solid fa-car"></i> Carros</button>
+        <button class="cat" data-cat="bike"><i class="fa-solid fa-motorcycle"></i> Motos</button>
+        <button class="cat" data-cat="plane"><i class="fa-solid fa-plane"></i> Avi es</button>
+        <button class="cat" data-cat="heli"><i class="fa-solid fa-helicopter"></i> Helic pteros</button>
+        <button class="cat" data-cat="boat"><i class="fa-solid fa-ship"></i> Barcos</button>
+        <button class="cat" data-cat="truck"><i class="fa-solid fa-truck"></i> Vans/Caminh es</button>
+      </aside>
+      <main class="vhub-list" id="d-list"></main>
+      <section class="vhub-detail" id="d-detail">
+        <div class="empty"><i class="fa-solid fa-tag"></i><br />Selecione um modelo</div>
+      </section>
+    </div>
+  </section>
+
+  <!-- VIEW: AUCTION -->
+  <section id="view-auction" class="vhub-view hidden">
+    <header class="vhub-header">
+      <div class="vhub-logo">
+        <i class="fa-solid fa-gavel"></i>
+        <span>vHub <strong>Leil es</strong></span>
+      </div>
+      <div class="vhub-actions">
+        <button class="btn ghost" id="a-new"><i class="fa-solid fa-plus"></i> Novo Leil o</button>
+        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i> Sair</button>
+      </div>
+    </header>
+    <div class="vhub-body single">
+      <main class="vhub-list wide" id="a-list"></main>
+    </div>
+  </section>
+
+  <!-- VIEW: IMPOUND -->
+  <section id="view-impound" class="vhub-view hidden">
+    <header class="vhub-header">
+      <div class="vhub-logo">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>vHub <strong>P tio</strong></span>
+      </div>
+      <div class="vhub-actions">
+        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i> Sair</button>
+      </div>
+    </header>
+    <div class="vhub-body single">
+      <main class="vhub-list wide" id="p-list"></main>
+    </div>
+  </section>
+
+  <!-- Modal universal (entrada de texto / confirma  o) -->
+  <div id="modal-bg" class="modal-bg hidden">
+    <div class="modal">
+      <h3 id="modal-title">Confirmar</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn primary" id="modal-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script src="js/garage.js"></script>
+  <script src="js/dealership.js"></script>
+  <script src="js/auction.js"></script>
+  <script src="js/impound.js"></script>
+</body>
+</html>

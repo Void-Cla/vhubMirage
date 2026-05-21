@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub Admin</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="bg" class="hidden"></div>
+
+  <!-- Toast/announce -->
+  <div id="toast" class="toast hidden"></div>
+  <div id="announce" class="announce hidden"><div></div></div>
+
+  <!-- Main panel -->
+  <section id="panel" class="panel hidden">
+    <header class="hdr">
+      <div class="brand">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>vHub <strong>Admin</strong></span>
+        <small id="me-info"></small>
+      </div>
+      <div class="hdr-actions">
+        <div class="flags">
+          <span class="flag" id="f-noclip" data-act="god"><i class="fa-solid fa-helmet-safety"></i></span>
+          <span class="flag" id="f-god"    data-act="god"><i class="fa-solid fa-shield"></i></span>
+          <span class="flag" id="f-invis"  data-act="invis"><i class="fa-solid fa-eye-slash"></i></span>
+        </div>
+        <button class="btn ghost" id="btn-refresh"><i class="fa-solid fa-rotate"></i></button>
+        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-view="dashboard"><i class="fa-solid fa-gauge-high"></i> Painel</button>
+      <button class="tab" data-view="players"><i class="fa-solid fa-users"></i> Jogadores</button>
+      <button class="tab" data-view="moderation"><i class="fa-solid fa-gavel"></i> Modera  o</button>
+      <button class="tab" data-view="teleport"><i class="fa-solid fa-location-crosshairs"></i> Teleporte</button>
+      <button class="tab" data-view="vehicle"><i class="fa-solid fa-car-side"></i> Ve culos</button>
+      <button class="tab" data-view="world"><i class="fa-solid fa-cloud-sun"></i> Mundo</button>
+      <button class="tab" data-view="economy"><i class="fa-solid fa-coins"></i> Economia</button>
+      <button class="tab" data-view="reports"><i class="fa-solid fa-flag"></i> Den ncias <span id="r-badge" class="badge hidden">0</span></button>
+      <button class="tab" data-view="logs"><i class="fa-solid fa-clipboard-list"></i> Hist rico</button>
+    </nav>
+
+    <main class="body">
+      <!-- Dashboard -->
+      <section class="view" id="view-dashboard">
+        <div class="cards">
+          <div class="card stat">
+            <i class="fa-solid fa-users"></i>
+            <div><div class="k">Online</div><div class="v" id="s-online">0</div></div>
+          </div>
+          <div class="card stat">
+            <i class="fa-solid fa-gavel"></i>
+            <div><div class="k">Den ncias abertas</div><div class="v" id="s-reports">0</div></div>
+          </div>
+          <div class="card stat">
+            <i class="fa-solid fa-clock"></i>
+            <div><div class="k">Uptime</div><div class="v" id="s-uptime"> </div></div>
+          </div>
+        </div>
+        <h3>A  es r pidas</h3>
+        <div class="quick">
+          <button class="btn" data-quick="god"><i class="fa-solid fa-shield"></i> Invenc vel</button>
+          <button class="btn" data-quick="invis"><i class="fa-solid fa-eye-slash"></i> Invis vel</button>
+          <button class="btn" data-quick="tpgo"><i class="fa-solid fa-location-arrow"></i> Ir ao Marcador</button>
+          <button class="btn" data-quick="tplast"><i class="fa-solid fa-rotate-left"></i> Voltar</button>
+          <button class="btn" data-quick="healall"><i class="fa-solid fa-heart-pulse"></i> Curar Todos</button>
+          <button class="btn warn" data-quick="announce"><i class="fa-solid fa-bullhorn"></i> Anunciar</button>
+        </div>
+        <h3>Equipe online</h3>
+        <div id="staff-list" class="list-flat"></div>
+      </section>
+
+      <!-- Players -->
+      <section class="view hidden" id="view-players">
+        <div class="search-row">
+          <input id="p-search" placeholder="Buscar nome / id / uid">
+          <button class="btn ghost" id="p-refresh"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div class="split">
+          <div id="players-list" class="list-cards"></div>
+          <div id="player-detail" class="detail empty">
+            <div class="empty-msg"><i class="fa-solid fa-id-card"></i><br />Selecione um jogador</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Moderation -->
+      <section class="view hidden" id="view-moderation">
+        <h3>A  es de modera  o</h3>
+        <div class="action-grid" data-cat="moderation"></div>
+      </section>
+
+      <!-- Teleport -->
+      <section class="view hidden" id="view-teleport">
+        <h3>Teleporte</h3>
+        <div class="action-grid" data-cat="teleport"></div>
+      </section>
+
+      <!-- Vehicle -->
+      <section class="view hidden" id="view-vehicle">
+        <h3>Ve culo</h3>
+        <div class="action-grid" data-cat="vehicle"></div>
+      </section>
+
+      <!-- World -->
+      <section class="view hidden" id="view-world">
+        <h3>Mundo</h3>
+        <div class="action-grid" data-cat="world"></div>
+      </section>
+
+      <!-- Economy -->
+      <section class="view hidden" id="view-economy">
+        <h3>Economia / Invent rio / Grupos</h3>
+        <div class="action-grid" data-cat="economy"></div>
+        <div class="action-grid" data-cat="inventory"></div>
+        <div class="action-grid" data-cat="groups"></div>
+      </section>
+
+      <!-- Reports / Den ncias -->
+      <section class="view hidden" id="view-reports">
+        <div class="search-row">
+          <h3 style="margin:0">Den ncias</h3>
+          <button class="btn ghost" id="r-refresh"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div id="reports-list" class="list-flat"></div>
+      </section>
+
+      <!-- Logs / Hist rico -->
+      <section class="view hidden" id="view-logs">
+        <div class="search-row">
+          <input id="l-search" placeholder="Filtrar (ex: banir, expulsar, prender)">
+          <button class="btn ghost" id="l-refresh"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div id="logs-list" class="list-flat"></div>
+      </section>
+    </main>
+  </section>
+
+  <!-- Modal universal -->
+  <div id="modal-bg" class="modal-bg hidden">
+    <div class="modal">
+      <h3 id="modal-title">Confirmar</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modal-cancel">Cancelar</button>
+        <button class="btn primary" id="modal-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spec HUD -->
+  <div id="spec-hud" class="spec-hud hidden">
+    <i class="fa-solid fa-video"></i> Espectando ID <span id="spec-id"></span>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script src="js/players.js"></script>
+  <script src="js/actions.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/logs.js"></script>
+</body>
+</html>
