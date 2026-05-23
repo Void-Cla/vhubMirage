@@ -81,6 +81,7 @@ VHubMoneyCfg = {
     ['vhub']        = true,
     ['vhub_admin']  = true,
     ['vhub_garage'] = true,
+    ['vhub_racha']  = true,
   },
 
   -- ─── Comandos ───────────────────────────────────────────────────────────

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mirage Racha</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="vhub-bg" class="hidden"></div>
+  <canvas id="vhub-sand"></canvas>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <section id="panel" class="panel hidden">
+    <header class="topbar">
+      <div class="brand">
+        <img src="assets/logo.png" alt="vHub" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-flag-checkered'}))">
+        <div>
+          <strong id="brand-name">Mirage Racha</strong>
+          <span id="brand-tag">Liga clandestina</span>
+        </div>
+      </div>
+      <div class="profile">
+        <input id="nickname" maxlength="24" spellcheck="false" />
+        <button class="icon-btn" id="save-nick" title="Salvar apelido"><i class="fa-solid fa-floppy-disk"></i></button>
+        <button class="icon-btn danger" data-close title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="tracks" id="tracks"></aside>
+
+      <section class="race-main">
+        <div class="race-title">
+          <div>
+            <h1 id="track-title">Pista</h1>
+            <p id="track-sub">Distrito</p>
+          </div>
+          <button class="btn ghost" id="route"><i class="fa-solid fa-location-arrow"></i> Rota</button>
+        </div>
+
+        <div class="metrics" id="metrics"></div>
+
+        <section class="lobby-band" id="lobby"></section>
+
+        <section class="create-band">
+          <label>Entrada
+            <input id="entry-fee" type="number" min="0" step="100" />
+          </label>
+          <label>Voltas
+            <input id="laps" type="number" min="1" max="5" step="1" />
+          </label>
+          <label class="check">
+            <input id="ranked" type="checkbox" checked />
+            <span>Rankeada</span>
+          </label>
+          <button class="btn primary" id="create"><i class="fa-solid fa-plus"></i> Criar</button>
+        </section>
+      </section>
+
+      <aside class="boards">
+        <div class="tabs">
+          <button class="tab active" data-tab="track">Pista</button>
+          <button class="tab" data-tab="general">Geral</button>
+          <button class="tab" data-tab="history">Historico</button>
+        </div>
+        <section id="board"></section>
+      </aside>
+    </main>
+  </section>
+
+  <section id="race-hud" class="race-hud hidden">
+    <div class="hud-left">
+      <strong id="hud-pos">--</strong>
+      <span id="hud-total">/--</span>
+    </div>
+    <div class="hud-center">
+      <strong id="hud-time">00:00.000</strong>
+      <span id="hud-track">Racha</span>
+    </div>
+    <div class="hud-right">
+      <strong id="hud-cp">0/0</strong>
+      <span id="hud-lap">Volta 1</span>
+    </div>
+  </section>
+
+  <section id="countdown" class="countdown hidden">
+    <span id="count-num">3</span>
+    <strong id="count-track">Racha</strong>
+  </section>
+
+  <section id="finish" class="finish hidden">
+    <strong id="finish-pos">--</strong>
+    <span id="finish-time">00:00.000</span>
+    <small id="finish-pay">R$ 0</small>
+  </section>
+
+  <script src="js/app.js"></script>
+  <script src="js/sand.js"></script>
+</body>
+</html>
