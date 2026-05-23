@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleeca Camell</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="vhub-bg" class="hidden"></div>
+  <canvas id="vhub-sand" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+
+  <section id="panel" class="vh-panel hidden">
+    <!-- Cabeçalho -->
+    <header class="vh-header">
+      <div class="vh-brand">
+        <img src="assets/logo.png" alt="Fleeca Camell"
+             onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-building-columns'}))">
+        <div class="vh-brand-block">
+          <span class="vh-brand-txt">Fleeca <strong>Camell</strong></span>
+          <span class="vh-brand-tag" id="brand-tag">Banco Digital</span>
+        </div>
+        <small id="ctx-info">— Agência Vespucci</small>
+      </div>
+      <div class="vh-header-actions">
+        <span class="vh-pill" id="hdr-mode" title="Modo atual">
+          <i class="fa-solid fa-circle-dot"></i>
+          <span id="hdr-mode-txt">ATM</span>
+        </span>
+        <button class="vh-btn ghost" data-action="close" title="Fechar (ESC)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Resumo de saldo (sempre visível) -->
+    <section class="vh-balance">
+      <div class="vh-balance-card">
+        <span class="vh-balance-label"><i class="fa-solid fa-wallet"></i> Carteira</span>
+        <span class="vh-balance-value" id="bal-wallet">R$ 0</span>
+      </div>
+      <div class="vh-balance-card primary">
+        <span class="vh-balance-label"><i class="fa-solid fa-vault"></i> Conta Camell</span>
+        <span class="vh-balance-value" id="bal-bank">R$ 0</span>
+      </div>
+      <div class="vh-balance-card subtle">
+        <span class="vh-balance-label"><i class="fa-solid fa-coins"></i> Total</span>
+        <span class="vh-balance-value" id="bal-total">R$ 0</span>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="vh-tabs">
+      <button class="vh-tab active" data-tab="ops">
+        <i class="fa-solid fa-right-left"></i> Operações
+      </button>
+      <button class="vh-tab" data-tab="transfer">
+        <i class="fa-solid fa-paper-plane"></i> Transferir
+      </button>
+      <button class="vh-tab" data-tab="history">
+        <i class="fa-solid fa-clock-rotate-left"></i> Extrato
+      </button>
+    </nav>
+
+    <!-- Body -->
+    <main class="vh-body">
+
+      <!-- Aba Operações -->
+      <section class="vh-tabpanel active" data-tabpanel="ops">
+        <div class="vh-ops">
+          <!-- Depositar -->
+          <div class="vh-card vh-op">
+            <div class="vh-op-head">
+              <i class="fa-solid fa-arrow-down-to-bracket"></i>
+              <strong>Depositar</strong>
+              <small>Carteira → Conta Camell</small>
+            </div>
+            <div class="vh-op-input">
+              <span class="vh-prefix">R$</span>
+              <input id="op-deposit-amount" class="vh-input" type="number"
+                     placeholder="0" min="1" />
+            </div>
+            <div class="vh-op-presets" data-target="op-deposit-amount">
+              <button class="vh-chip" data-val="100">100</button>
+              <button class="vh-chip" data-val="500">500</button>
+              <button class="vh-chip" data-val="1000">1.000</button>
+              <button class="vh-chip" data-val="5000">5.000</button>
+              <button class="vh-chip" data-val="all">Tudo</button>
+            </div>
+            <div class="vh-op-foot">
+              <span class="vh-op-hint" id="op-deposit-hint"></span>
+              <button class="vh-btn primary" data-action="deposit">
+                <i class="fa-solid fa-check"></i> Confirmar
+              </button>
+            </div>
+          </div>
+
+          <!-- Sacar -->
+          <div class="vh-card vh-op">
+            <div class="vh-op-head">
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              <strong>Sacar</strong>
+              <small>Conta Camell → Carteira</small>
+            </div>
+            <div class="vh-op-input">
+              <span class="vh-prefix">R$</span>
+              <input id="op-withdraw-amount" class="vh-input" type="number"
+                     placeholder="0" min="1" />
+            </div>
+            <div class="vh-op-presets" data-target="op-withdraw-amount">
+              <button class="vh-chip" data-val="100">100</button>
+              <button class="vh-chip" data-val="500">500</button>
+              <button class="vh-chip" data-val="1000">1.000</button>
+              <button class="vh-chip" data-val="5000">5.000</button>
+              <button class="vh-chip" data-val="all">Tudo</button>
+            </div>
+            <div class="vh-op-foot">
+              <span class="vh-op-hint" id="op-withdraw-hint"></span>
+              <button class="vh-btn primary" data-action="withdraw">
+                <i class="fa-solid fa-check"></i> Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="vh-card vh-info" id="ops-info">
+          <i class="fa-solid fa-circle-info"></i>
+          <span id="ops-info-txt">
+            <strong>ATM:</strong> limites por operação aplicados.
+          </span>
+        </div>
+      </section>
+
+      <!-- Aba Transferir -->
+      <section class="vh-tabpanel" data-tabpanel="transfer">
+        <div class="vh-card vh-transfer">
+          <div class="vh-transfer-head">
+            <i class="fa-solid fa-paper-plane"></i>
+            <strong>Transferência Camell</strong>
+            <small>Conta Camell → Conta Camell</small>
+          </div>
+
+          <div class="vh-transfer-row">
+            <label class="vh-label">Destinatário</label>
+            <input id="tr-target" class="vh-input" type="text"
+                   placeholder="char_id, registro civil ou telefone" />
+            <span class="vh-help">Use o número do registro civil (chave Camell) ou o telefone do destinatário.</span>
+          </div>
+
+          <div class="vh-transfer-row">
+            <label class="vh-label">Valor</label>
+            <div class="vh-op-input">
+              <span class="vh-prefix">R$</span>
+              <input id="tr-amount" class="vh-input" type="number"
+                     placeholder="0" min="1" />
+            </div>
+            <span class="vh-help" id="tr-fee-hint">Taxa será calculada conforme tabela.</span>
+          </div>
+
+          <div class="vh-transfer-row">
+            <label class="vh-label">Motivo (opcional)</label>
+            <input id="tr-reason" class="vh-input" type="text" maxlength="120"
+                   placeholder="Ex: aluguel da semana" />
+          </div>
+
+          <div class="vh-transfer-foot">
+            <span class="vh-tip"><i class="fa-solid fa-lock"></i> Operação somente em agências.</span>
+            <button class="vh-btn primary" data-action="transfer">
+              <i class="fa-solid fa-paper-plane"></i> Enviar transferência
+            </button>
+          </div>
+        </div>
+
+        <div class="vh-card vh-info">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>
+            <strong>Segurança:</strong> toda transferência é validada pelo servidor.
+            Em caso de erro, o valor é estornado automaticamente.
+          </span>
+        </div>
+      </section>
+
+      <!-- Aba Extrato -->
+      <section class="vh-tabpanel" data-tabpanel="history">
+        <div class="vh-toolbar">
+          <span class="vh-toolbar-info"><span id="tx-count">0</span> movimentações</span>
+        </div>
+        <div class="vh-table-wrap">
+          <table class="vh-table">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Origem → Destino</th>
+                <th>Saldo após</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="tx-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Toast -->
+    <div id="toast-stack" class="vh-toast-stack"></div>
+  </section>
+
+  <script src="js/app.js"></script>
+  <script src="js/sand.js"></script>
+</body>
+</html>

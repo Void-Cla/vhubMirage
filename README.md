@@ -1,555 +1,325 @@
-# Mirage Framework — Arquitetura Base do Projeto
+# vHub Mirage — Framework FiveM GTARP
 
-## Visão Geral
+Framework server-authoritative para FiveM escrito em Lua 5.4.
+**Core FROZEN v1.0 — selado em 2026-05-22. Próxima revisão: 2027-05-22.**
 
-O Mirage é uma base proprietária para servidores FiveM/GTA RP construída sobre o ecossistema vRP, porém completamente reestruturada para remover limitações históricas de arquitetura, sincronização, persistência e escalabilidade encontradas nas versões tradicionais do framework.
-
-O projeto abandona definitivamente o modelo legado baseado em Proxy/Tunnel como núcleo operacional e substitui essa abordagem por uma arquitetura orientada a kernel modular, baseada em eventos nativos do FiveM, controle de ownership via natives oficiais e gerenciamento de estado centralizado em VRAM.
-
-A proposta do Mirage não é ser apenas uma “base editada de vRP”, mas sim um framework moderno de alta performance, preparado para ambientes de produção de larga escala, com foco extremo em:
-
-* Performance real de runtime.
-* Escalabilidade horizontal de módulos.
-* Baixo consumo de resmon.
-* Persistência segura.
-* Segurança de eventos.
-* Redução de tráfego de rede.
-* Modularidade profissional.
-* Compatibilidade gradual com legado vRP.
-* Observabilidade e rastreabilidade.
-* Estrutura limpa para equipes grandes.
-
-O objetivo técnico final é manter o servidor operando abaixo de 0.2ms de resmon médio nos principais recursos core, mesmo em cenários de alta densidade de entidades, veículos e eventos concorrentes.
+> resmon medido: **0.02ms** (alvo < 0.05ms idle, < 0.20ms sob carga).
 
 ---
 
-# Filosofia Arquitetural
+## O que é
 
-## Kernel-Centric Architecture
+vHub Mirage é um framework FiveM GTARP completo, construído do zero, sem dependência de legado vRP.
+O objetivo é entregar uma base estável, previsível e extensível para servidores de médio/grande porte.
 
-O Mirage utiliza uma arquitetura baseada em Kernel.
+Decisões arquiteturais centrais:
 
-O kernel atua como camada central responsável por:
-
-* Registro de módulos.
-* Controle de eventos.
-* Rate limiting.
-* Segurança de rede.
-* Gerenciamento de permissões.
-* Orquestração de persistência.
-* APIs públicas.
-* Ciclo de vida dos recursos.
-* Controle transacional.
-* Observabilidade.
-
-Cada módulo possui responsabilidade isolada e comunicação desacoplada.
-
-Nenhum módulo acessa diretamente estruturas internas de outro módulo.
-Toda comunicação ocorre através de interfaces públicas registradas no kernel.
-
-Isso elimina:
-
-* Acoplamento circular.
-* Dependências implícitas.
-* Side effects silenciosos.
-* Race conditions comuns do vRP.
-* Dificuldade de manutenção.
+- **Servidor é a única fonte de verdade** — cliente trata UI, física e estado efêmero
+- **VRAM-first** — toda leitura vai à memória primeiro; SQL é backup, não runtime
+- **Batch SQL atômico** — writes agrupados em transações de até 800 ops a cada 3s
+- **Compat: none** — shim vRP (`_G.vRP`, `_G.Proxy`, `_G.Tunnel`) removido definitivamente em Frozen v1.0
 
 ---
 
-# Estrutura Modular
+## Estrutura do repositório
 
-## Separação Estrita por Responsabilidade
-
-O Mirage segue rigorosamente os princípios:
-
-* SOLID
-* DRY
-* KISS
-* SRP
-* Fail Fast
-* Defensive Programming
-
-Cada arquivo possui uma única responsabilidade.
-
-Exemplo estrutural:
-
-```txt
-resources/
- └── [CORE]/
-      └── mirage/
-           ├── client/
-           │    ├── core.lua
-           │    ├── player.lua
-           │    ├── vehicle.lua
-           │    ├── inventory.lua
-           │    └── modules/
-           │
-           ├── server/
-           │    ├── kernel.lua
-           │    ├── state.lua
-           │    ├── auth.lua
-           │    ├── vehicle.lua
-           │    ├── inventory.lua
-           │    ├── security.lua
-           │    ├── persistence.lua
-           │    ├── economy.lua
-           │    ├── queue.lua
-           │    └── modules/
-           │
-           ├── shared/
-           │    ├── config.lua
-           │    ├── logger.lua
-           │    ├── utils.lua
-           │    ├── enums.lua
-           │    └── events.lua
-           │
-           ├── .claude/
-           │    ├── agents/
-           │    ├── instructions/
-           │    ├── patterns/
-           │    └── architecture/
-           │
-           └── metas/
-                ├── roadmap.md
-                ├── implementacao.md
-                ├── auditoria.md
-                └── plan.md
+```
+vhubMirage/
+├── config/
+│   └── resources.cfg          # Ordem de ensure obrigatória
+├── resources/
+│   ├── [CORE]/
+│   │   ├── vhub/              # Core principal (FROZEN v1.0)
+│   │   ├── oxmysql/           # Driver MySQL upstream (não alterar)
+│   │   └── vhub_oxmysql/      # Adaptador vHub ↔ oxmysql
+│   ├── [SCRIPTS]/
+│   │   ├── vhub_groups/       # Permissões e grupos
+│   │   ├── vhub_identity/     # Nome, registro, telefone
+│   │   ├── vhub_money/        # Carteira e banco
+│   │   ├── vhub_survival/     # Fome e sede
+│   │   ├── vhub_player_state/ # Spawn, posição, armas, customização
+│   │   ├── vhub_inventory/    # Itens, peso, baús, chaves de veículo
+│   │   ├── vhub_garage/       # Garagem, concessionária, leilão, aluguel,
+│   │   │                      #   impound, IPVA, reparo, clone/transferência
+│   │   └── vhub_admin/        # Kick, ban, tp, noclip, give — painel NUI
+│   └── [TOOLS]/
+│       └── vhub_testrunner/   # Runner de testes server-side
+├── tools/
+│   ├── limpardadossql.ps1
+│   └── fix_vhub_db.ps1
+├── metas/
+│   ├── manual_dev_vhub.md     # Referência de desenvolvimento (ativa)
+│   └── fivem_natives_organizadas_ptbr.md
+├── CLAUDE.md                  # Leis e instruções para Claude Code
+├── FROZEN_EXEC_LOG.md         # Log de execução do Frozen Plan v1.0
+└── README.md
 ```
 
 ---
 
-# Sistema de Persistência
+## Core vHub — arquitetura interna
 
-## VRAM First Architecture
-
-O Mirage opera sob a filosofia:
-
-> VRAM é a verdade. SQL é persistência de segurança.
-
-Toda leitura prioritariamente ocorre em memória.
-
-O SQL não é tratado como fonte principal de runtime.
-
-Fluxo:
-
-```txt
-Runtime -> VRAM -> Queue -> Batch SQL -> Persistência Física
+```
+resources/[CORE]/vhub/
+├── fxmanifest.lua
+├── base.lua                   # Carrega server/init.lua via load()
+├── bootstrap.lua              # Driver oxmysql + exports API/Status/Health
+├── shared/
+│   ├── config.lua             # Cria vHub = {}, mergeConfig, validateConfig
+│   ├── events.lua             # vHub.E.* read-only
+│   ├── utils.lua              # Helpers puros (formatNumber, dataCopy, clamp...)
+│   └── logger.lua             # Único ponto de log — vHub.Logger
+├── server/
+│   ├── init.lua               # OOP helper, assertThread, loadmod, ordem de carga
+│   ├── kernel.lua             # Event bus, rate limit, permissões, K:export
+│   ├── state.lua              # VRAM-first, TX com rollback, batch SQL, get/setData
+│   ├── sql.lua                # Todos os S:prepare() — único lugar de SQL declarado
+│   ├── notify.lua             # Webhooks Discord com retry
+│   ├── auth.lua               # Identidade, sessão, personagem, ban
+│   ├── vehicle.lua            # Registro, State Bags, odômetro, autoridade de entidade
+│   ├── security.lua           # Payload check, ACE, invoker whitelist
+│   ├── boot.lua               # vHub:init(), net events, autosave, lifecycle
+│   └── exports.lua            # Cross-resource exports com _invoker_allowed()
+├── client/
+│   ├── bootstrap.lua          # Ready único, initDone, charSelected, State Bags locais
+│   └── vehicle.lua            # Report de estado 4Hz adaptativo
+└── sql/
+    └── schema.sql             # Schema idempotente, aplicado a cada boot
 ```
 
-Benefícios:
+### Ordem de carga (server/init.lua — imutável)
 
-* Redução massiva de queries.
-* Redução de IO.
-* Menor latência.
-* Escalabilidade.
-* Menor lock de banco.
-* Melhor throughput.
-* Redução de stutter.
-
----
-
-## Sistema de Fila Assíncrona
-
-As operações de persistência não executam writes diretos síncronos.
-
-Toda alteração crítica entra em uma fila de persistência.
-
-A fila:
-
-* Consolida operações.
-* Remove writes redundantes.
-* Agrupa queries.
-* Executa batch SQL.
-* Controla retry.
-* Evita deadlocks.
-* Controla flush por tempo e volume.
-
-Modelo:
-
-```txt
-setState()
-  -> enqueue()
-      -> batch merge
-          -> validation
-              -> atomic sql save
+```
+kernel → state → sql → notify → auth → vehicle → security → boot → exports
 ```
 
 ---
 
-## Transações Atômicas
+## Persistência VRAM-first
 
-Toda operação financeira, inventário, garagem ou sincronização crítica utiliza transações atômicas.
+```
+Leitura:   VRAM hit → retorna direto (sem DB)
+           VRAM miss → query DB → armazena em VRAM → retorna
 
-Fluxo:
+Escrita:   atualiza VRAM → enfileira no batch → invalida VRAM*
+           (*hot keys: ban.active, whitelist, permissions ficam em VRAM)
 
-```txt
-begin()
-  -> snapshot()
-  -> mutation()
-  -> validation()
-  -> commit()
-  -> persist()
+Flush:     automático a cada 3s OU ao atingir 800 ops
+           emergencial em onResourceStop (chunked, yield a cada 50)
 ```
 
-Caso qualquer etapa falhe:
-
-```txt
-rollback()
-```
-
-Isso elimina:
-
-* Dupes.
-* Corrupção de estado.
-* Race conditions.
-* Inconsistência entre VRAM e SQL.
-* Exploits financeiros.
-
----
-
-# Nova Modelagem de Entidades
-
-## Identidade Separada por Contexto
-
-O Mirage abandona o conceito antigo de identidade única do vRP.
-
-A arquitetura passa a utilizar:
-
-```txt
-user_id
-character_id
-veh_uid
-session_id
-instance_id
-```
-
----
-
-## user_id
-
-Representa a conta global do jogador.
-
-Responsável por:
-
-* Autenticação.
-* Licenciamento.
-* Banimentos.
-* Dados persistentes globais.
-* Vinculação social.
-
----
-
-## character_id
-
-Representa personagens independentes.
-
-Permite:
-
-* Multi-char.
-* Inventários separados.
-* Progressões independentes.
-* Estados persistentes isolados.
-* Economias segmentadas.
-
----
-
-## veh_uid
-
-Nova entidade persistente exclusiva para veículos.
-
-Cada veículo possui:
-
-* UID único.
-* Ownership persistente.
-* Estado individual.
-* Quilometragem.
-* Histórico.
-* Damage state.
-* Fuel state.
-* Metadata.
-* Trunk state.
-* Lock state.
-* Network ownership.
-
-Isso remove dependência de placa como identificador lógico.
-
----
-
-# Sistema de Sincronização
-
-## FiveM Native Authority Model
-
-O Mirage utiliza o próprio modelo de autoridade de entidade do FiveM.
-
-Não existe:
-
-* Broadcast manual de posição.
-* Sync loop artificial.
-* Tunnel sync.
-* Replicação customizada desnecessária.
-
-Ownership é delegado utilizando:
+Transações com rollback:
 
 ```lua
-NetworkSetEntityOwner()
+local tx = vHub.State:begin()
+vHub.setUData(uid, "saldo", novo_saldo, tx)
+local ok, err = vHub.State:commit(tx)   -- rollback automático se validator falhar
+if not ok then ... end
 ```
 
-O servidor trata apenas:
-
-* Regras.
-* Validação.
-* Autoridade lógica.
-* Segurança.
-
-O cliente trata:
-
-* Renderização.
-* Interpolação.
-* Predição.
-* Simulação local.
-
-Resultado:
-
-* Menor tráfego.
-* Menor CPU.
-* Menor resmon.
-* Melhor estabilidade.
-* Menor desync.
-* Melhor escalabilidade.
-
 ---
 
-# Segurança
+## Entidades e APIs públicas
 
-## Zero Trust Client Model
+### Dados KV
 
-O cliente nunca é considerado confiável.
-
-Todo payload recebido passa por:
-
-* Sanitização.
-* Type checking.
-* Rate limiting.
-* Auth validation.
-* Ownership validation.
-* Distance validation.
-* Permission validation.
-* State validation.
-
----
-
-## Rate Limiter O(1)
-
-Todos os net events possuem proteção obrigatória.
-
-O sistema utiliza sliding window em O(1) com garbage collector interno.
-
-Proteções:
-
-* Spam.
-* Flood.
-* Trigger abuse.
-* Packet abuse.
-* Event overflow.
-* RPC spam.
-
----
-
-## Proteções Internas
-
-O Mirage implementa:
-
-* Anti-dupe.
-* Anti-state corruption.
-* Payload verification.
-* Event signature validation.
-* Session validation.
-* Ownership reconciliation.
-* Timeout recovery.
-* Reentrancy protection.
-* Safe await assertions.
-* Export isolation.
-
----
-
-# Performance
-
-## Meta de Resmon
-
-Meta final:
-
-```txt
-0.02 ~ 0.20ms
+```lua
+-- Requer Citizen.CreateThread no chamador
+vHub.getUData(user_id, "key")           → value
+vHub.setUData(user_id, "key", value, tx?)
+vHub.getCData(char_id, "key")           → value
+vHub.setCData(char_id, "key", value, tx?)
+vHub.getVData(plate,   "key")           → value
+vHub.setVData(plate,   "key", value, tx?)
+vHub.getGData("key")                    → value
+vHub.setGData("key", value, tx?)
 ```
 
-Mesmo sob:
+### Exports cross-resource
 
-* Alto volume de players.
-* Frota massiva de veículos.
-* Inventários persistentes.
-* Eventos simultâneos.
-* Sistemas complexos.
+| Export | Proteção | Descrição |
+|--------|----------|-----------|
+| `exports.vhub:getVHub()` | pública | Namespace `vHub` completo |
+| `exports.vhub:getUser(src)` | pública | Objeto `User` da sessão |
+| `exports.vhub:getUID(src)` | pública | `user_id` do source |
+| `exports.vhub:hasPerm(uid, perm)` | pública | Verifica permissão |
+| `exports.vhub:grantPerm(uid, perm)` | `_invoker_allowed()` | Concede permissão |
+| `exports.vhub:getVehicle(plate)` | pública | `VehicleData` da placa |
+| `exports.vhub:transferKey(plate, key)` | `_invoker_allowed()` | Transfere chave de veículo |
+| `exports.vhub:banPlayer(uid, r, by)` | `_invoker_allowed()` | Bane por uid |
+| `exports.vhub:unbanPlayer(uid)` | `_invoker_allowed()` | Remove ban |
+| `exports.vhub:Status()` | pública | Snapshot do runtime |
 
----
+`_invoker_allowed()` verifica `vHub.cfg.trusted_resources`. Se a lista estiver vazia, todos os resources são aceitos.
 
-## Estratégias de Otimização
+### Eventos server-side (TriggerEvent local)
 
-### Client
+| Evento | Payload | Disparado em |
+|--------|---------|--------------|
+| `vHub:playerJoin` | `user` | Auth:connect concluído |
+| `vHub:playerLeave` | `user, reason` | Auth:disconnect |
+| `vHub:playerSpawn` | `user, first_spawn` | Após initDone |
+| `vHub:playerDeath` | `user` | Cliente envia vHub:died |
+| `vHub:characterLoad` | `user` | Seleção/criação de personagem |
+| `vHub:vehicleLoaded` | `vd` | Veh:register |
+| `vHub:vehicleSpawned` | `vd` | Cliente envia vHub:vSpawned |
+| `vHub:vehicleDespawned` | `vd` | Cliente envia vHub:vDespawned |
+| `vHub:vehicleEnter` | `vd, src, seat` | Cliente envia vHub:vEnter |
+| `vHub:vehicleLeave` | `vd, src, seat` | Cliente envia vHub:vLeave |
+| `vHub:vehicleKeyTransferred` | `vd, new_key` | Veh:transferKey |
+| `vHub:vehicleFuelEmpty` | `vd, src` | Combustível chegou a zero |
 
-* Zero loops desnecessários.
-* Tick adaptativo.
-* Lazy loading.
-* Cache local.
-* Event-driven updates.
-* Zone streaming.
-* State bags.
-* Thread pooling.
+### State Bags de veículo (Entity.state — servidor escreve, cliente lê)
 
-### Server
-
-* Batch SQL.
-* Cache em VRAM.
-* Query deduplication.
-* Queue pipeline.
-* Async persistence.
-* Ownership authority.
-* Low allocation patterns.
-* Memory reuse.
-
----
-
-# Compatibilidade vRP
-
-## Camada de Compatibilidade Progressiva
-
-Apesar da reestruturação completa, o Mirage mantém compatibilidade controlada com ecossistema vRP.
-
-Inclui:
-
-* Proxy shim.
-* Tunnel shim.
-* Compat exports.
-* Legacy adapters.
-* Migration helpers.
-
-Objetivo:
-
-Permitir migração gradual de servidores antigos sem rewrite completo imediato.
+| Bag | Tipo | Delta mínimo para write |
+|-----|------|------------------------|
+| `vh_fuel` | number (0–100) | 0.5 L |
+| `vh_eng` | number (0–1000) | 5.0 HP |
+| `vh_body` | number (0–1000) | 5.0 HP |
+| `vh_odo` | number (km) | 0.05 km |
+| `vh_tune` | table | sempre |
+| `vh_on` | boolean | sempre |
 
 ---
 
-# Multi Mundo / Instâncias
+## Segurança
 
-O Mirage implementa suporte nativo para múltiplos mundos.
-
-Cada instância possui:
-
-* Population isolada.
-* Sync separado.
-* Ownership independente.
-* Regras locais.
-* Streaming contextual.
-* Controle de entidades.
-
-Aplicações:
-
-* Arenas.
-* Interiores.
-* Eventos.
-* Matchmaking.
-* Sessões privadas.
-* Dimensões.
+- **Payload size check** em todo `K:net` (padrão: 8192 bytes)
+- **Rate limit O(1) sliding window** em todos os net events (ex: `vHub:vState` — 8 por 1s; `vHub:ready` — 5 por 15s)
+- **Silent block** — cliente nunca sabe que foi bloqueado por rate limit
+- **Permission guard** — `K:net` com `opts.perm` verifica antes do handler
+- **`_invoker_allowed()`** em exports sensíveis — whitelist por resource
+- **`vHub.E` read-only** — metatable protege constantes de eventos contra escrita
+- **Type-safe ban** — `ban.reason` e `ban.by` são sempre strings
+- **Guard `src <= 0`** — rejeita eventos do servidor ou sources inválidos
+- **Guard de double-connect** — `Auth._sessions` impede sessão duplicada
 
 ---
 
-# Observabilidade
+## Performance
 
-## Logger Estruturado
+| Métrica | Alvo | Medido |
+|---------|------|--------|
+| Resmon server idle | < 0.05 ms | **0.02 ms** ✅ |
+| Resmon server tick (100 sessões) | < 0.20 ms | — (T1–T5 pendem runtime) |
+| Resmon client idle | < 0.10 ms | — |
+| Stall autosave (200 sessões) | < 5 ms | — |
+| LOC core | ≤ 2.556 | **2.432** ✅ |
 
-O sistema possui logger centralizado.
-
-Nenhum módulo utiliza print bruto.
-
-Logs incluem:
-
-* Timestamp.
-* Contexto.
-* Módulo.
-* Severity.
-* Trace.
-* Payload.
-* Correlation ID.
-
----
-
-## Métricas
-
-Planejamento inclui:
-
-* Profiling interno.
-* Health checks.
-* Tempo de flush.
-* Tempo de query.
-* Queue pressure.
-* RTT médio.
-* Ownership metrics.
-* Tick metrics.
-* Resmon analytics.
+**Estratégias ativas:**
+- Batch SQL: até 800 ops por transação (flush a cada 3s)
+- VRAM-first elimina a maioria das queries de leitura
+- `uidByIdsIn(n)`: login de N identifiers em 1 round-trip (era N round-trips)
+- Adaptive vehicle report: 0.5Hz parado → 1Hz idle → 4Hz dirigindo
+- State Bag delta thresholds: ≥ 8× menos writes/s
+- GC `_byNet` a cada 5min; GC `_rate` em playerDropped
 
 ---
 
-# Estrutura de Desenvolvimento Assistido por IA
+## Schema SQL
 
-## Integração com Claude Code
+8 tabelas, schema idempotente aplicado a cada boot em `bootstrap.lua`:
 
-O projeto foi estruturado para desenvolvimento assistido por IA.
+| Tabela | PK | Descrição |
+|--------|----|-----------|
+| `vh_users` | `id INT UNSIGNED` | Conta do jogador (entidade-pai) |
+| `vh_user_ids` | `identifier VARCHAR(64)` | Identifiers FiveM mapeados ao user_id |
+| `vh_characters` | `id INT UNSIGNED` | Personagens por usuário |
+| `vh_user_data` | `(user_id, dkey)` | KV de usuário — msgpack BLOB |
+| `vh_char_data` | `(char_id, dkey)` | KV de personagem — msgpack BLOB |
+| `vh_global_data` | `dkey` | KV global do servidor — msgpack BLOB |
+| `vh_vehicles` | `plate VARCHAR(10)` | Registro físico de veículo |
+| `vh_vehicle_data` | `(plate, dkey)` | KV de veículo — msgpack BLOB |
 
-A pasta `.claude/` contém:
+Todas as tabelas dependentes têm FK com `ON DELETE CASCADE ON UPDATE CASCADE`.
 
-* Regras arquiteturais.
-* Agentes especializados.
-* Padrões de código.
-* Fluxos de revisão.
-* Convenções obrigatórias.
-* Regras de performance.
-* Checklists de segurança.
-* Diretrizes de modularização.
+> **Schemas externos com FK ao core DEVEM usar `INT UNSIGNED`** para `user_id` e `char_id`.
+> Tipo divergente (`INT` signed) causa `errno 150`.
 
-Cada agente possui escopo delimitado.
+---
 
-Exemplo:
+## Como criar um novo módulo
 
-```txt
-vhub_arquiteto
-vhub_security
-vhub_performance
-vhub_sync
-vhub_database
-vhub_client
+Todo novo recurso vai em `resources/[SCRIPTS]/vhub_*`. Nunca em `[CORE]/vhub`.
+
+```lua
+-- meu_script/server/init.lua
+local M = {}
+
+AddEventHandler("vHub:characterLoad", function(user)
+  -- user.id    = user_id
+  -- user.char_id = char_id
+  -- user.source  = source FiveM
+end)
+
+AddEventHandler("vHub:playerLeave", function(user)
+  -- cleanup
+end)
 ```
 
-Objetivo:
-
-Padronizar decisões técnicas e impedir degradação arquitetural durante evolução do projeto.
+Regras do `manual_dev_vhub.md`:
+- Schema próprio via `LoadResourceFile('sql/schema.sql')` em `onResourceStart`
+- FK ao core: `INT UNSIGNED` obrigatório
+- SQL via `exports.oxmysql:*` diretamente (não via `vHub.State`)
+- Colunas de valor: `BLOB` + msgpack ou tipo nativo SQL conforme o dado
 
 ---
 
-# Objetivo Final
+## Requisitos
 
-O Mirage busca se tornar uma das arquiteturas mais modernas já desenvolvidas para FiveM no ecossistema brasileiro.
+| Dependência | Versão mínima | Notas |
+|-------------|--------------|-------|
+| FiveM / txAdmin | artifact recente | `lua54 yes` obrigatório |
+| oxmysql | 2.x | `multipleStatements=true` na connection string |
+| MariaDB / MySQL | 10.3 + / 8.0+ | InnoDB, utf8mb4 |
 
-A proposta é entregar:
+```
+# config/resources.cfg — ordem obrigatória
+ensure spawnmanager
+ensure oxmysql
+ensure vhub
+ensure vhub_groups
+ensure vhub_identity
+ensure vhub_money
+ensure vhub_survival
+ensure vhub_player_state
+ensure vhub_inventory
+ensure vhub_garage
+ensure vhub_admin
+```
 
-* Framework modular.
-* Performance extrema.
-* Segurança avançada.
-* Sync nativo.
-* Persistência robusta.
-* Escalabilidade real.
-* Base limpa para longo prazo.
-* Estrutura preparada para equipes grandes.
-* Compatibilidade gradual com legado.
-* Engenharia de software de padrão profissional.
+---
 
-O foco principal do projeto não é quantidade de features, mas qualidade estrutural, previsibilidade operacional, estabilidade e capacidade de evolução contínua sem degradação da base.
+## Desenvolvimento assistido por IA (Claude Code)
+
+O projeto usa Claude Code com agentes especializados em `.claude/agents/`:
+
+| Agente | Quando invocar |
+|--------|----------------|
+| `vhub_arquiteto` | Novo módulo, mudança estrutural, dúvida de ownership |
+| `vhub_guardiao_seguranca` | Auth, ban, payload, spawn, permissão |
+| `vhub_guardiao_performance` | Thread, loop, batch SQL, flush, serialização |
+| `vhub_guardiao_contrato` | API pública, exports, schema, eventos |
+| `vhub_guardiao_revisao` | Gate final antes de qualquer commit relevante |
+
+Instruções completas em `CLAUDE.md` e `.claude/contexto.md`.
+
+---
+
+## Estado de congelamento
+
+```
+╔═════════════════════════════════════════════════════════╗
+║ vHub Mirage — CORE FROZEN v1.0                          ║
+║ Data      : 2026-05-22                                  ║
+║ Revisão   : 2027-05-22                                  ║
+║ Compat vRP: none                                        ║
+║ LOC core  : 2.432 (de 2.813 — -381 líquido)            ║
+║ Resmon    : 0.02ms idle (alvo: < 0.05ms)               ║
+╚═════════════════════════════════════════════════════════╝
+```
+
+Qualquer alteração em `resources/[CORE]/vhub/**` exige:
+1. Justificativa por escrito (incidente, requisito legal, bug crítico)
+2. Aprovação de `vhub_arquiteto` + `vhub_guardiao_revisao`
+3. Bump de versão para `core-frozen-v2.0`

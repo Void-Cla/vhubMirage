@@ -1,4 +1,4 @@
-// nui/js/auction.js  view "Leil es"
+// nui/js/auction.js — view "Leilões" (tema vHub)
 (() => {
   const App = window.vhubApp;
   const $list = document.getElementById('a-list');
@@ -11,9 +11,9 @@
     $list.innerHTML = '';
     const items = snapshot?.auctions || [];
     if (!items.length) {
-      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--text-dim2);">
-        <i class="fa-solid fa-gavel" style="font-size:48px; display:block; margin-bottom:8px;"></i>
-        Nenhum leil o ativo no momento.
+      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--vh-text-dim2);">
+        <i class="fa-solid fa-gavel" style="font-size:48px; display:block; margin-bottom:8px; color:rgba(243,181,58,0.25);"></i>
+        Nenhum leilão ativo no momento.
       </div>`;
       return;
     }
@@ -33,8 +33,8 @@
             <span>Placa: ${a.plate}</span>
             <span>${a.vtype}</span>
           </div>
-          <div class="info-line"><span class="k">Refer ncia</span><span class="v">${App.fmtMoney(a.preco_ref)}</span></div>
-          <div class="info-line"><span class="k">Lance m nimo</span><span class="v">${App.fmtMoney(a.min_bid)}</span></div>
+          <div class="info-line"><span class="k">Referência</span><span class="v">${App.fmtMoney(a.preco_ref)}</span></div>
+          <div class="info-line"><span class="k">Lance mínimo</span><span class="v">${App.fmtMoney(a.min_bid)}</span></div>
           ${a.buyout ? `<div class="info-line"><span class="k">Compra direta</span><span class="v">${App.fmtMoney(a.buyout)}</span></div>` : ''}
         </div>
         <div class="right">
@@ -42,7 +42,7 @@
           <div class="timer" data-ends="${a.ends_at}">${App.fmtDur(a.ends_at - Math.floor(Date.now()/1000))}</div>
           <div class="row">
             <input type="number" min="${incr}" value="${incr}" data-bid="${a.id}">
-            <button class="btn primary" data-act="bid" data-id="${a.id}"><i class="fa-solid fa-gavel"></i> Lance</button>
+            <button class="btn primary" data-act="bid" data-id="${a.id}"><i class="fa-solid fa-gavel"></i> Dar Lance</button>
           </div>
         </div>`;
       $list.appendChild(c);
@@ -61,23 +61,24 @@
   function startTimer() {
     if (timerId) clearInterval(timerId);
     timerId = setInterval(() => {
-      const now = Math.floor(Date.now()/1000);
+      const now = Math.floor(Date.now() / 1000);
       $list.querySelectorAll('.timer').forEach((t) => {
         const ends = +t.dataset.ends;
         t.textContent = App.fmtDur(ends - now);
-        if (ends - now <= 0) t.style.color = 'var(--danger)';
+        if (ends - now <= 0) t.style.color = 'var(--vh-danger)';
       });
     }, 1000);
   }
 
   $new.onclick = async () => {
     const r = await App.modal({
-      title: 'Criar Leil o',
-      html: `<label>Placa do seu ve culo</label><input data-field="plate" maxlength="8">
-             <label>Lance m nimo (R$)</label><input data-field="min_bid" type="number" min="1">
-             <label>Compra direta (R$)  opcional</label><input data-field="buyout" type="number" min="0">
-             <label>Dura  o (minutos)</label><input data-field="dur_min" type="number" value="60" min="5" max="1440">
-             <p>Taxa de listagem n o-reembols vel: ${App.fmtMoney(snapshot?.cfg?.fee || 100)}</p>`,
+      title: 'Criar Leilão',
+      html: `<label>Placa do seu veículo</label><input data-field="plate" maxlength="8">
+             <label>Lance mínimo (R$)</label><input data-field="min_bid" type="number" min="1">
+             <label>Compra direta (R$) — opcional</label><input data-field="buyout" type="number" min="0">
+             <label>Duração (minutos)</label><input data-field="dur_min" type="number" value="60" min="5" max="1440">
+             <p>Taxa de listagem não-reembolsável: ${App.fmtMoney(snapshot?.cfg?.fee || 100)}</p>`,
+      okText: 'Criar Leilão',
     });
     if (r.ok) {
       App.post('auctionNew', {

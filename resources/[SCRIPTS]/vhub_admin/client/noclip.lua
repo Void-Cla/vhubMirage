@@ -35,56 +35,102 @@ local function rayGroundZ(x, y, fromZ)
   end
 end
 
+local function getNoclipEntity(ped)
+  if IsPedInAnyVehicle(ped, false) then
+    return GetVehiclePedIsIn(ped, false), true
+  end
+  return ped, false
+end
+
+local function setEntityInvisible(entity)
+  SetEntityVisible(entity, false, false)
+  SetEntityAlpha(entity, 0, false)
+  NetworkSetEntityInvisibleToNetwork(entity, true)
+end
+
+local function setEntityVisibleAgain(entity)
+  SetEntityVisible(entity, true, false)
+  SetEntityAlpha(entity, 255, false)
+  NetworkSetEntityInvisibleToNetwork(entity, false)
+end
+
+local function restoreEntityPhysics(entity)
+  SetEntityCollision(entity, true, true)
+  SetEntityHasGravity(entity, true)
+  SetEntityVelocity(entity, 0.0, 0.0, 0.0)
+  FreezeEntityPosition(entity, false)
+end
+
 local function enable(ped)
+  local ent, isVehicle = getNoclipEntity(ped)
+
   S.noclip = true
   -- god mode
   if not S.god then
     S.god = true
     SetPlayerInvincible(PlayerId(), true)
-    SetEntityProofs(ped, true, true, true, true, true, true, true, true)
+    SetEntityProofs(ent, true, true, true, true, true, true, true, true)
+    if isVehicle then
+      SetEntityProofs(ped, true, true, true, true, true, true, true, true)
+    end
   end
+
   -- invisibilidade
   if not S.invis then
     S.invis = true
-    SetEntityVisible(ped, false, false)
+    setEntityInvisible(ped)
     SetEntityLocallyInvisible(ped)
+
+    if isVehicle then
+      setEntityInvisible(ent)
+    end
   end
-  -- voo
-  SetEntityCollision(ped, false, false)
-  SetEntityHasGravity(ped, false)
-  SetEntityVelocity(ped, 0.0, 0.0, 0.0)
-  FreezeEntityPosition(ped, false)
+
+  -- voo / sem colis o
+  SetEntityCollision(ent, false, false)
+  SetEntityHasGravity(ent, false)
+  SetEntityVelocity(ent, 0.0, 0.0, 0.0)
+  FreezeEntityPosition(ent, false)
+  if isVehicle then
+    -- garante que o ped dentro do ve culo n o fique colidindo separadamente
+    SetEntityCollision(ped, false, false)
+  end
 end
 
 local function disable(ped)
+  local ent, isVehicle = getNoclipEntity(ped)
+
   -- 1) sinaliza para a thread principal parar de aplicar voo
   S.noclip = false
   -- 2) restaura god/invis (pacote completo)
   if S.god then
     S.god = false
     SetPlayerInvincible(PlayerId(), false)
-    SetEntityProofs(ped, false, false, false, false, false, false, false, false)
+    SetEntityProofs(ent, false, false, false, false, false, false, false, false)
+    if isVehicle then
+      SetEntityProofs(ped, false, false, false, false, false, false, false, false)
+    end
   end
   if S.invis then
     S.invis = false
-    SetEntityVisible(ped, true, false)
+    setEntityVisibleAgain(ped)
+    if isVehicle then
+      setEntityVisibleAgain(ent)
+    end
   end
-  -- 3) descida ao ch o de verdade (raycast + clear tasks + gravity)
+
+  -- 3) descida ao ch o de verdade (raycast + restore)
   Citizen.CreateThread(function()
     Citizen.Wait(50)  -- garante que a thread de voo j  saiu do else-branch
-    local c  = GetEntityCoords(ped)
+    local c  = GetEntityCoords(ent)
     local gz = rayGroundZ(c.x, c.y, c.z + 30.0)
     if gz then
-      -- snap exato ao ch o (sem offset) e clear area para descarregar f sicas residuais
-      SetEntityCoordsNoOffset(ped, c.x, c.y, gz + 0.05, false, false, false)
-      ClearAreaOfEverything(c.x, c.y, gz, 3.0, false, false, false, false)
+      SetEntityCoordsNoOffset(ent, c.x, c.y, gz + (isVehicle and 1.0 or 0.05), false, false, false)
     end
-    -- agora restaura collision/gravity e limpa tasks (matar qualquer estado animado)
+
     ClearPedTasksImmediately(ped)
-    SetEntityCollision(ped, true, true)
-    SetEntityHasGravity(ped, true)
-    SetEntityVelocity(ped, 0.0, 0.0, -1.0)  -- empurr o para a engine recalcular ground
-    FreezeEntityPosition(ped, false)
+    restoreEntityPhysics(ent)
+    SetEntityVelocity(ent, 0.0, 0.0, -1.0)  -- empurra para a engine recalcular ground
   end)
 end
 
@@ -111,24 +157,25 @@ RegisterCommand('noclip', function() if checkAdmin() then toggleNoclip() end end
 Citizen.CreateThread(function()
   -- bindings (control id   eixo, sinal)
   -- 32 = W (forward)   33 = S (back)   34 = A (strafe left)   35 = D (strafe right)
-  -- 44 = Q (up)        38 = E (down)
-  -- 21 = SHIFT (fast)  19 = CTRL alt (slow) (usamos 36 = SPRINT? n o, INPUT_DUCK)
-  -- Usaremos 21 = SPRINT (shift) p/ acelerar, 19 = INPUT_VEH_CIN_CAM (alt) p/ devagar
-  local DISABLED = { 30, 31, 32, 33, 34, 35, 44, 38, 21, 19, 22, 24, 25, 36 }
+  -- 21 = SHIFT (up)    22 = SPACE (up)
+  -- 36 = CTRL (fast)   19 = ALT (down/slow)
+  local DISABLED = { 30, 31, 32, 33, 34, 35, 21, 19, 22, 24, 25, 36 }
   while true do
     if not S.noclip then
       Citizen.Wait(250)
     else
       Citizen.Wait(0)
       local ped = PlayerPedId()
+      local ent = getNoclipEntity(ped)
+
       -- garante estado de voo (alguns scripts resetam por frame)
-      SetEntityCollision(ped, false, false)
-      SetEntityHasGravity(ped, false)
+      SetEntityCollision(ent, false, false)
+      SetEntityHasGravity(ent, false)
       for _, c in ipairs(DISABLED) do DisableControlAction(0, c, true) end
 
       local sp = CFG.noclip.speed_norm
-      if IsDisabledControlPressed(0, 21) then sp = CFG.noclip.speed_fast end  -- shift
-      if IsDisabledControlPressed(0, 19) then sp = CFG.noclip.speed_slow end  -- alt
+      if IsDisabledControlPressed(0, 36) then sp = CFG.noclip.speed_fast end  -- CTRL
+      if IsDisabledControlPressed(0, 19) then sp = CFG.noclip.speed_slow end  -- ALT
 
       local cam = GetGameplayCamRot(2)
       local rx, rz = math.rad(cam.x), math.rad(cam.z)
@@ -143,12 +190,12 @@ Citizen.CreateThread(function()
       if IsDisabledControlPressed(0, 33) then dx=dx-fx*sp; dy=dy-fy*sp; dz=dz-fz*sp end  -- S
       if IsDisabledControlPressed(0, 34) then dx=dx-sxx*sp; dy=dy-syy*sp end             -- A
       if IsDisabledControlPressed(0, 35) then dx=dx+sxx*sp; dy=dy+syy*sp end             -- D
-      if IsDisabledControlPressed(0, 44) then dz=dz+sp end                                -- Q (up)
-      if IsDisabledControlPressed(0, 38) then dz=dz-sp end                                -- E (down)
+      if IsDisabledControlPressed(0, 21) or IsDisabledControlPressed(0, 22) then dz=dz+sp end -- SHIFT/SPACE up
+      if IsDisabledControlPressed(0, 19) then dz=dz-sp end -- ALT down
 
-      SetEntityVelocity(ped, dx, dy, dz)
-      -- alinha o ped  c mera (visual)
-      SetEntityHeading(ped, cam.z % 360.0)
+      local pos = GetEntityCoords(ent)
+      SetEntityCoordsNoOffset(ent, pos.x + dx, pos.y + dy, pos.z + dz, false, false, false)
+      SetEntityHeading(ent, cam.z % 360.0)
     end
   end
 end)

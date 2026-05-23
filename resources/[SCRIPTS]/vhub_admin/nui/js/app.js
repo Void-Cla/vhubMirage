@@ -13,13 +13,15 @@
     } catch (e) { return {}; }
   };
 
-  // toast
+  // toast (borda dourada padrão vHub)
   const $toast = document.getElementById('toast');
   let toastT = null;
   App.toast = (msg, type = 'info', ttl = 3500) => {
     $toast.textContent = msg; $toast.classList.remove('hidden');
-    $toast.style.borderColor = type === 'err' ? 'rgba(255,91,110,0.7)' :
-      type === 'ok' ? 'rgba(107,214,107,0.7)' : 'rgba(76,200,255,0.6)';
+    $toast.style.borderColor =
+      type === 'err' ? 'rgba(232,81,63,0.7)' :
+      type === 'ok'  ? 'rgba(107,191,107,0.7)' :
+                       'rgba(243,181,58,0.7)';
     if (toastT) clearTimeout(toastT);
     toastT = setTimeout(() => $toast.classList.add('hidden'), ttl);
   };
@@ -80,8 +82,8 @@
     const k = b.dataset.quick;
     if (k === 'announce') {
       const r = await App.modal({
-        title: 'An ncio global',
-        html: `<label>Mensagem (at  220 caracteres)</label><textarea data-field="message" maxlength="220"></textarea>`,
+        title: 'Anúncio global',
+        html: `<label>Mensagem (até 220 caracteres)</label><textarea data-field="message" maxlength="220"></textarea>`,
         okText: 'Anunciar',
       });
       if (r.ok) App.post('act', { action: 'announce', fields: r.fields });
@@ -102,6 +104,7 @@
       case 'open':
         document.getElementById('bg').classList.remove('hidden');
         document.getElementById('panel').classList.remove('hidden');
+        window.vhubSand && window.vhubSand.start();
         App.state.actions = m.data?.actions || {};
         App.state.flags   = m.data?.flags   || {};
         App.renderActions?.();
@@ -112,6 +115,7 @@
         document.getElementById('panel').classList.add('hidden');
         document.getElementById('bg').classList.add('hidden');
         document.getElementById('modal-bg').classList.add('hidden');
+        window.vhubSand && window.vhubSand.stop();
         break;
       case 'playerList':  App.renderPlayers?.(m.data); break;
       case 'rgInfo':      App.renderRG?.(m.data); break;
@@ -136,5 +140,6 @@
   };
 
   App.fmtMoney = (n) => 'R$ ' + (n || 0).toLocaleString('pt-BR');
-  App.fmtDate  = (ts) => ts ? new Date(ts * 1000).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : ' ';
+  App.fmtDate  = (ts) => ts ? new Date(ts * 1000).toLocaleString('pt-BR',
+    { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
 })();

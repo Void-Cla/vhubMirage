@@ -12,8 +12,9 @@
 </head>
 <body>
   <div id="bg" class="hidden"></div>
+  <canvas id="vhub-sand"></canvas>
 
-  <!-- Toast/announce -->
+  <!-- Toast / announce -->
   <div id="toast" class="toast hidden"></div>
   <div id="announce" class="announce hidden"><div></div></div>
 
@@ -21,54 +22,55 @@
   <section id="panel" class="panel hidden">
     <header class="hdr">
       <div class="brand">
-        <i class="fa-solid fa-shield-halved"></i>
+        <img src="assets/logo.png" alt="vHub"
+             onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-shield-halved'}))">
         <span>vHub <strong>Admin</strong></span>
         <small id="me-info"></small>
       </div>
       <div class="hdr-actions">
         <div class="flags">
-          <span class="flag" id="f-noclip" data-act="god"><i class="fa-solid fa-helmet-safety"></i></span>
-          <span class="flag" id="f-god"    data-act="god"><i class="fa-solid fa-shield"></i></span>
-          <span class="flag" id="f-invis"  data-act="invis"><i class="fa-solid fa-eye-slash"></i></span>
+          <span class="flag" id="f-noclip" title="Modo livre" data-act="god"><i class="fa-solid fa-feather"></i></span>
+          <span class="flag" id="f-god"    title="Invenc&iacute;vel" data-act="god"><i class="fa-solid fa-shield"></i></span>
+          <span class="flag" id="f-invis"  title="Invis&iacute;vel" data-act="invis"><i class="fa-solid fa-eye-slash"></i></span>
         </div>
-        <button class="btn ghost" id="btn-refresh"><i class="fa-solid fa-rotate"></i></button>
-        <button class="btn danger" data-close><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn ghost" id="btn-refresh" title="Atualizar"><i class="fa-solid fa-rotate"></i></button>
+        <button class="btn danger" data-close title="Fechar"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </header>
 
     <nav class="tabs">
       <button class="tab active" data-view="dashboard"><i class="fa-solid fa-gauge-high"></i> Painel</button>
       <button class="tab" data-view="players"><i class="fa-solid fa-users"></i> Jogadores</button>
-      <button class="tab" data-view="moderation"><i class="fa-solid fa-gavel"></i> Modera  o</button>
+      <button class="tab" data-view="moderation"><i class="fa-solid fa-gavel"></i> Modera&ccedil;&atilde;o</button>
       <button class="tab" data-view="teleport"><i class="fa-solid fa-location-crosshairs"></i> Teleporte</button>
-      <button class="tab" data-view="vehicle"><i class="fa-solid fa-car-side"></i> Ve culos</button>
+      <button class="tab" data-view="vehicle"><i class="fa-solid fa-car-side"></i> Ve&iacute;culos</button>
       <button class="tab" data-view="world"><i class="fa-solid fa-cloud-sun"></i> Mundo</button>
       <button class="tab" data-view="economy"><i class="fa-solid fa-coins"></i> Economia</button>
-      <button class="tab" data-view="reports"><i class="fa-solid fa-flag"></i> Den ncias <span id="r-badge" class="badge hidden">0</span></button>
-      <button class="tab" data-view="logs"><i class="fa-solid fa-clipboard-list"></i> Hist rico</button>
+      <button class="tab" data-view="reports"><i class="fa-solid fa-flag"></i> Den&uacute;ncias <span id="r-badge" class="badge hidden">0</span></button>
+      <button class="tab" data-view="logs"><i class="fa-solid fa-clipboard-list"></i> Hist&oacute;rico</button>
     </nav>
 
     <main class="body">
-      <!-- Dashboard -->
+      <!-- Painel -->
       <section class="view" id="view-dashboard">
         <div class="cards">
           <div class="card stat">
             <i class="fa-solid fa-users"></i>
-            <div><div class="k">Online</div><div class="v" id="s-online">0</div></div>
+            <div><div class="k">Jogadores online</div><div class="v" id="s-online">0</div></div>
           </div>
           <div class="card stat">
             <i class="fa-solid fa-gavel"></i>
-            <div><div class="k">Den ncias abertas</div><div class="v" id="s-reports">0</div></div>
+            <div><div class="k">Den&uacute;ncias abertas</div><div class="v" id="s-reports">0</div></div>
           </div>
           <div class="card stat">
             <i class="fa-solid fa-clock"></i>
-            <div><div class="k">Uptime</div><div class="v" id="s-uptime"> </div></div>
+            <div><div class="k">Uptime</div><div class="v" id="s-uptime">&mdash;</div></div>
           </div>
         </div>
-        <h3>A  es r pidas</h3>
+        <h3>A&ccedil;&otilde;es r&aacute;pidas</h3>
         <div class="quick">
-          <button class="btn" data-quick="god"><i class="fa-solid fa-shield"></i> Invenc vel</button>
-          <button class="btn" data-quick="invis"><i class="fa-solid fa-eye-slash"></i> Invis vel</button>
+          <button class="btn" data-quick="god"><i class="fa-solid fa-shield"></i> Invenc&iacute;vel</button>
+          <button class="btn" data-quick="invis"><i class="fa-solid fa-eye-slash"></i> Invis&iacute;vel</button>
           <button class="btn" data-quick="tpgo"><i class="fa-solid fa-location-arrow"></i> Ir ao Marcador</button>
           <button class="btn" data-quick="tplast"><i class="fa-solid fa-rotate-left"></i> Voltar</button>
           <button class="btn" data-quick="healall"><i class="fa-solid fa-heart-pulse"></i> Curar Todos</button>
@@ -78,10 +80,10 @@
         <div id="staff-list" class="list-flat"></div>
       </section>
 
-      <!-- Players -->
+      <!-- Jogadores -->
       <section class="view hidden" id="view-players">
         <div class="search-row">
-          <input id="p-search" placeholder="Buscar nome / id / uid">
+          <input id="p-search" placeholder="Buscar por nome, ID ou UID">
           <button class="btn ghost" id="p-refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
         <div class="split">
@@ -92,51 +94,51 @@
         </div>
       </section>
 
-      <!-- Moderation -->
+      <!-- Modera&ccedil;&atilde;o -->
       <section class="view hidden" id="view-moderation">
-        <h3>A  es de modera  o</h3>
+        <h3>A&ccedil;&otilde;es de modera&ccedil;&atilde;o</h3>
         <div class="action-grid" data-cat="moderation"></div>
       </section>
 
-      <!-- Teleport -->
+      <!-- Teleporte -->
       <section class="view hidden" id="view-teleport">
         <h3>Teleporte</h3>
         <div class="action-grid" data-cat="teleport"></div>
       </section>
 
-      <!-- Vehicle -->
+      <!-- Ve&iacute;culo -->
       <section class="view hidden" id="view-vehicle">
-        <h3>Ve culo</h3>
+        <h3>Ve&iacute;culo</h3>
         <div class="action-grid" data-cat="vehicle"></div>
       </section>
 
-      <!-- World -->
+      <!-- Mundo -->
       <section class="view hidden" id="view-world">
         <h3>Mundo</h3>
         <div class="action-grid" data-cat="world"></div>
       </section>
 
-      <!-- Economy -->
+      <!-- Economia / Invent&aacute;rio / Grupos -->
       <section class="view hidden" id="view-economy">
-        <h3>Economia / Invent rio / Grupos</h3>
+        <h3>Economia / Invent&aacute;rio / Grupos</h3>
         <div class="action-grid" data-cat="economy"></div>
         <div class="action-grid" data-cat="inventory"></div>
         <div class="action-grid" data-cat="groups"></div>
       </section>
 
-      <!-- Reports / Den ncias -->
+      <!-- Den&uacute;ncias -->
       <section class="view hidden" id="view-reports">
         <div class="search-row">
-          <h3 style="margin:0">Den ncias</h3>
+          <h3 style="margin:0; flex:1">Den&uacute;ncias</h3>
           <button class="btn ghost" id="r-refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
         <div id="reports-list" class="list-flat"></div>
       </section>
 
-      <!-- Logs / Hist rico -->
+      <!-- Hist&oacute;rico -->
       <section class="view hidden" id="view-logs">
         <div class="search-row">
-          <input id="l-search" placeholder="Filtrar (ex: banir, expulsar, prender)">
+          <input id="l-search" placeholder="Filtrar (ex.: banir, expulsar, prender)">
           <button class="btn ghost" id="l-refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
         <div id="logs-list" class="list-flat"></div>
@@ -162,6 +164,7 @@
   </div>
 
   <script src="js/app.js"></script>
+  <script src="js/sand.js"></script>
   <script src="js/players.js"></script>
   <script src="js/actions.js"></script>
   <script src="js/reports.js"></script>

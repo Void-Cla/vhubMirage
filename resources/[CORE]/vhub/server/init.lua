@@ -68,7 +68,6 @@ loadmod("server/notify.lua")   -- webhooks Discord com retry
 loadmod("server/auth.lua")     -- identidade, sessão, personagem, ban
 loadmod("server/vehicle.lua")  -- entidade de veículo, State Bags
 loadmod("server/security.lua") -- payload, ACE, invoker whitelist
-loadmod("server/compat.lua")   -- shim vRP1/2/3
 loadmod("server/boot.lua")     -- net events, autosave, lifecycle
 loadmod("server/exports.lua")
 -- spawn é responsabilidade de vhub_player_state (resource externo) — sem duplicação no core

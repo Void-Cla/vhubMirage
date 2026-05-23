@@ -1,4 +1,4 @@
-// nui/js/app.js  bootstrap, postMessage router, modal/toast util
+// nui/js/app.js — bootstrap, postMessage router, modal/toast util (vHub theme)
 (() => {
   const App = (window.vhubApp = {
     resName: 'vhub_garage',
@@ -18,15 +18,15 @@
     } catch (e) { return {}; }
   };
 
-  // ---------- Toast ---------------------------------------------------------
+  // ---------- Toast (borda dourada padrão vHub) ----------------------------
   const $toast = document.getElementById('vhub-toast');
   let toastT = null;
   App.toast = (msg, type = 'info', ttl = 3500) => {
     $toast.textContent = msg;
     $toast.classList.remove('hidden');
-    if (type === 'err')  $toast.style.borderColor = 'rgba(255,91,110,0.6)';
-    else if (type === 'ok') $toast.style.borderColor = 'rgba(107,214,107,0.6)';
-    else $toast.style.borderColor = 'rgba(76,200,255,0.6)';
+    if (type === 'err')      $toast.style.borderColor = 'rgba(232,81,63,0.7)';
+    else if (type === 'ok')  $toast.style.borderColor = 'rgba(107,191,107,0.7)';
+    else                     $toast.style.borderColor = 'rgba(243,181,58,0.7)';
     if (toastT) clearTimeout(toastT);
     toastT = setTimeout(() => $toast.classList.add('hidden'), ttl);
   };
@@ -59,19 +59,21 @@
     $mbg.classList.remove('hidden');
   });
 
-  // ---------- View router ---------------------------------------------------
+  // ---------- View router (liga/desliga areia automaticamente) -------------
   App.show = (id) => {
     document.querySelectorAll('.vhub-view').forEach((v) => v.classList.add('hidden'));
     document.getElementById('vhub-bg').classList.remove('hidden');
+    window.vhubSand && window.vhubSand.start();
     if (id) document.getElementById(id).classList.remove('hidden');
   };
   App.hideAll = () => {
     document.querySelectorAll('.vhub-view').forEach((v) => v.classList.add('hidden'));
     document.getElementById('vhub-bg').classList.add('hidden');
     $mbg.classList.add('hidden');
+    window.vhubSand && window.vhubSand.stop();
   };
 
-  // ---------- ESC + close buttons + tecla "B" ------------------------------
+  // ---------- ESC + close buttons ------------------------------------------
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') App.post('close');
   });
@@ -97,7 +99,6 @@
         App.state.view = 'impound'; App.state.payload = m.data;
         App.views.impound?.render(m.data); App.show('view-impound'); break;
       case 'refresh':
-        // qual view est  ativa? recarrega ela
         if (App.state.view && App.views[App.state.view]?.render) {
           App.views[App.state.view].render(m.data || App.state.payload);
         }
@@ -111,7 +112,7 @@
     }
   });
 
-  // ---------- Imagem do ve culo (FiveM docs fallback) ----------------------
+  // ---------- Imagem do veículo (FiveM docs fallback) ----------------------
   App.imgFor = (model) => {
     if (!model) return null;
     return `https://docs.fivem.net/vehicles/${model}.webp`;
@@ -119,7 +120,8 @@
 
   // ---------- Format helpers ------------------------------------------------
   App.fmtMoney = (n) => 'R$ ' + (n || 0).toLocaleString('pt-BR');
-  App.fmtDate  = (ts) => ts ? new Date(ts * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ' ';
+  App.fmtDate  = (ts) => ts ? new Date(ts * 1000).toLocaleString('pt-BR',
+    { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
   App.fmtDur   = (s) => {
     s = Math.max(0, Math.floor(s));
     if (s >= 86400) return `${Math.floor(s/86400)}d ${Math.floor((s%86400)/3600)}h`;

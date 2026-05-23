@@ -2,6 +2,8 @@
 -- REGRA CRÍTICA: Auth:connect é chamado UMA única vez por player,
 --   dentro do handler de "vHub:ready". playerConnecting não autentica.
 
+local _RES = GetCurrentResourceName()
+
 function vHub:init(cfg, db_driver)
   -- Normaliza log_level: aceita número (GetConvarInt) ou string
   if type(cfg.log_level) == "number" then
@@ -11,23 +13,15 @@ function vHub:init(cfg, db_driver)
   vHub.cfg = cfg
   vHub.State:setDriver(db_driver)
 
-  -- ── onResourceStop — flush de emergência ─────────────────────────────
+  -- ── onResourceStop — flush de emergência (chunked: yield a cada 50) ──
   AddEventHandler("onResourceStop", function(res)
-    if res ~= GetCurrentResourceName() then return end
+    if res ~= _RES then return end
     vHub.Logger:warn("boot", "Resource encerrando — flush de emergência...")
+    local i = 0
     for _, user in pairs(vHub.Auth._sessions) do
-      -- Cópia plana para evitar acúmulo ao serializar
-      local copia = {}
-      for k, v in pairs(user.data) do
-        if type(v) == "table" then
-          local sub = {}
-          for sk, sv in pairs(v) do sub[sk] = sv end
-          copia[k] = sub
-        else
-          copia[k] = v
-        end
-      end
-      vHub.setUData(user.id, "datatable", copia)
+      i = i + 1
+      vHub.setUData(user.id, "datatable", vHub.Utils.dataCopy(user.data))
+      if i % 50 == 0 then Citizen.Wait(0) end
     end
     vHub.Vehicle:saveAll()
     vHub.State:_flush()
@@ -39,7 +33,7 @@ function vHub:init(cfg, db_driver)
   -- de vHub:characterLoad/playerSpawn perderam as sessões existentes.
   -- O vHub re-dispara os eventos para popular os _sessions de todos os recursos.
   AddEventHandler("onResourceStart", function(res)
-    if res == GetCurrentResourceName() then return end  -- ignora self
+    if res == _RES then return end  -- ignora self
     -- Pequeno delay garante que o resource novo registrou todos os handlers
     SetTimeout(200, function()
       for _, user in pairs(vHub.Auth._sessions) do
@@ -54,6 +48,19 @@ function vHub:init(cfg, db_driver)
     local src = source
     if src and src > 0 then
       vHub.Auth:disconnect(src, reason)
+      -- GC do rate-limit do source: chaves no padrão "src:action"
+      local prefix = tostring(src) .. ":"
+      local removidos = 0
+      for key in pairs(vHub.Kernel._rate) do
+        if key:sub(1, #prefix) == prefix then
+          vHub.Kernel._rate[key] = nil
+          removidos = removidos + 1
+        end
+      end
+      if removidos > 0 and vHub.Logger then
+        vHub.Logger:debug("kernel",
+          ("GC _rate src=%d — %d chave(s) removida(s)"):format(src, removidos))
+      end
     end
   end)
 
@@ -181,23 +188,13 @@ function vHub:init(cfg, db_driver)
     vHub.Vehicle:onStateUpdate(src, plate, upd)
   end, { rate = { 8, 1000, 5000 }, async = false })
 
-  -- ── Autosave periódico ────────────────────────────────────────────────
+  -- ── Autosave periódico (chunked: cede o tick a cada 50 sessões) ────────
   local function doSave()
     local n_sess = 0
     for _, user in pairs(vHub.Auth._sessions) do
       n_sess = n_sess + 1
-      -- Persiste cópia plana do data (evita acúmulo de referências)
-      local copia = {}
-      for k, v in pairs(user.data) do
-        if type(v) == "table" then
-          local sub = {}
-          for sk, sv in pairs(v) do sub[sk] = sv end
-          copia[k] = sub
-        else
-          copia[k] = v
-        end
-      end
-      vHub.setUData(user.id, "datatable", copia)
+      vHub.setUData(user.id, "datatable", vHub.Utils.dataCopy(user.data))
+      if n_sess % 50 == 0 then Citizen.Wait(0) end
     end
     vHub.Vehicle:saveAll()
     vHub.State:_flush()

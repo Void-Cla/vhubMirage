@@ -3,9 +3,8 @@
 --   tem Logger, Utils, E, mergeConfig — mas NÃO tem State, Auth, Kernel, init etc.
 -- A flag vHub._server_ready indica se os módulos server/ já foram carregados.
 
-local name = GetCurrentResourceName()
-  and GetCurrentResourceName()
-  or error("[vHub][BASE] GetCurrentResourceName ausente")
+local _RES = GetCurrentResourceName()
+local name = _RES or error("[vHub][BASE] GetCurrentResourceName ausente")
 
 -- Verifica se os módulos server/ já foram carregados nesta sessão
 -- (ex: reload do resource — evita duplo loadmod)

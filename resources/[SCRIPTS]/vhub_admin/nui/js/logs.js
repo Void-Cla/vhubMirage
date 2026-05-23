@@ -17,8 +17,8 @@
       el.innerHTML = `
         <div>
           <strong>${r.action}</strong>
-          <span style="color:var(--text-dim)">por ${r.actor_name || 'console'} (uid ${r.actor_id || '-'})</span>
-          ${r.target_id ? `   alvo uid ${r.target_id}` : ''}
+          <span style="color:var(--vh-text-dim)">por ${r.actor_name || 'console'} (uid ${r.actor_id || '—'})</span>
+          ${r.target_id ? ` · alvo uid ${r.target_id}` : ''}
           <div class="meta">${r.payload || ''}</div>
         </div>
         <div class="right meta">${App.fmtDate(r.created_at)}</div>`;

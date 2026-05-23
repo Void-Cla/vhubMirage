@@ -51,9 +51,11 @@ files {
   'nui/index.html',
   'nui/css/style.css',
   'nui/js/app.js',
+  'nui/js/sand.js',
   'nui/js/garage.js',
   'nui/js/dealership.js',
   'nui/js/auction.js',
   'nui/js/impound.js',
   'nui/assets/bg.png',
+  'nui/assets/logo.png',
 }

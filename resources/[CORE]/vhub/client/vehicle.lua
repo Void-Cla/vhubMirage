@@ -1,7 +1,14 @@
 -- client/vehicle.lua — leitura de State Bags e report de intenção do veículo (PT-BR)
--- Responsabilidade: reportar estado do veículo (fuel, rpm, health) ao servidor (~4Hz)
+-- Responsabilidade: reportar estado do veículo (fuel, rpm, health) ao servidor (adaptive 0.5–4Hz)
 
-local REPORT_MS = 250 -- 4Hz
+local REPORT_MS = 250 -- valor inicial; o loop adapta por velocidade/rpm
+
+-- Cadência adaptativa: parado=2000ms (0.5Hz), idle=1000ms (1Hz), dirigindo=250ms (4Hz)
+local function adaptiveDelay(speed_kmh, rpm)
+  if speed_kmh < 1 then return 2000 end
+  if rpm < 0.2 then return 1000 end
+  return 250
+end
 
 RegisterNetEvent("vHub:vehicleStateLoad")
 AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
@@ -9,7 +16,7 @@ AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
   local ped = PlayerPedId()
   local veh = GetVehiclePedIsIn(ped, false)
   if veh and veh ~= 0 then
-    local myplate = (GetVehicleNumberPlateText and GetVehicleNumberPlateText(veh)) or ""
+    local myplate = GetVehicleNumberPlateText(veh) or ""
     if myplate == plate then
       if state.fuel and SetVehicleFuelLevel then pcall(SetVehicleFuelLevel, veh, state.fuel) end
       if state.engine_health then pcall(SetVehicleEngineHealth, veh, state.engine_health) end
@@ -19,8 +26,9 @@ AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
 end)
 
 Citizen.CreateThread(function()
+  local period_ms = REPORT_MS
   while true do
-    Citizen.Wait(REPORT_MS)
+    Citizen.Wait(period_ms)
     local ped = PlayerPedId()
     if not ped then goto continue end
     local veh = GetVehiclePedIsIn(ped, false)
@@ -32,16 +40,16 @@ Citizen.CreateThread(function()
         seat = -2
       end
 
-      local plate = (GetVehicleNumberPlateText and GetVehicleNumberPlateText(veh)) or ""
+      local plate = GetVehicleNumberPlateText(veh) or ""
       local rpm = (GetVehicleCurrentRpm and GetVehicleCurrentRpm(veh)) or 0
       local engine_health = (GetVehicleEngineHealth and GetVehicleEngineHealth(veh)) or 0
       local body_health = (GetVehicleBodyHealth and GetVehicleBodyHealth(veh)) or 0
       local engine_on = (GetIsVehicleEngineRunning and GetIsVehicleEngineRunning(veh)) or false
 
-      -- Calcular delta de odômetro (km) baseado na velocidade atual
+      -- Calcular delta de odômetro (km) baseado na velocidade e período atual
       local speed_ms = (GetEntitySpeed and GetEntitySpeed(veh)) or 0
       local speed_kmh = speed_ms * 3.6
-      local delta_km = speed_kmh * (REPORT_MS / 1000) / 3600
+      local delta_km = speed_kmh * (period_ms / 1000) / 3600
 
       local payload = {
         rpm = rpm,
@@ -55,6 +63,12 @@ Citizen.CreateThread(function()
       if seat == -1 then
         TriggerServerEvent("vHub:vState", plate, payload)
       end
+
+      -- Cadência adaptativa: parado=2s, idle=1s, dirigindo=250ms
+      period_ms = adaptiveDelay(speed_kmh, rpm)
+    else
+      -- Fora de veículo: cadência mínima 1s (não há nada para reportar)
+      period_ms = 1000
     end
     ::continue::
   end

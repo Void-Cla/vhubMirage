@@ -1,4 +1,4 @@
-// nui/js/dealership.js  view "Concession ria"
+// nui/js/dealership.js — view "Concessionária" (tema vHub)
 (() => {
   const App = window.vhubApp;
   const $list   = document.getElementById('d-list');
@@ -20,9 +20,9 @@
     const items = (snapshot?.catalog || [])
       .filter(v => activeCat === 'all' || v.tipo === activeCat);
     if (!items.length) {
-      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--text-dim2);">
-        <i class="fa-solid fa-store-slash" style="font-size:48px; display:block; margin-bottom:8px;"></i>
-        Cat logo vazio.
+      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--vh-text-dim2);">
+        <i class="fa-solid fa-store-slash" style="font-size:48px; display:block; margin-bottom:8px; color:rgba(243,181,58,0.25);"></i>
+        Catálogo vazio.
       </div>`;
       return;
     }
@@ -39,7 +39,7 @@
           <span>${v.tipo} / ${v.categoria}</span>
           <span class="preco">${App.fmtMoney(v.preco)}</span>
         </div>
-        ${v.estoque >= 0 ? `<div style="font-size:11px; color:var(--text-dim2);">Estoque: ${v.estoque}</div>` : ''}`;
+        ${v.estoque >= 0 ? `<div style="font-size:11px; color:var(--vh-text-dim2);">Estoque: ${v.estoque}</div>` : ''}`;
       c.onclick = () => { selectedModel = v.model; renderList(); renderDetail(v); };
       $list.appendChild(c);
     });
@@ -68,14 +68,14 @@
         ${(v.tags || []).map(t => `<span class="tag warn">${t}</span>`).join('')}
       </div>
       <div class="stats">
-        ${statBar('Vel.', v.stats?.vel || 50)}
-        ${statBar('Acel.', v.stats?.acel || 50)}
-        ${statBar('Freio', v.stats?.freio || 50)}
-        ${statBar('Dir.',  v.stats?.dir  || 50)}
+        ${statBar('Velocidade',    v.stats?.vel   || 50)}
+        ${statBar('Aceleração',    v.stats?.acel  || 50)}
+        ${statBar('Freio',         v.stats?.freio || 50)}
+        ${statBar('Dirigibilidade',v.stats?.dir   || 50)}
       </div>
       <div class="detail-actions">
         <button class="btn primary full" data-act="buy"><i class="fa-solid fa-credit-card"></i> Comprar ${App.fmtMoney(v.preco)}</button>
-        <button class="btn full" data-act="buy-custom"><i class="fa-solid fa-pen"></i> Comprar c/ Placa Custom +${App.fmtMoney(cfg.taxa_placa || 200)}</button>
+        <button class="btn full" data-act="buy-custom"><i class="fa-solid fa-pen"></i> Comprar com placa personalizada +${App.fmtMoney(cfg.taxa_placa || 200)}</button>
         <button class="btn" data-act="test"><i class="fa-solid fa-flag-checkered"></i> Test Drive</button>
         <button class="btn warn" data-act="rent"><i class="fa-solid fa-key"></i> Alugar</button>
       </div>`;
@@ -88,21 +88,27 @@
   async function handleAct(act, v) {
     const conc = snapshot.conc;
     if (act === 'buy') {
-      const r = await App.modal({ title: 'Confirmar Compra', text: `Comprar ${v.nome} por ${App.fmtMoney(v.preco)}?` });
+      const r = await App.modal({
+        title: 'Confirmar Compra',
+        text: `Comprar ${v.nome} por ${App.fmtMoney(v.preco)}?`,
+        okText: 'Comprar',
+      });
       if (r.ok) App.post('buy', { model: v.model, conc_id: conc.id });
     } else if (act === 'buy-custom') {
       const r = await App.modal({
-        title: 'Comprar com Placa Custom',
-        html: `<p>Placa (2-8 chars, A-Z/0-9): + ${App.fmtMoney(snapshot.cfg?.taxa_placa || 200)}</p>
+        title: 'Comprar com Placa Personalizada',
+        html: `<p>Placa (2 a 8 caracteres, A-Z/0-9). Custo adicional: ${App.fmtMoney(snapshot.cfg?.taxa_placa || 200)}.</p>
                <label>Placa</label><input data-field="plate" maxlength="8" placeholder="EX 1234">`,
+        okText: 'Comprar',
       });
       if (r.ok && r.fields.plate) App.post('buy', { model: v.model, conc_id: conc.id, plate: r.fields.plate.toUpperCase() });
     } else if (act === 'test') {
       App.post('testDrive', { model: v.model, conc_id: conc.id });
     } else if (act === 'rent') {
       const r = await App.modal({
-        title: 'Alugar Ve culo',
-        html: `<label>Horas (1-168)</label><input data-field="horas" type="number" value="24" min="1" max="168">`,
+        title: 'Alugar Veículo',
+        html: `<label>Horas (1 a 168)</label><input data-field="horas" type="number" value="24" min="1" max="168">`,
+        okText: 'Alugar',
       });
       if (r.ok) App.post('rent', { model: v.model, conc_id: conc.id, horas: +r.fields.horas });
     }
@@ -110,16 +116,19 @@
 
   $cats.forEach((b) => {
     b.onclick = () => {
-      $cats.forEach(x => x.classList.remove('active')); b.classList.add('active');
-      activeCat = b.dataset.cat; renderList();
+      $cats.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      activeCat = b.dataset.cat;
+      renderList();
     };
   });
 
   App.views.dealer = {
     render(data) {
       snapshot = data || {};
-      $name.textContent = snapshot.conc?.label || '';
-      selectedModel = null; renderList();
+      $name.textContent = snapshot.conc?.label ? `— ${snapshot.conc.label}` : '';
+      selectedModel = null;
+      renderList();
       $detail.innerHTML = `<div class="empty"><i class="fa-solid fa-tag"></i><br />Selecione um modelo</div>`;
     },
   };

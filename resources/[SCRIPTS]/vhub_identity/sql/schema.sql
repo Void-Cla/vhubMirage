@@ -1,7 +1,7 @@
 -- sql/schema.sql — vhub_identity
--- char_id é INT (não UNSIGNED) para casar com vh_characters.id (INT AUTO_INCREMENT signed)
+-- char_id é INT UNSIGNED para casar com vh_characters.id (CORE FROZEN v1.0)
 CREATE TABLE IF NOT EXISTS `vh_identity` (
-  `char_id`      INT              NOT NULL,
+  `char_id`      INT UNSIGNED     NOT NULL,
   `firstname`    VARCHAR(50)      NOT NULL DEFAULT '',
   `lastname`     VARCHAR(50)      NOT NULL DEFAULT '',
   `age`          TINYINT UNSIGNED NOT NULL DEFAULT 25,

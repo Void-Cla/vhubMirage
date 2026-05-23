@@ -13,7 +13,7 @@ local _E = {
   NET_V_LEAVE      = "vHub:vLeave",
   NET_V_STATE      = "vHub:vState",
   NET_SELECT_CHAR  = "vHub:selectChar",
-  NET_SAVE_POS     = "vHub:savePos",
+  -- NET_SAVE_POS removido em Frozen v1.0 — vhub_player_state é dono da posição
 
   -- Eventos server-side (TriggerEvent local)
   EVT_PLAYER_JOIN   = "vHub:playerJoin",
@@ -26,7 +26,7 @@ local _E = {
   CLI_INIT_DONE    = "vHub:initDone",
   CLI_CHAR_SEL     = "vHub:charSelected",
   CLI_CHAR_FAIL    = "vHub:charSelectFailed",
-  CLI_DO_SPAWN     = "vHub:doSpawn",
+  -- CLI_DO_SPAWN removido em Frozen v1.0 — vhub_player_state aplica spawn
 }
 
 -- Metatable read-only para evitar escrita acidental

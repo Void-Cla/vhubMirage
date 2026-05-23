@@ -89,9 +89,9 @@ VHubAdmin.cfg = {
 
   -- ---------- Pol tica de noclip ----------------------------------------
   noclip = {
-    speed_slow = 4.0,
-    speed_norm = 12.0,
-    speed_fast = 36.0,
+    speed_slow = 5.0,
+    speed_norm = 18.0,
+    speed_fast = 54.0,
   },
 
   -- ---------- Tetos de listagem (anti-DoS NUI) --------------------------

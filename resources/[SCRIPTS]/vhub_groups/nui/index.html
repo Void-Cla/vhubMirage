@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub — Grupos</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="vhub-bg" class="hidden"></div>
+  <canvas id="vhub-sand" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+
+  <section id="panel" class="vh-panel hidden">
+    <!-- Cabeçalho -->
+    <header class="vh-header">
+      <div class="vh-brand">
+        <img src="assets/logo.png" alt="vHub"
+             onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-users-gear'}))">
+        <span class="vh-brand-txt">vHub <strong>Grupos</strong></span>
+        <small id="ctx-info">— Painel de permissões</small>
+      </div>
+      <div class="vh-header-actions">
+        <span class="vh-pill" id="hdr-stats">
+          <i class="fa-solid fa-circle-check"></i>
+          <span id="hdr-online">0</span> online
+        </span>
+        <button class="vh-btn ghost" data-action="refresh" title="Atualizar">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+        <button class="vh-btn ghost" data-action="close" title="Fechar (ESC)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="vh-tabs">
+      <button class="vh-tab active" data-tab="players">
+        <i class="fa-solid fa-user-group"></i> Jogadores
+      </button>
+      <button class="vh-tab" data-tab="catalog">
+        <i class="fa-solid fa-list-check"></i> Catálogo
+      </button>
+      <button class="vh-tab" data-tab="audit">
+        <i class="fa-solid fa-clock-rotate-left"></i> Auditoria
+      </button>
+      <button class="vh-tab" data-tab="system">
+        <i class="fa-solid fa-gauge-high"></i> Sistema
+      </button>
+    </nav>
+
+    <!-- Body -->
+    <main class="vh-body">
+      <!-- Aba Jogadores -->
+      <section class="vh-tabpanel active" data-tabpanel="players">
+        <div class="vh-toolbar">
+          <input id="players-search" class="vh-input" type="text"
+                 placeholder="Buscar por nome, ID ou char_id…" />
+          <span class="vh-toolbar-info"><span id="players-count">0</span> jogador(es)</span>
+        </div>
+        <div id="players-grid" class="vh-grid"></div>
+      </section>
+
+      <!-- Aba Catálogo -->
+      <section class="vh-tabpanel" data-tabpanel="catalog">
+        <div class="vh-toolbar">
+          <input id="catalog-search" class="vh-input" type="text"
+                 placeholder="Buscar grupo, label ou tipo…" />
+          <span class="vh-toolbar-info"><span id="catalog-count">0</span> grupos definidos</span>
+        </div>
+        <div id="catalog-grid" class="vh-grid"></div>
+      </section>
+
+      <!-- Aba Auditoria -->
+      <section class="vh-tabpanel" data-tabpanel="audit">
+        <div class="vh-toolbar">
+          <input id="audit-target" class="vh-input" type="number"
+                 placeholder="char_id alvo (opcional)" min="0" />
+          <input id="audit-action" class="vh-input" type="text"
+                 placeholder="ação (add_group, remove_group…)" />
+          <input id="audit-group" class="vh-input" type="text"
+                 placeholder="group_id (opcional)" />
+          <button class="vh-btn primary" data-action="audit-search">
+            <i class="fa-solid fa-magnifying-glass"></i> Buscar
+          </button>
+        </div>
+        <div class="vh-table-wrap">
+          <table class="vh-table">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Ação</th>
+                <th>Ator</th>
+                <th>Alvo</th>
+                <th>Grupo</th>
+                <th>Nível</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Aba Sistema -->
+      <section class="vh-tabpanel" data-tabpanel="system">
+        <div class="vh-system-cards" id="system-cards">
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-database"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">SQL</span>
+              <span class="vh-stat-value" id="sys-sql">—</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-server"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Core</span>
+              <span class="vh-stat-value" id="sys-core">—</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-memory"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Entries (VRAM)</span>
+              <span class="vh-stat-value" id="sys-entries">0</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-bullseye"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Cache hits</span>
+              <span class="vh-stat-value" id="sys-hits">0</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-question"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Cache misses</span>
+              <span class="vh-stat-value" id="sys-misses">0</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-broom"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Invalidações</span>
+              <span class="vh-stat-value" id="sys-invals">0</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-crown"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Owner char_id</span>
+              <span class="vh-stat-value" id="sys-owner">—</span>
+            </div>
+          </div>
+          <div class="vh-card vh-stat">
+            <div class="vh-stat-icon"><i class="fa-solid fa-clock"></i></div>
+            <div class="vh-stat-body">
+              <span class="vh-stat-label">Cron expira</span>
+              <span class="vh-stat-value" id="sys-cron">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="vh-card vh-info">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>
+            <strong>VRAM-first.</strong> Toda checagem de permissão é O(1) sem round-trip SQL.
+            Mutação atualiza VRAM + SQL + audit + cliente afetado em uma única passada.
+          </span>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: adicionar/editar grupo -->
+    <div class="vh-modal-backdrop hidden" id="modal-edit">
+      <div class="vh-modal">
+        <header class="vh-modal-head">
+          <span id="modal-title">Adicionar grupo</span>
+          <button class="vh-btn ghost" data-action="modal-close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </header>
+        <div class="vh-modal-body">
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Personagem</span>
+            <strong id="modal-target">—</strong>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Grupo</span>
+            <select id="modal-group" class="vh-input"></select>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Nível</span>
+            <select id="modal-level" class="vh-input"></select>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Expira em (dias)</span>
+            <input id="modal-days" class="vh-input" type="number" min="0" placeholder="0 = sem expiração" />
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Motivo</span>
+            <input id="modal-reason" class="vh-input" type="text" maxlength="120"
+                   placeholder="ex: contratação polícia" />
+          </div>
+        </div>
+        <footer class="vh-modal-foot">
+          <button class="vh-btn ghost" data-action="modal-close">Cancelar</button>
+          <button class="vh-btn primary" data-action="modal-save">
+            <i class="fa-solid fa-floppy-disk"></i> Confirmar
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-stack" class="vh-toast-stack"></div>
+  </section>
+
+  <script src="js/app.js"></script>
+  <script src="js/sand.js"></script>
+</body>
+</html>

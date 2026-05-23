@@ -7,7 +7,13 @@ local state = VHubGarage.state
 
 state.veiculos = state.veiculos or {}
 
-Citizen.CreateThread(function() DecorRegister('vhub.plate', 7) end)  -- 7 = string
+-- forward declarations (permitem que `spawnVehicle` chame fun  es definidas
+-- mais abaixo no arquivo; Lua resolve a vari vel local em runtime)
+local despawnLocal, scanAndDeleteByPlate
+
+-- NOTA: n o usamos `DecorSetString` (foi removido do FiveM). A placa GTA
+-- nativa (`SetVehicleNumberPlateText` / `GetVehicleNumberPlateText`)   o
+-- identificador  nico do ve culo  ela j  replica por sync padr o.
 
 -- ----------------------------------------------------------------------------
 -- Helpers
@@ -74,9 +80,13 @@ local function collectCustomization(veh)
 end
 
 -- ----------------------------------------------------------------------------
--- SPAWN
+-- SPAWN  apaga duplicata local + scan global antes de criar
 -- ----------------------------------------------------------------------------
 local function spawnVehicle(snap, pos, entrar)
+  -- defesa: apaga qualquer inst ncia anterior dessa placa
+  if state.veiculos[snap.plate] then despawnLocal(snap.plate) end
+  scanAndDeleteByPlate(snap.plate)
+
   local hash = loadModel(snap.model)
   if not hash then return false end
   local x, y, z = pos.x, pos.y, pos.z + 0.5
@@ -88,7 +98,6 @@ local function spawnVehicle(snap, pos, entrar)
   placeOnSurface(veh, snap.surface)
   SetEntityAsMissionEntity(veh, true, true)
   SetVehicleHasBeenOwnedByPlayer(veh, true)
-  DecorSetString(veh, 'vhub.plate', snap.plate)
   applyCustomization(veh, snap.customization)
   if snap.locked then
     SetVehicleDoorsLocked(veh, 2)
@@ -115,18 +124,79 @@ AddEventHandler(E.SPAWN_OUT, function(list)
 end)
 
 -- ----------------------------------------------------------------------------
--- DESPAWN
+-- DESPAWN  apaga DE VERDADE (warp out + NetworkRequestControl + DeleteVehicle)
+-- + scan do pool de ve culos para apagar qualquer duplicata com mesma placa
 -- ----------------------------------------------------------------------------
-local function despawnLocal(plate)
-  local veh = state.veiculos[plate]
-  if not veh or not DoesEntityExist(veh) then state.veiculos[plate] = nil; return end
-  if GetVehiclePedIsIn(PlayerPedId(), false) == veh then
-    TaskLeaveVehicle(PlayerPedId(), veh, 4160); Citizen.Wait(500)
+
+-- iterador local de ve culos no mundo
+local function enumerateVehicles()
+  return coroutine.wrap(function()
+    local it, veh = FindFirstVehicle()
+    if not it or not veh or veh == 0 then
+      if it then EndFindVehicle(it) end
+      return
+    end
+    coroutine.yield(veh)
+    while true do
+      local has
+      has, veh = FindNextVehicle(it)
+      if not has or not veh or veh == 0 then break end
+      coroutine.yield(veh)
+    end
+    EndFindVehicle(it)
+  end)
+end
+
+-- tenta deletar o entity (assume controle de rede + DeleteEntity + fallback)
+local function tryDeleteEntity(veh)
+  if not veh or veh == 0 or not DoesEntityExist(veh) then return false end
+  NetworkRequestControlOfEntity(veh)
+  local t = 0
+  while not NetworkHasControlOfEntity(veh) and t < 1000 do
+    Citizen.Wait(50); t = t + 50
   end
-  SetEntityAsMissionEntity(veh, false, true)
-  local ref = veh
-  SetVehicleAsNoLongerNeeded(ref)
+  SetEntityAsMissionEntity(veh, true, true)
+  DeleteEntity(veh)
+  if DoesEntityExist(veh) then SetVehicleAsNoLongerNeeded(veh) end
+  return not DoesEntityExist(veh)
+end
+
+-- normaliza placa para compara  o (sem espa os, upper)
+local function normPlate(p)
+  if type(p) ~= 'string' then return '' end
+  return p:upper():gsub('%s+', '')
+end
+
+-- procura QUALQUER ve culo no mundo com placa == plate e apaga
+-- Usa SOMENTE placa nativa do GTA (DecorSetString foi removido do FiveM).
+scanAndDeleteByPlate = function(plate)
+  if not plate or plate == '' then return 0 end
+  local target = normPlate(plate)
+  local removed = 0
+  for veh in enumerateVehicles() do
+    if DoesEntityExist(veh) then
+      local raw = GetVehicleNumberPlateText(veh)
+      if raw and normPlate(raw) == target then
+        if tryDeleteEntity(veh) then removed = removed + 1 end
+      end
+    end
+  end
+  return removed
+end
+
+despawnLocal = function(plate)
+  local veh = state.veiculos[plate]
+  if veh and DoesEntityExist(veh) then
+    local ped = PlayerPedId()
+    if GetVehiclePedIsIn(ped, false) == veh then
+      TaskLeaveVehicle(ped, veh, 16)  -- flag 16 = warp out (sem anima  o)
+      Citizen.Wait(150)
+    end
+    tryDeleteEntity(veh)
+  end
   state.veiculos[plate] = nil
+  -- defesa: apaga qualquer outra inst ncia com a mesma placa
+  scanAndDeleteByPlate(plate)
 end
 
 RegisterNetEvent(E.DO_DESPAWN)

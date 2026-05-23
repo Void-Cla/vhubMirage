@@ -45,10 +45,13 @@ AddEventHandler(E.ACT_RENT, function(model, conc_id, horas)
 
     local now = os.time()
     local rented_until = now + horas * 3600
+    -- Aluguel: status normal 'garage' (igual aos demais). O que marca
+    -- como aluguel   o campo `rented_until` (consultado pelo cron de expira  o).
+    -- Isso permite spawnar/guardar normalmente; chave   kind='rental'.
     SQL:createVehicle({
       plate = plate, model = model, vtype = entry.tipo,
       category = entry.categoria, char_id = cid,
-      status = 'rental',
+      status = 'garage',
       customization = U.jenc({ model = model }),
       locked = false,
       purchase_price = 0, purchase_at = now,
@@ -64,6 +67,7 @@ end)
 
 -- ----------------------------------------------------------------------------
 -- CRON: aluguel expirando (1x por minuto)
+-- Identifica  o por `rented_until` (n o por status, que pode ser garage/out).
 -- ----------------------------------------------------------------------------
 Citizen.CreateThread(function()
   while true do
@@ -71,13 +75,14 @@ Citizen.CreateThread(function()
     local now = os.time()
     local rows = SQL.query([[
       SELECT plate, char_id FROM vhub_vehicles
-       WHERE status = 'rental' AND rented_until IS NOT NULL AND rented_until <= ?
+       WHERE rented_until IS NOT NULL AND rented_until <= ?
     ]], { now }) or {}
     for _, r in ipairs(rows) do
-      -- tira chave-item se dono online
+      -- tira chave-item se dono online + despawna em todos os clientes
       for src, u in pairs(Core.sessions) do
         if u.char_id == r.char_id then Core.takeKeyItem(src, r.plate); break end
       end
+      TriggerClientEvent(E.DO_DESPAWN, -1, r.plate)
       SQL:revokeKey(r.plate, r.char_id, 'rental')
       SQL:deleteVehicle(r.plate)
       Core:log(r.plate, 'rent_expired', r.char_id, {})

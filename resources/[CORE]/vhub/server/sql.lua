@@ -34,6 +34,20 @@ S:prepare("vh/add_id",
 S:prepare("vh/uid_by_id",
   "SELECT user_id FROM vh_user_ids WHERE identifier = @identifier")
 
+-- Resolve N identifiers em 1 round-trip (lazy-prepared por N).
+-- Uso: local name = vHub.SQL.uidByIdsIn(#ids); S:query(name, ids)
+vHub.SQL = vHub.SQL or {}
+function vHub.SQL.uidByIdsIn(n)
+  local name = "vh/uid_by_ids_in_" .. tostring(n)
+  if not S._prepared[name] then
+    local qs = {}
+    for i = 1, n do qs[i] = "?" end
+    S:prepare(name,
+      "SELECT identifier, user_id FROM vh_user_ids WHERE identifier IN ("..table.concat(qs,",")..")")
+  end
+  return name
+end
+
 -- ── Personagens ───────────────────────────────────────────────────────
 
 -- Busca o maior char_id para seed do alocador
@@ -58,7 +72,7 @@ S:prepare("vh/delete_char",
 
 -- ── Dados KV (user / char / global) ──────────────────────────────────
 
--- dvalue é MEDIUMBLOB — msgpack binário
+-- dvalue é BLOB — msgpack binário (pós-freeze v1.0; antes era MEDIUMBLOB)
 S:prepare("vh/set_ud",
   "REPLACE INTO vh_user_data(user_id, dkey, dvalue) VALUES(@user_id, @key, @value)")
 S:prepare("vh/get_ud",

@@ -15,8 +15,8 @@ S._cprepare   = {}    -- fila de prepares antes do driver
 S._cquery     = {}    -- fila de queries antes do driver
 S._prepared   = {}    -- queries registradas
 
-local BATCH_MAX = 150   -- força flush ao atingir este volume
-local BATCH_INT = 5000  -- flush automático a cada 5s
+local BATCH_MAX = 800   -- força flush ao atingir este volume
+local BATCH_INT = 3000  -- flush automático a cada 3s
 
 -- Auto-flush periódico em thread dedicada
 Citizen.CreateThread(function()
@@ -108,7 +108,8 @@ function S:exec(n, p)   return self:query(n, p, "execute") end
 function S:get(et, eid, key)
   local t = self._mem[et]; if not t then return nil end
   local e = t[eid];        if not e then return nil end
-  return key ~= nil and e[key] or e
+  if key ~= nil then return e[key] end
+  return e
 end
 
 function S:set(et, eid, key, val, tx)
@@ -189,16 +190,34 @@ function S:_flush()
   local ops, n = self._batch, self._batchN
   self._batch, self._batchN = {}, 0
   Citizen.CreateThread(function()
-    local ok, r = pcall(self._driver.batch, self._driver, ops, n)
-    if not ok or r == false then
-      -- Reenfileira ops falhas preservando ordem
+    -- Driver:batch retorna (bool, lista_de_falhas):
+    --   true,  {}          → tudo OK
+    --   false, {op, op, …} → falha parcial: re-enfileira só as ops que falharam
+    -- pcall captura exceções inesperadas (crash no driver, etc.)
+    local pcall_ok, batch_ok, batch_falhas = pcall(self._driver.batch, self._driver, ops, n)
+    if not pcall_ok then
+      -- Exceção no driver: re-enfileira tudo (seguro de última instância)
       local pend, pendN = self._batch, self._batchN
       local fila = {}
       for i = 1, n     do fila[i]   = ops[i]  end
       for i = 1, pendN do fila[n+i] = pend[i] end
       self._batch, self._batchN = fila, n + pendN
       self._flushing = false
-      vHub.Logger:warn("state", ("batch reenfileirado total=%d"):format(n))
+      vHub.Logger:warn("state", ("batch reenfileirado total=%d (excecao driver)"):format(n))
+      return
+    end
+    if not batch_ok and type(batch_falhas) == "table" then
+      -- Falha parcial: re-enfileira APENAS as ops que o driver reportou como falhas.
+      -- Ops de outros jogadores que tiveram sucesso NÃO são re-enfileiradas.
+      local nf = #batch_falhas
+      local pend, pendN = self._batch, self._batchN
+      local fila = {}
+      for i = 1, nf    do fila[i]    = batch_falhas[i] end
+      for i = 1, pendN do fila[nf+i] = pend[i] end
+      self._batch, self._batchN = fila, nf + pendN
+      self._flushing = false
+      vHub.Logger:warn("state",
+        ("batch parcial: %d/%d op(s) reenfileirada(s)"):format(nf, n))
       return
     end
     self._flushing = false
@@ -278,6 +297,14 @@ local function _set(et, eid, key, val, sql, idf, tx)
   S:set(et, eid, key, val, tx)
   -- Enfileira escrita no banco com cópia serializada
   local packed = _pack(val)
+  -- Guarda de tamanho: BLOB > 60 KB envenena toda a SQL transaction do batch.
+  -- 61440 = 60 KB (4 KB abaixo do limite de 64 KB do tipo BLOB).
+  if type(packed) == "string" and #packed > 61440 then
+    vHub.Logger:error("state",
+      ("BLOB overflow — op descartada et=%s eid=%s key=%s size=%d"):format(
+        et, tostring(eid), tostring(key), #packed))
+    return
+  end
   S:_queue({ sql, { [idf]=eid, key=key, value=packed } })
   -- IMPORTANTE: invalida a VRAM logo após para que a próxima leitura
   --   vá ao banco e receba o dado limpo (evita acúmulo de referências)

@@ -12,21 +12,15 @@ local CFG = {
   perder_ao_morrer   = true,
 
   itens = {
-    ["repairkit"]    = { nome="Kit de Reparo",   desc="Repara veículo.",        peso=1.0, stack=1   },
-    ["water_bottle"] = { nome="Garrafa d'Água",  desc="Reduz a sede.",          peso=0.5, stack=10  },
-    ["sandwich"]     = { nome="Sanduíche",        desc="Reduz a fome.",         peso=0.3, stack=10  },
-    ["bandage"]      = { nome="Bandagem",         desc="Restaura 10 HP.",       peso=0.2, stack=20  },
-    ["medkit"]       = { nome="Kit Médico",       desc="Restaura 50 HP.",       peso=1.5, stack=5   },
-    ["handcuffs"]    = { nome="Algemas",          desc="Prende suspeitos.",     peso=0.3, stack=3   },
-    ["lockpick"]     = { nome="Gazua",            desc="Abre travas simples.",  peso=0.1, stack=5   },
-    ["phone"]        = { nome="Celular",          desc="Comunicação.",          peso=0.2, stack=1   },
-    ["radio"]        = { nome="Rádio",            desc="Comunicação policial.", peso=0.5, stack=1   },
-    ["id_card"]      = { nome="Carteira de ID",   desc="Documento de ID.",      peso=0.1, stack=1   },
-    ["veh_key"]      = { nome="Chave de Veículo", desc="Chave para um veículo.",peso=0.1, stack=1   },
+    ["reparekit"] = { nome="Kit de Reparo", desc="Repara veículo.", peso=1.0, stack=1, tag=legal, },
+    ["lockpick"]  = { nome="Lockpick", desc="Usado para arrombar carros.", peso=0.1, stack=1, tag=ilegal },
+    ["rg"]   = { nome="Carteirinha", desc="Identificação pessoal.", peso=0.1, stack=1, tag=legal },
+    ["veh_key"] = { nome="Chave de Veículo", desc="Chave de veículo genérica.", peso=0.1, stack=1, tag=legal },
+    
   },
 
   -- Itens não perdidos na morte
-  itens_preservados = { "id_card", "veh_key" },
+  itens_preservados = { "rg", "veh_key" },
   callbacks_uso     = {},
 }
 

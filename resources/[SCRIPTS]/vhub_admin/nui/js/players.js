@@ -57,12 +57,12 @@
       <div class="row"><span class="k">Carteira</span><span>${App.fmtMoney(info.wallet)}</span></div>
       <div class="row"><span class="k">Banco</span><span>${App.fmtMoney(info.bank)}</span></div>
       <div class="row"><span class="k">Grupos</span><span>${(info.groups||[]).join(', ') || '-'}</span></div>
-      <div class="row"><span class="k">Ve culos</span><span>${(info.vehicles||[]).map(v=>v.plate).join(', ') || '-'}</span></div>
-      ${info.jail_until ? `<div class="row"><span class="k">Jail at </span><span style="color:var(--danger)">${App.fmtDate(info.jail_until)}</span></div>` : ''}
-      ${info.mute_until ? `<div class="row"><span class="k">Mute at </span><span style="color:var(--warn)">${App.fmtDate(info.mute_until)}</span></div>` : ''}
+      <div class="row"><span class="k">Veículos</span><span>${(info.vehicles||[]).map(v=>v.plate).join(', ') || '—'}</span></div>
+      ${info.jail_until ? `<div class="row"><span class="k">Preso até</span><span style="color:var(--vh-danger)">${App.fmtDate(info.jail_until)}</span></div>` : ''}
+      ${info.mute_until ? `<div class="row"><span class="k">Silenciado até</span><span style="color:var(--vh-amber)">${App.fmtDate(info.mute_until)}</span></div>` : ''}
       <div class="row"><span class="k">Ping</span><span>${info.ping}ms</span></div>
       <div class="actions">
-        <button class="btn primary" data-a="tp">Ir at </button>
+        <button class="btn primary" data-a="tp">Ir até</button>
         <button class="btn" data-a="tptome">Trazer</button>
         <button class="btn" data-a="spec">Espectar</button>
         <button class="btn" data-a="heal">Curar</button>
@@ -79,11 +79,16 @@
     $detail.querySelectorAll('[data-a]').forEach(b => b.onclick = () => quickAct(b.dataset.a, info));
   };
 
+  const ACT_LBL = {
+    warn: 'Avisar', kick: 'Expulsar', ban: 'Banir',
+    jail: 'Prender', mute: 'Silenciar',
+  };
+
   async function quickAct(a, info) {
     const t = info.src;
     if (a === 'warn' || a === 'kick' || a === 'ban') {
       const r = await App.modal({
-        title: a.toUpperCase() + ' [' + t + ']',
+        title: `${ACT_LBL[a]} — jogador ${t}`,
         html: `<label>Motivo</label><input data-field="reason" maxlength="180">`,
       });
       if (r.ok) App.post('act', { action: a, fields: { target: t, message: r.fields.reason, reason: r.fields.reason } });
@@ -91,7 +96,7 @@
     }
     if (a === 'jail' || a === 'mute') {
       const r = await App.modal({
-        title: a.toUpperCase() + ' [' + t + ']',
+        title: `${ACT_LBL[a]} — jogador ${t}`,
         html: `<label>Minutos</label><input type="number" data-field="minutes" value="10" min="5" max="4320">
                <label>Motivo</label><input data-field="reason" maxlength="180">`,
       });

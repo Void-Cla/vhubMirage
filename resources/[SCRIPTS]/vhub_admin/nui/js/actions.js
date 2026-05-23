@@ -1,29 +1,29 @@
-// nui/js/actions.js  renderiza grids de a  es a partir de App.state.actions
+// nui/js/actions.js — renderiza grids de ações a partir de App.state.actions
 (() => {
   const App = window.vhubAdmin;
 
-  // R tulo visual da a  o em PT-BR (sobrep e a chave inglesa de actions.lua)
+  // Rótulo visual da ação em PT-BR (sobrepõe a chave inglesa de actions.lua)
   const PT_LABEL = {
     kick: 'Expulsar', ban: 'Banir', unban: 'Desbanir',
     whitelist: 'Aprovar na lista', unwl: 'Remover da lista',
-    warn: 'Aviso', jail: 'Prender', unjail: 'Soltar',
+    warn: 'Avisar', jail: 'Prender', unjail: 'Soltar',
     mute: 'Silenciar', unmute: 'Liberar fala',
-    tp: 'Ir at  jogador', tptome: 'Trazer jogador', tpgo: 'Ir ao marcador',
-    tpcds: 'Ir a coordenadas', tpall: 'Trazer todos', tplast: 'Voltar  posi  o',
+    tp: 'Ir até o jogador', tptome: 'Trazer jogador', tpgo: 'Ir ao marcador',
+    tpcds: 'Ir a coordenadas', tpall: 'Trazer todos', tplast: 'Voltar à posição',
     heal: 'Curar', healall: 'Curar todos',
-    god: 'Invenc vel', freeze: 'Congelar',
+    god: 'Invencível', freeze: 'Congelar',
     revive: 'Reviver', reviveall: 'Reviver todos',
-    invis: 'Invis vel', skin: 'Trocar skin',
+    invis: 'Invisível', skin: 'Trocar aparência',
     spec: 'Espectar', kill: 'Matar',
-    spawncar: 'Spawnar ve culo', delveh: 'Deletar ve culo',
-    fix: 'Reparar ve culo', tuning: 'Tuning completo', carcolor: 'Cor RGB',
-    weather: 'Clima', time: 'Hor rio', blackout: 'Apag o',
-    clearzone: 'Limpar  rea', announce: 'Anunciar', staffchat: 'Chat da equipe',
+    spawncar: 'Spawnar veículo', delveh: 'Deletar veículo',
+    fix: 'Reparar veículo', tuning: 'Aplicar tuning', carcolor: 'Cor RGB',
+    weather: 'Clima', time: 'Horário', blackout: 'Apagão',
+    clearzone: 'Limpar área', announce: 'Anunciar', staffchat: 'Chat da equipe',
     givemoney: 'Dar dinheiro', setmoney: 'Definir saldo',
-    giveitem: 'Dar item', clearinv: 'Limpar invent rio',
+    giveitem: 'Dar item', clearinv: 'Limpar inventário',
     addgroup: 'Adicionar grupo', delgroup: 'Remover grupo',
     rg: 'Ver ficha', coords: 'Coordenadas', pon: 'Listar jogadores',
-    reports: 'Den ncias',
+    reports: 'Denúncias',
   };
 
   App.renderActions = () => {
@@ -42,25 +42,23 @@
   };
 
   async function trigger(key, a) {
-    // a  es sem campos: dispara direto
     if (!a.fields || a.fields.length === 0) {
       if (a.dangerous) {
-        const r = await App.modal({ text: `Executar ${a.desc}?` });
+        const r = await App.modal({ title: 'Confirmar', text: `Executar: ${a.desc}?` });
         if (!r.ok) return;
       }
       App.post('act', { action: key, fields: {} });
       return;
     }
-    // monta form din mico
     const labels = {
       target: 'Alvo (ID)', uid: 'UID', reason: 'Motivo', message: 'Mensagem',
-      minutes: 'Minutos', x: 'X', y: 'Y', z: 'Z', h: 'Heading',
+      minutes: 'Minutos', x: 'X', y: 'Y', z: 'Z', h: 'Direção',
       model: 'Modelo', r: 'R (0-255)', g: 'G (0-255)', b: 'B (0-255)',
       wx: 'Clima', hour: 'Hora', minute: 'Minuto',
       amount: 'Valor (R$)', rota: 'Rota (banco/wallet)',
       item: 'Item', qty: 'Quantidade',
-      group: 'Grupo', radius: 'Raio (m)', notes: 'Notas',
-      id: 'ID do report',
+      group: 'Grupo', radius: 'Raio (m)', notes: 'Observações',
+      id: 'ID da denúncia',
     };
     const types = {
       target: 'number', uid: 'number', minutes: 'number',
@@ -76,7 +74,10 @@
         ? `<label>${lbl}</label><textarea data-field="${f}" maxlength="500"></textarea>`
         : `<label>${lbl}</label><input data-field="${f}" type="${tp}">`;
     }).join('');
-    const res = await App.modal({ title: a.desc, html, okText: a.dangerous ? 'Confirmar a  o' : 'Executar' });
+    const res = await App.modal({
+      title: a.desc, html,
+      okText: a.dangerous ? 'Confirmar ação' : 'Executar',
+    });
     if (!res.ok) return;
     App.post('act', { action: key, fields: res.fields });
   }

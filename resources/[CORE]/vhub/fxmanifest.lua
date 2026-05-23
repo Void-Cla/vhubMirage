@@ -1,3 +1,9 @@
+-- ╔════════════════════════════════════════════════════════════════╗
+-- ║ vHub Mirage — CORE FROZEN v1.0                                 ║
+-- ║ Data de congelamento: 2026-05-22                               ║
+-- ║ Próxima janela de revisão: +12 meses                           ║
+-- ║ Qualquer alteração exige aprovação dos guardiões.              ║
+-- ╚════════════════════════════════════════════════════════════════╝
 -- fxmanifest.lua — vHub Mirage
 -- Ordem de carga garantida pelo runtime FiveM:
 --   shared_scripts → server_scripts → client_scripts
@@ -8,7 +14,7 @@ lua54     'yes'
 name        'vhub'
 author      'vHub Mirage'
 version     '1.0.0'
-description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe, vRP-compat.'
+description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (FROZEN v1.0).'
 
 dependency 'oxmysql'
 

@@ -122,6 +122,8 @@ local function criar_driver()
       promessa:resolve({resultado = resultado, erro = erro})
     end
 
+    -- KNOWN MINOR LEAK: closure permanece viva até 15s mesmo após resolver.
+    -- Aceitável: pico transitório de heap, GC absorve. Não substituir sem API cancelável nativa.
     SetTimeout(15000, function()
       resolver(nil, "timeout_db")
     end)
@@ -230,30 +232,56 @@ local function criar_driver()
   end
 
   function Driver:batch(operacoes, total)
-    if tonumber(total or 0) <= 0 then return true end
+    if tonumber(total or 0) <= 0 then return true, {} end
 
-    local transacao = {}
+    -- Dispara todas as ops em paralelo como executes isolados.
+    -- Cada op tem seu próprio promise — uma falha não cancela as outras.
+    -- Retorna (true, {}) em sucesso total ou (false, {ops_falhas}) em falha parcial.
+    local promessas = {}
     for indice = 1, total do
-      local operacao = operacoes[indice]
-      local nome = type(operacao) == "table" and operacao[1] or nil
+      local operacao  = operacoes[indice]
+      local nome      = type(operacao) == "table" and operacao[1] or nil
       local parametros = type(operacao) == "table" and operacao[2] or nil
-      local consulta = self:_consulta(nome)
-      if not consulta then return false end
-      transacao[#transacao + 1] = {query = consulta, parameters = parametros or {}}
+      local consulta  = self:_consulta(nome)
+      if not consulta then
+        -- query desconhecida: descarta (já logado por _consulta); não re-enfileira
+      else
+        local p         = promise.new()
+        local resolvido = false
+        local function resolver(resultado, erro)
+          if resolvido then return end
+          resolvido = true
+          p:resolve({ ok = (resultado ~= false and resultado ~= nil and erro == nil) })
+        end
+        -- Timeout de segurança por op (reutiliza padrão do driver)
+        SetTimeout(15000, function() resolver(nil, "timeout_op") end)
+        local ok_envio = pcall(function()
+          self.api:update(consulta, parametros or {}, resolver)
+        end)
+        if not ok_envio then resolver(nil, "pcall_falhou") end
+        promessas[#promessas + 1] = { p = p, op = operacao }
+      end
     end
 
-    local ok, resultado, latencia = self:_executar("transaction", transacao, {})
+    -- Coleta resultados; identifica ops que falharam para re-enfileiramento seletivo
+    local falhas = {}
+    for _, item in ipairs(promessas) do
+      local env = Citizen.Await(item.p)
+      if not env.ok then
+        falhas[#falhas + 1] = item.op
+        self.metricas.falhas = self.metricas.falhas + 1
+      end
+    end
+
     self.metricas.transacoes = self.metricas.transacoes + 1
-    Boot.metricas.batches = Boot.metricas.batches + 1
+    Boot.metricas.batches    = Boot.metricas.batches + 1
 
-    if not ok or resultado ~= true then
-      self.metricas.falhas = self.metricas.falhas + 1
+    if #falhas > 0 then
       Boot.metricas.batch_falhas = Boot.metricas.batch_falhas + 1
-      logar("ERROR", "batch SQL falhou", {total = total, latencia_ms = latencia})
-      return false
+      logar("WARN", "batch parcial", { total = total, falhas = #falhas })
+      return false, falhas
     end
-
-    return true
+    return true, {}
   end
 
   return Driver

@@ -28,6 +28,24 @@ function VD:init(plate, key_uid)
     damage={}, tuning={}, garage=nil,
     last_pos={x=0,y=0,z=0,h=0}, odometer=0.0, engine_on=false,
   }
+  -- Cache do último valor replicado ao State Bag (gating por delta — F4.4).
+  -- Default -math.huge garante que o primeiro write SEMPRE acontece.
+  self._last_fuel_bag = -math.huge
+  self._last_eng_bag  = -math.huge
+  self._last_body_bag = -math.huge
+  self._last_odo_bag  = -math.huge
+end
+
+-- Helper: escreve em State Bag apenas se delta >= threshold OU se valor cruzou
+-- limite crítico (0 = vazio/destruído). Evita que cliente fique vendo "0.4L"
+-- quando tanque na verdade já zerou, ou motor "morto" continuar exibindo HP.
+local function bagSet(bag, key, value, vd, last_field, threshold)
+  local last = vd[last_field]
+  local cruzou_zero = (value == 0 and last ~= 0)
+  if cruzou_zero or math.abs(value - last) >= threshold then
+    bag:set(key, value, true)
+    vd[last_field] = value
+  end
 end
 
 -- Write state to FiveM State Bags — FiveM replicates to all clients
@@ -36,12 +54,12 @@ function VD:_syncBags()
   local ent = NetworkGetEntityFromNetworkId(self.netid)
   if not ent or ent == 0 then return end
   local bag = Entity(ent).state; local s = self.state
-  bag:set("vh_fuel", s.fuel,          true)
-  bag:set("vh_eng",  s.engine_health, true)
-  bag:set("vh_body", s.body_health,   true)
-  bag:set("vh_tune", s.tuning,        true)
-  bag:set("vh_odo",  s.odometer,      true)
-  bag:set("vh_on",   s.engine_on,     true)
+  bagSet(bag, "vh_fuel", s.fuel,          self, "_last_fuel_bag", 0.5)
+  bagSet(bag, "vh_eng",  s.engine_health, self, "_last_eng_bag",  5.0)
+  bagSet(bag, "vh_body", s.body_health,   self, "_last_body_bag", 5.0)
+  bagSet(bag, "vh_odo",  s.odometer,      self, "_last_odo_bag",  0.05)
+  bag:set("vh_tune", s.tuning,    true)  -- tabela; mudança rara
+  bag:set("vh_on",   s.engine_on, true)  -- bool; mudança rara
 end
 
 function Veh:_atualizarPosicao(vd)
@@ -51,18 +69,6 @@ function Veh:_atualizarPosicao(vd)
   local c = GetEntityCoords(ent)
   vd.state.last_pos = {x=c.x,y=c.y,z=c.z,h=GetEntityHeading(ent)}
   return true
-end
-
-function Veh:_validateOwner(vd)
-  if not (vd and vd.netid) then return false end
-  local ent = NetworkGetEntityFromNetworkId(vd.netid)
-  if not ent or ent == 0 then return false end
-  local owner = NetworkGetEntityOwner(ent)
-  if owner and owner ~= 0 and owner ~= vd.driver then
-    vd.driver = owner
-    return true
-  end
-  return false
 end
 
 -- Register / load — MUST run inside Citizen.CreateThread (uses Await)
@@ -206,20 +212,20 @@ function Veh:onStateUpdate(src, plate, upd)
   if rpm and rpm > 0.05 then
     rpm = math.min(rpm, 1.0)
     s.fuel = math.max(0, s.fuel - rpm * (vHub.cfg.fuel_rate or 0.005))
-    if bag then bag:set("vh_fuel", s.fuel, true) end
+    if bag then bagSet(bag, "vh_fuel", s.fuel, vd, "_last_fuel_bag", 0.5) end
     if s.fuel == 0 then TriggerEvent("vHub:vehicleFuelEmpty", vd, src) end
   end
 
   local engine_health = tonumber(upd.engine_health)
   if engine_health then
     s.engine_health = math.max(0, math.min(1000, engine_health))
-    if bag then bag:set("vh_eng", s.engine_health, true) end
+    if bag then bagSet(bag, "vh_eng", s.engine_health, vd, "_last_eng_bag", 5.0) end
   end
 
   local body_health = tonumber(upd.body_health)
   if body_health then
     s.body_health = math.max(0, math.min(1000, body_health))
-    if bag then bag:set("vh_body", s.body_health, true) end
+    if bag then bagSet(bag, "vh_body", s.body_health, vd, "_last_body_bag", 5.0) end
   end
 
   local odometer_delta = tonumber(upd.odometer_delta)
@@ -230,7 +236,7 @@ function Veh:onStateUpdate(src, plate, upd)
     local max_delta = (rpm or 0) * max_speed_kmh * time_per_tick / 3600
     local applied = math.min(odometer_delta, math.max(0.0001, max_delta), 0.5)
     s.odometer = s.odometer + applied
-    if bag then bag:set("vh_odo", s.odometer, true) end
+    if bag then bagSet(bag, "vh_odo", s.odometer, vd, "_last_odo_bag", 0.05) end
   end
 
   if upd.engine_on ~= nil then
@@ -250,3 +256,25 @@ end
 function Veh:saveAll()
   for _, vd in pairs(self._veh) do self:_save(vd) end
 end
+
+-- GC periódico de _byNet: remove netids cuja entidade não existe mais (5 min)
+Citizen.CreateThread(function()
+  vHub.assertThread()
+  while true do
+    Citizen.Wait(300000)
+    local checados, removidos = 0, 0
+    for netid in pairs(Veh._byNet) do
+      local ent = NetworkGetEntityFromNetworkId(netid)
+      if not ent or ent == 0 then
+        Veh._byNet[netid] = nil
+        removidos = removidos + 1
+      end
+      checados = checados + 1
+      if checados % 100 == 0 then Citizen.Wait(0) end
+    end
+    if removidos > 0 and vHub.Logger then
+      vHub.Logger:info("vehicle",
+        ("GC _byNet — %d removido(s) de %d checado(s)"):format(removidos, checados))
+    end
+  end
+end)

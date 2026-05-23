@@ -69,13 +69,20 @@ function Auth:_resolveUID(src)
 
   local uid = nil
 
-  -- Fase 1: verifica TODOS os identifiers antes de criar qualquer usuário
-  for _, id in ipairs(ids) do
-    local ok, r = pcall(function()
-      return Citizen.Await(vHub.State:query("vh/uid_by_id", {identifier=id}))
-    end)
-    if ok and r and #r > 0 then
-      local found = tonumber(r[1].user_id)
+  -- Fase 1: verifica TODOS os identifiers em UM round-trip (SELECT … IN (…))
+  local q_name = vHub.SQL.uidByIdsIn(#ids)
+  local ok, r = pcall(function()
+    return Citizen.Await(vHub.State:query(q_name, ids))
+  end)
+  if ok and type(r) == "table" then
+    -- Indexa rows por identifier para preservar a ordem de resolução por `ids`
+    --   (mantém semântica original: primeiro id encontrado define uid; warn em divergência)
+    local by_id = {}
+    for _, row in ipairs(r) do
+      by_id[tostring(row.identifier)] = tonumber(row.user_id)
+    end
+    for _, id in ipairs(ids) do
+      local found = by_id[tostring(id)]
       if found then
         if uid and uid ~= found then
           vHub.Logger:warn("auth",
@@ -173,9 +180,11 @@ function Auth:connect(src)
 
   -- Ban check (VRAM first)
   if vHub.getUData(uid, "ban.active") then
-    local reason = vHub.getUData(uid, "ban.reason") or
-      (vHub.cfg.lang or {}).banned or "Você foi banido."
-    DropPlayer(src, reason)
+    local raw    = vHub.getUData(uid, "ban.reason")
+    local reason = (type(raw) == "string" and raw ~= "") and raw
+                   or (vHub.cfg.lang or {}).banned
+                   or "Você foi banido."
+    DropPlayer(src, tostring(reason))
     vHub.Notify:send("security",
       ("⚠️ Banido tentou entrar | ID:`%d` | %s"):format(uid, reason))
     return nil
@@ -202,20 +211,11 @@ function Auth:connect(src)
   self._sessions[src] = user
   self._byUID[uid]    = user
 
-  -- Carrega datatable — CÓPIA PROFUNDA para evitar que user.data seja
-  --   a mesma referência que está na VRAM (isso causava o acúmulo)
+  -- Carrega datatable — cópia profunda via vHub.Utils.dataCopy
+  --   (evita que user.data seja a mesma referência da VRAM)
   local dt_raw = vHub.getUData(uid, "datatable")
   if type(dt_raw) == "table" then
-    -- Copia apenas campos primitivos e tabelas simples (1 nível)
-    for k, v in pairs(dt_raw) do
-      if type(v) == "table" then
-        local sub = {}
-        for sk, sv in pairs(v) do sub[sk] = sv end
-        user.data[k] = sub
-      else
-        user.data[k] = v
-      end
-    end
+    for k, v in pairs(vHub.Utils.dataCopy(dt_raw)) do user.data[k] = v end
   end
 
   -- Atualiza datas de login sem criar referência circular
@@ -241,19 +241,9 @@ function Auth:disconnect(src, reason)
 
   TriggerEvent("vHub:playerLeave", user, reason)
 
-  -- Persiste datatable — serializa APENAS os campos de user.data (não a tabela inteira)
-  -- Isso evita o acúmulo: gravamos uma cópia plana, não a referência viva
-  local data_para_salvar = {}
-  for k, v in pairs(user.data) do
-    if type(v) == "table" then
-      local sub = {}
-      for sk, sv in pairs(v) do sub[sk] = sv end
-      data_para_salvar[k] = sub
-    else
-      data_para_salvar[k] = v
-    end
-  end
-  vHub.setUData(user.id, "datatable", data_para_salvar)
+  -- Persiste datatable — cópia plana via vHub.Utils.dataCopy
+  --   (evita acúmulo: grava cópia, não a referência viva)
+  vHub.setUData(user.id, "datatable", vHub.Utils.dataCopy(user.data))
   vHub.State:_flush()
 
   vHub.Kernel:clearPerms(user.id)
@@ -336,9 +326,11 @@ end
 
 function Auth:ban(uid, reason, by)
   local tx = vHub.State:begin()
-  vHub.setUData(uid, "ban.active", true,   tx)
-  vHub.setUData(uid, "ban.reason", reason, tx)
-  vHub.setUData(uid, "ban.by",     by,     tx)
+  local reason_str = type(reason) == "string" and reason or tostring(reason or "banido")
+  local by_str     = type(by)     == "string" and by     or tostring(by     or "admin")
+  vHub.setUData(uid, "ban.active", true,       tx)
+  vHub.setUData(uid, "ban.reason", reason_str, tx)
+  vHub.setUData(uid, "ban.by",     by_str,     tx)
   vHub.State:commit(tx)
 
   local user = self._byUID[uid]
