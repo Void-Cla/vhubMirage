@@ -1,75 +1,127 @@
--- sql/schema.sql - vhub_racha
--- Perfis/recordes usam FK CASCADE; runs/results preservam historico.
+-- sql/schema.sql — vhub_racha v3 (Liga clandestina)
+-- 6 tabelas. Pistas custom criadas pelo editor in-game vivem so no SQL.
+-- Pistas do config sao espelhadas em vh_race_tracks no boot (idempotente).
 
-CREATE TABLE IF NOT EXISTS `vh_racha_profiles` (
-  `char_id`     INT UNSIGNED NOT NULL,
-  `nickname`    VARCHAR(24)  NOT NULL,
-  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`char_id`),
-  UNIQUE KEY `uk_racha_nickname` (`nickname`),
-  CONSTRAINT `fk_racha_profile_char` FOREIGN KEY (`char_id`)
+CREATE TABLE IF NOT EXISTS `vh_race_tracks` (
+  `id`              VARCHAR(48)      NOT NULL,
+  `label`           VARCHAR(80)      NOT NULL DEFAULT '',
+  `district`        VARCHAR(60)      NOT NULL DEFAULT '',
+  `kind`            VARCHAR(24)      NOT NULL DEFAULT 'sprint',
+  `creator_char`    INT UNSIGNED     NOT NULL DEFAULT 0,
+  `illegal`         TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `alerts_police`   TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `laps`            INT UNSIGNED     NOT NULL DEFAULT 1,
+  `min_players`     INT UNSIGNED     NOT NULL DEFAULT 1,
+  `max_players`     INT UNSIGNED     NOT NULL DEFAULT 8,
+  `vehicle_class`   VARCHAR(16)      NOT NULL DEFAULT 'car',
+  `default_fee`     INT UNSIGNED     NOT NULL DEFAULT 0,
+  `limit_seconds`   INT UNSIGNED     NOT NULL DEFAULT 300,
+  `start_x`         DOUBLE           NOT NULL DEFAULT 0,
+  `start_y`         DOUBLE           NOT NULL DEFAULT 0,
+  `start_z`         DOUBLE           NOT NULL DEFAULT 0,
+  `start_h`         DOUBLE           NOT NULL DEFAULT 0,
+  `source`          ENUM('config','custom') NOT NULL DEFAULT 'config',
+  `enabled`         TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `created_at`      TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_tracks_kind` (`kind`),
+  KEY `idx_tracks_source` (`source`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_race_checkpoints` (
+  `track_id`  VARCHAR(48)  NOT NULL,
+  `idx`       INT UNSIGNED NOT NULL,
+  `x`         DOUBLE       NOT NULL,
+  `y`         DOUBLE       NOT NULL,
+  `z`         DOUBLE       NOT NULL,
+  `radius`    DOUBLE       NOT NULL DEFAULT 11.0,
+  `kind`      VARCHAR(16)  NOT NULL DEFAULT 'normal',
+  PRIMARY KEY (`track_id`, `idx`),
+  CONSTRAINT `fk_cp_track` FOREIGN KEY (`track_id`)
+    REFERENCES `vh_race_tracks` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_race_grid` (
+  `track_id`  VARCHAR(48)  NOT NULL,
+  `slot`      INT UNSIGNED NOT NULL,
+  `x`         DOUBLE       NOT NULL,
+  `y`         DOUBLE       NOT NULL,
+  `z`         DOUBLE       NOT NULL,
+  `h`         DOUBLE       NOT NULL DEFAULT 0,
+  PRIMARY KEY (`track_id`, `slot`),
+  CONSTRAINT `fk_grid_track` FOREIGN KEY (`track_id`)
+    REFERENCES `vh_race_tracks` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_race_history` (
+  `id`              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `track_id`        VARCHAR(48)      NOT NULL,
+  `kind`            VARCHAR(24)      NOT NULL DEFAULT 'sprint',
+  `mode`            ENUM('rankeada','treino','privada') NOT NULL DEFAULT 'rankeada',
+  `creator_char`    INT UNSIGNED     NOT NULL DEFAULT 0,
+  `players_total`   INT UNSIGNED     NOT NULL DEFAULT 0,
+  `winner_char`     INT UNSIGNED     NOT NULL DEFAULT 0,
+  `winner_time_ms`  BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `pot_total`       BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `started_at`      TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `finished_at`     TIMESTAMP        NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_hist_track` (`track_id`),
+  KEY `idx_hist_winner` (`winner_char`),
+  KEY `idx_hist_kind` (`kind`),
+  KEY `idx_hist_mode` (`mode`),
+  KEY `idx_hist_started` (`started_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_race_results` (
+  `history_id`     BIGINT UNSIGNED  NOT NULL,
+  `char_id`        INT UNSIGNED     NOT NULL,
+  `nick`           VARCHAR(48)      NOT NULL DEFAULT '',
+  `placement`      INT UNSIGNED     NOT NULL DEFAULT 0,
+  `total_time_ms`  BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `best_lap_ms`    BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `drift_score`    INT UNSIGNED     NOT NULL DEFAULT 0,
+  `top_speed`      INT UNSIGNED     NOT NULL DEFAULT 0,
+  `finished`       TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `payout`         BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  PRIMARY KEY (`history_id`, `char_id`),
+  KEY `idx_res_char` (`char_id`),
+  KEY `idx_res_placement` (`placement`),
+  CONSTRAINT `fk_res_hist` FOREIGN KEY (`history_id`)
+    REFERENCES `vh_race_history` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_race_records` (
+  `track_id`      VARCHAR(48)      NOT NULL,
+  `char_id`       INT UNSIGNED     NOT NULL,
+  `best_time_ms`  BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `best_drift`    INT UNSIGNED     NOT NULL DEFAULT 0,
+  `top_speed`     INT UNSIGNED     NOT NULL DEFAULT 0,
+  `runs`          INT UNSIGNED     NOT NULL DEFAULT 0,
+  `wins`          INT UNSIGNED     NOT NULL DEFAULT 0,
+  `updated_at`    TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`track_id`, `char_id`),
+  KEY `idx_rec_best` (`track_id`, `best_time_ms`),
+  CONSTRAINT `fk_rec_track` FOREIGN KEY (`track_id`)
+    REFERENCES `vh_race_tracks` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_rec_char` FOREIGN KEY (`char_id`)
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `vh_racha_runs` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `track_id` VARCHAR(48) NOT NULL,
-  `state` ENUM('open','countdown','running','finished','cancelled','expired') NOT NULL DEFAULT 'open',
-  `organizer_char_id` INT UNSIGNED NOT NULL,
-  `entry_fee` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  `prize_pool` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  `laps` TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  `ranked` TINYINT(1) NOT NULL DEFAULT 1,
-  `participant_count` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  `started_at` DATETIME NULL DEFAULT NULL,
-  `finished_at` DATETIME NULL DEFAULT NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_racha_runs_track` (`track_id`, `created_at`),
-  KEY `idx_racha_runs_state` (`state`),
-  KEY `idx_racha_runs_organizer` (`organizer_char_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS `vh_racha_results` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `run_id` BIGINT UNSIGNED NOT NULL,
-  `track_id` VARCHAR(48) NOT NULL,
-  `char_id` INT UNSIGNED NOT NULL,
-  `nickname` VARCHAR(24) NOT NULL DEFAULT '',
-  `vehicle_plate` VARCHAR(12) NOT NULL DEFAULT '',
-  `vehicle_model` VARCHAR(32) NOT NULL DEFAULT '',
-  `position` SMALLINT UNSIGNED DEFAULT NULL,
-  `duration_ms` INT UNSIGNED DEFAULT NULL,
-  `checkpoints` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  `status` ENUM('finished','dnf','left','timeout','cancelled') NOT NULL,
-  `payout` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_racha_result_run_char` (`run_id`, `char_id`),
-  KEY `idx_racha_results_track_time` (`track_id`, `status`, `duration_ms`),
-  KEY `idx_racha_results_char` (`char_id`, `created_at`),
-  CONSTRAINT `fk_racha_result_run` FOREIGN KEY (`run_id`)
-    REFERENCES `vh_racha_runs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS `vh_racha_records` (
-  `track_id` VARCHAR(48) NOT NULL,
-  `char_id` INT UNSIGNED NOT NULL,
-  `nickname` VARCHAR(24) NOT NULL DEFAULT '',
-  `best_ms` INT UNSIGNED DEFAULT NULL,
-  `best_run_id` BIGINT UNSIGNED DEFAULT NULL,
-  `wins` INT UNSIGNED NOT NULL DEFAULT 0,
-  `podiums` INT UNSIGNED NOT NULL DEFAULT 0,
-  `finishes` INT UNSIGNED NOT NULL DEFAULT 0,
-  `dnfs` INT UNSIGNED NOT NULL DEFAULT 0,
-  `total_ms` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`track_id`, `char_id`),
-  KEY `idx_racha_records_char` (`char_id`),
-  KEY `idx_racha_records_track_best` (`track_id`, `best_ms`),
-  KEY `idx_racha_records_general` (`wins`, `podiums`, `finishes`, `best_ms`),
-  CONSTRAINT `fk_racha_record_char` FOREIGN KEY (`char_id`)
+CREATE TABLE IF NOT EXISTS `vh_race_stats` (
+  `char_id`        INT UNSIGNED     NOT NULL,
+  `kind`           VARCHAR(24)      NOT NULL DEFAULT 'sprint',
+  `runs`           INT UNSIGNED     NOT NULL DEFAULT 0,
+  `wins`           INT UNSIGNED     NOT NULL DEFAULT 0,
+  `podiums`        INT UNSIGNED     NOT NULL DEFAULT 0,
+  `dnf`            INT UNSIGNED     NOT NULL DEFAULT 0,
+  `total_payout`   BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `total_drift`    BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `top_speed`     INT UNSIGNED     NOT NULL DEFAULT 0,
+  `best_time_ms`   BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `updated_at`    TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`char_id`, `kind`),
+  CONSTRAINT `fk_stats_char` FOREIGN KEY (`char_id`)
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

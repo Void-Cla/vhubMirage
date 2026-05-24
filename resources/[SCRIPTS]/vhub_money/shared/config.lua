@@ -8,8 +8,8 @@ VHubMoneyCfg = {
   BRAND_SLOGAN = 'Seu dinheiro, com a confianca do deserto.',
 
   -- ─── Saldos iniciais ────────────────────────────────────────────────────
-  WALLET_INITIAL = 150,
-  BANK_INITIAL   = 1000,
+  WALLET_INITIAL = 1000,
+  BANK_INITIAL   = 19000,
 
   -- ─── Comportamento ──────────────────────────────────────────────────────
   LOSE_WALLET_ON_DEATH = true,       -- perde dinheiro vivo ao morrer
@@ -81,7 +81,6 @@ VHubMoneyCfg = {
     ['vhub']        = true,
     ['vhub_admin']  = true,
     ['vhub_garage'] = true,
-    ['vhub_racha']  = true,
   },
 
   -- ─── Comandos ───────────────────────────────────────────────────────────

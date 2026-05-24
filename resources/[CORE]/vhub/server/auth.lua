@@ -171,12 +171,19 @@ end
 
 function Auth:connect(src)
   vHub.assertThread()
+  print(('vHub.Auth:connect attempt src=%s'):format(tostring(src)))
 
   -- Guard: já tem sessão para este source
-  if self._sessions[src] then return self._sessions[src] end
+  if self._sessions[src] then
+    print(('vHub.Auth:connect already session src=%s uid=%s'):format(tostring(src), tostring(self._sessions[src] and self._sessions[src].id)))
+    return self._sessions[src]
+  end
 
   local uid = self:_resolveUID(src)
-  if not uid then return nil end
+  if not uid then
+    print(('vHub.Auth:connect fail no uid src=%s'):format(tostring(src)))
+    return nil
+  end
 
   -- Ban check (VRAM first)
   if vHub.getUData(uid, "ban.active") then
@@ -210,6 +217,7 @@ function Auth:connect(src)
   local user = User.new(src, uid)
   self._sessions[src] = user
   self._byUID[uid]    = user
+  print(('vHub.Auth:connect ok src=%s uid=%s'):format(tostring(src), tostring(uid)))
 
   -- Carrega datatable — cópia profunda via vHub.Utils.dataCopy
   --   (evita que user.data seja a mesma referência da VRAM)

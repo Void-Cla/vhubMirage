@@ -7,97 +7,425 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700;800&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <div id="vhub-bg" class="hidden"></div>
-  <canvas id="vhub-sand"></canvas>
+  <!-- Background do painel principal (bg.png + glows) -->
+  <div id="vhub-bg" class="hidden">
+    <div class="vh-bg-grid"></div>
+    <div class="vh-bg-vignette"></div>
+    <div class="vh-bg-scan"></div>
+  </div>
+  <canvas id="vhub-sand" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
 
-  <div id="toast" class="toast hidden"></div>
+  <!-- ═══ HUD DE CORRIDA (in-race overlay, sobre o GTA) ═══════════════════════ -->
+  <div id="hud" class="vh-hud hidden" aria-hidden="true">
 
-  <section id="panel" class="panel hidden">
-    <header class="topbar">
-      <div class="brand">
-        <img src="assets/logo.png" alt="vHub" onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-flag-checkered'}))">
-        <div>
-          <strong id="brand-name">Mirage Racha</strong>
-          <span id="brand-tag">Liga clandestina</span>
+    <!-- Countdown 3..2..1..GO -->
+    <div id="hud-countdown" class="vh-countdown hidden">
+      <div class="vh-count-ring"></div>
+      <div class="vh-count-ring vh-count-ring--2"></div>
+      <span id="hud-count-num">3</span>
+      <div class="vh-count-bars" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i>
+      </div>
+    </div>
+
+    <!-- Topo: cronômetro central + chips de Posição/Volta -->
+    <div class="vh-hud-top">
+      <div class="vh-hud-chip vh-hud-pos">
+        <span class="vh-hud-label">Pos</span>
+        <span class="vh-hud-value"><b id="hud-pos">1</b><i id="hud-pos-total">/8</i></span>
+      </div>
+
+      <div class="vh-hud-timer">
+        <div class="vh-hud-timer-glow"></div>
+        <span class="vh-hud-label">Tempo</span>
+        <span id="hud-time" class="vh-hud-time">00:00.000</span>
+        <span id="hud-best" class="vh-hud-best hidden">Melhor 00:00.000</span>
+      </div>
+
+      <div class="vh-hud-chip vh-hud-lap">
+        <span class="vh-hud-label">Volta</span>
+        <span class="vh-hud-value"><b id="hud-lap">1</b><i id="hud-lap-total">/3</i></span>
+      </div>
+    </div>
+
+    <!-- Próximo checkpoint (HUD direito) — grande, nítido, com seta direcional -->
+    <div id="hud-cp" class="vh-hud-cp">
+      <div class="vh-cp-pulse"></div>
+      <div class="vh-cp-arrow">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <defs>
+            <linearGradient id="cpGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"  stop-color="#ffd573"/>
+              <stop offset="60%" stop-color="#f3b53a"/>
+              <stop offset="100%" stop-color="#a8761d"/>
+            </linearGradient>
+          </defs>
+          <circle cx="50" cy="50" r="44" fill="url(#cpGrad)"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(12,10,6,0.35)" stroke-width="2"/>
+        </svg>
+        <i class="fa-solid fa-location-arrow"></i>
+      </div>
+      <div class="vh-cp-info">
+        <span class="vh-cp-label">Próximo CP</span>
+        <span class="vh-cp-num"><b id="hud-cp-i">1</b><i id="hud-cp-n">/12</i></span>
+      </div>
+      <div class="vh-cp-dist">
+        <b id="hud-cp-dist">0</b><span>m</span>
+      </div>
+    </div>
+
+    <!-- Velocímetro + drift (canto inferior direito) -->
+    <div class="vh-hud-bottom">
+      <div class="vh-hud-speedo">
+        <div class="vh-speed-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="speedGrad" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0%"  stop-color="#ffd573"/>
+                <stop offset="55%" stop-color="#f3b53a"/>
+                <stop offset="100%" stop-color="#ff9a1f"/>
+              </linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="52" class="vh-speed-track"/>
+            <circle id="hud-speed-arc" cx="60" cy="60" r="52" class="vh-speed-arc"
+                    stroke-dasharray="326.7" stroke-dashoffset="326.7"
+                    transform="rotate(135 60 60)"/>
+            <g class="vh-speed-ticks" aria-hidden="true"></g>
+          </svg>
+          <div class="vh-speed-num">
+            <b id="hud-speed">0</b>
+            <span>km/h</span>
+          </div>
+          <div class="vh-speed-glow"></div>
+        </div>
+        <div id="hud-drift" class="vh-hud-drift hidden">
+          <i class="fa-solid fa-wind"></i> <b id="hud-drift-val">0</b>
+          <span>DRIFT</span>
         </div>
       </div>
-      <div class="profile">
-        <input id="nickname" maxlength="24" spellcheck="false" />
-        <button class="icon-btn" id="save-nick" title="Salvar apelido"><i class="fa-solid fa-floppy-disk"></i></button>
-        <button class="icon-btn danger" data-close title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Mini leaderboard (canto inferior esquerdo) -->
+    <div class="vh-hud-leader-wrap">
+      <div class="vh-hud-leader-head">
+        <i class="fa-solid fa-trophy"></i> <span>Grid ao vivo</span>
+      </div>
+      <ol id="hud-leader" class="vh-hud-leader"></ol>
+    </div>
+
+    <!-- Flash banners (Volta, Setor, Recorde) -->
+    <div id="hud-flash" class="vh-hud-flash hidden">
+      <span id="hud-flash-text">VOLTA 2</span>
+    </div>
+
+    <!-- Resultado final -->
+    <div id="hud-finish" class="vh-hud-finish hidden">
+      <div class="vh-finish-card">
+        <div class="vh-finish-rays"></div>
+        <div class="vh-finish-place">
+          <span class="vh-finish-tag" id="hud-finish-tag">#1</span>
+          <span class="vh-finish-sub">Posição final</span>
+        </div>
+        <div class="vh-finish-stats">
+          <div><span>Tempo</span><b id="hud-finish-time">00:00.000</b></div>
+          <div><span>Prêmio</span><b id="hud-finish-payout">R$ 0</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAINEL PRINCIPAL /racha ═══════════════════════════════════════════ -->
+  <section id="panel" class="vh-panel hidden">
+    <div class="vh-panel-edge vh-panel-edge--tl"></div>
+    <div class="vh-panel-edge vh-panel-edge--tr"></div>
+    <div class="vh-panel-edge vh-panel-edge--bl"></div>
+    <div class="vh-panel-edge vh-panel-edge--br"></div>
+
+    <header class="vh-header">
+      <div class="vh-brand">
+        <div class="vh-brand-logo">
+          <img src="assets/logo.png" alt="Mirage Racha"
+               onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-flag-checkered'}))">
+        </div>
+        <div class="vh-brand-block">
+          <span class="vh-brand-txt">Mirage <strong>Racha</strong></span>
+          <span class="vh-brand-tag" id="brand-tag">Liga clandestina</span>
+        </div>
+        <div class="vh-brand-bars" aria-hidden="true"><i></i><i></i><i></i></div>
+      </div>
+      <div class="vh-header-actions">
+        <button class="vh-btn ghost" data-action="refresh" title="Atualizar">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+        <button class="vh-btn ghost" data-action="close" title="Fechar (ESC)">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
     </header>
 
-    <main class="layout">
-      <aside class="tracks" id="tracks"></aside>
+    <nav class="vh-tabs">
+      <button class="vh-tab active" data-tab="tracks">
+        <i class="fa-solid fa-road"></i> <span>Pistas</span>
+      </button>
+      <button class="vh-tab" data-tab="lobbies">
+        <i class="fa-solid fa-users"></i> <span>Lobbies</span>
+        <span class="vh-pill-mini" id="lobby-count">0</span>
+      </button>
+      <button class="vh-tab" data-tab="ranking">
+        <i class="fa-solid fa-trophy"></i> <span>Ranking</span>
+      </button>
+      <button class="vh-tab" data-tab="history">
+        <i class="fa-solid fa-clock-rotate-left"></i> <span>Histórico</span>
+      </button>
+      <button class="vh-tab" data-tab="editor">
+        <i class="fa-solid fa-hammer"></i> <span>Editor</span>
+      </button>
+    </nav>
 
-      <section class="race-main">
-        <div class="race-title">
-          <div>
-            <h1 id="track-title">Pista</h1>
-            <p id="track-sub">Distrito</p>
-          </div>
-          <button class="btn ghost" id="route"><i class="fa-solid fa-location-arrow"></i> Rota</button>
+    <main class="vh-body">
+      <!-- Pistas -->
+      <section class="vh-tabpanel active" data-tabpanel="tracks">
+        <div class="vh-toolbar">
+          <input id="tracks-search" class="vh-input" type="text"
+                 placeholder="Buscar pista, distrito ou modo…" />
+          <select id="tracks-filter-kind" class="vh-input vh-input-sm">
+            <option value="">Todos os modos</option>
+            <option value="sprint">Sprint</option>
+            <option value="circuit">Circuito</option>
+            <option value="drag">Drag</option>
+            <option value="drift">Drift</option>
+            <option value="speedtrap">Radar</option>
+            <option value="timeattack">Contra-relógio</option>
+            <option value="freerun">Free Run</option>
+          </select>
+          <span class="vh-toolbar-info"><span id="tracks-count">0</span> pistas</span>
         </div>
-
-        <div class="metrics" id="metrics"></div>
-
-        <section class="lobby-band" id="lobby"></section>
-
-        <section class="create-band">
-          <label>Entrada
-            <input id="entry-fee" type="number" min="0" step="100" />
-          </label>
-          <label>Voltas
-            <input id="laps" type="number" min="1" max="5" step="1" />
-          </label>
-          <label class="check">
-            <input id="ranked" type="checkbox" checked />
-            <span>Rankeada</span>
-          </label>
-          <button class="btn primary" id="create"><i class="fa-solid fa-plus"></i> Criar</button>
-        </section>
+        <div id="tracks-grid" class="vh-grid"></div>
       </section>
 
-      <aside class="boards">
-        <div class="tabs">
-          <button class="tab active" data-tab="track">Pista</button>
-          <button class="tab" data-tab="general">Geral</button>
-          <button class="tab" data-tab="history">Historico</button>
+      <!-- Lobbies -->
+      <section class="vh-tabpanel" data-tabpanel="lobbies">
+        <div class="vh-toolbar">
+          <span class="vh-toolbar-info">Lobbies abertos no momento</span>
         </div>
-        <section id="board"></section>
-      </aside>
+        <div id="lobbies-list" class="vh-list"></div>
+      </section>
+
+      <!-- Ranking -->
+      <section class="vh-tabpanel" data-tabpanel="ranking">
+        <div class="vh-toolbar">
+          <select id="ranking-kind" class="vh-input vh-input-sm">
+            <option value="sprint">Sprint</option>
+            <option value="circuit">Circuito</option>
+            <option value="drag">Drag</option>
+            <option value="drift">Drift</option>
+            <option value="speedtrap">Radar</option>
+            <option value="timeattack">Contra-relógio</option>
+          </select>
+          <select id="ranking-mode" class="vh-input vh-input-sm">
+            <option value="wins">Por vitórias</option>
+            <option value="time">Por melhor tempo</option>
+            <option value="drift">Por drift total</option>
+          </select>
+          <button class="vh-btn primary" data-action="refresh-ranking">
+            <i class="fa-solid fa-magnifying-glass"></i> Buscar
+          </button>
+        </div>
+        <div class="vh-table-wrap">
+          <table class="vh-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Piloto</th><th>Vitórias</th><th>Pódios</th>
+                <th>DNF</th><th>Melhor</th><th>Drift</th><th>Top</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Histórico -->
+      <section class="vh-tabpanel" data-tabpanel="history">
+        <div class="vh-toolbar">
+          <select id="history-kind" class="vh-input vh-input-sm">
+            <option value="">Todos os modos</option>
+            <option value="sprint">Sprint</option>
+            <option value="circuit">Circuito</option>
+            <option value="drag">Drag</option>
+            <option value="drift">Drift</option>
+            <option value="speedtrap">Radar</option>
+            <option value="timeattack">Contra-relógio</option>
+          </select>
+          <select id="history-mode" class="vh-input vh-input-sm">
+            <option value="">Rankeada + Treino</option>
+            <option value="rankeada">Apenas Rankeada</option>
+            <option value="treino">Apenas Treino</option>
+          </select>
+          <button class="vh-btn primary" data-action="refresh-history">
+            <i class="fa-solid fa-magnifying-glass"></i> Buscar
+          </button>
+        </div>
+        <div class="vh-table-wrap">
+          <table class="vh-table">
+            <thead>
+              <tr>
+                <th>Quando</th><th>Modo</th><th>Tipo</th><th>Pista</th>
+                <th>Jogadores</th><th>Vencedor</th><th>Tempo</th><th>Pot</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Editor -->
+      <section class="vh-tabpanel" data-tabpanel="editor">
+        <div class="vh-card vh-info">
+          <i class="fa-solid fa-hammer"></i>
+          <span>
+            <strong>Editor visual de pistas.</strong> Iniciar abre o modo edição in-game:
+            dirige pela cidade e usa as teclas no veículo para marcar grade e checkpoints.
+            Ao final, volte aqui e preencha os metadados.
+          </span>
+        </div>
+        <div class="vh-actions-row">
+          <button class="vh-btn primary" data-action="editor-start">
+            <i class="fa-solid fa-play"></i> Iniciar edição
+          </button>
+          <button class="vh-btn" data-action="editor-phase-grid">
+            <i class="fa-solid fa-flag-checkered"></i> Fase 1: Grade
+          </button>
+          <button class="vh-btn" data-action="editor-phase-cps">
+            <i class="fa-solid fa-route"></i> Fase 2: Checkpoints
+          </button>
+          <button class="vh-btn" data-action="editor-phase-meta">
+            <i class="fa-solid fa-file-pen"></i> Fase 3: Metadados
+          </button>
+          <button class="vh-btn danger" data-action="editor-discard">
+            <i class="fa-solid fa-trash"></i> Descartar
+          </button>
+        </div>
+
+        <div class="vh-cmd-list" id="editor-help">
+          <div class="vh-cmd"><code>Fase 1: Grade</code>
+            <span>Estacione cada veículo na posição da grade e aperte <b>E</b> (ou <b>buzina</b>).</span></div>
+          <div class="vh-cmd"><code>Fase 2: Checkpoints</code>
+            <span>Dirija pelo trajeto. <b>E</b> adiciona CP, <b>H</b> remove o último.</span></div>
+          <div class="vh-cmd"><code>Próxima fase</code>
+            <span>Aperte <b>G</b> in-game ou clique no botão da fase acima.</span></div>
+          <div class="vh-cmd"><code>Fase 3: Metadados</code>
+            <span>Preencha o formulário abaixo e salve.</span></div>
+        </div>
+
+        <div class="vh-card vh-meta-form" id="editor-meta">
+          <div class="vh-meta-row">
+            <label>ID da pista</label>
+            <input id="meta-id" class="vh-input" type="text" placeholder="ex: meu_circuito_lsia" />
+          </div>
+          <div class="vh-meta-row">
+            <label>Nome</label>
+            <input id="meta-label" class="vh-input" type="text" placeholder="ex: Circuito LSIA" />
+          </div>
+          <div class="vh-meta-row">
+            <label>Distrito</label>
+            <input id="meta-district" class="vh-input" type="text" placeholder="ex: LSIA" />
+          </div>
+          <div class="vh-meta-row">
+            <label>Modo</label>
+            <select id="meta-kind" class="vh-input">
+              <option value="sprint">Sprint</option>
+              <option value="circuit">Circuito</option>
+              <option value="drag">Drag</option>
+              <option value="drift">Drift</option>
+              <option value="speedtrap">Radar</option>
+              <option value="timeattack">Contra-relógio</option>
+              <option value="freerun">Free Run</option>
+            </select>
+          </div>
+          <div class="vh-meta-row">
+            <label>Voltas</label>
+            <input id="meta-laps" class="vh-input" type="number" min="1" max="10" value="1" />
+          </div>
+          <div class="vh-meta-row">
+            <label>Taxa padrão (R$)</label>
+            <input id="meta-fee" class="vh-input" type="number" min="0" value="1000" />
+          </div>
+          <div class="vh-meta-row">
+            <label>Tempo limite (s)</label>
+            <input id="meta-limit" class="vh-input" type="number" min="0" value="300" />
+          </div>
+          <div class="vh-meta-row">
+            <label>
+              <input id="meta-illegal" type="checkbox" checked />
+              Ilegal (gera alerta na polícia se configurado)
+            </label>
+          </div>
+          <div class="vh-meta-row">
+            <label>
+              <input id="meta-police" type="checkbox" />
+              Alertar polícia
+            </label>
+          </div>
+          <div class="vh-actions-row">
+            <button class="vh-btn primary" data-action="editor-save">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar pista
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
-  </section>
 
-  <section id="race-hud" class="race-hud hidden">
-    <div class="hud-left">
-      <strong id="hud-pos">--</strong>
-      <span id="hud-total">/--</span>
+    <!-- Modal: criar lobby -->
+    <div id="modal-create" class="vh-modal-backdrop hidden">
+      <div class="vh-modal">
+        <header class="vh-modal-head">
+          <span id="modal-title">Criar lobby</span>
+          <button class="vh-btn ghost" data-action="modal-close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </header>
+        <div class="vh-modal-body">
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Pista</span>
+            <strong id="modal-track">—</strong>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Modo</span>
+            <strong id="modal-kind">—</strong>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Tipo</span>
+            <select id="modal-mode" class="vh-input">
+              <option value="rankeada">Rankeada (com prêmio)</option>
+              <option value="treino">Treino (sem prêmio nem ranking)</option>
+            </select>
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Voltas</span>
+            <input id="modal-laps" class="vh-input" type="number" min="1" max="10" value="1" />
+          </div>
+          <div class="vh-modal-row">
+            <span class="vh-modal-label">Taxa de entrada</span>
+            <div class="vh-op-input">
+              <span class="vh-prefix">R$</span>
+              <input id="modal-fee" class="vh-input" type="number" min="0" value="1000" />
+            </div>
+          </div>
+        </div>
+        <footer class="vh-modal-foot">
+          <button class="vh-btn ghost" data-action="modal-close">Cancelar</button>
+          <button class="vh-btn primary" data-action="modal-create">
+            <i class="fa-solid fa-flag-checkered"></i> Criar lobby
+          </button>
+        </footer>
+      </div>
     </div>
-    <div class="hud-center">
-      <strong id="hud-time">00:00.000</strong>
-      <span id="hud-track">Racha</span>
-    </div>
-    <div class="hud-right">
-      <strong id="hud-cp">0/0</strong>
-      <span id="hud-lap">Volta 1</span>
-    </div>
-  </section>
 
-  <section id="countdown" class="countdown hidden">
-    <span id="count-num">3</span>
-    <strong id="count-track">Racha</strong>
-  </section>
-
-  <section id="finish" class="finish hidden">
-    <strong id="finish-pos">--</strong>
-    <span id="finish-time">00:00.000</span>
-    <small id="finish-pay">R$ 0</small>
+    <div id="toast-stack" class="vh-toast-stack"></div>
   </section>
 
   <script src="js/app.js"></script>

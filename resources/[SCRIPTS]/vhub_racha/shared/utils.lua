@@ -1,9 +1,8 @@
--- shared/utils.lua - utilitarios puros do vhub_racha.
+-- shared/utils.lua — utilitarios puros (sem natives, sem IO).
 
 VHubRachaUtils = {}
 local U = VHubRachaUtils
 
--- Retorna inteiro limitado ao intervalo informado.
 function U.clamp_int(value, min, max)
   local n = math.floor(tonumber(value) or min)
   if n < min then return min end
@@ -11,62 +10,90 @@ function U.clamp_int(value, min, max)
   return n
 end
 
--- Sanitiza identificadores internos.
 function U.sanitize_id(value)
   if type(value) ~= 'string' then return '' end
   return value:lower():gsub('[^a-z0-9_%-]', ''):sub(1, 48)
 end
 
--- Sanitiza apelido de ranking.
+function U.sanitize_label(value)
+  if type(value) ~= 'string' then return '' end
+  local s = value:gsub('[\r\n\t]', ' '):gsub('%s+', ' ')
+  s = s:match('^%s*(.-)%s*$') or ''
+  return s:sub(1, 80)
+end
+
 function U.sanitize_nick(value)
   if type(value) ~= 'string' then return '' end
-  local s = value:gsub('[\r\n\t]', ' '):gsub('[^%w%s_%-%.]', ''):gsub('%s+', ' ')
+  local s = value:gsub('[\r\n\t]', ' ')
+  s = s:gsub('[^%w%sÀ-ÿ_%-%.]', ''):gsub('%s+', ' ')
   s = s:match('^%s*(.-)%s*$') or ''
-  return s:sub(1, 24)
+  return s:sub(1, 48)
 end
 
--- Formata milissegundos como mm:ss.mmm.
 function U.time_ms(ms)
   local n = math.max(0, math.floor(tonumber(ms) or 0))
-  return ('%02d:%02d.%03d'):format(math.floor(n / 60000), math.floor((n % 60000) / 1000), n % 1000)
+  return ('%02d:%02d.%03d'):format(
+    math.floor(n / 60000),
+    math.floor((n % 60000) / 1000),
+    n % 1000)
 end
 
--- Retorna pista por id.
-function U.track_by_id(track_id)
-  local id = U.sanitize_id(track_id)
-  for _, track in ipairs(VHubRachaTracks or {}) do
-    if track.id == id then return track end
+function U.time_short_ms(ms)
+  local n = math.max(0, math.floor(tonumber(ms) or 0))
+  return ('%d:%02d.%02d'):format(
+    math.floor(n / 60000),
+    math.floor((n % 60000) / 1000),
+    math.floor((n % 1000) / 10))
+end
+
+function U.fmt_num(n, sep)
+  sep = sep or '.'
+  local s = tostring(math.floor(tonumber(n) or 0))
+  local out, c = '', 0
+  for i = #s, 1, -1 do
+    out = s:sub(i, i) .. out; c = c + 1
+    if c % 3 == 0 and i > 1 then out = sep .. out end
   end
-  return nil
-end
-
--- Copia uma pista para payload client-safe.
-function U.public_track(track)
-  if type(track) ~= 'table' then return nil end
-  local checkpoints, grid = {}, {}
-  for i, p in ipairs(track.checkpoints or {}) do checkpoints[i] = { x = p.x, y = p.y, z = p.z } end
-  for i, p in ipairs(track.grid or {}) do grid[i] = { x = p.x, y = p.y, z = p.z, h = p.h or 0.0 } end
-  return {
-    id = track.id, label = track.label, district = track.district, kind = track.kind,
-    illegal = track.illegal == true, start = track.start, grid = grid, checkpoints = checkpoints,
-    laps = track.laps or 1, min_players = track.min_players or 1,
-    max_players = track.max_players or #grid, limit_seconds = track.limit_seconds or 300,
-    default_fee = track.default_fee or 0,
-    checkpoint_radius = track.checkpoint_radius or VHubRachaCfg.CHECKPOINT_RADIUS,
-    color = track.color or VHubRachaCfg.COLOR,
-  }
-end
-
--- Retorna catalogo publico de pistas.
-function U.public_tracks()
-  local out = {}
-  for i, track in ipairs(VHubRachaTracks or {}) do out[i] = U.public_track(track) end
   return out
 end
 
--- Valida classe de veiculo contra a pista.
-function U.vehicle_allowed(track, class)
-  local allowed = track and track.vehicle_classes
-  if type(allowed) ~= 'table' or next(allowed) == nil then return true end
-  return allowed[tonumber(class) or -1] == true
+function U.short_id()
+  local chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  local out = ''
+  for _ = 1, 8 do
+    local i = math.random(1, #chars)
+    out = out .. chars:sub(i, i)
+  end
+  return out
+end
+
+function U.copy(t)
+  if type(t) ~= 'table' then return t end
+  local out = {}; for k, v in pairs(t) do out[k] = v end; return out
+end
+
+function U.deep_copy(t, seen)
+  if type(t) ~= 'table' then return t end
+  seen = seen or {}
+  if seen[t] then return seen[t] end
+  local out = {}; seen[t] = out
+  for k, v in pairs(t) do out[U.deep_copy(k, seen)] = U.deep_copy(v, seen) end
+  return out
+end
+
+-- Encontra track no catalogo carregado (server) ou config (client)
+function U.find_track(track_id, catalog)
+  if not track_id or track_id == '' then return nil end
+  if type(catalog) == 'table' then
+    if catalog[track_id] then return catalog[track_id] end
+    for _, t in pairs(catalog) do
+      if t.id == track_id then return t end
+    end
+  end
+  if type(VHubRachaTracks) == 'table' then
+    for _, t in ipairs(VHubRachaTracks) do
+      if t.id == track_id then return t end
+    end
+  end
+  return nil
 end

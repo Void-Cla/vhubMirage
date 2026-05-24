@@ -1,6 +1,10 @@
--- server/exports.lua - API publica do vhub_racha.
+-- server/exports.lua — API publica + TRUSTED.
 
-local Core, SQL, Cfg = VHubRachaCore, VHubRachaSQL, VHubRachaCfg
+local Cfg = VHubRachaCfg
+local ST  = VHubRachaState
+local L   = VHubRachaLobby
+local R   = VHubRachaRanking
+local SQL = VHubRachaSQL
 
 local function _invoker_allowed()
   local caller = GetInvokingResource()
@@ -10,15 +14,53 @@ local function _invoker_allowed()
   return trusted[caller] == true
 end
 
-exports('Status', function() return Core.status() end)
-exports('getTrackRanking', function(track_id, limit) return SQL.track_ranking(track_id, limit or 20) end)
-exports('getGeneralRanking', function(limit) return SQL.general_ranking(limit or 20) end)
-exports('getTrackHistory', function(track_id, limit) return SQL.track_history(track_id, limit or 30) end)
-exports('getRunResults', function(run_id) return SQL.run_results(run_id) end)
+-- ── Read-only ───────────────────────────────────────────────────────────────
 
-exports('cancelTrackLobby', function(track_id)
+exports('catalog', function()
+  local out = {}
+  for id, t in pairs(ST.catalog()) do
+    out[#out + 1] = {
+      id = id, label = t.label, district = t.district, kind = t.kind,
+      illegal = t.illegal, alerts_police = t.alerts_police,
+      laps = t.laps, min_players = t.min_players, max_players = t.max_players,
+      vehicle_class = t.vehicle_class, default_fee = t.default_fee,
+      limit_seconds = t.limit_seconds, source = t.source,
+      cps = #(t.checkpoints or {}),
+    }
+  end
+  table.sort(out, function(a, b) return a.label < b.label end)
+  return out
+end)
+
+exports('lobbies', function()        return ST.public_lobbies() end)
+exports('isInRace', function(src)    return ST.instance_by_src(tonumber(src) or 0) ~= nil end)
+exports('isReady',  function()       return VHubRachaBoot and VHubRachaBoot.READY == true end)
+exports('Status',   function()       return ST.status_snapshot() end)
+
+-- ── Ranking ─────────────────────────────────────────────────────────────────
+
+exports('topRanking',     function(kind, mode, limit) return R.top(kind or 'sprint', mode or 'wins', limit or 50) end)
+exports('historyRecent',  function(filters, limit)    return R.recent(filters or {}, limit or 30) end)
+exports('resultsOf',      function(history_id)        return R.results_of(history_id) end)
+exports('statsOfChar',    function(char_id)           return R.stats_of_char(tonumber(char_id) or 0) end)
+exports('recordsOfChar',  function(char_id, limit)    return R.records_of_char(tonumber(char_id) or 0, limit or 30) end)
+
+-- ── Mutacoes (TRUSTED) ──────────────────────────────────────────────────────
+
+exports('createLobby', function(src, payload)
   if not _invoker_allowed() then return false, 'forbidden' end
-  local lobby = Core._lobbies and Core._lobbies[track_id]
-  if not lobby then return false, 'lobby_inexistente' end
-  return Core.cancel_lobby(lobby.organizer_src or 0, { track_id = track_id })
+  return L.create(tonumber(src) or 0, payload or {})
+end)
+
+exports('cancelLobby', function(inst_id, reason)
+  if not _invoker_allowed() then return false, 'forbidden' end
+  return L.cancel(inst_id, reason or 'admin')
+end)
+
+exports('deleteTrack', function(track_id)
+  if not _invoker_allowed() then return false, 'forbidden' end
+  if not track_id then return false, 'track_id_obrigatorio' end
+  SQL.delete_track(track_id, true)
+  ST._catalog[track_id] = nil
+  return true
 end)

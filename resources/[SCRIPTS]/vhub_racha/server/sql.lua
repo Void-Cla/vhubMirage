@@ -1,194 +1,322 @@
--- server/sql.lua - wrapper oxmysql e queries do vhub_racha.
+-- server/sql.lua — wrapper oxmysql + queries.
 
 VHubRachaSQL = { ready = false }
 local S = VHubRachaSQL
 
--- Executa SELECT; retorna lista de linhas.
 function S.query(sql, params)
   local p = promise.new()
-  exports.oxmysql:query(sql, params or {}, function(rows) p:resolve(rows or {}) end)
+  exports.oxmysql:query(sql, params or {}, function(r) p:resolve(r or {}) end)
   return Citizen.Await(p)
 end
 
--- Executa INSERT/UPDATE/DELETE; retorna resultado bruto do driver.
 function S.execute(sql, params)
   local p = promise.new()
-  exports.oxmysql:execute(sql, params or {}, function(result) p:resolve(result or 0) end)
+  exports.oxmysql:execute(sql, params or {}, function(r) p:resolve(r or 0) end)
   return Citizen.Await(p)
 end
 
--- Executa INSERT e retorna insertId quando disponivel.
-function S.insert(sql, params)
+function S.execute_raw(sql)
   local p = promise.new()
-  exports.oxmysql:insert(sql, params or {}, function(id) p:resolve(tonumber(id) or 0) end)
+  exports.oxmysql:execute(sql, {}, function() p:resolve(true) end)
   return Citizen.Await(p)
 end
 
--- Aplica schema idempotente.
+-- ── Tracks ──────────────────────────────────────────────────────────────────
+
+function S.upsert_track(t)
+  return S.execute([[
+    INSERT INTO vh_race_tracks
+      (id, label, district, kind, creator_char, illegal, alerts_police, laps,
+       min_players, max_players, vehicle_class, default_fee, limit_seconds,
+       start_x, start_y, start_z, start_h, source, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      label = VALUES(label), district = VALUES(district), kind = VALUES(kind),
+      illegal = VALUES(illegal), alerts_police = VALUES(alerts_police),
+      laps = VALUES(laps), min_players = VALUES(min_players),
+      max_players = VALUES(max_players), vehicle_class = VALUES(vehicle_class),
+      default_fee = VALUES(default_fee), limit_seconds = VALUES(limit_seconds),
+      start_x = VALUES(start_x), start_y = VALUES(start_y),
+      start_z = VALUES(start_z), start_h = VALUES(start_h),
+      enabled = VALUES(enabled)
+  ]], {
+    t.id, t.label or t.id, t.district or '', t.kind or 'sprint',
+    tonumber(t.creator_char) or 0,
+    t.illegal and 1 or 0, t.alerts_police and 1 or 0,
+    tonumber(t.laps) or 1, tonumber(t.min_players) or 1, tonumber(t.max_players) or 8,
+    tostring(t.vehicle_class or 'car'), tonumber(t.default_fee) or 0,
+    tonumber(t.limit_seconds) or 300,
+    (t.start and t.start.x) or 0, (t.start and t.start.y) or 0,
+    (t.start and t.start.z) or 0, (t.start and t.start.h) or 0,
+    tostring(t.source or 'config'), 1,
+  })
+end
+
+function S.set_checkpoints(track_id, cps)
+  S.execute("DELETE FROM vh_race_checkpoints WHERE track_id = ?", { track_id })
+  if type(cps) ~= 'table' or #cps == 0 then return end
+  local ph, params = {}, {}
+  for i, cp in ipairs(cps) do
+    ph[#ph + 1] = '(?, ?, ?, ?, ?, ?, ?)'
+    params[#params + 1] = track_id
+    params[#params + 1] = i
+    params[#params + 1] = cp.x
+    params[#params + 1] = cp.y
+    params[#params + 1] = cp.z
+    params[#params + 1] = tonumber(cp.radius) or 11.0
+    params[#params + 1] = tostring(cp.kind or 'normal')
+  end
+  S.execute(
+    "INSERT INTO vh_race_checkpoints (track_id, idx, x, y, z, radius, kind) VALUES " ..
+    table.concat(ph, ','), params)
+end
+
+function S.set_grid(track_id, grid)
+  S.execute("DELETE FROM vh_race_grid WHERE track_id = ?", { track_id })
+  if type(grid) ~= 'table' or #grid == 0 then return end
+  local ph, params = {}, {}
+  for i, g in ipairs(grid) do
+    ph[#ph + 1] = '(?, ?, ?, ?, ?, ?)'
+    params[#params + 1] = track_id
+    params[#params + 1] = i
+    params[#params + 1] = g.x
+    params[#params + 1] = g.y
+    params[#params + 1] = g.z
+    params[#params + 1] = tonumber(g.h) or 0
+  end
+  S.execute(
+    "INSERT INTO vh_race_grid (track_id, slot, x, y, z, h) VALUES " ..
+    table.concat(ph, ','), params)
+end
+
+function S.load_catalog()
+  local tracks = S.query("SELECT * FROM vh_race_tracks WHERE enabled = 1")
+  local out = {}
+  for _, row in ipairs(tracks) do
+    out[row.id] = {
+      id = row.id, label = row.label, district = row.district, kind = row.kind,
+      creator_char  = tonumber(row.creator_char) or 0,
+      illegal       = tonumber(row.illegal) == 1,
+      alerts_police = tonumber(row.alerts_police) == 1,
+      laps          = tonumber(row.laps) or 1,
+      min_players   = tonumber(row.min_players) or 1,
+      max_players   = tonumber(row.max_players) or 8,
+      vehicle_class = row.vehicle_class,
+      default_fee   = tonumber(row.default_fee) or 0,
+      limit_seconds = tonumber(row.limit_seconds) or 300,
+      start         = { x = tonumber(row.start_x), y = tonumber(row.start_y),
+                        z = tonumber(row.start_z), h = tonumber(row.start_h) },
+      source        = row.source or 'config',
+      checkpoints   = {},
+      grid          = {},
+    }
+  end
+
+  local cps = S.query("SELECT track_id, idx, x, y, z, radius, kind FROM vh_race_checkpoints ORDER BY track_id, idx")
+  for _, cp in ipairs(cps) do
+    local t = out[cp.track_id]
+    if t then
+      t.checkpoints[#t.checkpoints + 1] = {
+        x = tonumber(cp.x), y = tonumber(cp.y), z = tonumber(cp.z),
+        radius = tonumber(cp.radius), kind = cp.kind,
+      }
+    end
+  end
+
+  local grid = S.query("SELECT track_id, slot, x, y, z, h FROM vh_race_grid ORDER BY track_id, slot")
+  for _, g in ipairs(grid) do
+    local t = out[g.track_id]
+    if t then
+      t.grid[#t.grid + 1] = {
+        x = tonumber(g.x), y = tonumber(g.y), z = tonumber(g.z), h = tonumber(g.h),
+      }
+    end
+  end
+  return out
+end
+
+function S.delete_track(track_id, only_custom)
+  if only_custom then
+    return S.execute("DELETE FROM vh_race_tracks WHERE id = ? AND source = 'custom'", { track_id })
+  end
+  return S.execute("DELETE FROM vh_race_tracks WHERE id = ?", { track_id })
+end
+
+-- ── History / Results / Records / Stats ────────────────────────────────────
+
+function S.insert_history(row)
+  local p = promise.new()
+  exports.oxmysql:execute([[
+    INSERT INTO vh_race_history
+      (track_id, kind, mode, creator_char, players_total,
+       winner_char, winner_time_ms, pot_total, started_at, finished_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?))
+  ]], {
+    row.track_id, row.kind, row.mode or 'rankeada',
+    tonumber(row.creator_char) or 0,
+    tonumber(row.players_total) or 0, tonumber(row.winner_char) or 0,
+    tonumber(row.winner_time_ms) or 0, tonumber(row.pot_total) or 0,
+    tonumber(row.started_at) or os.time(),
+    tonumber(row.finished_at) or os.time(),
+  }, function(r) p:resolve(r) end)
+  local r = Citizen.Await(p)
+  if type(r) == 'table' then return tonumber(r.insertId) or 0 end
+  return tonumber(r) or 0
+end
+
+function S.insert_results(history_id, results)
+  if type(results) ~= 'table' or #results == 0 then return end
+  local ph, params = {}, {}
+  for _, r in ipairs(results) do
+    ph[#ph + 1] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    params[#params + 1] = history_id
+    params[#params + 1] = tonumber(r.char_id) or 0
+    params[#params + 1] = tostring(r.nick or '')
+    params[#params + 1] = tonumber(r.placement) or 0
+    params[#params + 1] = tonumber(r.total_time_ms) or 0
+    params[#params + 1] = tonumber(r.best_lap_ms) or 0
+    params[#params + 1] = tonumber(r.drift_score) or 0
+    params[#params + 1] = tonumber(r.top_speed) or 0
+    params[#params + 1] = (r.finished and 1) or 0
+    params[#params + 1] = tonumber(r.payout) or 0
+  end
+  S.execute([[
+    INSERT INTO vh_race_results
+      (history_id, char_id, nick, placement, total_time_ms, best_lap_ms,
+       drift_score, top_speed, finished, payout)
+    VALUES ]] .. table.concat(ph, ','), params)
+end
+
+function S.update_records(track_id, char_id, time_ms, drift, top_speed, was_win)
+  S.execute([[
+    INSERT INTO vh_race_records
+      (track_id, char_id, best_time_ms, best_drift, top_speed, runs, wins)
+    VALUES (?, ?, ?, ?, ?, 1, ?)
+    ON DUPLICATE KEY UPDATE
+      best_time_ms = IF(? > 0 AND (best_time_ms = 0 OR ? < best_time_ms), ?, best_time_ms),
+      best_drift   = GREATEST(best_drift, ?),
+      top_speed    = GREATEST(top_speed, ?),
+      runs         = runs + 1,
+      wins         = wins + ?
+  ]], {
+    track_id, char_id, time_ms or 0, drift or 0, top_speed or 0, was_win and 1 or 0,
+    time_ms or 0, time_ms or 0, time_ms or 0,
+    drift or 0, top_speed or 0, was_win and 1 or 0,
+  })
+end
+
+function S.update_stats(char_id, kind, was_win, was_podium, dnf, payout, drift, top_speed, time_ms)
+  S.execute([[
+    INSERT INTO vh_race_stats
+      (char_id, kind, runs, wins, podiums, dnf, total_payout, total_drift, top_speed, best_time_ms)
+    VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      runs          = runs + 1,
+      wins          = wins + ?,
+      podiums       = podiums + ?,
+      dnf           = dnf + ?,
+      total_payout  = total_payout + ?,
+      total_drift   = total_drift + ?,
+      top_speed     = GREATEST(top_speed, ?),
+      best_time_ms  = IF(? > 0 AND (best_time_ms = 0 OR ? < best_time_ms), ?, best_time_ms)
+  ]], {
+    char_id, kind, was_win and 1 or 0, was_podium and 1 or 0, dnf and 1 or 0,
+    payout or 0, drift or 0, top_speed or 0, time_ms or 0,
+    was_win and 1 or 0, was_podium and 1 or 0, dnf and 1 or 0,
+    payout or 0, drift or 0, top_speed or 0,
+    time_ms or 0, time_ms or 0, time_ms or 0,
+  })
+end
+
+-- ── Queries (NUI) ───────────────────────────────────────────────────────────
+
+function S.history_recent(filters, limit)
+  filters = type(filters) == 'table' and filters or {}
+  local where, params = {}, {}
+  if tonumber(filters.char_id) then
+    where[#where + 1] = "id IN (SELECT history_id FROM vh_race_results WHERE char_id = ?)"
+    params[#params + 1] = tonumber(filters.char_id)
+  end
+  if type(filters.track_id) == 'string' and filters.track_id ~= '' then
+    where[#where + 1] = 'track_id = ?'; params[#params + 1] = filters.track_id
+  end
+  if type(filters.kind) == 'string' and filters.kind ~= '' then
+    where[#where + 1] = 'kind = ?'; params[#params + 1] = filters.kind
+  end
+  if type(filters.mode) == 'string' and filters.mode ~= '' then
+    where[#where + 1] = 'mode = ?'; params[#params + 1] = filters.mode
+  end
+  local lim = math.min(math.max(tonumber(limit) or 30, 1), 100)
+  params[#params + 1] = lim
+  local where_sql = #where > 0 and ('WHERE ' .. table.concat(where, ' AND ')) or ''
+  return S.query([[
+    SELECT id, track_id, kind, mode, creator_char, players_total,
+           winner_char, winner_time_ms, pot_total,
+           UNIX_TIMESTAMP(started_at)  AS started_unix,
+           UNIX_TIMESTAMP(finished_at) AS finished_unix
+    FROM vh_race_history ]] .. where_sql .. [[
+    ORDER BY id DESC LIMIT ?
+  ]], params)
+end
+
+function S.results_of(history_id)
+  return S.query([[
+    SELECT char_id, nick, placement, total_time_ms, best_lap_ms,
+           drift_score, top_speed, finished, payout
+    FROM vh_race_results WHERE history_id = ?
+    ORDER BY placement ASC
+  ]], { tonumber(history_id) or 0 })
+end
+
+function S.ranking_kind(kind, mode, limit)
+  local lim = math.min(math.max(tonumber(limit) or 50, 1), 100)
+  local order = 'wins DESC, podiums DESC, runs DESC'
+  if mode == 'time' then order = 'best_time_ms ASC, wins DESC' end
+  if mode == 'drift' then order = 'total_drift DESC, wins DESC' end
+  return S.query([[
+    SELECT char_id, kind, runs, wins, podiums, dnf,
+           total_payout, total_drift, top_speed, best_time_ms
+    FROM vh_race_stats
+    WHERE kind = ? AND runs > 0
+    ORDER BY ]] .. order .. [[
+    LIMIT ?
+  ]], { kind, lim })
+end
+
+function S.stats_of_char(char_id)
+  return S.query([[
+    SELECT kind, runs, wins, podiums, dnf,
+           total_payout, total_drift, top_speed, best_time_ms
+    FROM vh_race_stats WHERE char_id = ? ORDER BY kind
+  ]], { tonumber(char_id) or 0 })
+end
+
+function S.records_of_char(char_id, limit)
+  local lim = math.min(math.max(tonumber(limit) or 30, 1), 100)
+  return S.query([[
+    SELECT track_id, best_time_ms, best_drift, top_speed, runs, wins
+    FROM vh_race_records WHERE char_id = ?
+    ORDER BY runs DESC LIMIT ?
+  ]], { tonumber(char_id) or 0, lim })
+end
+
 function S.apply_schema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
-  if type(schema) ~= 'string' or schema == '' then return false, 'schema_file_missing' end
-  S.execute(schema, {})
+  if type(schema) ~= 'string' or schema == '' then return false, 'schema_missing' end
+  S.execute_raw(schema)
+  -- Compat: se a coluna `mode` não existir (upgrade de schema), adiciona-a.
+  local ok, cols = pcall(function()
+    return S.query("SHOW COLUMNS FROM vh_race_history LIKE 'mode'")
+  end)
+  if not ok or not cols or #cols == 0 then
+    print('[vhub_racha][schema] adicionando coluna `mode` em vh_race_history')
+    local alter_sql = [[
+      ALTER TABLE vh_race_history
+      ADD COLUMN `mode` ENUM('rankeada','treino','privada') NOT NULL DEFAULT 'rankeada',
+      ADD KEY `idx_hist_mode` (`mode`)
+    ]]
+    pcall(function() S.execute_raw(alter_sql) end)
+  end
   S.ready = true
   return true
-end
-
--- Cria uma corrida e retorna run_id.
-function S.create_run(track_id, organizer_char_id, entry_fee, laps, ranked)
-  return S.insert([[
-    INSERT INTO vh_racha_runs
-      (track_id, organizer_char_id, entry_fee, laps, ranked, state)
-    VALUES (?, ?, ?, ?, ?, 'open')
-  ]], { track_id, organizer_char_id, entry_fee or 0, laps or 1, ranked and 1 or 0 })
-end
-
--- Atualiza estado agregado da corrida.
-function S.update_run(run_id, state, participant_count, prize_pool, mark_start, mark_finish)
-  local set = { 'state = ?', 'participant_count = ?', 'prize_pool = ?' }
-  local params = { state, participant_count or 0, prize_pool or 0 }
-  if mark_start then set[#set + 1] = 'started_at = COALESCE(started_at, CURRENT_TIMESTAMP)' end
-  if mark_finish then set[#set + 1] = 'finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP)' end
-  params[#params + 1] = run_id
-  return S.execute('UPDATE vh_racha_runs SET ' .. table.concat(set, ', ') .. ' WHERE id = ?', params)
-end
-
--- Busca perfil de piloto.
-function S.get_profile(char_id)
-  local rows = S.query('SELECT char_id, nickname FROM vh_racha_profiles WHERE char_id = ? LIMIT 1', { char_id })
-  return rows[1]
-end
-
--- Busca dono de um apelido.
-function S.find_nickname(nickname)
-  local rows = S.query('SELECT char_id FROM vh_racha_profiles WHERE nickname = ? LIMIT 1', { nickname })
-  return rows[1] and tonumber(rows[1].char_id) or nil
-end
-
--- Cria ou atualiza perfil de piloto.
-function S.upsert_profile(char_id, nickname)
-  return S.execute([[
-    INSERT INTO vh_racha_profiles (char_id, nickname)
-    VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE nickname = VALUES(nickname)
-  ]], { char_id, nickname })
-end
-
--- Insere resultado de corrida.
-function S.insert_result(row)
-  return S.execute([[
-    INSERT INTO vh_racha_results
-      (run_id, track_id, char_id, nickname, vehicle_plate, vehicle_model,
-       position, duration_ms, checkpoints, status, payout)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      nickname = VALUES(nickname),
-      vehicle_plate = VALUES(vehicle_plate),
-      vehicle_model = VALUES(vehicle_model),
-      position = VALUES(position),
-      duration_ms = VALUES(duration_ms),
-      checkpoints = VALUES(checkpoints),
-      status = VALUES(status),
-      payout = VALUES(payout)
-  ]], {
-    row.run_id, row.track_id, row.char_id, row.nickname or '',
-    row.vehicle_plate or '', row.vehicle_model or '',
-    row.position, row.duration_ms, row.checkpoints or 0, row.status, row.payout or 0,
-  })
-end
-
--- Atualiza recorde agregado apos chegada valida.
-function S.record_finish(track_id, char_id, nickname, duration_ms, run_id, position)
-  return S.execute([[
-    INSERT INTO vh_racha_records
-      (track_id, char_id, nickname, best_ms, best_run_id, wins, podiums, finishes, dnfs, total_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?)
-    ON DUPLICATE KEY UPDATE
-      nickname = VALUES(nickname),
-      best_run_id = IF(best_ms IS NULL OR VALUES(best_ms) < best_ms, VALUES(best_run_id), best_run_id),
-      best_ms = IF(best_ms IS NULL OR VALUES(best_ms) < best_ms, VALUES(best_ms), best_ms),
-      wins = wins + VALUES(wins),
-      podiums = podiums + VALUES(podiums),
-      finishes = finishes + 1,
-      total_ms = total_ms + VALUES(total_ms)
-  ]], {
-    track_id, char_id, nickname, duration_ms, run_id,
-    position == 1 and 1 or 0, position <= 3 and 1 or 0, duration_ms,
-  })
-end
-
--- Atualiza agregado de DNF/cancelamento.
-function S.record_dnf(track_id, char_id, nickname)
-  return S.execute([[
-    INSERT INTO vh_racha_records
-      (track_id, char_id, nickname, wins, podiums, finishes, dnfs, total_ms)
-    VALUES (?, ?, ?, 0, 0, 0, 1, 0)
-    ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), dnfs = dnfs + 1
-  ]], { track_id, char_id, nickname })
-end
-
--- Ranking especifico da pista.
-function S.track_ranking(track_id, limit)
-  local lim = math.min(math.max(tonumber(limit) or 20, 1), 100)
-  return S.query([[
-    SELECT track_id, char_id, nickname, best_ms, wins, podiums, finishes, dnfs, total_ms,
-           CASE WHEN finishes > 0 THEN FLOOR(total_ms / finishes) ELSE NULL END AS avg_ms
-    FROM vh_racha_records
-    WHERE track_id = ? AND best_ms IS NOT NULL
-    ORDER BY best_ms ASC, wins DESC, podiums DESC, finishes DESC
-    LIMIT ?
-  ]], { track_id, lim })
-end
-
--- Ranking geral da liga.
-function S.general_ranking(limit)
-  local lim = math.min(math.max(tonumber(limit) or 20, 1), 100)
-  return S.query([[
-    SELECT char_id,
-           SUBSTRING_INDEX(GROUP_CONCAT(nickname ORDER BY updated_at DESC), ',', 1) AS nickname,
-           SUM(wins) AS wins, SUM(podiums) AS podiums, SUM(finishes) AS finishes,
-           SUM(dnfs) AS dnfs, MIN(best_ms) AS best_ms, COUNT(*) AS tracks,
-           (SUM(wins) * 100 + SUM(podiums) * 35 + SUM(finishes) * 5 - SUM(dnfs) * 2) AS score
-    FROM vh_racha_records
-    GROUP BY char_id
-    ORDER BY score DESC, wins DESC, podiums DESC, best_ms ASC
-    LIMIT ?
-  ]], { lim })
-end
-
--- Historico recente de uma pista.
-function S.track_history(track_id, limit)
-  local lim = math.min(math.max(tonumber(limit) or 30, 1), 100)
-  return S.query([[
-    SELECT run_id, track_id, char_id, nickname, vehicle_plate, vehicle_model,
-           position, duration_ms, status, payout, UNIX_TIMESTAMP(created_at) AS created_unix
-    FROM vh_racha_results
-    WHERE track_id = ?
-    ORDER BY id DESC
-    LIMIT ?
-  ]], { track_id, lim })
-end
-
--- Historico do piloto.
-function S.char_history(char_id, limit)
-  local lim = math.min(math.max(tonumber(limit) or 30, 1), 100)
-  return S.query([[
-    SELECT run_id, track_id, position, duration_ms, status, payout,
-           UNIX_TIMESTAMP(created_at) AS created_unix
-    FROM vh_racha_results
-    WHERE char_id = ?
-    ORDER BY id DESC
-    LIMIT ?
-  ]], { char_id, lim })
-end
-
--- Resultado completo de uma corrida.
-function S.run_results(run_id)
-  return S.query([[
-    SELECT run_id, track_id, char_id, nickname, vehicle_plate, vehicle_model,
-           position, duration_ms, checkpoints, status, payout,
-           UNIX_TIMESTAMP(created_at) AS created_unix
-    FROM vh_racha_results
-    WHERE run_id = ?
-    ORDER BY COALESCE(position, 9999), id ASC
-  ]], { run_id })
 end

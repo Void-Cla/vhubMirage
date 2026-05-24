@@ -77,6 +77,7 @@ function vHub:init(cfg, db_driver)
 
   -- ── vHub:ready — ÚNICO ponto de autenticação e spawn ──────────────────
   vHub.Kernel:net("vHub:ready", function(src)
+    print(('vHub.boot: ready received src=%s'):format(tostring(src)))
 
     -- Se já tem sessão: é um respawn (morte, reconexão rápida)
     local existing = vHub.Auth:getUser(src)

@@ -1,101 +1,271 @@
--- server/init.lua - bootstrap e fronteiras de rede do vhub_racha.
+-- server/init.lua — wire de todos os modulos via VHubRachaBoot.on_ready.
+-- Garante que NADA roda antes do vhub estar pronto (resolve 'ensure manual').
 
-local Core, SQL, E = VHubRachaCore, VHubRachaSQL, VHubRachaE
+local Cfg = VHubRachaCfg
+local U   = VHubRachaUtils
+local CP  = VHubRachaCP
+local E   = VHubRachaE
+local ST  = VHubRachaState
+local SQL = VHubRachaSQL
+local LB  = VHubRachaLobby
+local RT  = VHubRachaRuntime
+local ED  = VHubRachaEditor
+local R   = VHubRachaRanking
+local Lang = VHubRachaLang
+local B   = VHubRachaBoot
 
-local function respond(src, ok, data_or_err)
-  TriggerClientEvent(E.NUI_RESULT, src, ok and { ok = true, data = data_or_err } or { ok = false, err = data_or_err })
+-- ── Schema + catalogo (roda quando boot ficar ready) ───────────────────────
+
+B.on_ready(function()
+  local ok, err = SQL.apply_schema()
+  if not ok then
+    print('[vhub_racha][init] schema falhou: ' .. tostring(err))
+    return
+  end
+
+  -- Espelha config → SQL (normaliza coords)
+  for _, t in ipairs(VHubRachaTracks or {}) do
+    local cps  = CP.normalize_list(t.checkpoints, 0)
+    local grid = CP.normalize_list(t.grid, t.start and t.start.h or 0)
+    local start = CP.normalize(t.start, 0) or (grid[1] or { x = 0, y = 0, z = 0, h = 0 })
+    SQL.upsert_track({
+      id            = t.id,
+      label         = t.label or t.id,
+      district      = t.district or '',
+      kind          = t.kind or 'sprint',
+      creator_char  = 0,
+      illegal       = t.illegal,
+      alerts_police = t.alerts_police,
+      laps          = t.laps or 1,
+      min_players   = t.min_players or 1,
+      max_players   = t.max_players or #grid,
+      vehicle_class = t.vehicle_class or 'car',
+      default_fee   = t.default_fee or 0,
+      limit_seconds = t.limit_seconds or 300,
+      start         = start,
+      source        = 'config',
+    })
+    SQL.set_checkpoints(t.id, cps)
+    SQL.set_grid(t.id, grid)
+  end
+
+  -- Carrega catalogo (config + custom)
+  ST.set_catalog(SQL.load_catalog())
+
+  local n = 0; for _ in pairs(ST._catalog) do n = n + 1 end
+  print(('[vhub_racha][init] %d pistas carregadas.'):format(n))
+end, 'schema_catalog')
+
+-- ── Cron GC ────────────────────────────────────────────────────────────────
+
+B.on_ready(function()
+  Citizen.CreateThread(function()
+    while true do
+      Citizen.Wait(30000)
+      pcall(LB.gc_idle)
+    end
+  end)
+end, 'cron_gc')
+
+-- ── Lifecycle de player ────────────────────────────────────────────────────
+
+AddEventHandler('playerDropped', function()
+  local src = source
+  if not B.READY then return end
+  LB.on_player_dropped(src)
+  RT.on_player_dropped(src)
+end)
+
+AddEventHandler('vHub:playerDeath', function(user)
+  if not B.READY or not user or not user.source then return end
+  RT.on_abort(user.source, 'morte')
+end)
+
+-- ── Net events ─────────────────────────────────────────────────────────────
+
+local function send_open(src)
+  if not src or src <= 0 then return end
+  if not B.READY then
+    TriggerClientEvent(E.NOTIFY, src, 'O sistema ainda esta carregando, aguarde...', 'info')
+    return
+  end
+
+  local lobbies = ST.public_lobbies()
+  local catalog = {}
+  for id, t in pairs(ST.catalog()) do
+    catalog[#catalog + 1] = {
+      id = id, label = t.label, district = t.district, kind = t.kind,
+      illegal = t.illegal, alerts_police = t.alerts_police,
+      laps = t.laps, min_players = t.min_players, max_players = t.max_players,
+      vehicle_class = t.vehicle_class, default_fee = t.default_fee,
+      limit_seconds = t.limit_seconds, source = t.source,
+      cps = #(t.checkpoints or {}), color = t.color,
+    }
+  end
+  table.sort(catalog, function(a, b) return a.label < b.label end)
+
+  TriggerClientEvent(E.NUI_OPENED, src, {
+    catalog = catalog,
+    lobbies = lobbies,
+    ranking = R.top('sprint', 'time', 10),
+    history = R.recent({}, 15),
+    cfg = {
+      brand_name = Cfg.BRAND_NAME,
+      brand_tag  = Cfg.BRAND_TAG,
+      max_fee    = Cfg.MAX_ENTRY_FEE,
+    },
+  })
 end
 
-AddEventHandler('onResourceStart', function(res)
-  if res ~= GetCurrentResourceName() then return end
-  Citizen.CreateThread(function()
-    local vh = nil
-    for _ = 1, 60 do
-      local ok, ref = pcall(function() return exports.vhub:getVHub() end)
-      if ok and type(ref) == 'table' and ref.Auth then vh = ref; break end
-      Citizen.Wait(250)
-    end
-    if not vh then print('[vhub_racha][ERRO] vhub indisponivel apos 15s - abortando init.'); return end
-    Core.set_vhub(vh)
-    local ok, err = SQL.apply_schema()
-    if not ok then print('[vhub_racha][ERRO] falha ao aplicar schema: ' .. tostring(err)); return end
-    Core.mark_ready()
-    print('[vhub_racha] Pronto.')
-  end)
-end)
+RegisterNetEvent(E.NUI_OPEN, function() send_open(source) end)
 
-RegisterNetEvent(E.NUI_OPEN, function(payload)
-  Core.open_panel(source, type(payload) == 'table' and payload.track_id or nil)
-end)
-
-RegisterNetEvent('vhub_racha:profile:nick', function(payload)
+-- Lobby
+RegisterNetEvent(E.LOBBY_CREATE, function(payload)
+  if not B.READY then return end
   local src = source
-  Citizen.CreateThread(function()
-    local ok, data_or_err = Core.set_nickname(src, type(payload) == 'table' and payload.nickname or '')
-    respond(src, ok, data_or_err)
-    if ok then Core.open_panel(src, type(payload) == 'table' and payload.track_id or nil) end
-  end)
+  local ok, data = LB.create(src, payload or {})
+  TriggerClientEvent(E.NUI_RESULT, src, { ok = ok, kind = 'create', data = data })
 end)
 
-RegisterNetEvent(E.CREATE_LOBBY, function(payload)
+RegisterNetEvent(E.LOBBY_JOIN, function(inst_id)
+  if not B.READY then return end
   local src = source
-  Citizen.CreateThread(function() local ok, data_or_err = Core.create_lobby(src, payload); respond(src, ok, data_or_err) end)
+  local ok, data = LB.join(src, inst_id)
+  TriggerClientEvent(E.NUI_RESULT, src, { ok = ok, kind = 'join', data = data })
 end)
 
-RegisterNetEvent(E.JOIN_LOBBY, function(payload)
+RegisterNetEvent(E.LOBBY_LEAVE, function(inst_id)
+  if not B.READY then return end
   local src = source
-  Citizen.CreateThread(function() local ok, data_or_err = Core.join_lobby(src, payload); respond(src, ok, data_or_err) end)
+  LB.leave(src, inst_id)
+  TriggerClientEvent(E.NUI_RESULT, src, { ok = true, kind = 'leave' })
 end)
 
-RegisterNetEvent(E.START_LOBBY, function(payload)
+RegisterNetEvent(E.LOBBY_CANCEL, function(inst_id)
+  if not B.READY then return end
   local src = source
-  Citizen.CreateThread(function() local ok, data_or_err = Core.start_lobby(src, payload); respond(src, ok, data_or_err) end)
+  local inst = ST.instance(inst_id); if not inst then return end
+  local user = B.vHub.Auth:getUser(src)
+  if not user or user.char_id ~= inst.creator_char then return end
+  LB.cancel(inst_id, 'criador')
 end)
 
-RegisterNetEvent(E.LEAVE_LOBBY, function(payload)
+RegisterNetEvent(E.LOBBY_CONFIRM, function(inst_id)
+  if not B.READY then return end
   local src = source
-  Citizen.CreateThread(function()
-    local ok, data_or_err = Core.leave(src, 'left')
-    respond(src, ok, data_or_err)
-    if ok then Core.open_panel(src, type(payload) == 'table' and payload.track_id or nil) end
-  end)
-end)
-
-RegisterNetEvent(E.CANCEL_LOBBY, function(payload)
-  local src = source
-  Citizen.CreateThread(function()
-    local ok, data_or_err = Core.cancel_lobby(src, payload)
-    respond(src, ok, data_or_err)
-    if ok then Core.open_panel(src, type(payload) == 'table' and payload.track_id or nil) end
-  end)
-end)
-
-RegisterNetEvent(E.RACE_CHECKPOINT, function(payload)
-  local src = source
-  Citizen.CreateThread(function() Core.checkpoint(src, payload) end)
-end)
-
-RegisterNetEvent(E.RACE_ABORT, function(payload)
-  local src = source
-  Citizen.CreateThread(function()
-    local reason = type(payload) == 'table' and payload.reason or 'dnf'
-    Core.leave(src, reason == 'timeout' and 'timeout' or 'dnf')
-  end)
-end)
-
-AddEventHandler('playerDropped', function() Core.drop_src(source) end)
-
-Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(5000)
-    if Core.is_ready() then Core.tick() end
+  local ok, err = LB.confirm_presence(src, inst_id, false)
+  if not ok then
+    TriggerClientEvent(E.NOTIFY, src,
+      Lang.t('lobby.outside_ready_zone'), 'error')
   end
 end)
 
+RegisterNetEvent(E.LOBBY_FORCE_START, function(inst_id)
+  if not B.READY then return end
+  local src = source
+  local inst = ST.instance(inst_id); if not inst then return end
+  local user = B.vHub.Auth:getUser(src)
+  if not user or user.char_id ~= inst.creator_char then
+    TriggerClientEvent(E.NOTIFY, src, Lang.t('lobby.only_host_start'), 'error')
+    return
+  end
+  local ok, err = LB.start(inst_id, false)
+  if not ok then
+    TriggerClientEvent(E.NOTIFY, src, ('Falha: %s'):format(tostring(err)), 'error')
+  end
+end)
+
+-- Race
+RegisterNetEvent(E.RACE_CHECKPOINT, function(payload)
+  if not B.READY then return end
+  RT.on_checkpoint(source, payload or {})
+end)
+
+RegisterNetEvent(E.RACE_TICK, function(payload)
+  if not B.READY then return end
+  RT.on_tick(source, payload or {})
+end)
+
+RegisterNetEvent(E.RACE_ABORT, function(reason)
+  if not B.READY then return end
+  RT.on_abort(source, tostring(reason or 'manual'))
+end)
+
+-- NUI queries
+RegisterNetEvent(E.NUI_RANKING, function(payload)
+  if not B.READY then return end
+  local src = source
+  local kind = (payload and payload.kind) or 'sprint'
+  local mode = (payload and payload.mode) or 'wins'
+  TriggerClientEvent(E.NUI_RANKING_DATA, src,
+    { kind = kind, mode = mode, data = R.top(kind, mode, 50) })
+end)
+
+RegisterNetEvent(E.NUI_HISTORY, function(payload)
+  if not B.READY then return end
+  local src = source
+  TriggerClientEvent(E.NUI_HISTORY_DATA, src, R.recent(payload or {}, 30))
+end)
+
+RegisterNetEvent(E.NUI_RESULTS, function(history_id)
+  if not B.READY then return end
+  local src = source
+  TriggerClientEvent(E.NUI_RESULTS_DATA, src,
+    { history_id = history_id, results = R.results_of(tonumber(history_id) or 0) })
+end)
+
+-- Editor
+RegisterNetEvent(E.EDITOR_OPEN,    function() if B.READY then ED.open(source) end end)
+RegisterNetEvent(E.EDITOR_PHASE,   function(p)
+  if B.READY then ED.set_phase(source, (p and p.phase) or 'idle') end
+end)
+RegisterNetEvent(E.EDITOR_ADD_GRID,function() if B.READY then ED.add_grid(source) end end)
+RegisterNetEvent(E.EDITOR_ADD_CP,  function() if B.READY then ED.add_cp(source) end end)
+RegisterNetEvent(E.EDITOR_UNDO,    function() if B.READY then ED.undo(source) end end)
+RegisterNetEvent(E.EDITOR_SAVE,    function(meta) if B.READY then ED.save(source, meta or {}) end end)
+RegisterNetEvent(E.EDITOR_DISCARD, function() if B.READY then ED.discard(source) end end)
+
+-- ── Comandos ────────────────────────────────────────────────────────────────
+
+RegisterCommand(Cfg.CMD_OPEN, function(src)
+  if src <= 0 then return end
+  send_open(src)
+end, false)
+
+-- /racha_treino <track_id> → cria lobby treino solo + ja confirma
+RegisterCommand(Cfg.CMD_TRAINING, function(src, args)
+  if src <= 0 then return end
+  if not B.READY then return end
+  local track_id = U.sanitize_id(args[1] or '')
+  if track_id == '' then
+    TriggerClientEvent(E.NOTIFY, src,
+      ('Uso: /%s <track_id>'):format(Cfg.CMD_TRAINING), 'info')
+    return
+  end
+  local ok, data = LB.create(src, { track_id = track_id, mode = 'treino' })
+  if not ok then
+    TriggerClientEvent(E.NOTIFY, src, ('Falha: %s'):format(tostring(data)), 'error')
+    return
+  end
+  -- Confirma presenca automaticamente em treino
+  LB.confirm_presence(src, data.inst_id, true)
+end, false)
+
+-- Editor backup (caso NUI esteja com problema)
+RegisterCommand(Cfg.CMD_EDITOR_DEBUG, function(src, args)
+  if src <= 0 then return end
+  if not B.READY then return end
+  local sub = tostring(args[1] or '')
+  if sub == 'add_grid' then ED.add_grid(src)
+  elseif sub == 'add_cp' then ED.add_cp(src)
+  elseif sub == 'undo' then ED.undo(src)
+  elseif sub == 'discard' then ED.discard(src)
+  else ED.open(src) end
+end, false)
+
 RegisterCommand('vhub_racha_status', function(src)
   if src ~= 0 then return end
-  local st = Core.status()
-  print(('[vhub_racha] ready=%s sql=%s lobbies=%d created=%d started=%d finished=%d dnf=%d'):format(
-    tostring(st.ready), tostring(st.sql_ready), #(st.lobbies or {}),
-    st.metrics.created, st.metrics.started, st.metrics.finished, st.metrics.dnf))
+  local s = ST.status_snapshot()
+  print(('[vhub_racha] ready=%s tracks=%d lobbies=%d pending=%d racing=%d drafts=%d'):format(
+    tostring(B.READY), s.catalog_size, s.lobbies, s.pending, s.racing, s.drafts))
 end, true)

@@ -5,12 +5,12 @@ lua54      'yes'
 
 name        'vhub_racha'
 author      'vHub Mirage'
-version     '1.0.0'
-description 'Corridas ilegais server-authoritative com lobby, ranking, historico e premios auditaveis.'
+version     '3.0.0'
+description 'Liga clandestina premium — 7 modos, ready-zone, totem cinematografico, editor visual, ranking persistido.'
 
 dependencies {
-  'vhub',
   'oxmysql',
+  'vhub',
   'vhub_money',
   'vhub_identity',
   'vhub_groups',
@@ -18,21 +18,48 @@ dependencies {
 
 shared_scripts {
   'shared/config.lua',
-  'shared/events.lua',
+  'shared/enums.lua',
+  'shared/lang/pt_br.lua',
+  'shared/math.lua',
+  'shared/vehicle.lua',
+  'shared/checkpoints.lua',
   'shared/utils.lua',
 }
 
 server_scripts {
+  'server/bootstrap.lua',
   'server/sql.lua',
-  'server/core.lua',
-  'server/init.lua',
+  'server/state.lua',
+  'server/anti_cheat.lua',
+  'server/history.lua',
+  'server/ranking.lua',
+  'server/rewards.lua',
+  'server/lobby.lua',
+  'server/runtime.lua',
+  'server/editor.lua',
   'server/exports.lua',
+  'server/init.lua',
 }
 
 client_scripts {
-  'client/init.lua',
-  'client/zones.lua',
+  'client/bootstrap.lua',
+  'client/state.lua',
+  'client/nui.lua',
+  'client/lobby.lua',
   'client/race.lua',
+  'client/totem.lua',
+  'client/hud.lua',
+  'client/countdown.lua',
+  'client/sync.lua',
+  'client/editor.lua',
+  'client/modes/base.lua',
+  'client/modes/sprint.lua',
+  'client/modes/circuit.lua',
+  'client/modes/drag.lua',
+  'client/modes/drift.lua',
+  'client/modes/speedtrap.lua',
+  'client/modes/timeattack.lua',
+  'client/modes/freerun.lua',
 }
 
 ui_page 'nui/index.html'
