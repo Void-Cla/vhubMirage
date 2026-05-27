@@ -47,6 +47,7 @@ client_scripts {
   'client/nui.lua',
   'client/lobby.lua',
   'client/race.lua',
+  'client/nui_bridge.lua',
   'client/totem.lua',
   'client/hud.lua',
   'client/countdown.lua',

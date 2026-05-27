@@ -28,6 +28,7 @@ local function sync_state_bag(inst)
       lap         = p.lap or 0,
       laps        = inst.laps or 1,
       placement   = p.placement or 0,
+      players_total = ST.count_players(inst),
       drift_score = p.drift_score or 0,
       starts_at   = inst.starts_at or 0,
       started_ms  = p.started_ms or 0,
@@ -90,6 +91,7 @@ function RT.on_checkpoint(src, payload)
     cp_total    = cp_total,
     lap         = player.lap,
     laps        = inst.laps,
+    players_total = ST.count_players(inst),
     drift_score = player.drift_score,
     started_ms  = player.started_ms,
   }, true)
@@ -144,6 +146,7 @@ function RT.on_tick(src, payload)
     cp_total    = inst.cp_total or 0,
     lap         = player.lap or 0,
     laps        = inst.laps or 1,
+    players_total = ST.count_players(inst),
     drift_score = player.drift_score,
     started_ms  = player.started_ms or 0,
   }, true)

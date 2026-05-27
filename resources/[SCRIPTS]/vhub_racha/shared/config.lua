@@ -91,6 +91,10 @@ VHubRachaCfg = {
 
   -- ── HUD (cinematografico, sem fundo opaco) ─────────────────────────────
   HUD = {
+    -- When true the HTML/CSS NUI owns all HUD rendering. Set to true
+    -- after migrating your UI. The client will forward statebag/telemetry
+    -- to the NUI and disable the Lua DrawText HUD.
+    USE_NUI = true,
     -- Pos do timer central topo
     TIMER_X = 0.50, TIMER_Y = 0.04, TIMER_SCALE = 0.72,
     -- Recorde abaixo do timer
@@ -110,13 +114,17 @@ VHubRachaCfg = {
   -- ── Totem de checkpoint (substitui vanilla) ────────────────────────────
   TOTEM = {
     -- Render range (distancia maxima visivel em metros)
-    RENDER_RANGE      = 350.0,
+    RENDER_RANGE      = 999.0,
     -- LOD por distancia (perto = particulas completas; longe = so coluna)
-    LOD_NEAR          = 80.0,
-    LOD_MID           = 180.0,
+    LOD_NEAR          = 120.0,
+    LOD_MID           = 420.0,
     -- Tamanho
+    MIN_HEIGHT        = 5.0,
+    MAX_HEIGHT        = 110.0,
+    WIDTH_MIN         = 0.45,
+    WIDTH_MAX         = 2.80,
     WIDTH             = 0.10,
-    HEIGHT            = 50.0,
+    HEIGHT            = 110.0,
     -- Animacao (oscilacao vertical leve)
     PULSE_AMPLITUDE   = 0.18,
     PULSE_FREQ_HZ     = 0.6,

@@ -1,169 +1,291 @@
--- client/totem.lua — TOTEM cinematografico de checkpoint.
--- Substitui blip/marker/seta vanilla GTA por uma coluna holografica gigante
--- com particulas de areia dourada. LOD dinamico por distancia.
---
--- API publica:
---   VHubRachaTotem.set_target(target)   target = { x, y, z, kind, is_finish, label, distance_km }
---   VHubRachaTotem.clear()              limpa overlay
---
--- Render: thread frame loop CONDICIONAL (so quando ha target ativo + perto).
+-- client/totem.lua - totem 3D de checkpoint + projeção NUI cinematográfica.
+-- DrawMarker no mundo (sempre ativo) + thread NUI que envia coords de tela.
+-- Lei L-02: NUI recebe projeção calculada aqui; não decide posição 3D.
 
 VHubRachaTotem = {}
-local T = VHubRachaTotem
+
+local T   = VHubRachaTotem
 local Cfg = VHubRachaCfg
-local MA  = VHubRachaMath
 
-local _target = nil   -- alvo atual (CP a atingir)
-local _t0     = GetGameTimer()
+local USE_NUI = Cfg and Cfg.HUD and Cfg.HUD.USE_NUI
 
-function T.set_target(target)
-  _target = target
-  _t0 = GetGameTimer()
+local _target    = nil
+local _t0        = GetGameTimer()
+local _particles = {}
+
+-- ── Helpers ────────────────────────────────────────────────────────────────
+
+local function clamp(v, mn, mx)
+  v = tonumber(v) or mn
+  if v < mn then return mn end
+  if v > mx then return mx end
+  return v
 end
 
-function T.clear() _target = nil end
-function T.current() return _target end
+local function smoothstep(t)
+  t = clamp(t, 0.0, 1.0)
+  return t * t * (3.0 - (2.0 * t))
+end
 
--- Cor do totem conforme tipo de CP
-local function color_for(target)
+local function render_range()
+  return (Cfg.TOTEM and Cfg.TOTEM.RENDER_RANGE) or 999.0
+end
+
+local function shape_for(dist_m)
   local cfg = Cfg.TOTEM or {}
-  if target.is_finish then return cfg.COLOR_FINISH or { r = 100, g = 220, b = 120 } end
-  if target.kind == 'speedtrap' then return cfg.COLOR_SPEEDTRAP or { r = 38, g = 220, b = 80 } end
-  if target.kind == 'drift'     then return cfg.COLOR_DRIFT_ZONE or { r = 168, g = 50, b = 240 } end
-  return cfg.COLOR_DEFAULT or { r = 243, g = 181, b = 58 }
+  local range = render_range()
+  local t = smoothstep(clamp(dist_m / range, 0.0, 1.0))
+  local min_h = cfg.MIN_HEIGHT or 5.0
+  local max_h = cfg.MAX_HEIGHT or cfg.HEIGHT or 110.0
+  local min_w = cfg.WIDTH_MIN or 0.45
+  local max_w = cfg.WIDTH_MAX or 2.80
+  return min_h + ((max_h - min_h) * t), min_w + ((max_w - min_w) * t)
 end
 
--- LOD: distancia define densidade de particulas/altura
 local function lod_for(dist_m)
   local cfg = Cfg.TOTEM or {}
-  if dist_m <= (cfg.LOD_NEAR or 80) then return 'near' end
-  if dist_m <= (cfg.LOD_MID  or 180) then return 'mid' end
+  if dist_m <= (cfg.LOD_NEAR or 120.0) then return 'near' end
+  if dist_m <= (cfg.LOD_MID  or 420.0) then return 'mid'  end
   return 'far'
 end
 
--- Particles: array circular pre-alocado para performance
-local _particles = {}
+local function color_for(target)
+  local cfg = Cfg.TOTEM or {}
+  if type(target) ~= 'table' then return cfg.COLOR_DEFAULT or { r = 243, g = 181, b = 58 } end
+  if target.is_finish            then return cfg.COLOR_FINISH    or { r = 100, g = 220, b = 120 } end
+  if target.kind == 'speedtrap'  then return cfg.COLOR_SPEEDTRAP or { r = 38,  g = 220, b = 80  } end
+  if target.kind == 'drift'      then return cfg.COLOR_DRIFT_ZONE or { r = 168, g = 50,  b = 240 } end
+  return cfg.COLOR_DEFAULT or { r = 243, g = 181, b = 58 }
+end
+
+local function valid_target(target)
+  if type(target) ~= 'table' then return false end
+  return type(target.x) == 'number' and type(target.y) == 'number' and type(target.z) == 'number'
+end
+
 local function init_particles()
   local cfg = Cfg.TOTEM or {}
-  for i = 1, (cfg.PARTICLES or 14) do
+  local n     = cfg.PARTICLES  or 14
+  local max_h = cfg.MAX_HEIGHT or cfg.HEIGHT or 110.0
+  local max_r = cfg.WIDTH_MAX  or 2.80
+  for i = 1, n do
     _particles[i] = {
-      offset_y = math.random() * (cfg.HEIGHT or 50),
-      angle    = math.random() * math.pi * 2,
-      speed    = 0.3 + math.random() * 0.6,
-      radius   = 0.4 + math.random() * 0.6,
-      size     = (cfg.PARTICLE_SIZE or 0.20) * (0.7 + math.random() * 0.6),
+      offset_z = math.random() * max_h,
+      angle    = math.random() * math.pi * 2.0,
+      speed    = 0.25 + (math.random() * 0.75),
+      radius   = 0.65 + (math.random() * max_r),
+      size     = (cfg.PARTICLE_SIZE or 0.20) * (0.70 + math.random() * 0.70),
     }
   end
+  for i = n + 1, #_particles do _particles[i] = nil end
 end
-init_particles()
 
--- Render principal: chamado em loop CONDICIONAL (so quando target perto)
-local function render_totem(target, dist_m, t_ms)
-  if not target then return end
-  local cfg = Cfg.TOTEM or {}
-  local color = color_for(target)
-  local lod = lod_for(dist_m)
+-- ── API pública ────────────────────────────────────────────────────────────
+
+function T.set_target(target)
+  if not valid_target(target) then
+    _target = nil
+    if USE_NUI then SendNUIMessage({ type = 'vhub_racha.totem.clear' }) end
+    return
+  end
+  _target = target
+  _t0     = GetGameTimer()
+  init_particles()
+  if USE_NUI then
+    SendNUIMessage({ type = 'vhub_racha.totem.set', target = target })
+  end
+end
+
+function T.clear()
+  _target = nil
+  if USE_NUI then
+    SendNUIMessage({ type = 'vhub_racha.totem.project', payload = { visible = false } })
+    SendNUIMessage({ type = 'vhub_racha.totem.clear' })
+  end
+end
+
+function T.current() return _target end
+
+-- ── DrawMarker world-space (sempre ativo independente de NUI) ──────────────
+
+local function draw_distance_label(target, height, dist_m, lod)
+  -- Rótulo de distância visível em TODOS os LODs (near, mid e far)
+  local scale = (lod == 'near') and 0.52 or (lod == 'mid') and 0.44 or 0.36
+  local label = (dist_m >= 1000.0)
+      and ('%.1f KM'):format(dist_m / 1000.0)
+      or  ('%d M'):format(math.floor(dist_m))
+  local on_screen, sx, sy = GetScreenCoordFromWorldCoord(target.x, target.y, target.z + height + 1.2)
+  if not on_screen then return end
+  SetTextFont(4)
+  SetTextScale(0.0, scale)
+  SetTextColour(255, 232, 168, 245)
+  SetTextOutline()
+  SetTextCentre(true)
+  SetTextEntry('STRING')
+  AddTextComponentString(label)
+  DrawText(sx, sy - 0.02)
+end
+
+local function draw_totem(target, dist_m, t_ms)
+  if not valid_target(target) then return end
+  local cfg    = Cfg.TOTEM or {}
+  local color  = color_for(target)
+  local lod    = lod_for(dist_m)
+  local height, width = shape_for(dist_m)
   local cx, cy, cz = target.x, target.y, target.z
 
-  -- Pulse vertical (oscilacao leve)
-  local pulse_phase = (t_ms / 1000) * (cfg.PULSE_FREQ_HZ or 0.6) * math.pi * 2
-  local pulse = math.sin(pulse_phase) * (cfg.PULSE_AMPLITUDE or 0.18)
+  local phase  = (t_ms / 1000.0) * (cfg.PULSE_FREQ_HZ or 0.6) * math.pi * 2.0
+  local pulse  = math.sin(phase) * (cfg.PULSE_AMPLITUDE or 0.18)
+  local range_t = clamp(dist_m / render_range(), 0.0, 1.0)
+  local alpha  = math.floor(145 - (range_t * 70))
+  local base_radius = 4.0 + (width * 2.2)
 
-  -- 1) BASE CIRCULAR no chao (sempre visivel, marca o ponto)
+  -- Base: disco fino no solo
   DrawMarker(1,
-    cx, cy, cz - 1.0,
-    0, 0, 0, 0, 0, 0,
-    14.0, 14.0, 0.6,
-    color.r, color.g, color.b, 110,
+    cx, cy, cz - 0.95,
+    0,0,0, 0,0,0,
+    base_radius, base_radius, 0.12,
+    color.r, color.g, color.b, 48,
     false, false, 2, false, nil, nil, false)
 
-  -- 2) CILINDRO/COLUNA hologr fica vertical (DrawMarker 28 = sphere cilindrica;
-  --    1 = box. Vamos usar markers empilhados para criar a "coluna").
-  --    Em LOD 'far' mostramos so 1 marker grande; LOD 'mid' = 3; LOD 'near' = particulas completas.
-  local height  = cfg.HEIGHT or 50.0
-  local width   = (cfg.WIDTH or 1.4) * (1.0 + pulse * 0.1)
+  -- Esfera base
+  DrawMarker(28,
+    cx, cy, cz + 0.35 + pulse,
+    0,0,0, 0,0,0,
+    width * 1.8, width * 1.8, width * 1.8,
+    color.r, color.g, color.b, 95,
+    false, false, 2, false, nil, nil, false)
 
-  -- Cor com alpha que decai com a altura (efeito "fade pro topo")
-  local segments
-  if lod == 'far' then segments = 1
-  elseif lod == 'mid' then segments = 3
-  else segments = 6 end
-
+  -- Coluna segmentada (cresce com a distância)
+  local segments = (lod == 'near') and 6 or (lod == 'mid') and 4 or 2
   for i = 1, segments do
-    local frac = (i - 1) / segments
-    local seg_h = height / segments
-    local zc = cz + (height * frac) + (seg_h * 0.5) + pulse
-    local alpha = math.floor(180 * (1.0 - frac * 0.8))   -- fade do chao pro topo
-    DrawMarker(28,   -- sphere (transparente, com glow)
-      cx, cy, zc,
-      0, 0, 0, 0, 0, 0,
-      width, width, seg_h,
-      color.r, color.g, color.b, alpha,
+    local frac   = (i - 0.5) / segments
+    local seg_h  = height / segments
+    local fade   = 1.0 - (frac * 0.58)
+    local seg_alpha = math.floor(alpha * fade)
+    local seg_w  = width * (1.0 - (frac * 0.18)) * (1.0 + (pulse * 0.08))
+    DrawMarker(1,
+      cx, cy, cz + (height * frac) + pulse,
+      0,0,0, 0,0,0,
+      seg_w, seg_w, seg_h,
+      color.r, color.g, color.b, seg_alpha,
       false, false, 2, false, nil, nil, false)
   end
 
-  -- 3) PARTICULAS (so em LOD near/mid)
+  -- Coroa do alvo (topo)
+  DrawMarker(28,
+    cx, cy, cz + height + pulse,
+    0,0,0, 0,0,0,
+    width * 1.45, width * 1.45, width * 1.45,
+    color.r, color.g, color.b, math.min(190, alpha + 35),
+    false, false, 2, false, nil, nil, false)
+
+  -- Partículas (near/mid) + label de distância em TODOS os LODs
   if lod ~= 'far' then
-    local n_part = (lod == 'near') and (cfg.PARTICLES or 14) or math.ceil((cfg.PARTICLES or 14) / 2)
-    local drift_y = cfg.PARTICLE_DRIFT_Y or 0.5
-    for i = 1, n_part do
+    local n = (lod == 'near') and (cfg.PARTICLES or 14) or math.ceil((cfg.PARTICLES or 14) * 0.55)
+    local drift_z = cfg.PARTICLE_DRIFT_Y or 0.5
+    for i = 1, n do
       local p = _particles[i]
       if p then
-        -- Particula sobe lentamente, faz loop quando passa do topo
-        p.offset_y = (p.offset_y + drift_y * (1/60)) % height
-        local px = cx + math.cos(p.angle) * p.radius
-        local py = cy + math.sin(p.angle) * p.radius
-        local pz = cz + p.offset_y + pulse
+        p.offset_z = (p.offset_z + (drift_z * p.speed * 0.016)) % math.max(height, 1.0)
+        p.angle    = p.angle + (0.006 * p.speed)
+        local radius = math.min(p.radius, width * 2.4)
+        local px = cx + (math.cos(p.angle) * radius)
+        local py = cy + (math.sin(p.angle) * radius)
+        local pz = cz + p.offset_z + pulse
         DrawMarker(28,
           px, py, pz,
-          0, 0, 0, 0, 0, 0,
+          0,0,0, 0,0,0,
           p.size, p.size, p.size,
-          color.r, color.g, color.b, 180,
+          color.r, color.g, color.b, 165,
           false, false, 2, false, nil, nil, false)
       end
     end
   end
 
-  -- 4) TEXTO 3D no topo (CP X / distancia) — so em LOD near/mid
-  if lod ~= 'far' then
-    -- Mostra apenas a distancia no topo do totem (sem 'CP' grande)
-    local hgt = cfg.HEIGHT or 50.0
-    local dist_label = (dist_m >= 1000) and ('%.2f KM'):format(dist_m / 1000)
-                       or (('%d M'):format(math.floor(dist_m)))
-    local on_screen, sx, sy = GetScreenCoordFromWorldCoord(cx, cy, cz + hgt + 1.0)
-    if on_screen then
-      SetTextFont(4); SetTextScale(0.0, 0.55)
-      SetTextColour(217, 193, 154, 240); SetTextOutline()
-      SetTextEntry('STRING'); AddTextComponentString(dist_label)
-      SetTextCentre(true); DrawText(sx, sy - 0.02)
-    end
-  end
+  -- Label de distância sempre visível (independente de LOD)
+  draw_distance_label(target, height, dist_m, lod)
 end
 
--- ── Loop de render condicional ─────────────────────────────────────────────
+-- ── Thread de render DrawMarker ────────────────────────────────────────────
 
 CreateThread(function()
   while true do
-    if not _target then
+    local target = _target
+    if not target then
       Wait(400)
     else
       local ped = PlayerPedId()
-      local px, py, pz = table.unpack(GetEntityCoords(ped))
-      local dx = px - _target.x
-      local dy = py - _target.y
-      local dz = pz - _target.z
+      local pos = GetEntityCoords(ped)
+      local dx  = pos.x - target.x
+      local dy  = pos.y - target.y
+      local dz  = pos.z - target.z
       local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-      local render_range = (Cfg.TOTEM and Cfg.TOTEM.RENDER_RANGE) or 350.0
-
-      if dist > render_range then
+      if dist > render_range() then
         Wait(500)
       else
         Wait(0)
-        render_totem(_target, dist, GetGameTimer() - _t0)
+        draw_totem(target, dist, GetGameTimer() - _t0)
       end
     end
   end
 end)
+
+-- ── Thread NUI: projeta coordenadas de tela → CSS overlay ─────────────────
+-- FIX PRINCIPAL: roda independente do estado da corrida (warmup + racing).
+-- Envia vhub_racha.totem.project a 20Hz quando há target.
+
+if USE_NUI then
+  CreateThread(function()
+    while true do
+      local target = _target
+      if not target then
+        -- Sem alvo: garante que o overlay suma
+        Wait(150)
+      else
+        Wait(50)   -- 20Hz
+        local ped  = PlayerPedId()
+        local pos  = GetEntityCoords(ped)
+        local dx   = pos.x - target.x
+        local dy   = pos.y - target.y
+        local dz   = pos.z - target.z
+        local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        local range = render_range()
+
+        -- Projeta o TOPO da coluna (onde fica a coroa) para coordenadas de tela
+        local height, _ = shape_for(dist)
+        local proj_z = target.z + height + 1.8
+
+        local on_screen, sx, sy = GetScreenCoordFromWorldCoord(target.x, target.y, proj_z)
+
+        -- Rótulo de distância
+        local dist_label
+        if dist >= 1000.0 then
+          dist_label = ('%.1f KM'):format(dist / 1000.0)
+        else
+          dist_label = ('%d M'):format(math.floor(dist))
+        end
+
+        SendNUIMessage({
+          type    = 'vhub_racha.totem.project',
+          payload = {
+            visible    = (on_screen == true) and (dist <= range),
+            x          = sx or 0.0,
+            y          = sy or 0.0,
+            dist       = dist,
+            dist_label = dist_label,
+            cp_label   = target.label or 'CP',
+            is_finish  = target.is_finish == true,
+            kind       = target.kind or 'sprint',
+            height_px  = height,
+          }
+        })
+      end
+    end
+  end)
+end
+
+-- ── Cleanup ────────────────────────────────────────────────────────────────
 
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end

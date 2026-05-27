@@ -100,6 +100,7 @@ local function broadcast_lobby_state(inst)
       state            = inst.state,
       confirmed        = p.confirmed == true,
       grid_slot        = p.grid_slot,
+      players_total    = ST.count_players(inst),
       pending_deadline = inst.pending_deadline or 0,
       ready_zone       = inst.ready_zone,
       starts_at        = inst.starts_at or 0,
@@ -424,6 +425,7 @@ function L.start(inst_id, solo)
       grid_pos   = grid_slot,
       starts_at  = inst.starts_at,
       countdown  = Cfg.COUNTDOWN_MS or 7000,
+      players_total = ST.count_players(inst),
     })
   end
 

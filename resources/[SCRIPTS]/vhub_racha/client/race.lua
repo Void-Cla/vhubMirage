@@ -7,6 +7,7 @@ local V    = VHubRachaVeh
 local CP   = VHubRachaCP
 local L    = VHubRachaLocal
 local Lang = VHubRachaLang
+local USE_NUI = Cfg and Cfg.HUD and Cfg.HUD.USE_NUI
 -- TOT pode ainda não estar carregado no momento em que este arquivo for executado.
 -- Usamos um proxy que encaminha chamadas para `VHubRachaTotem` quando disponível
 -- para evitar `attempt to index a nil value (upvalue 'TOT')` por ordem de carga.
@@ -179,7 +180,7 @@ CreateThread(function()
     if not active or active.aborted or active.finished or active.started_ms == 0 then
       Wait(300)
     else
-      Wait(50)   -- 20Hz: suficiente, pois o totem renderiza no proprio loop dele
+      Wait(50)   -- 20Hz: suficiente; também envia projeção ao NUI quando ativo
       local target = next_target(active)
       if target then
         local ped = PlayerPedId()
@@ -211,6 +212,34 @@ CreateThread(function()
             refresh_totem(active)
           end
         end
+      end
+      -- Quando a NUI é a fonte de verdade, envie projeção/ângulo/distância
+      if USE_NUI then
+        local ped = PlayerPedId()
+        local veh = V.ped_vehicle(ped)
+        local ent = (veh ~= 0) and veh or ped
+        local pcoords = GetEntityCoords(ent)
+        local payload = { }
+        if target and type(target) == 'table' then
+          local dx = target.x - pcoords.x
+          local dy = target.y - pcoords.y
+          local dz = (target.z or 0.0) - pcoords.z
+          local dist = math.sqrt((dx * dx) + (dy * dy) + (dz * dz))
+          local on_screen, sx, sy = GetScreenCoordFromWorldCoord(target.x, target.y, (target.z or 0.0) + 1.0)
+          payload.visible = on_screen == true
+          payload.totemX = sx or 0.0
+          payload.totemY = sy or 0.0
+          payload.distance_m = math.floor(dist)
+          payload.cp_index = active.cp_index
+          payload.cp_total = active.cp_total
+          payload.cp_label = (target.label or ('CP ' .. tostring(active.cp_index)))
+        else
+          payload.visible = false
+        end
+        payload.started_ms = active.started_ms or (L.bag and L.bag.started_ms) or 0
+        payload.elapsed_ms = (payload.started_ms > 0) and (GetGameTimer() - payload.started_ms) or 0
+        payload.drift_score = active.drift_score or (L.bag and L.bag.drift_score) or 0
+        SendNUIMessage({ type = 'vhub_racha.telemetry', payload = payload })
       end
     end
   end

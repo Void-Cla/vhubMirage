@@ -4,6 +4,8 @@
 
 local Lang = VHubRachaLang
 local L    = VHubRachaLocal
+local Cfg  = VHubRachaCfg
+local E    = VHubRachaE
 
 local _shaken = false
 
@@ -14,6 +16,14 @@ local function shake_cam()
     -- Native shake leve: pequena vibracao na largada
     ShakeGameplayCam('SMALL_EXPLOSION_SHAKE', 0.35)
   end)
+end
+
+if Cfg and Cfg.HUD and Cfg.HUD.USE_NUI then
+  RegisterNetEvent(E.RACE_START, function()
+    _shaken = false
+    shake_cam()
+  end)
+  return
 end
 
 CreateThread(function()

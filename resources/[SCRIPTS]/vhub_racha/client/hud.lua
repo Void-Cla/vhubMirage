@@ -17,6 +17,10 @@ local MA   = VHubRachaMath
 
 local C = Cfg.HUD or {}
 
+-- If the HTML/CSS NUI is active, disable this Lua DrawText HUD.
+-- The `client/nui_bridge.lua` will forward statebag/telemetry to the NUI.
+if C.USE_NUI then return end
+
 -- ── Helpers de desenho (sem fundo opaco) ───────────────────────────────────
 
 local function draw_text(x, y, txt, scale, r, g, b, a, font, centre)
