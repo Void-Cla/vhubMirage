@@ -1,0 +1,39 @@
+<!-- web/modules/race/race.html — overlay da ready-zone (confirmacao no totem).
+     Camada limpa sobre o GTA (pointer-events:none). O totem 3D e nativo
+     (client/totem.lua) — aqui mora apenas a UI de confirmacao de presenca. -->
+
+<div class="race-overlay">
+
+    <!-- ============================================================
+         READY ZONE — confirmacao de presenca no totem
+         ============================================================ -->
+    <div class="race-readyzone hidden" data-el="readyzone" aria-hidden="true">
+
+        <!-- HUD fixo (instrucao + status) -->
+        <div class="race-rz-hud" data-el="rz-hud">
+            <div class="race-rz-icon"><i class="fa-solid fa-flag-checkered"></i></div>
+            <div class="race-rz-body">
+                <div class="race-rz-track" data-el="rz-track">CORRIDA</div>
+                <div class="race-rz-action" data-el="rz-action">
+                    Va ao ponto de largada e pressione
+                    <span class="race-rz-key">E</span> para confirmar
+                </div>
+                <div class="race-rz-meta">
+                    <span class="race-rz-dist" data-el="rz-dist">— m</span>
+                    <span class="race-rz-countdown" data-el="rz-countdown"></span>
+                </div>
+                <div class="race-rz-ok hidden" data-el="rz-ok">
+                    <i class="fa-solid fa-circle-check"></i> Presenca confirmada — aguardando largada
+                </div>
+            </div>
+        </div>
+
+        <!-- Anchor 3D no mundo (posicionado pelo Lua quando visivel na tela) -->
+        <div class="race-rz-anchor hidden" data-el="rz-anchor">
+            <div class="race-rz-anchor-pin"></div>
+            <div class="race-rz-anchor-label" data-el="rz-anchor-label">LARGADA</div>
+        </div>
+
+    </div>
+
+</div>

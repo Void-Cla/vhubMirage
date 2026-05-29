@@ -116,23 +116,24 @@ CreateThread(function()
           SetTextCentre(false); DrawText(0.03, 0.02)
         end
 
-        local cfg = Cfg.READY_ZONE.GLOW_COLOR or { r = 243, g = 181, b = 58, a = 90 }
+        local gas = Cfg.READY_ZONE.GAS_COLOR or { r = 232, g = 198, b = 130 }
+        local ga  = Cfg.READY_ZONE.GAS_ALPHA or 32
         local r   = zone.radius or 18.0
 
-        -- Disco no chão
+        -- Gas de areia dourada no chao — quase invisivel, so marca o lugar
         DrawMarker(1,
-          zone.x, zone.y, zone.z - 1.0,
+          zone.x, zone.y, zone.z - 0.98,
           0,0,0, 0,0,0,
-          r * 2.0, r * 2.0, 0.8,
-          cfg.r, cfg.g, cfg.b, cfg.a or 90,
+          r * 2.0, r * 2.0, 0.06,
+          gas.r, gas.g, gas.b, ga,
           false, false, 2, false, nil, nil, false)
 
-        -- Cilindro etéreo
-        DrawMarker(28,
-          zone.x, zone.y, zone.z + 1.5,
+        -- Anel de borda (um tom mais visivel para definir o limite da zona)
+        DrawMarker(1,
+          zone.x, zone.y, zone.z - 0.96,
           0,0,0, 0,0,0,
-          r * 1.8, r * 1.8, Cfg.READY_ZONE.GLOW_HEIGHT or 4.0,
-          cfg.r, cfg.g, cfg.b, 50,
+          r * 2.04, r * 2.04, 0.04,
+          gas.r, gas.g, gas.b, ga + 22,
           false, false, 2, false, nil, nil, false)
 
         -- Hint in-world
@@ -160,19 +161,24 @@ CreateThread(function()
           end
         end
 
-        -- Partículas suaves ao redor da zona
+        -- Fumaca/gas subindo (baforadas baixas e fracas — efeito etereo)
         if not L.confirmed then
-          local N = 12
+          local N = Cfg.READY_ZONE.GAS_WISPS or 14
           local t = GetGameTimer() / 1000.0
           for i = 1, N do
-            local angle = (i / N) * (math.pi * 2) + (t * 0.6)
-            local rr = (r * 0.5) + math.sin(t + i) * (r * 0.12)
-            local px = zone.x + math.cos(angle) * rr
-            local py = zone.y + math.sin(angle) * rr
-            local pz = zone.z + 0.2 + (math.sin(t * 1.3 + i) * 0.08)
-            DrawMarker(1, px, py, pz, 0,0,0, 0,0,0,
-              0.12, 0.12, 0.12, cfg.r, cfg.g, cfg.b, 60,
-              false, false, 2, false, nil, nil, false)
+            local angle = (i / N) * (math.pi * 2) + (t * 0.25)
+            local rr    = r * (0.30 + ((i % 5) * 0.13))
+            local oz    = (t * 0.4 + i) % 2.2            -- sobe ~2.2m e reinicia
+            local px    = zone.x + math.cos(angle) * rr
+            local py    = zone.y + math.sin(angle) * rr
+            local pz    = zone.z - 0.4 + oz
+            local fade  = math.floor((ga + 20) * (1.0 - (oz / 2.2)))
+            if fade > 0 then
+              local s = 0.8 + (oz * 0.5)
+              DrawMarker(28, px, py, pz, 0,0,0, 0,0,0,
+                s, s, s, gas.r, gas.g, gas.b, fade,
+                false, false, 2, false, nil, nil, false)
+            end
           end
         end
       end

@@ -1,0 +1,101 @@
+/* web/shared/tokens.css — design tokens canonicos vHub.
+ *
+ * Aprovado por vhub_guardiao_designer com ajustes obrigatorios:
+ *   • --vh-glass-bg = rgba(12,10,6,0.55) (NAO 0.72 do legado — viola L-D1)
+ *   • --vh-shadow-1 dourado em 0.10 (NAO 0.05 — marginal demais para L-D4)
+ *   • --vh-red FORA do shared; vai em web/modules/hud/hud.css como --hud-live-red
+ *   • Tokens racha-especificos (gold-deep, black-3, ok-deep) NAO entram aqui
+ *
+ * Cada modulo pode declarar overrides locais escopados em seu seletor raiz
+ * (ex: .mod-panel { --vh-glass-blur: 22px; } para variante motorsport).
+ */
+
+
+:root {
+
+    /* ============================================================
+       PALETA — areia dominante, dourado de acento, danger restrito
+       ============================================================ */
+
+    --vh-sand:        #d9c19a;
+    --vh-sand-dim:    #a89572;
+    --vh-sand-deep:   #5a4a30;
+
+    --vh-gold:        #f3b53a;
+    --vh-gold-soft:   #ffd573;
+
+    --vh-amber:       #ff9a1f;
+
+    --vh-black:       #0c0a06;
+    --vh-black-2:     #1a1610;
+
+    --vh-danger:      #e8513f;
+    --vh-ok:          #6bbf6b;
+
+    --vh-text:        #f0e6d2;
+    --vh-text-dim:    #c4ad84;
+    --vh-text-dim2:   #8a7a5a;
+
+
+    /* ============================================================
+       GLASS — overlay translucido (canonico L-D1, opacidade <= 0.55)
+       ============================================================ */
+
+    --vh-glass-bg:     linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
+    --vh-glass-bg-2:   linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.40));
+    --vh-glass-border: rgba(243,181,58,0.18);
+    --vh-glass-line:   rgba(243,181,58,0.10);
+
+    --vh-glass-blur:   blur(14px) saturate(140%);
+
+
+    /* ============================================================
+       SOMBRAS — sempre com componente dourado (L-D4)
+       ============================================================ */
+
+    --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
+    --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
+    --vh-shadow-3:    0 24px 60px rgba(0,0,0,0.60), 0 0 32px rgba(243,181,58,0.12);
+    --vh-shadow-glow: 0 0 20px rgba(255,213,115,0.45);
+
+
+    /* ============================================================
+       RAIOS — bordas arredondadas em TUDO (L-D3)
+       ============================================================ */
+
+    --vh-r-pan:  16px;   /* painel principal */
+    --vh-r-card: 12px;   /* card / secao interna */
+    --vh-r-btn:  8px;    /* botao / input */
+    --vh-r-pill: 999px;  /* chip / badge / tag */
+
+
+    /* ============================================================
+       TIPOGRAFIA — Barlow Condensed display, Inter corpo, monos opcionais
+       ============================================================ */
+
+    --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
+    --vh-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+    --vh-font-tech:    'Rajdhani', 'Inter', sans-serif;
+    --vh-font-num:     'Orbitron', 'Barlow Condensed', sans-serif;
+    --vh-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+
+    /* ============================================================
+       ESPACAMENTOS — escala consistente
+       ============================================================ */
+
+    --vh-gap-xs: 4px;
+    --vh-gap-sm: 8px;
+    --vh-gap-md: 12px;
+    --vh-gap-lg: 18px;
+    --vh-gap-xl: 24px;
+
+
+    /* ============================================================
+       TRANSICOES
+       ============================================================ */
+
+    --vh-t-fast: 0.14s ease;
+    --vh-t-norm: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+
+}

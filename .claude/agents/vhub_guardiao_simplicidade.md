@@ -33,6 +33,27 @@ APROVAR SE:
 - A mudança elimina uma duplicação real
 - A mudança unifica ownership antes fragmentado
 
+
+-- ============================================================
+-- SIMPLICIDADE NA ARQUITETURA COMPONENTIZADA (L3/L4)
+-- ============================================================
+
+A engine NUI (`vhub.createModule`, `store`, `eventbus`, `router`) existe para REDUZIR código por componente — não para virar mais uma camada inflada.
+
+CHECKLIST COMPONENTIZADO:
+□ Novo módulo segue o template `web/modules/<nome>/{index.html, style.css, app.js, store.js, events.js}` — sem inventar variação?
+□ Subcomponente em `components/` só nasce quando reaproveitado em ≥ 2 lugares (não criar átomos especulativos)?
+□ Store slice novo só existe se domínio é genuinamente distinto — não criar `store.tempUiState` para esconder ref local?
+□ Listener no event bus tem nome canônico (`<modulo>:<verbo>`), sem aliases redundantes?
+□ Service em `services/` não é wrapper de uma única chamada de `vhub.native.*` — só existe se há orquestração real?
+□ `vhub.createModule` em vez de IIFE artesanal? (a engine já dá lifecycle — não reescrever)
+
+DETECTAR E REPROVAR (NUI):
+- Componente duplicando lógica de outro só porque "é parecido mas não igual" — preferir variantes via props
+- Store slice criado para esconder estado que pertence a outro slice
+- Helper JS em 3 lugares com nome diferente fazendo a mesma transformação
+- View em `views/` que só renderiza outro componente sem agregar nada
+
 FORMATO DE RESPOSTA (obrigatório):
 VEREDITO: APROVAR | REPROVAR | REDUZIR_ESCOPO
 ACHADOS: <máximo 4, formato "arquivo:função — redundância/inflação detectada">

@@ -1,0 +1,200 @@
+/* web/modules/hud/hud.css — HUD overlay (escopado .mod-hud).
+ *
+ * REGRA: ZERO fundo/caixa. Tudo e texto flutuante com outline + glow sobre o
+ * GTA (sem "janela preta"). Sem backdrop-filter, sem background nos elementos.
+ * Tokens locais escopados (nao entram em shared).
+ */
+
+
+.mod-hud {
+    pointer-events: none;
+    user-select: none;
+}
+
+.mod-hud .hud-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+}
+
+
+/* ============================================================
+   COUNTDOWN — numero gigante glow no centro (sem circulo/fundo)
+   ============================================================ */
+
+.mod-hud .hud-countdown {
+    position: absolute;
+    left: 50%; top: 42%;
+    transform: translate(-50%, -50%);
+}
+
+.mod-hud .hud-countdown-num {
+    font-family: var(--vh-font-num);
+    font-weight: 900;
+    font-size: 150px;
+    line-height: 1;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 30px rgba(243, 181, 58, 0.85),
+                 0 0 60px rgba(243, 181, 58, 0.45),
+                 0 4px 10px rgba(0, 0, 0, 0.8);
+}
+
+.mod-hud .hud-countdown.go .hud-countdown-num {
+    color: var(--vh-ok);
+    font-size: 120px;
+    letter-spacing: 4px;
+    text-shadow: 0 0 30px rgba(120, 230, 140, 0.85),
+                 0 0 60px rgba(120, 230, 140, 0.45),
+                 0 4px 10px rgba(0, 0, 0, 0.8);
+}
+
+
+/* ============================================================
+   TIMER — canto esquerdo, menor (so MM:SS in-race, sem piscar)
+   ============================================================ */
+
+.mod-hud .hud-timer {
+    position: absolute;
+    top: 3vh; left: 2.5vw;
+
+    font-family: var(--vh-font-num);
+    font-weight: 900;
+    font-size: clamp(22px, 2.4vw, 34px);
+    letter-spacing: 1.5px;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 12px rgba(243, 181, 58, 0.5),
+                 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+
+/* ============================================================
+   STATS — texto flutuante (pos / volta / cp / drift), sem caixa
+   ============================================================ */
+
+.mod-hud .hud-stat {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mod-hud .hud-stat-label {
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--vh-sand);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+.mod-hud .hud-stat-value {
+    font-family: var(--vh-font-num);
+    font-weight: 800;
+    font-size: 30px;
+    line-height: 1;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 12px rgba(243, 181, 58, 0.5),
+                 0 2px 5px rgba(0, 0, 0, 0.95);
+}
+
+.mod-hud .hud-stat-extra {
+    font-family: var(--vh-font-mono);
+    font-size: 13px;
+    color: var(--vh-gold);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+/* Posicoes na tela (coluna esquerda: timer → volta → cp) */
+.mod-hud .hud-pos   { top: 3vh;     right: 2.5vw; align-items: flex-end; text-align: right; }
+.mod-hud .hud-lap   { top: 9vh;     left: 2.5vw; }
+.mod-hud .hud-cp    { top: 15vh;    left: 2.5vw; }
+.mod-hud .hud-drift { bottom: 16vh; right: 2.5vw; align-items: flex-end; text-align: right; }
+
+.mod-hud .hud-drift .hud-stat-value {
+    font-size: 38px;
+    color: var(--vh-gold-soft);
+}
+
+
+/* ============================================================
+   FINISH CARD — unico elemento com leve fundo (card de chegada)
+   ============================================================ */
+
+.mod-hud .hud-finish {
+    position: absolute;
+    left: 50%; top: 38%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.mod-hud .hud-finish-title {
+    font-family: var(--vh-font-display);
+    font-weight: 900;
+    font-size: 30px;
+    color: var(--vh-gold);
+    text-transform: uppercase;
+    letter-spacing: 5px;
+    text-shadow: 0 0 18px rgba(243, 181, 58, 0.6), 0 2px 6px rgba(0, 0, 0, 0.9);
+    margin-bottom: 6px;
+}
+
+.mod-hud .hud-finish-place {
+    display: inline-flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    color: var(--vh-text);
+}
+
+.mod-hud .hud-finish-pos {
+    font-family: var(--vh-font-num);
+    font-weight: 900;
+    font-size: 80px;
+    line-height: 1;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 28px rgba(243, 181, 58, 0.7), 0 4px 10px rgba(0, 0, 0, 0.9);
+}
+
+.mod-hud .hud-finish-ord {
+    font-family: var(--vh-font-num);
+    font-weight: 800;
+    font-size: 32px;
+    line-height: 1;
+    color: var(--vh-gold-soft);
+    margin-top: 6px;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.mod-hud .hud-finish-lugar {
+    align-self: flex-end;
+    font-family: var(--vh-font-tech);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--vh-sand);
+    margin-bottom: 10px;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.mod-hud .hud-finish-time {
+    font-family: var(--vh-font-num);
+    font-size: 24px;
+    color: var(--vh-sand);
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+    margin-top: 8px;
+}
+
+.mod-hud .hud-finish-payout {
+    font-family: var(--vh-font-tech);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--vh-gold-soft);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 12px rgba(243, 181, 58, 0.6), 0 2px 6px rgba(0, 0, 0, 0.9);
+    margin-top: 12px;
+}

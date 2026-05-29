@@ -1,0 +1,201 @@
+/* web/shared/components.css — componentes visuais canonicos vHub.
+ *
+ * .vh-panel    container principal de painel (glass + raio 16)
+ * .vh-card     card / secao interna (raio 12)
+ * .vh-btn      botao (raio 8) + variantes .primary / .danger / .ghost
+ * .vh-input    input / select / textarea (raio 8 + foco dourado)
+ * .vh-toast    notificacao flutuante (raio 12 + borda colorida)
+ * .vh-chip     badge / tag (pill — raio 999)
+ *
+ * Cada modulo escopado em .mod-<name> pode sobrescrever — esses sao defaults.
+ */
+
+
+/* ============================================================
+   PANEL — container principal
+   ============================================================ */
+
+.vh-panel {
+    position: fixed;
+    inset: 5vh 5vw;
+    z-index: 2;
+
+    border-radius: var(--vh-r-pan);
+    background: var(--vh-glass-bg);
+    border: 1px solid var(--vh-glass-border);
+    box-shadow: var(--vh-shadow-3);
+
+    backdrop-filter: var(--vh-glass-blur);
+    -webkit-backdrop-filter: var(--vh-glass-blur);
+
+    overflow: hidden;
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+}
+
+
+/* ============================================================
+   CARD — secao interna
+   ============================================================ */
+
+.vh-card {
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+    border-radius: var(--vh-r-card);
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    box-shadow: var(--vh-shadow-1);
+}
+
+
+/* ============================================================
+   BUTTON — base + variantes
+   ============================================================ */
+
+.vh-btn {
+    font-family: var(--vh-font-body);
+    font-weight: 600;
+    font-size: 13px;
+
+    padding: 9px 16px;
+    border-radius: var(--vh-r-btn);
+
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text);
+
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    transition: transform var(--vh-t-fast),
+                background var(--vh-t-norm),
+                border-color var(--vh-t-norm),
+                box-shadow var(--vh-t-norm);
+}
+
+.vh-btn:hover {
+    background: rgba(243, 181, 58, 0.10);
+    border-color: var(--vh-gold);
+}
+
+.vh-btn:active {
+    transform: scale(0.97);
+}
+
+
+/* Primary — dourado vivo */
+.vh-btn.primary {
+    background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
+    color: var(--vh-black);
+    border-color: var(--vh-gold);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.vh-btn.primary:hover {
+    box-shadow: var(--vh-shadow-glow);
+}
+
+
+/* Danger — vermelho restrito (L-D6) */
+.vh-btn.danger {
+    color: var(--vh-danger);
+    border-color: rgba(232, 81, 63, 0.40);
+    background: rgba(232, 81, 63, 0.10);
+}
+
+
+/* Ghost — sem fundo */
+.vh-btn.ghost {
+    background: transparent;
+}
+
+
+/* ============================================================
+   INPUT — input / select / textarea
+   ============================================================ */
+
+.vh-input {
+    padding: 9px 12px;
+    border-radius: var(--vh-r-btn);
+
+    background: rgba(12, 10, 6, 0.55);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text);
+
+    font-family: var(--vh-font-body);
+    font-size: 13px;
+
+    transition: border-color var(--vh-t-fast),
+                box-shadow var(--vh-t-fast);
+}
+
+.vh-input:focus {
+    border-color: var(--vh-gold);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(243, 181, 58, 0.18);
+}
+
+
+/* ============================================================
+   TOAST — notificacao flutuante
+   ============================================================ */
+
+.vh-toast {
+    position: fixed;
+    top: 22px;
+    right: 22px;
+    z-index: 50;
+
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+    border-left: 3px solid var(--vh-gold);    /* info default */
+    border-radius: var(--vh-r-card);
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    box-shadow: var(--vh-shadow-1);
+
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+    font-size: 13px;
+    max-width: 360px;
+}
+
+.vh-toast.error   { border-left-color: var(--vh-danger); }
+.vh-toast.success { border-left-color: var(--vh-ok); }
+.vh-toast.warn    { border-left-color: var(--vh-amber); }
+
+
+/* ============================================================
+   CHIP — badge / tag pill
+   ============================================================ */
+
+.vh-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 4px 10px;
+    border-radius: var(--vh-r-pill);
+
+    background: rgba(243, 181, 58, 0.10);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text-dim);
+
+    font-family: var(--vh-font-tech);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+
+/* ============================================================
+   SAND CANVAS — global background layer (z-1, pointer-events:none)
+   ============================================================ */
+
+#vhub-sand {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}

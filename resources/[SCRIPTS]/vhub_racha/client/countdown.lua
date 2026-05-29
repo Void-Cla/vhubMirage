@@ -1,60 +1,17 @@
--- client/countdown.lua — countdown cinematografico 3 / 2 / 1 / GO!
--- Renderiza so durante warmup. Cor escalonada: vermelho → amarelo → verde.
--- Inclui camera shake leve no GO.
+---@diagnostic disable: undefined-global, lowercase-global
 
-local Lang = VHubRachaLang
-local L    = VHubRachaLocal
-local Cfg  = VHubRachaCfg
-local E    = VHubRachaE
+-- client/countdown.lua — camera shake nativo no GO da largada.
+--
+-- A contagem visual (3/2/1/GO) e feita pela NUI (web/modules/hud). Aqui mora
+-- apenas o efeito nativo que a NUI nao consegue fazer: um tremor leve de
+-- camera no instante da largada (RACE_START).
 
-local _shaken = false
 
-local function shake_cam()
-  if _shaken then return end
-  _shaken = true
+local E = VHubRachaE
+
+
+RegisterNetEvent(E.RACE_START, function()
   pcall(function()
-    -- Native shake leve: pequena vibracao na largada
     ShakeGameplayCam('SMALL_EXPLOSION_SHAKE', 0.35)
   end)
-end
-
-if Cfg and Cfg.HUD and Cfg.HUD.USE_NUI then
-  RegisterNetEvent(E.RACE_START, function()
-    _shaken = false
-    shake_cam()
-  end)
-  return
-end
-
-CreateThread(function()
-  while true do
-    local active = VHubRachaLocal.active_race()
-    if not active or active.started_ms ~= 0 or active.aborted or active.finished then
-      _shaken = false
-      Wait(200)
-    else
-      Wait(0)
-      local now = GetGameTimer()
-      local remain = (active.starts_at or 0) - now
-
-      if remain <= 0 then
-        -- GO!
-        shake_cam()
-        SetTextFont(7); SetTextScale(0.0, 2.6)
-        SetTextColour(80, 230, 80, 245); SetTextOutline(); SetTextDropShadow()
-        SetTextEntry('STRING'); AddTextComponentString(Lang.t('race.go'))
-        SetTextCentre(true); DrawText(0.5, 0.40)
-      else
-        local sec = math.ceil(remain / 1000)
-        local r, g, b
-        if sec >= 4 then       r, g, b = 230, 60, 60       -- vermelho
-        elseif sec >= 2 then   r, g, b = 230, 200, 50      -- amarelo
-        else                   r, g, b = 80, 230, 80 end   -- verde
-        SetTextFont(7); SetTextScale(0.0, 2.4)
-        SetTextColour(r, g, b, 245); SetTextOutline(); SetTextDropShadow()
-        SetTextEntry('STRING'); AddTextComponentString(tostring(sec))
-        SetTextCentre(true); DrawText(0.5, 0.40)
-      end
-    end
-  end
 end)

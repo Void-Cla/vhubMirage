@@ -15,56 +15,15 @@ local E   = VHubRachaE
 
 local function ms() return GetGameTimer() end
 
+
+-- ============================================================
+-- HELPER — sessao do player (fonte unica: VHubRachaSessions)
+-- ============================================================
+
+-- Retorna user da sessao ativa. Zero retry, zero Wait.
+-- Substitui o user_of() antigo (retry de 2s + acesso a _sessions privado).
 local function user_of(src)
-  local B = VHubRachaBoot
-  if not B or not B.vHub or not B.vHub.Auth then
-    print(('vhub_racha: editor.user_of(%s) -> nil (no vHub/Auth)'):format(tostring(src)))
-    return nil
-  end
-
-  local attempts = 20
-  local lookup_key = tonumber(src) or src
-  for i = 1, attempts do
-    local ok, user = pcall(function() return B.vHub.Auth:getUser(lookup_key) end)
-    if ok and user then
-      if i > 1 then
-        print(('vhub_racha: editor.user_of(%s) -> acquired after %d tries'):format(tostring(src), i))
-      end
-      return user
-    end
-    Citizen.Wait(100)
-  end
-
-  local sessions = B.vHub.Auth._sessions or {}
-  local direct = sessions[lookup_key] or sessions[tostring(lookup_key)] or sessions[tostring(src)]
-  if direct then
-    print(('vhub_racha: editor.user_of(%s) -> found via _sessions direct key'):format(tostring(src)))
-    return direct
-  end
-
-  for k, v in pairs(sessions) do
-    if type(v) == 'table' then
-      if v.source == src or tostring(v.source) == tostring(src) or tostring(k) == tostring(src) then
-        print(('vhub_racha: editor.user_of(%s) -> found in _sessions by value key=%s'):format(tostring(src), tostring(k)))
-        return v
-      end
-    end
-  end
-
-  print(('vhub_racha: editor.user_of(%s) -> nil after %d attempts and fallbacks'):format(tostring(src), attempts))
-  pcall(function()
-    local cnt = 0
-    for k,_ in pairs(B.vHub.Auth._sessions or {}) do cnt = cnt + 1 end
-    print(('vhub_racha: vHub.Auth._sessions count=%d'):format(cnt))
-    local i = 0
-    for k,_ in pairs(B.vHub.Auth._sessions or {}) do
-      i = i + 1
-      if i <= 16 then
-        print(('vhub_racha: session_key[%d]=%s'):format(i, tostring(k)))
-      end
-    end
-  end)
-  return nil
+  return VHubRachaSessions and VHubRachaSessions.get(src) or nil
 end
 
 function ED.is_allowed(src)

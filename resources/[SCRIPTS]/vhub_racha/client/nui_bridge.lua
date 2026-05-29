@@ -7,7 +7,7 @@ local V   = VHubRachaVeh
 local L   = VHubRachaLocal
 
 local TELEMETRY_INTERVAL = 250
-local last_bag_json = nil
+local last_bag_key = nil       -- chave leve de diff (sem json.encode em hot path 4Hz)
 local last_telemetry_ms = 0
 local local_started_ms = 0
 
@@ -28,15 +28,21 @@ local function bridge(kind, payload)
   if enabled() then SendNUIMessage({ type = kind, payload = payload or {} }) end
 end
 
-local function encode(v)
-  local ok, out = pcall(function() return json.encode(v or {}) end)
-  return ok and out or ''
+-- Chave leve de diff: concat de campos criticos, sem json.encode em hot path.
+-- O ganho real e em loop 4Hz (TELEMETRY_INTERVAL=250ms) onde json.encode pesa.
+local function bag_key(bag)
+  if not bag then return '' end
+  return (bag.state or '') .. '|' ..
+         tostring(bag.cp_done   or 0) .. '|' ..
+         tostring(bag.lap       or 0) .. '|' ..
+         tostring(bag.placement or 0) .. '|' ..
+         tostring(bag.confirmed and 1 or 0)
 end
 
 local function send_bag_if_changed(bag)
-  local j = encode(bag or {})
-  if j == last_bag_json then return end
-  last_bag_json = j
+  local k = bag_key(bag)
+  if k == last_bag_key then return end
+  last_bag_key = k
   if enabled() then SendNUIMessage({ type = 'vhub_racha.bag_update', bag = bag or {} }) end
 end
 
@@ -76,6 +82,7 @@ RegisterNetEvent(E.RACE_PREPARE, function(payload)
     laps_total = tonumber(payload.laps) or tonumber(track.laps) or 1,
     players_total = tonumber(payload.players_total) or 0,
     mode = payload.mode or 'rankeada',
+    kind = track.kind or 'sprint',
   })
   nui('hud_countdown', { seconds = math.max(1, math.ceil((tonumber(payload.countdown) or Cfg.COUNTDOWN_MS or 7000) / 1000)) })
 end)

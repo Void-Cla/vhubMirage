@@ -1,0 +1,77 @@
+/* web/shared/reset.css — normalize minimo, box-sizing, base body.
+ * Nao e um reset agressivo (Eric Meyer style) — eh apenas o essencial
+ * para CEF do FiveM se comportar previsivelmente.
+ */
+
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+
+body {
+    background: transparent;          /* GTA tem que aparecer atras (L-D1) */
+    font-family: var(--vh-font-body);
+    font-size: 13px;
+    color: var(--vh-text);
+
+    /* Anti-FOUC: NUI comeca invisivel ate o engine montar algo */
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+
+button {
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: inherit;
+}
+
+
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border: none;
+    outline: none;
+    background: none;
+}
+
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+
+/* Estado universal: .hidden esconde totalmente (display:none para parar
+ * CSS animations — visibility:hidden NAO pausa, viola A-07). */
+.hidden {
+    display: none !important;
+}
+
+
+/* Acessibilidade: foco visivel em interactivos */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--vh-gold);
+    outline-offset: 2px;
+}

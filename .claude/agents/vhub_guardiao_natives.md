@@ -25,6 +25,26 @@ CHECKLIST:
 □ Autoridade de entidade validada com `NetworkGetEntityOwner` antes de operar?
 □ Sem `while true` monitorando entidade — usar evento nativo quando disponível?
 
+
+-- ============================================================
+-- NATIVE BRIDGE (L2 → L3) — exposição centralizada de natives ao JS
+-- ============================================================
+
+JS no CEF NÃO chama native diretamente. Toda native consumida pela NUI passa por um registro central no lado cliente (HAL).
+
+ARQUITETURA CANÔNICA:
+- `core/client/native_bridge.lua` mantém `NativeRegistry = { ['vehicle.getSpeed'] = function(args) ... end, ... }`
+- Single `RegisterNUICallback('native', ...)` despacha por chave
+- JS chama via `vhub.native.<api>.<fn>(args)` — wrapper documentado em `web/runtime/native.js`
+- Throttling, cache (read-only) e validação acontecem no bridge — não no chamador
+
+CHECKLIST NATIVE BRIDGE:
+□ Natives expostas ao JS estão registradas em `NativeRegistry`, não espalhadas em callbacks ad-hoc?
+□ Reads frequentes (speed, RPM, fuel) têm cache curto (tick-based) para não consultar native a cada chamada JS?
+□ Writes (`SetVehicleHandlingFloat`, `ShakeCam`, etc.) têm rate limit por chave?
+□ `State Bags` foram considerados ANTES de criar nova call de bridge? (read via state bag elimina a chamada)
+□ Sem repasse genérico tipo `bridge('native', name, ...args)` — toda chave é declarada
+
 FORMATO DE RESPOSTA (obrigatório):
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máximo 4, formato "arquivo:função — native disponível vs custom desnecessário">

@@ -145,7 +145,7 @@ RegisterNetEvent(E.LOBBY_CANCEL, function(inst_id)
   if not B.READY then return end
   local src = source
   local inst = ST.instance(inst_id); if not inst then return end
-  local user = B.vHub.Auth:getUser(src)
+  local user = VHubRachaSessions.get(src)
   if not user or user.char_id ~= inst.creator_char then return end
   LB.cancel(inst_id, 'criador')
 end)
@@ -164,7 +164,7 @@ RegisterNetEvent(E.LOBBY_FORCE_START, function(inst_id)
   if not B.READY then return end
   local src = source
   local inst = ST.instance(inst_id); if not inst then return end
-  local user = B.vHub.Auth:getUser(src)
+  local user = VHubRachaSessions.get(src)
   if not user or user.char_id ~= inst.creator_char then
     TriggerClientEvent(E.NOTIFY, src, Lang.t('lobby.only_host_start'), 'error')
     return
@@ -232,7 +232,9 @@ RegisterCommand(Cfg.CMD_OPEN, function(src)
   send_open(src)
 end, false)
 
--- /racha_treino <track_id> → cria lobby treino solo + ja confirma
+-- /racha_treino <track_id> → cria lobby treino e abre o totem.
+-- Treino e FIEL ao ranqueado: player vai ate o totem e aperta [E] para confirmar.
+-- Diferenças do ranqueado: sem fee, sem recompensa, min_players=1 (solo).
 RegisterCommand(Cfg.CMD_TRAINING, function(src, args)
   if src <= 0 then return end
   if not B.READY then return end
@@ -245,10 +247,7 @@ RegisterCommand(Cfg.CMD_TRAINING, function(src, args)
   local ok, data = LB.create(src, { track_id = track_id, mode = 'treino' })
   if not ok then
     TriggerClientEvent(E.NOTIFY, src, ('Falha: %s'):format(tostring(data)), 'error')
-    return
   end
-  -- Confirma presenca automaticamente em treino
-  LB.confirm_presence(src, data.inst_id, true)
 end, false)
 
 -- Editor backup (caso NUI esteja com problema)

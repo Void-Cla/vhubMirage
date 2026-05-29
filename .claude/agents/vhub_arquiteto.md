@@ -30,9 +30,41 @@ CONDIÇÕES DE REPROVAR IMEDIATO:
 - Mudança sem ownership claro
 - Quebra de contrato da API pública (assinaturas em `.claude/contexto.md`)
 - Extensão após exports em vez de antes
+- Mudança fura a fronteira de camada (Kernel renderiza UI, JS decide regra crítica, HAL persiste estado)
+
+
+-- ============================================================
+-- ARQUITETURA COMPONENTIZADA (L1..L4)
+-- ============================================================
+
+Toda mudança nova deve ser classificada em UMA das quatro camadas. Decisão de placement parte daqui:
+
+| Camada | Tecnologia | Pasta canônica | Owner típico |
+|--------|------------|----------------|--------------|
+| L1 Kernel    | Lua server  | `core/server/`     | módulo de domínio |
+| L2 HAL       | Lua client  | `core/client/`     | bridge de natives |
+| L3 Runtime   | JS engine   | `web/runtime/`     | engine (router/store/eventbus/native bridge) |
+| L4 Componente| JS módulo   | `web/modules/<n>/` | módulo isolado (lobby/hud/garage/…) |
+
+REGRAS DE PLACEMENT:
+- Verdade autoritativa (dinheiro, permissão, ban, persistência) → SEMPRE L1
+- Native FiveM (entity, ped, câmera, controle, raycast) → SEMPRE L2 e exposta a L3 via `vhub.native.*`
+- UI / HUD / menu / animação → SEMPRE L3 ou L4
+- Estado UI compartilhado entre módulos → `web/runtime/store/<domain>.js`
+- Novo módulo de tela → `web/modules/<nome>/` com `index.html / style.css / app.js / store.js / events.js`
+- Toda extensão CORE entra ANTES dos exports da API original
+
+VERIFICAR ANTES DE APROVAR:
+□ Camada da mudança identificada (L1/L2/L3/L4)?
+□ Ownership único declarado para cada slice de estado tocado?
+□ Lifecycle do módulo (onInit/onMount/onShow/onHide/onDestroy) definido se for L4?
+□ Comunicação inter-módulo via eventbus, não acesso direto?
+□ Native bridge centralizado se há nova native exposta ao JS?
+
 
 FORMATO DE RESPOSTA (obrigatório, sem campos extras):
 VEREDITO: APROVAR | REPROVAR | REDUZIR_ESCOPO
+CAMADA: L1 | L2 | L3 | L4 | CROSS (com justificativa em uma linha)
 OWNERSHIP: <módulo canônico responsável>
 PLACEMENT: <arquivo(s) correto(s) para a mudança>
 FASE: <SPRINT N — justificativa em uma linha>

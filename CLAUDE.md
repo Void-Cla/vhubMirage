@@ -67,9 +67,10 @@ Agentes definidos em `.claude/agents/*.md` — formato nativo Claude Code, invoc
 | `vhub_guardiao_natives` | Tocar entity, ped, netid, State Bag, spawn, bucket, vehicle |
 | `vhub_guardiao_performance` | Tocar thread, loop, batch SQL, flush, serialização |
 | `vhub_guardiao_simplicidade` | Criar módulo, helper, camada nova, ou qualquer refactor |
-| `vhub_guardiao_designer` | Tocar NUI, CEF, HUD, `client/`, `SendNUIMessage`, `RegisterNUICallback` |
+| `vhub_guardiao_designer` | Tocar NUI, CEF, HUD, `client/`, `SendNUIMessage`, `RegisterNUICallback` — identidade visual + CEF |
+| `vhub_guardiao_runtime` | Tocar engine NUI (`web/runtime/*`), lifecycle de módulo, store/eventbus/router, native bridge, lazy load |
 | `vhub_guardiao_revisao` | Gate final antes de todo commit relevante; único autorizado a escrever em `contexto.md` |
-| `vhub_designer` | Proposta ou redesign de NUI/interface |
+| `vhub_designer` | Proposta ou redesign de NUI/interface componentizada |
 
 ### Fluxo preferencial multi-agente
 
@@ -125,6 +126,243 @@ shared/config.lua → shared/events.lua → shared/utils.lua → shared/logger.l
 bootstrap.lua → base.lua → server/init.lua
 client/bootstrap.lua → client/vehicle.lua → client/modules/*
 ```
+
+## Arquitetura componentizada (camadas e ownership)
+
+O vHub Mirage opera em **quatro camadas** com ownership estrito. Toda mudança respeita a fronteira da camada à qual pertence. Esta seção COMPLEMENTA as leis L-01..L-12 — não as substitui.
+
+### Camadas e responsabilidades
+
+| Camada | Tecnologia | Responsabilidade | NUNCA faz |
+|--------|------------|------------------|-----------|
+| **L1 — Kernel** | Lua server | Verdade autoritativa: SQL, dinheiro, inventário, permissão, ban, anti-cheat, State Bag *writer* | UI, render, animação, fluxo visual |
+| **L2 — HAL** | Lua client | Hardware Abstraction Layer: natives, ped, veículo, câmera, controles, raycast, markers, sync entidade | Decidir verdade crítica, regras de negócio |
+| **L3 — Runtime** | JS/HTML/CSS | Application runtime: UI, HUD, menus, animação, UX, transições, áudio UI | Validar dinheiro, permissão, cálculo crítico |
+| **L4 — Componente** | JS módulo isolado | Módulo isolado com lifecycle próprio (lobby, editor, race, hud, garage…) | Acessar DOM/estado de outro componente sem store/eventbus |
+
+### Estrutura recomendada por resource (a partir de novos projetos)
+
+```
+vhub_<dominio>/
+├── core/
+│   ├── server/       ← L1 — kernel authoritative (SQL, validação, persistência)
+│   ├── client/       ← L2 — HAL (bridge natives, ped/veículo/câmera)
+│   └── shared/       ← contratos, eventos, utils puros
+│
+├── web/
+│   ├── runtime/      ← L3 — engine (router, state, eventbus, native bridge, animation, sound)
+│   ├── modules/      ← L4 — componentes (lobby/, editor/, hud/, race/, garage/…)
+│   ├── shared/       ← componentes comuns, layouts, ícones, services, stores compartilhadas
+│   └── bootstrap/    ← entrada da aplicação, registro de módulos
+│
+├── assets/           ← imagens, sons, fontes locais
+├── config/           ← config estática carregada server/client
+└── fxmanifest.lua
+```
+
+### Anatomia de um componente em `web/modules/<nome>/`
+
+```
+<nome>/
+├── index.html        ← markup do módulo (sem CSS/JS inline)
+├── style.css         ← escopado por seletor raiz `.mod-<nome>`
+├── app.js            ← lifecycle (onInit / onMount / onShow / onHide / onDestroy)
+├── store.js          ← slice de estado isolado do módulo
+├── events.js         ← registros de eventbus do módulo
+├── components/       ← subcomponentes (átomo / molécula)
+├── services/         ← chamadas ao native bridge / TriggerServerEvent
+└── views/            ← telas / sub-rotas do módulo
+```
+
+---
+
+## Engine de runtime (web/runtime)
+
+Mini framework próprio — **sem React/Vue/webpack**. Convenções obrigatórias:
+
+| API | Responsabilidade |
+|-----|------------------|
+| `vhub.createModule(spec)`           | Registra módulo com lifecycle padronizado |
+| `vhub.mount(name)` / `unmount(name)` | Insere/remove módulo do DOM com cleanup garantido |
+| `vhub.emit(event, payload)`         | Publica evento no event bus central |
+| `vhub.listen(event, fn)`            | Inscreve handler no event bus (retorna `off()`) |
+| `vhub.store(domain)`                | Slice global tipado (player, race, lobby, vehicle, settings) |
+| `vhub.router.navigate(name, params)` | Roteamento entre telas — substitui `display:none` manual |
+| `vhub.native.<api>.<fn>(args)`      | Chamada nativa via bridge centralizado (throttled, validado) |
+
+### Lifecycle obrigatório por componente
+
+```js
+vhub.createModule('garage', {
+
+    // ============================================================
+    // INIT — registrar listeners, criar slice de store
+    // ============================================================
+    onInit() {
+        // ...
+    },
+
+    // ============================================================
+    // MOUNT — DOM inserido; query selectors, bind handlers
+    // ============================================================
+    onMount() {
+        // ...
+    },
+
+    // ============================================================
+    // SHOW / HIDE — visibilidade; animações pausam quando hide
+    // ============================================================
+    onShow() { /* ... */ },
+    onHide() { /* ... */ },
+
+    // ============================================================
+    // DESTROY — cleanup OBRIGATÓRIO (A-07)
+    // ============================================================
+    onDestroy() {
+        // cancelar RAF, clearInterval, removeEventListener, observer.disconnect
+    },
+
+});
+```
+
+### Native bridge — fluxo canônico
+
+```lua
+-- core/client/native_bridge.lua — exposição central de natives à NUI
+
+RegisterNUICallback('native', function(req, cb)
+
+    local api = NativeRegistry[req.api]
+    if not api then return cb({ ok = false, err = 'unknown_api' }) end
+
+    cb({ ok = true, data = api(req.args) })
+
+end)
+```
+
+```js
+// web/runtime/native.js — wrappers tipados, throttling e cache leve
+
+vhub.native.vehicle.getSpeed = () => bridge('vehicle.getSpeed');
+vhub.native.camera.shake    = (intensity) => bridge('camera.shake', { intensity });
+```
+
+JS **nunca** acumula `fetch('https://<resource>/<endpoint>')` em hot path — toda native passa por `vhub.native.*` que centraliza throttling, batching e validação.
+
+---
+
+## Leis de componentização (A-01 a A-08)
+
+Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem nenhuma lei imutável.
+
+| Lei | Regra |
+|-----|-------|
+| **A-01** | Separação de camada — Lua kernel não renderiza UI; JS não decide regra de negócio crítica |
+| **A-02** | Todo módulo NUI novo nasce com lifecycle padronizado (onInit / onMount / onShow / onHide / onDestroy) |
+| **A-03** | Comunicação inter-módulo passa pelo event bus; sem acesso direto a DOM/estado de outro módulo |
+| **A-04** | Estado por domínio em `store.<domain>` — sem segunda fonte de verdade dentro da NUI |
+| **A-05** | Lazy load — módulo só é montado quando navegado; `unmount` libera memória de fato |
+| **A-06** | Native bridge centralizado — JS não acumula `fetch` espalhado nem chama native fora de `vhub.native.*` |
+| **A-07** | Cleanup obrigatório no `onDestroy`: `cancelAnimationFrame`, `clearInterval`, `removeEventListener`, `observer.disconnect` |
+| **A-08** | `SendNUIMessage` em hot path usa batching/delta sync — nunca 60fps de payload bruto |
+
+### Condições adicionais de parada obrigatória (NUI)
+
+- Componente sem `onDestroy` definido enquanto cria listener/RAF/interval
+- Dois módulos lendo/escrevendo o mesmo slice de store sem ownership declarado
+- `fetch` direto a endpoint de resource fora de `vhub.native.*` ou `services/`
+- Animação rodando com NUI fechada (idle > 0 em resmon)
+
+---
+
+## Estilo humano de código (legibilidade primeiro)
+
+Além de separar **arquivos por componente e responsabilidade**, separar **contextos lógicos DENTRO do arquivo** com banners e respiração visual. Vale para Lua, JS, CSS e SQL.
+
+### Padrão Lua
+
+```lua
+-- garage.lua — gerenciamento de garagem (server-authoritative)
+
+local M = {}; M.__index = M; vHub.Garage = M
+
+
+-- ============================================================
+-- LIFECYCLE
+-- ============================================================
+
+-- inicializa módulo com config validada e driver SQL pronto
+function M:init(cfg, driver)
+    -- ...
+end
+
+
+-- ============================================================
+-- QUERIES (read-only)
+-- ============================================================
+
+-- retorna lista de veículos do player (sem mutação)
+function M:listPlayerVehicles(playerId)
+    -- ...
+end
+
+
+-- ============================================================
+-- MUTATIONS (validadas, atômicas, server-side)
+-- ============================================================
+
+-- guarda veículo na garagem do player (transação atômica)
+function M:storeVehicle(playerId, plate)
+    -- ...
+end
+
+
+return M
+```
+
+### Padrão JS
+
+```js
+// app.js — runtime do módulo Garage
+
+
+// ============================================================
+// STATE
+// ============================================================
+
+const state = vhub.store('garage');
+
+
+// ============================================================
+// LIFECYCLE
+// ============================================================
+
+vhub.createModule('garage', {
+    onInit()    { /* ... */ },
+    onMount()   { /* ... */ },
+    onDestroy() { /* ... */ },
+});
+
+
+// ============================================================
+// HANDLERS
+// ============================================================
+
+function onStoreClick(event) {
+    // ...
+}
+```
+
+### Regras de formatação
+
+- Banners `=` (60 colunas) separam grandes contextos; cabeçalho em **CAIXA ALTA**.
+- **Duas linhas em branco antes** de cada banner; **uma linha em branco depois**.
+- Função pública: **uma linha** de comentário em PT-BR objetiva imediatamente acima.
+- Bloco de validação separado por linha em branco do bloco de execução.
+- Imports/requires no topo, agrupados por origem (kernel → utils → services → views).
+- Largura de linha alvo: **100 colunas**; máximo absoluto: 120.
+
+---
 
 ## Ferramentas de teste
 

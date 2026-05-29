@@ -30,12 +30,18 @@ VHubRachaCfg = {
   TICK_INTERVAL_MS    = 1000,
 
   -- ── Ready Zone (confirmacao de presenca na largada) ────────────────────
+  -- Visual: gas/fumaca de areia dourada bem fraco no chao — so para o piloto
+  -- identificar que esta no lugar certo. NADA de cilindro opaco gritante.
   READY_ZONE = {
     RADIUS_M        = 18.0,        -- raio do circulo de confirmacao
     Z_TOLERANCE     = 5.0,         -- diferenca de altura aceita
     REQUIRE_VEHICLE = false,       -- pode confirmar a pe ou em qualquer veiculo?
-    GLOW_COLOR      = { r = 243, g = 181, b = 58, a = 90 },
-    GLOW_HEIGHT     = 4.0,
+    GAS_COLOR       = { r = 232, g = 198, b = 130 },  -- areia dourada
+    GAS_ALPHA       = 32,          -- gas quase invisivel no chao
+    GAS_WISPS       = 14,          -- numero de baforadas de fumaca
+    -- compat legado
+    GLOW_COLOR      = { r = 232, g = 198, b = 130, a = 32 },
+    GLOW_HEIGHT     = 2.5,
   },
 
   -- ── Editor ─────────────────────────────────────────────────────────────
@@ -89,54 +95,41 @@ VHubRachaCfg = {
     HEAT_PER_MIN = 1,
   },
 
-  -- ── HUD (cinematografico, sem fundo opaco) ─────────────────────────────
+  -- ── HUD ─────────────────────────────────────────────────────────────────
+  -- Todo o HUD de corrida e renderizado pela NUI (web/modules/hud). O HUD Lua
+  -- DrawText legado foi removido. USE_NUI deve permanecer true — e a flag que
+  -- libera o envio de telemetria/statebag para a NUI em client/nui_bridge.lua.
   HUD = {
-    -- When true the HTML/CSS NUI owns all HUD rendering. Set to true
-    -- after migrating your UI. The client will forward statebag/telemetry
-    -- to the NUI and disable the Lua DrawText HUD.
     USE_NUI = true,
-    -- Pos do timer central topo
-    TIMER_X = 0.50, TIMER_Y = 0.04, TIMER_SCALE = 0.72,
-    -- Recorde abaixo do timer
-    RECORD_X = 0.50, RECORD_Y = 0.08, RECORD_SCALE = 0.38,
-    -- Posicao (canto direito sup)
-    POS_X = 0.97, POS_Y = 0.04, POS_SCALE = 0.40,
-    -- Volta (canto esq sup)
-    LAP_X = 0.03, LAP_Y = 0.04, LAP_SCALE = 0.40,
-    -- Proximo CP (reposicionado: canto esquerdo superior)
-    NEXT_X = 0.03, NEXT_Y = 0.04, NEXT_SCALE = 0.42,
-    -- Cores
-    GOLD  = { r = 243, g = 181, b = 58 },
-    SAND  = { r = 217, g = 193, b = 154 },
-    BLACK = { r = 12,  g = 10,  b = 6 },
   },
 
-  -- ── Totem de checkpoint (substitui vanilla) ────────────────────────────
+  -- ── Totem de checkpoint (estilo Forza — nativo, totem unico) ────────────
+  -- Coluna FINA e LONGA de areia dourada com nucleo quase branco e glow forte,
+  -- mais ALTA a 999m e ENCOLHE ate sumir no 0m. Base com rasteirinha de poeira
+  -- marcando o diametro do CP + baforadas subindo. Contador km + label no topo.
+  -- Renderizado SEMPRE nativo (DrawMarker/DrawText) — um totem, sem duplicacao.
   TOTEM = {
-    -- Render range (distancia maxima visivel em metros)
-    RENDER_RANGE      = 999.0,
-    -- LOD por distancia (perto = particulas completas; longe = so coluna)
-    LOD_NEAR          = 120.0,
-    LOD_MID           = 420.0,
-    -- Tamanho
-    MIN_HEIGHT        = 5.0,
-    MAX_HEIGHT        = 110.0,
-    WIDTH_MIN         = 0.45,
-    WIDTH_MAX         = 2.80,
-    WIDTH             = 0.10,
-    HEIGHT            = 110.0,
-    -- Animacao (oscilacao vertical leve)
-    PULSE_AMPLITUDE   = 0.18,
-    PULSE_FREQ_HZ     = 0.6,
-    -- Particulas
-    PARTICLES         = 14,
-    PARTICLE_SIZE     = 0.20,
-    PARTICLE_DRIFT_Y  = 0.5,    -- subindo lentamente
+    -- Alcance maximo de render (m)
+    RENDER_RANGE     = 999.0,
+    -- Altura: mais alta a 999m (= SCALE_DIST), encolhe linear ate MIN no 0m.
+    SCALE_DIST       = 999.0,
+    MIN_HEIGHT       = 8.0,
+    MAX_HEIGHT       = 150.0,
+    -- Espessura da coluna (FINA): nucleo solido + halo de glow
+    COLUMN_CORE_W    = 0.45,
+    COLUMN_GLOW_W    = 1.3,
+    -- Raio do CP (a rasteirinha de poeira marca o diametro = 2x esse valor)
+    BASE_RADIUS      = 11.0,
+    -- Baforadas de poeira subindo na base
+    DUST_COUNT       = 10,
+    -- Frequencia do pulso de brilho
+    PULSE_FREQ_HZ    = 0.7,
     -- Cores (RGB)
-    COLOR_DEFAULT     = { r = 243, g = 181, b = 58 },   -- dourado padrao
-    COLOR_FINISH      = { r = 100, g = 220, b = 120 },  -- verde no CP final
-    COLOR_SPEEDTRAP   = { r = 38,  g = 220, b = 80  },  -- speedtrap = radar verde
-    COLOR_DRIFT_ZONE  = { r = 168, g = 50,  b = 240 },  -- drift zone roxo
+    COLOR_DEFAULT    = { r = 232, g = 198, b = 130 },  -- AREIA DOURADA (corpo)
+    COLOR_CORE       = { r = 255, g = 244, b = 210 },  -- nucleo quase branco
+    COLOR_FINISH     = { r = 120, g = 230, b = 140 },  -- verde no CP final
+    COLOR_SPEEDTRAP  = { r = 38,  g = 220, b = 80  },  -- speedtrap = radar verde
+    COLOR_DRIFT_ZONE = { r = 190, g = 120, b = 255 },  -- drift zone roxo
   },
 
   -- ── Estilo geral (mantido para compat) ─────────────────────────────────
@@ -147,11 +140,30 @@ VHubRachaCfg = {
 }
 
 -- ─── Catalogo de pistas pre-definidas ────────────────────────────────────────
--- Coords aceitam 3 formatos (normalizado em shared/checkpoints.lua):
---   { x = X, y = Y, z = Z, h = H }
---   vec3(X, Y, Z)
---   { X, Y, Z }
+--
+-- Coords aceitam 5 formatos (normalizado em shared/checkpoints.lua):
+--
+--   1. { x = X, y = Y, z = Z [, h = H] }              ← canonico
+--   2. vec3(X, Y, Z)                                   ← FiveM nativo
+--   3. { X, Y, Z [, H] }                               ← array curto
+--   4. "x = N, y = N, z = N"                           ← string do comando /cds
+--   5. { cds = vec3(X, Y, Z), h = H }                  ← PREFERIDO p/ grid (estilo nation_race)
+--
+-- Exemplo recomendado para tracks novas (sintaxe humana, separa coord+heading):
+--
+--   start = vec3(2658.68, 1693.25, 24.49),  -- heading 0 implicito
+--   grid  = {
+--     { cds = vec3(2662.46, 1645.46, 23.87), h = 268.71 },
+--     { cds = vec3(2662.19, 1638.51, 23.87), h = 270.82 },
+--   },
+--   checkpoints = {
+--     vec3(2821.18, 1650.77, 23.94),
+--     vec3(2813.19, 1701.23, 23.97),
+--     vec3(2689.22, 1623.83, 23.84),
+--   },
+--
 -- Campos opcionais por track: ready_zone = { x, y, z, radius } (override do start)
+-- As 8 pistas atuais (vrp_1..vrp_8) usam o formato 1 — funcionam sem migracao.
 
 -- Imported tracks converted from exemplos/.../vrp_races (vrp_races client-side)
 -- IDs: vrp_1 .. vrp_8

@@ -1,0 +1,550 @@
+/* web/modules/panel/panel.css — menu principal /racha (escopado .mod-panel).
+ *
+ * Usa tokens canonicos de shared/tokens.css. Sem cores hardcoded fora da
+ * paleta vHub. Variante motorsport documentada: blur do shell em 18px.
+ */
+
+
+/* ============================================================
+   BACKGROUND — overlay com bg.png local (L-D1: opacidade <= 0.55)
+   ============================================================ */
+
+.mod-panel #vhub-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+
+    background:
+        radial-gradient(900px 600px at 20% 15%, rgba(243,181,58,0.16), transparent 60%),
+        radial-gradient(700px 500px at 80% 90%, rgba(255,154,31,0.10), transparent 65%),
+        linear-gradient(180deg, rgba(12,10,6,0.52), rgba(12,10,6,0.52)),
+        url('../../assets/bg.png') center/cover no-repeat;
+    backdrop-filter: blur(3px);
+}
+
+
+/* ============================================================
+   SHELL — painel principal (glass motorsport: blur 18px)
+   ============================================================ */
+
+.mod-panel .panel-shell {
+    position: fixed;
+    inset: 5vh 5vw;
+    z-index: 2;
+
+    display: flex;
+    flex-direction: column;
+
+    border-radius: var(--vh-r-pan);
+    background: var(--vh-glass-bg);
+    border: 1px solid var(--vh-glass-border);
+    box-shadow: var(--vh-shadow-3);
+
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+
+    overflow: hidden;
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+}
+
+
+/* ============================================================
+   HEADER — brand + tabs + close
+   ============================================================ */
+
+.mod-panel .panel-header {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-lg);
+
+    padding: var(--vh-gap-md) var(--vh-gap-xl);
+    border-bottom: 1px solid var(--vh-glass-line);
+    background: linear-gradient(180deg, rgba(243,181,58,0.06), transparent);
+}
+
+.mod-panel .panel-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-logo {
+    height: 34px;
+    width: auto;
+    filter: drop-shadow(0 0 8px rgba(243,181,58,0.55));
+}
+
+.mod-panel .panel-logo-fallback {
+    font-size: 28px;
+    color: var(--vh-gold);
+}
+
+.mod-panel .panel-brand-name {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-sand);
+    display: block;
+    line-height: 1;
+}
+
+.mod-panel .panel-brand-name strong { color: var(--vh-gold); }
+
+.mod-panel .panel-brand-tag {
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+
+/* TABS */
+.mod-panel .panel-tabs {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.mod-panel .panel-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 10px 16px;
+    border-radius: var(--vh-r-btn) var(--vh-r-btn) 0 0;
+
+    font-family: var(--vh-font-tech);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    border-bottom: 2px solid transparent;
+    transition: color var(--vh-t-fast), border-color var(--vh-t-fast);
+}
+
+.mod-panel .panel-tab:hover { color: var(--vh-sand); }
+
+.mod-panel .panel-tab.active {
+    color: var(--vh-gold);
+    border-bottom-color: var(--vh-gold);
+}
+
+.mod-panel .panel-tab-badge {
+    background: var(--vh-gold);
+    color: var(--vh-black);
+    border-radius: var(--vh-r-pill);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    margin-left: 2px;
+}
+
+.mod-panel .panel-close { margin-left: var(--vh-gap-md); }
+
+
+/* ============================================================
+   BODY — views
+   ============================================================ */
+
+.mod-panel .panel-body {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.mod-panel .panel-view {
+    display: none;
+    position: absolute;
+    inset: 0;
+    padding: var(--vh-gap-lg) var(--vh-gap-xl);
+    overflow-y: auto;
+}
+
+.mod-panel .panel-view.active { display: block; }
+
+
+/* TOOLBAR */
+.mod-panel .panel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+    margin-bottom: var(--vh-gap-lg);
+}
+
+.mod-panel .panel-search {
+    position: relative;
+    flex: 1;
+    max-width: 420px;
+}
+
+.mod-panel .panel-search i {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--vh-text-dim2);
+    font-size: 13px;
+}
+
+.mod-panel .panel-search .vh-input {
+    width: 100%;
+    padding-left: 34px;
+}
+
+.mod-panel .panel-count {
+    font-family: var(--vh-font-tech);
+    font-size: 12px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: auto;
+}
+
+.mod-panel .panel-count b { color: var(--vh-gold); }
+
+
+/* ============================================================
+   GRID DE PISTAS
+   ============================================================ */
+
+.mod-panel .panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--vh-gap-md);
+}
+
+.mod-panel .panel-track {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-track-head {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-track-head > i {
+    color: var(--vh-gold);
+    font-size: 16px;
+}
+
+.mod-panel .panel-track-title {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+.mod-panel .vh-chip.illegal {
+    background: rgba(232,81,63,0.12);
+    border-color: rgba(232,81,63,0.4);
+    color: var(--vh-danger);
+}
+
+.mod-panel .panel-track-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vh-gap-sm) var(--vh-gap-md);
+    font-size: 12px;
+    color: var(--vh-text-dim);
+}
+
+.mod-panel .panel-track-meta b { color: var(--vh-text); }
+.mod-panel .panel-track-meta i { color: var(--vh-text-dim2); }
+
+.mod-panel .panel-track-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--vh-gap-sm);
+    padding-top: var(--vh-gap-sm);
+    border-top: 1px solid var(--vh-glass-line);
+}
+
+.mod-panel .panel-track-fee {
+    font-family: var(--vh-font-num);
+    font-weight: 700;
+    color: var(--vh-gold);
+}
+
+
+/* ============================================================
+   LISTA DE LOBBIES
+   ============================================================ */
+
+.mod-panel .panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-lobby {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    border-radius: var(--vh-r-card);
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+}
+
+.mod-panel .panel-lobby > i {
+    font-size: 18px;
+    color: var(--vh-gold);
+}
+
+.mod-panel .panel-lobby-info { flex: 1; }
+
+.mod-panel .panel-lobby-title {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.mod-panel .panel-lobby-state {
+    font-family: var(--vh-font-tech);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: var(--vh-r-pill);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mod-panel .panel-lobby-state.lobby,
+.mod-panel .panel-lobby-state.pending {
+    background: rgba(243,181,58,0.14);
+    color: var(--vh-gold);
+}
+
+.mod-panel .panel-lobby-mode {
+    font-family: var(--vh-font-tech);
+    font-size: 10px;
+    color: var(--vh-text-dim2);
+    border: 1px solid var(--vh-glass-line);
+    border-radius: var(--vh-r-pill);
+    padding: 1px 7px;
+}
+
+.mod-panel .panel-lobby-meta {
+    font-size: 12px;
+    color: var(--vh-text-dim);
+    margin-top: 3px;
+}
+
+.mod-panel .panel-lobby-meta b { color: var(--vh-text); }
+
+
+/* ============================================================
+   TABELAS (ranking + historico)
+   ============================================================ */
+
+.mod-panel .panel-tablewrap {
+    border-radius: var(--vh-r-card);
+    border: 1px solid var(--vh-glass-line);
+    overflow: hidden;
+}
+
+.mod-panel .panel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.mod-panel .panel-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-text-dim2);
+    background: rgba(12,10,6,0.40);
+    border-bottom: 1px solid var(--vh-glass-line);
+}
+
+.mod-panel .panel-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(243,181,58,0.05);
+}
+
+.mod-panel .panel-table tr:last-child td { border-bottom: none; }
+
+.mod-panel .panel-table td.gold   { color: var(--vh-gold); font-weight: 700; }
+.mod-panel .panel-table td.silver { color: #cfd2d6; font-weight: 700; }
+.mod-panel .panel-table td.bronze { color: #d99a5a; font-weight: 700; }
+
+.mod-panel .panel-table-empty {
+    text-align: center;
+    padding: 32px !important;
+    color: var(--vh-text-dim2);
+}
+
+
+/* ============================================================
+   EDITOR
+   ============================================================ */
+
+.mod-panel .panel-editor {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--vh-gap-lg);
+}
+
+.mod-panel .panel-editor-phases {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-editor-phases .vh-btn { justify-content: flex-start; }
+
+.mod-panel .panel-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: var(--vh-gap-md);
+}
+
+.mod-panel .panel-form-row label {
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vh-text-dim);
+}
+
+.mod-panel .panel-form-row.checks {
+    flex-direction: row;
+    gap: var(--vh-gap-lg);
+}
+
+.mod-panel .panel-form-row.checks label {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: var(--vh-text);
+}
+
+.mod-panel .panel-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vh-gap-sm);
+    margin-top: var(--vh-gap-md);
+}
+
+
+/* ============================================================
+   MODAL — criar lobby
+   ============================================================ */
+
+.mod-panel .panel-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mod-panel .panel-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12,10,6,0.55);
+    backdrop-filter: blur(6px);
+}
+
+.mod-panel .panel-modal-box {
+    position: relative;
+    inset: auto;
+    width: min(480px, 92vw);
+    padding: var(--vh-gap-xl);
+}
+
+.mod-panel .panel-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--vh-gap-lg);
+}
+
+.mod-panel .panel-modal-title {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 22px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+    color: var(--vh-gold);
+}
+
+.mod-panel .panel-modal-track {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    margin-bottom: var(--vh-gap-lg);
+    font-family: var(--vh-font-display);
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.mod-panel .panel-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vh-gap-sm);
+    margin-top: var(--vh-gap-lg);
+}
+
+
+/* ============================================================
+   EMPTY STATE + TOAST
+   ============================================================ */
+
+.mod-panel .panel-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 48px;
+    color: var(--vh-text-dim2);
+    font-size: 14px;
+}
+
+.mod-panel .panel-empty i {
+    display: block;
+    font-size: 32px;
+    margin-bottom: var(--vh-gap-sm);
+    color: var(--vh-sand-deep);
+}
+
+.mod-panel .panel-toast-stack {
+    position: fixed;
+    top: 22px; right: 22px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-panel .panel-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    transition: opacity var(--vh-t-norm), transform var(--vh-t-norm);
+}
+
+.mod-panel .panel-toast.fade-out {
+    opacity: 0;
+    transform: translateX(20px);
+}

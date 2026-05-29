@@ -25,13 +25,17 @@ PROTOCOLO DE MEMÓRIA (quando MEMÓRIA_ATUALIZADA = sim):
 
 CHECKLIST FINAL:
 □ Nenhuma lei de AGENTS.md violada (L-01 a L-12)?
-□ Sem segunda fonte de verdade introduzida?
-□ Contratos de API pública mantidos (assinaturas estáveis)?
+□ Nenhuma lei de componentização violada (A-01 a A-08), se a mudança toca NUI/L3/L4?
+□ Sem segunda fonte de verdade introduzida (Lua ou JS store)?
+□ Contratos de API pública mantidos — Lua (`exports`, `vHub.E.*`) E NUI (SendNUIMessage types, RegisterNUICallback actions, `vhub.native.*`, eventbus names)?
 □ `assertThread()` em toda função pública com `Citizen.Await`?
 □ Exports sensíveis com `_invoker_allowed()`?
 □ Sem `print()` fora de `shared/logger.lua` / `bootstrap.lua`?
 □ Comentários em PT-BR em todas as funções públicas novas?
 □ Ordem de carregamento em `server/init.lua` respeitada?
+□ Camada da mudança (L1/L2/L3/L4) coerente com placement (kernel não renderiza UI, JS não decide regra crítica)?
+□ Componentes novos com lifecycle completo (onInit/onMount/onShow/onHide/onDestroy) e `onDestroy` com cleanup?
+□ Estilo humano respeitado — banners de contexto lógico em arquivos novos/refatorados, espaçamento e largura 100col?
 □ Testes de smoke documentados e executáveis?
 
 FORMATO DE RESPOSTA (obrigatório):

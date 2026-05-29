@@ -1,0 +1,142 @@
+/* web/modules/race/race.css — overlays de mundo (escopado .mod-race).
+ *
+ * Ready-zone (confirmacao no totem) + totem 3D (coluna apontando CP).
+ * Overlay LIMPO sobre GTA: pointer-events:none, sem fundo opaco.
+ * Tokens locais escopados (nao entram em shared).
+ */
+
+
+.mod-race {
+    --rz-pin: #f3b53a;
+    pointer-events: none;
+}
+
+.mod-race .race-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 8;
+    font-family: var(--vh-font-body);
+    color: var(--vh-text);
+}
+
+
+/* ============================================================
+   READY ZONE — HUD fixo de instrucao
+   ============================================================ */
+
+/* Sem fundo/caixa — texto flutuante com glow (regra: nada de janela preta). */
+.mod-race .race-rz-hud {
+    position: absolute;
+    left: 50%; bottom: 9vh;
+    transform: translateX(-50%);
+
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+
+    max-width: 560px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+}
+
+.mod-race .race-rz-icon {
+    font-size: 28px;
+    color: var(--vh-gold);
+}
+
+.mod-race .race-rz-track {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-gold);
+}
+
+.mod-race .race-rz-action {
+    font-size: 13px;
+    color: var(--vh-text-dim);
+    margin-top: 2px;
+}
+
+.mod-race .race-rz-key {
+    display: inline-block;
+    min-width: 22px;
+    text-align: center;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: var(--vh-gold);
+    color: var(--vh-black);
+    font-family: var(--vh-font-num);
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.mod-race .race-rz-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+    margin-top: 6px;
+    font-family: var(--vh-font-tech);
+    font-size: 12px;
+}
+
+.mod-race .race-rz-dist {
+    color: var(--vh-sand);
+    font-weight: 600;
+}
+
+.mod-race .race-rz-countdown {
+    color: var(--vh-text-dim2);
+}
+
+/* tempo esgotando — usa danger canonico, sem literal */
+.mod-race .race-rz-countdown.urgent {
+    color: var(--vh-danger);
+    font-weight: 700;
+}
+
+.mod-race .race-rz-ok {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--vh-ok);
+    font-weight: 600;
+}
+
+
+/* ============================================================
+   READY ZONE — anchor 3D no mundo
+   ============================================================ */
+
+.mod-race .race-rz-anchor {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    text-align: center;
+}
+
+.mod-race .race-rz-anchor-pin {
+    width: 14px;
+    height: 14px;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: var(--rz-pin);
+    box-shadow: 0 0 16px rgba(243,181,58,0.8);
+    animation: race-pin-pulse 1.4s ease-in-out infinite;
+}
+
+.mod-race .race-rz-anchor-label {
+    margin-top: 4px;
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 8px rgba(0,0,0,0.9);
+}
+
+@keyframes race-pin-pulse {
+    0%, 100% { transform: scale(1);   opacity: 1; }
+    50%      { transform: scale(1.4); opacity: 0.6; }
+}
+
+

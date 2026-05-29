@@ -1,0 +1,51 @@
+<!-- web/modules/hud/hud.html — HUD overlay in-race.
+     Texto flutuante com glow, SEM caixas/fundo (a tela do GTA aparece atras).
+     Sem velocimetro (ja existe HUD proprio de velocidade no servidor). -->
+
+<div class="hud-overlay">
+
+    <!-- Countdown 3..2..1..GO (warmup) -->
+    <div class="hud-countdown hidden" data-el="countdown">
+        <span class="hud-countdown-num" data-el="countdown-num">3</span>
+    </div>
+
+    <!-- Timer central topo -->
+    <div class="hud-timer" data-el="timer">00:00.000</div>
+
+    <!-- Posicao (canto direito sup) -->
+    <div class="hud-stat hud-pos">
+        <span class="hud-stat-label">Posicao</span>
+        <span class="hud-stat-value" data-el="pos">--</span>
+    </div>
+
+    <!-- Volta (canto esq sup) -->
+    <div class="hud-stat hud-lap hidden" data-el="lap-chip">
+        <span class="hud-stat-label">Volta</span>
+        <span class="hud-stat-value" data-el="lap">--/--</span>
+    </div>
+
+    <!-- Proximo CP (canto esq, abaixo da volta) -->
+    <div class="hud-stat hud-cp hidden" data-el="cp-chip">
+        <span class="hud-stat-label">Proximo CP</span>
+        <span class="hud-stat-value" data-el="cp">--/--</span>
+        <span class="hud-stat-extra" data-el="cp-dist"></span>
+    </div>
+
+    <!-- Drift score (so em modo drift) -->
+    <div class="hud-stat hud-drift hidden" data-el="drift-chip">
+        <span class="hud-stat-label">Drift</span>
+        <span class="hud-stat-value" data-el="drift">0</span>
+    </div>
+
+    <!-- Card de chegada (5s e some) -->
+    <div class="hud-finish hidden" data-el="finish">
+        <div class="hud-finish-title">Chegou!</div>
+        <div class="hud-finish-place">
+            <span class="hud-finish-pos" data-el="finish-pos">1</span><sup class="hud-finish-ord">&ordm;</sup>
+            <span class="hud-finish-lugar">Lugar</span>
+        </div>
+        <div class="hud-finish-time" data-el="finish-time">00:00.000</div>
+        <div class="hud-finish-payout hidden" data-el="finish-payout"></div>
+    </div>
+
+</div>

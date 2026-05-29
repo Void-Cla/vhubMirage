@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mirage Racha</title>
+
+    <!-- Tokens + reset + components (carregam sincronos, prontos antes do JS) -->
+    <link rel="stylesheet" href="shared/tokens.css" />
+    <link rel="stylesheet" href="shared/reset.css" />
+    <link rel="stylesheet" href="shared/components.css" />
+
+    <!-- Fontes Google (canonico vHub + extras tecnicos para racha) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome para icones -->
+    <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous" defer></script>
+</head>
+<body>
+
+    <!-- Canvas de areia global (z-1, pointer-events:none) -->
+    <canvas id="vhub-sand"></canvas>
+
+    <!-- Container de montagem dos modulos -->
+    <div id="vhub-app"></div>
+
+
+    <!-- ============================================================
+         RUNTIME — ORDEM OBRIGATORIA
+         ============================================================
+         bus / store / bridge / sand devem existir antes de
+         core.js, pois core agrega esses globais em window.vhub.
+         shared/utils nao depende de nada. -->
+
+    <script src="runtime/bus.js"></script>
+    <script src="runtime/store.js"></script>
+    <script src="runtime/bridge.js"></script>
+    <script src="runtime/sand.js"></script>
+    <script src="shared/utils.js"></script>
+    <script src="runtime/core.js"></script>
+
+
+    <!-- ============================================================
+         MODULOS — cada um se auto-registra via vhub.createModule
+         ============================================================
+         HUD e PANEL pre-montam no boot: ambos precisam receber mensagens
+         do Lua a qualquer momento (HUD na largada, PANEL no /racha).
+         Modulos futuros puramente sob-demanda serao lazy. -->
+
+    <script src="modules/hud/hud.js"></script>
+    <script src="modules/panel/panel.js"></script>
+    <script src="modules/race/race.js"></script>
+
+
+    <!-- ============================================================
+         BOOTSTRAP — sinaliza ao Lua que a NUI esta pronta
+         ============================================================ -->
+
+    <script>
+        (async () => {
+            // Pre-monta modulos sempre-ativos. INDEPENDENTE por modulo: a
+            // falha de um (ex: fetch) NAO impede os outros de montar.
+            //   HUD   — overlay in-race  (RACE_PREPARE/START)
+            //   PANEL — menu /racha      (NUI_OPEN)
+            //   RACE  — ready-zone       (LOBBY_PENDING)
+            // (o totem de checkpoint e 100% nativo — client/totem.lua)
+            for (const name of ['hud', 'panel', 'race']) {
+                try {
+                    await vhub.mount(name);
+                } catch (err) {
+                    console.error('[index] mount ' + name + ' falhou:', err);
+                }
+            }
+
+            // Sinaliza Lua: NUI carregou, pode mandar mensagens
+            try {
+                await vhub.post('nui_ready', { href: location.href });
+            } catch (err) {
+                // Lua ainda pode nao ter registrado o callback — sem retry agressivo
+                console.warn('[index] nui_ready falhou (sera retentado em interacao):', err);
+            }
+        })();
+    </script>
+
+</body>
+</html>

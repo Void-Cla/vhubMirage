@@ -79,13 +79,15 @@ end)
 -- Cliente que entrou apos o evento ja ter sido emitido pode solicitar a
 -- re-emissao via este endpoint. Idempotente: so reemite para um usuario ja
 -- autenticado. Confere apenas dados — sem efeito colateral.
-RegisterNetEvent('vhub_racha:request_initDone')
-AddEventHandler('vhub_racha:request_initDone', function()
+--
+-- Fonte unica de verdade: VHubRachaSessions (cache via vHub:characterLoad).
+-- Nome do evento: VHubRachaE.REQUEST_INIT_DONE (shared/enums.lua).
+RegisterNetEvent(VHubRachaE.REQUEST_INIT_DONE)
+AddEventHandler(VHubRachaE.REQUEST_INIT_DONE, function()
   local src = source
-  if not B.READY or not B.vHub or not B.vHub.Auth then return end
-  local ok, user = pcall(function() return B.vHub.Auth:getUser(src) end)
-  if not ok or type(user) ~= 'table' then return end
-  -- Reenvia apenas para o solicitante
+  if not B.READY then return end
+  local user = VHubRachaSessions and VHubRachaSessions.get(src) or nil
+  if type(user) ~= 'table' then return end
   TriggerClientEvent('vHub:initDone', src,
     user.id or user.user_id, user.char_id, false)
 end)

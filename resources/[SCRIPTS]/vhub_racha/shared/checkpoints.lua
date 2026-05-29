@@ -1,12 +1,24 @@
 -- shared/checkpoints.lua — normalizador multi-formato + helpers de CP.
--- Aceita 4 formatos (resolve "config chato"):
---   { x = X, y = Y, z = Z [, h = H] }     ← canonico
---   vec3(X, Y, Z)                          ← FiveM
---   { X, Y, Z [, H] }                      ← array (nation_race style)
---   "x = N, y = N, z = N"                  ← string do comando /cds
+--
+-- Aceita 5 formatos (resolve "config chato"). Em qualquer caso, normaliza
+-- para o shape canonico `{ x, y, z, h }`:
+--
+--   1. { x = X, y = Y, z = Z [, h = H] }       ← canonico (record nomeado)
+--   2. vec3(X, Y, Z)                            ← FiveM nativo (sem heading)
+--   3. { X, Y, Z [, H] }                        ← array (nation_race style)
+--   4. "x = N, y = N, z = N"                    ← string do comando /cds
+--   5. { cds = vec3(X, Y, Z), h = H }           ← novo: cds + heading separado
+--
+-- Formato (5) e o estilo preferido para slots de grid: a coordenada vai em
+-- `cds` (campo nomeado, igual ao nation_race) e o `h` (heading) fica fora.
 
 VHubRachaCP = {}
 local CP = VHubRachaCP
+
+
+-- ============================================================
+-- PARSING DE STRING (formato 4)
+-- ============================================================
 
 local function _parse_string(s)
   if type(s) ~= 'string' then return nil end
@@ -17,17 +29,48 @@ local function _parse_string(s)
   return nil
 end
 
+
+-- ============================================================
+-- NORMALIZE — qualquer formato → { x, y, z, h }
+-- ============================================================
+
 function CP.normalize(raw, default_h)
   if raw == nil then return nil end
+
+  -- Formato 4 — string crua
   if type(raw) == 'string' then
     local x, y, z = _parse_string(raw)
     if not x then return nil end
     return { x = x, y = y, z = z, h = tonumber(default_h) or 0.0 }
   end
+
+  -- Formato 2 — vec3 nativo do FiveM
   if type(raw) == 'vector3' then
     return { x = raw.x, y = raw.y, z = raw.z, h = tonumber(default_h) or 0.0 }
   end
+
   if type(raw) ~= 'table' then return nil end
+
+  -- Formato 5 — { cds = vec3(...), h = N } (estilo nation_race / preferido)
+  if raw.cds ~= nil then
+    local c = raw.cds
+    if type(c) == 'vector3' then
+      return {
+        x = c.x, y = c.y, z = c.z,
+        h = tonumber(raw.h or raw.heading or default_h) or 0.0,
+      }
+    end
+    if type(c) == 'table' and c.x and c.y and c.z then
+      return {
+        x = tonumber(c.x) or 0.0,
+        y = tonumber(c.y) or 0.0,
+        z = tonumber(c.z) or 0.0,
+        h = tonumber(raw.h or raw.heading or default_h) or 0.0,
+      }
+    end
+  end
+
+  -- Formato 1 — record { x, y, z, h }
   if raw.x ~= nil and raw.y ~= nil and raw.z ~= nil then
     return {
       x = tonumber(raw.x) or 0.0,
@@ -36,6 +79,8 @@ function CP.normalize(raw, default_h)
       h = tonumber(raw.h or raw.heading or default_h) or 0.0,
     }
   end
+
+  -- Formato 3 — array { X, Y, Z [, H] }
   if raw[1] ~= nil and raw[2] ~= nil and raw[3] ~= nil then
     return {
       x = tonumber(raw[1]) or 0.0,
@@ -44,6 +89,7 @@ function CP.normalize(raw, default_h)
       h = tonumber(raw[4] or default_h) or 0.0,
     }
   end
+
   return nil
 end
 

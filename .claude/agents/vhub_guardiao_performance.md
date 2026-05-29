@@ -32,6 +32,36 @@ DETECTAR E BLOQUEAR:
 - Abertura de thread por evento de rede sem controle de concorrência
 - GC de tabelas grandes sem yield (`Citizen.Wait(0)` entre chunks)
 
+
+-- ============================================================
+-- PERFORMANCE NUI / CEF (L3 e L4)
+-- ============================================================
+
+CEF é caro e vaza memória facilmente. Toda mudança em `web/runtime` ou `web/modules` deve respeitar o orçamento de runtime do CEF.
+
+MÉTRICAS ALVO (CEF):
+- Idle com NUI fechada: 0.00ms (sem RAF, sem interval, sem listener ativo)
+- Idle com NUI aberta sem interação: < 0.10ms (animação de partículas / glass é o teto)
+- `SendNUIMessage`: máximo 10Hz para hot path (vehicle telemetry, race timer); usar delta sync
+- DOM total por painel: < 1500 nodes; alertar acima de 3000
+
+CHECKLIST NUI:
+□ `onDestroy` do componente cancela RAF, clearInterval, removeEventListener, observer.disconnect (A-07)?
+□ `unmount` libera DOM de fato (`element.remove()` + descarte de referência), não apenas `display:none`?
+□ `SendNUIMessage` em loop usa batching/delta — nunca payload completo a 60fps (A-08)?
+□ Listener `AddStateBagChangeHandler` no cliente faz throttle antes de propagar para NUI?
+□ `backdrop-filter`, `blur`, `box-shadow` complexos limitados a containers grandes (não em items de lista repetida)?
+□ Módulo carrega lazy — não monta no boot, monta no `router.navigate`?
+□ Imagens grandes têm `loading="lazy"` ou são sprites?
+□ `fetch` para callback custom não está em hot path (ver native bridge cache)?
+
+DETECTAR E BLOQUEAR (NUI):
+- `setInterval`/`requestAnimationFrame` sem cleanup em `onDestroy`
+- `addEventListener` sem `removeEventListener` correspondente
+- `SendNUIMessage` chamada por tick de cliente sem throttle
+- Store slice crescendo sem GC (cache que nunca expira)
+- Imagem ou asset > 500KB carregado eagerly no boot
+
 FORMATO DE RESPOSTA (obrigatório):
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máximo 4, formato "arquivo:função — custo estimado / problema">

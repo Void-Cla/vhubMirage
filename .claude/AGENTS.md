@@ -28,6 +28,31 @@ metas/fivem_natives_organizadas_ptbr.md ← referência de natives FiveM (consul
 | **L-11** | vRP-compat (`server/compat.lua`) deve permanecer funcional até vHub ter nome no mercado |
 | **L-12** | Transações SQL são atômicas e exclusivamente server-side |
 
+
+## Leis de componentização (A-01 a A-08)
+
+Complementam L-01..L-12 e governam a arquitetura **NUI / runtime JS / componente**. Vale para novos resources e refactors de UI.
+
+| Lei | Regra |
+|-----|-------|
+| **A-01** | Separação de camada — Lua kernel não renderiza UI; JS não decide regra de negócio crítica |
+| **A-02** | Todo módulo NUI novo nasce com lifecycle padronizado (onInit / onMount / onShow / onHide / onDestroy) |
+| **A-03** | Comunicação inter-módulo passa pelo event bus; sem acesso direto a DOM/estado de outro módulo |
+| **A-04** | Estado por domínio em `store.<domain>` — sem segunda fonte de verdade dentro da NUI |
+| **A-05** | Lazy load — módulo só é montado quando navegado; `unmount` libera memória de fato |
+| **A-06** | Native bridge centralizado — JS não chama native fora de `vhub.native.*` |
+| **A-07** | Cleanup obrigatório no `onDestroy`: `cancelAnimationFrame`, `clearInterval`, `removeEventListener`, `observer.disconnect` |
+| **A-08** | `SendNUIMessage` em hot path usa batching/delta sync — nunca 60fps de payload bruto |
+
+### Camadas de ownership (mapa rápido)
+
+| Camada | Tecnologia | Owner natural |
+|--------|------------|---------------|
+| **L1** Kernel  | Lua server  | `vhub_arquiteto` + `vhub_guardiao_seguranca` + `vhub_guardiao_natives` |
+| **L2** HAL     | Lua client  | `vhub_guardiao_natives` + `vhub_guardiao_performance` |
+| **L3** Runtime | JS engine   | `vhub_guardiao_runtime` |
+| **L4** Componente | JS módulo | `vhub_guardiao_runtime` + `vhub_guardiao_designer` |
+
 ---
 
 ## Economia de tokens — protocolo obrigatório
@@ -54,7 +79,8 @@ metas/fivem_natives_organizadas_ptbr.md ← referência de natives FiveM (consul
    ├── vhub_guardiao_natives    (se tocar entity/ped/netid/State Bag/spawn)
    ├── vhub_guardiao_performance (se tocar thread/loop/batch/flush)
    ├── vhub_guardiao_simplicidade (se criar módulo/helper/camada nova)
-   └── vhub_guardiao_designer   (se tocar NUI/client/HUD)
+   ├── vhub_guardiao_designer   (se tocar NUI/CEF/identidade visual)
+   └── vhub_guardiao_runtime    (se tocar web/runtime, lifecycle, eventbus, store, router, native bridge)
 5. worker executa SOMENTE após forma aprovada
 6. vhub_guardiao_revisao faz gate final quando diff tem código relevante
 7. vhub_guardiao_revisao atualiza .claude/contexto.md se houver contexto durável novo
@@ -107,7 +133,8 @@ client/bootstrap.lua → client/core.lua → client/vehicle.lua → client/modul
 | `vhub_guardiao_natives` | Native-first: evita mirror/cache/shadow sem necessidade |
 | `vhub_guardiao_performance` | Protege resmon, idle, CPU, rede e custo de thread |
 | `vhub_guardiao_simplicidade` | Remove inflação, duplicação e camadas sem ganho técnico |
-| `vhub_guardiao_designer` | NUI/CEF: compatibilidade FiveM, resmon baixo, sem regra de negócio |
+| `vhub_guardiao_designer` | NUI/CEF: identidade visual oficial, compatibilidade FiveM, resmon baixo, sem regra de negócio |
+| `vhub_guardiao_runtime` | Engine NUI (`web/runtime`), lifecycle, eventbus, store, router, native bridge, lazy load, A-01..A-08 |
 | `vhub_guardiao_revisao` | Gate final: regressão, risco, testes, memória institucional |
 
 ---
