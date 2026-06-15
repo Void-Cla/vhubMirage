@@ -221,9 +221,7 @@ exports('adminTransfer', function(plate, new_char_id, actor_src)
     for src, u in pairs(Core.sessions) do
       if u.char_id == v.char_id then Core.takeKeyItem(src, pp); break end
     end
-    SQL:revokeKey(pp, v.char_id, 'owner')
-    SQL:updateOwner(pp, cid)
-    SQL:grantKey(pp, cid, 'owner', cid, nil)
+    exports.vhub_conce:transferOwner(pp, cid)   -- char_id + owner antigo/novo (autoridade unica)
     for src, u in pairs(Core.sessions) do
       if u.char_id == cid then Core.giveKeyItem(src, pp); break end
     end
@@ -243,6 +241,7 @@ exports('adminDelete', function(plate, actor_src)
     for src, u in pairs(Core.sessions) do
       if u.char_id == v.char_id then Core.takeKeyItem(src, pp); break end
     end
+    -- prontu rio morre junto no deleteVehicle  nada a persistir antes
     SQL:deleteVehicle(pp)
     TriggerClientEvent(E.DO_DESPAWN, -1, pp)
     Core:log(pp, 'admin_delete', actorOf(actor_src), { char_id = v.char_id })
@@ -267,13 +266,10 @@ exports('adminRepair', function(plate, actor_src)
   if not invoker_ok() then return false end
   local pp = U.normalizePlate(plate); if not pp then return false end
   inThread(function()
-    local ok, vd = pcall(function() return exports.vhub:getVehicle(pp) end)
-    if ok and vd and vd.state then
-      vd.state.engine_health = 1000.0
-      vd.state.body_health   = 1000.0
-      vd.dirty = true
-      pcall(function() vd:_syncBags() end)
-    end
+    -- reparo TRUSTED no prontu rio (a vers o antiga mutava C PIA do CORE = no-op);
+    -- broadcast DO_REPAIR: quem tiver a entidade + controle conserta a viva (raro/admin)
+    pcall(function() exports.vhub_conce:repairVehicleState(pp) end)
+    TriggerClientEvent(E.DO_REPAIR, -1, pp)
     Core:log(pp, 'admin_repair', actorOf(actor_src), {})
   end)
   return true
@@ -307,19 +303,12 @@ exports('adminReleaseImpound', function(plate, actor_src)
   return true
 end)
 
--- Cancelar leil o
+-- Cancelar leil o (a transacao/escrow/broadcast e do vhub_ferinha desde a FASE 4)
 exports('adminCancelAuction', function(auction_id, actor_src)
   if not invoker_ok() then return false end
   local id = tonumber(auction_id); if not id then return false end
   inThread(function()
-    local a = SQL:getAuction(id); if not a or a.status ~= 'active' then return end
-    SQL:setAuctionStatus(id, 'cancelled')
-    SQL:updateStatus(a.plate, 'garage')
-    for src, u in pairs(Core.sessions) do
-      if u.char_id == a.seller_id then Core.giveKeyItem(src, a.plate); break end
-    end
-    Core:log(a.plate, 'admin_cancel_auction', actorOf(actor_src), { id = id })
-    TriggerClientEvent(E.UPDATE_AUCTION, -1, SQL:getAuction(id))
+    exports.vhub_ferinha:cancelAuction(id, actorOf(actor_src))
   end)
   return true
 end)
@@ -380,9 +369,13 @@ exports('adminSpawnTo', function(src, plate, pos, actor_src)
     local p = pos or { x = 0, y = 0, z = 50, h = 0 }
     SQL:updateStatus(pp, 'out')
     SQL:updatePosition(pp, U.jenc(p))
+    -- PRONTU RIO: fonte  nica do f sico+cosm tico (fallback coluna legada)
+    local st
+    pcall(function() st = exports.vhub_conce:getVehicleState(pp) end)
     TriggerClientEvent(E.DO_SPAWN, src, {
       plate = pp, model = v.model, vtype = v.vtype,
-      customization = U.jdec(v.customization), locked = v.locked == 1,
+      customization = (st and st.customization) or U.jdec(v.customization),
+      state = st, locked = v.locked == 1,
       surface = VHubGarage.types.surface[v.vtype] or 'ground',
     }, p)
     Core:log(pp, 'admin_spawn_to', actorOf(actor_src), { src = src })
@@ -435,13 +428,10 @@ exports('adminFinalizeStaleAuctions', function(actor_src)
   if not invoker_ok() then return 0 end
   local p = promise.new()
   Citizen.CreateThread(function()
-    local rows = SQL:listExpiringAuctions() or {}
-    for _, a in ipairs(rows) do
-      if _G.finalizeAuction then _G.finalizeAuction(a.id, false) end
-    end
-    Core:log('SYS', 'admin_finalize_auctions', actorOf(actor_src),
-      { count = #rows })
-    p:resolve(#rows)
+    -- finaliza (com escrow/transferOwner) no vhub_ferinha; retorna a contagem
+    local n = exports.vhub_ferinha:finalizeExpired() or 0
+    Core:log('SYS', 'admin_finalize_auctions', actorOf(actor_src), { count = n })
+    p:resolve(n)
   end)
   return Citizen.Await(p)
 end)

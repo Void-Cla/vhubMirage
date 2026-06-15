@@ -1,17 +1,49 @@
 -- vhub_player_state/client.lua
 -- Responsabilidade: aplicar spawn e estado recebido do servidor; reportar estado periodicamente.
+-- ÚNICO ESCRITOR DO PED (Void-Zero/It.1): nenhum outro resource chama
+--   SetPlayerModel/SetEntityCoords no fluxo de spawn. O selector elege coordenada
+--   no servidor; este arquivo recebe apply (com hold opcional) e release.
 -- Regra: NUNCA modifica dados sem autorização do servidor.
--- É o único handler de spawn — não há doSpawn do core rodando em paralelo.
 
 local _state_ready     = false
 local _update_interval = 15
 local _mp_models       = {}   -- hash → true para modelos freemode
+local _hold            = false
+local _first_spawn     = false
 
--- Fluxo vRP: NÃO interferir no spawnmanager nativo (mesmo padrão do vRP).
--- O spawnmanager default spawna o player em uma posição padrão (Vespucci),
--- dispara `playerSpawned` naturalmente, o `client/bootstrap.lua` do vhub
--- captura esse evento e envia `vHub:ready` ao servidor, que então responde
--- com `vhub_player_state:apply` para teleportar+customizar.
+-- Fluxo: spawnmanager/fallback do CORE deixa o player ativo e envia vHub:ready;
+-- o servidor responde com vhub_player_state:apply (model+custom+pos). Com
+-- hold=true o ped fica congelado/invisível até vhub_player_state:release
+-- entregar a coordenada eleita (selector) ou o timeout server-side liberar.
+
+-- ── Primitivas de movimento (uso interno exclusivo) ───────────────────────────
+
+local function moverPed(ped, x, y, z, heading)
+  FreezeEntityPosition(ped, true)
+  SetEntityCoords(ped, x, y, z, false, false, false, false)
+  if heading then SetEntityHeading(ped, heading) end
+  RequestCollisionAtCoord(x, y, z)
+  local wc = 0
+  while not HasCollisionLoadedAroundEntity(ped) and wc < 3000 do
+    Citizen.Wait(100); wc = wc + 100
+  end
+end
+
+local function finalizarSpawn(ped, first_spawn)
+  FreezeEntityPosition(ped, false)
+  SetEntityVisible(ped, true, false)
+  SetEntityInvincible(ped, false)
+  DoScreenFadeIn(500)
+  _state_ready = true
+
+  TriggerEvent("vhub_player_state:spawned", first_spawn)
+
+  if first_spawn then
+    BeginTextCommandThefeedPost("STRING")
+    AddTextComponentSubstringPlayerName("Bem-vindo ao servidor!")
+    EndTextCommandThefeedPostTicker(false, true)
+  end
+end
 
 -- ── Aplicação do estado no spawn ─────────────────────────────────────────────
 
@@ -31,6 +63,8 @@ AddEventHandler("vhub_player_state:apply", function(dados)
 
   Citizen.CreateThread(function()
     _state_ready = false
+    _hold        = dados.hold == true
+    _first_spawn = dados.first_spawn == true
 
     -- 1. Aguarda player ativo no mundo
     local tries = 0
@@ -70,19 +104,10 @@ AddEventHandler("vhub_player_state:apply", function(dados)
     -- 4. Customização de ped (partes, props, overlays)
     _aplicarCustomizacao(ped, custom)
 
-    -- 5. Posição
+    -- 5. Posição (provável/final). Em hold permanece congelado nela.
     local pos = dados.pos
     if type(pos) == "table" and pos.x and pos.y and pos.z then
-      FreezeEntityPosition(ped, true)
-      SetEntityCoords(ped, pos.x, pos.y, pos.z, false, false, false, false)
-      if pos.heading then SetEntityHeading(ped, pos.heading) end
-
-      RequestCollisionAtCoord(pos.x, pos.y, pos.z)
-      local wc = 0
-      while not HasCollisionLoadedAroundEntity(ped) and wc < 3000 do
-        Citizen.Wait(100); wc = wc + 100
-      end
-      FreezeEntityPosition(ped, false)
+      moverPed(ped, pos.x, pos.y, pos.z, pos.heading)
     end
 
     -- 6. Saúde e armadura
@@ -96,20 +121,27 @@ AddEventHandler("vhub_player_state:apply", function(dados)
       _aplicarArmas(dados.weapons, true)
     end
 
-    -- 8. Finaliza
-    SetEntityVisible(ped, true, false)
-    SetEntityInvincible(ped, false)
-    DoScreenFadeIn(500)
-    _state_ready = true
-
-    TriggerEvent("vhub_player_state:spawned", dados.first_spawn)
-
-    -- Boas-vindas no primeiro spawn
-    if dados.first_spawn then
-      BeginTextCommandThefeedPost("STRING")
-      AddTextComponentSubstringPlayerName("Bem-vindo ao servidor!")
-      EndTextCommandThefeedPostTicker(false, true)
+    -- 8. Finaliza OU segura para eleição de coordenada (selector)
+    if _hold then
+      SetEntityVisible(ped, false, false)
+      SetEntityInvincible(ped, true)
+      -- ped fica congelado (moverPed) e invisível; release fecha o ciclo
+    else
+      finalizarSpawn(ped, _first_spawn)
     end
+  end)
+end)
+
+-- Coordenada eleita (ou timeout): teleporta se veio pos e libera o ped.
+RegisterNetEvent("vhub_player_state:release")
+AddEventHandler("vhub_player_state:release", function(pos, first_spawn)
+  Citizen.CreateThread(function()
+    local ped = PlayerPedId()
+    _hold = false
+    if type(pos) == "table" and pos.x and pos.y and pos.z then
+      moverPed(ped, pos.x, pos.y, pos.z, pos.heading)
+    end
+    finalizarSpawn(ped, first_spawn == true or _first_spawn)
   end)
 end)
 
@@ -277,11 +309,14 @@ RegisterNetEvent("vhub_player_state:teleport")
 AddEventHandler("vhub_player_state:teleport", function(x, y, z, heading)
   Citizen.CreateThread(function()
     local ped = PlayerPedId()
-    FreezeEntityPosition(ped, true)
-    SetEntityCoords(ped, x, y, z, false, false, false, false)
-    if heading then SetEntityHeading(ped, heading) end
-    RequestCollisionAtCoord(x, y, z)
-    Citizen.Wait(500)
-    FreezeEntityPosition(ped, false)
+    moverPed(ped, x, y, z, heading)
+    if _hold then
+      -- veio do fallback do selector com o ped ainda em hold: finaliza para
+      -- nunca deixar a tela preta / ped invisível. (IT.1 runtime fix)
+      finalizarSpawn(ped, _first_spawn)
+    else
+      Citizen.Wait(500)
+      FreezeEntityPosition(ped, false)
+    end
   end)
 end)

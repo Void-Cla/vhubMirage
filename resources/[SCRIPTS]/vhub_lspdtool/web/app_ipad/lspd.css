@@ -1,0 +1,714 @@
+/* web/app_ipad/lspd.css — Central LSPD embutida no iPad.
+ *
+ * Identidade visual vHub: Liquid Glass + Areia + Dourado. TUDO escopado sob
+ * `.mod-lspd` (o core monta o HTML dentro de <div class="mod-lspd">) — nenhum
+ * token vaza para o shell do iPad. Variaveis locais com prefixo --lspd-*.
+ *
+ * Adaptacoes p/ a tela do iPad (#vhub-app = position:absolute inset:0):
+ *   • .lspd-shell preenche o container (inset:0, height:100%)
+ *   • backdrop-filter NO CONTAINER (1 camada CEF), nao em cada card
+ *   • toast-stack ABSOLUTE ao .mod-lspd (vidro fica DENTRO da tela)
+ */
+
+
+/* ============================================================
+   TOKENS LOCAIS — paleta canonica vHub (escopo .mod-lspd)
+   ============================================================ */
+
+.mod-lspd {
+
+    /* PALETA — areia dominante, dourado de acento, danger restrito */
+    --lspd-sand:       #d9c19a;
+    --lspd-sand-dim:   #a89572;
+    --lspd-sand-deep:  #5a4a30;
+
+    --lspd-gold:       #f3b53a;
+    --lspd-gold-soft:  #ffd573;
+
+    --lspd-amber:      #ff9a1f;
+
+    --lspd-black:      #0c0a06;
+    --lspd-black-2:    #1a1610;
+
+    --lspd-danger:     #e8513f;
+    --lspd-ok:         #6bbf6b;
+
+    --lspd-text:       #f0e6d2;
+    --lspd-text-dim:   #c4ad84;
+    --lspd-text-dim2:  #8a7a5a;
+
+    /* GLASS — overlay translucido (canonico, opacidade <= 0.55) */
+    --lspd-glass-bg:     linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
+    --lspd-glass-bg-2:   linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.40));
+    --lspd-glass-border: rgba(243,181,58,0.18);
+    --lspd-glass-line:   rgba(243,181,58,0.10);
+    --lspd-glass-blur:   blur(18px) saturate(150%);
+
+    /* SOMBRAS — sempre com componente dourado */
+    --lspd-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
+    --lspd-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
+    --lspd-shadow-3:    0 24px 60px rgba(0,0,0,0.60), 0 0 32px rgba(243,181,58,0.12);
+    --lspd-shadow-glow: 0 0 20px rgba(255,213,115,0.45);
+
+    /* RAIOS */
+    --lspd-r-pan:  16px;
+    --lspd-r-card: 12px;
+    --lspd-r-btn:  8px;
+    --lspd-r-pill: 999px;
+
+    /* TIPOGRAFIA */
+    --lspd-font-display: 'Barlow Condensed', 'Inter', sans-serif;
+    --lspd-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+    --lspd-font-tech:    'Rajdhani', 'Inter', sans-serif;
+    --lspd-font-num:     'Orbitron', 'Barlow Condensed', sans-serif;
+
+    /* ESPACAMENTOS */
+    --lspd-gap-xs: 4px;
+    --lspd-gap-sm: 8px;
+    --lspd-gap-md: 12px;
+    --lspd-gap-lg: 18px;
+    --lspd-gap-xl: 24px;
+
+    /* TRANSICOES */
+    --lspd-t-fast: 0.14s ease;
+    --lspd-t-norm: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* a propria .mod-lspd e a superficie — fonte + cor base */
+    font-family: var(--lspd-font-body);
+    color: var(--lspd-text);
+}
+
+.mod-lspd .hidden { display: none !important; }
+
+
+/* ============================================================
+   SHELL — preenche o container do iPad; backdrop-filter aqui (1 camada)
+   ============================================================ */
+
+.mod-lspd .lspd-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+
+    height: 100%;
+    overflow: hidden;
+
+    background: var(--lspd-glass-bg);
+    backdrop-filter: var(--lspd-glass-blur);
+    -webkit-backdrop-filter: var(--lspd-glass-blur);
+
+    color: var(--lspd-text);
+    font-family: var(--lspd-font-body);
+}
+
+/* cada tela da maquina de estado preenche o shell */
+.mod-lspd .lspd-view {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+
+/* ============================================================
+   COMPONENTES CANONICOS — vh-card / vh-btn / vh-input (escopados)
+   ============================================================ */
+
+.mod-lspd .vh-card {
+    background: var(--lspd-glass-bg-2);
+    border: 1px solid var(--lspd-glass-line);
+    border-radius: var(--lspd-r-card);
+    padding: var(--lspd-gap-md) var(--lspd-gap-lg);
+    box-shadow: var(--lspd-shadow-1);
+}
+
+.mod-lspd .vh-btn {
+    font-family: var(--lspd-font-body);
+    font-weight: 600;
+    font-size: 13px;
+
+    padding: 9px 16px;
+    border-radius: var(--lspd-r-btn);
+
+    background: var(--lspd-glass-bg-2);
+    border: 1px solid var(--lspd-glass-border);
+    color: var(--lspd-text);
+
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    transition: transform var(--lspd-t-fast),
+                background var(--lspd-t-norm),
+                border-color var(--lspd-t-norm),
+                box-shadow var(--lspd-t-norm);
+}
+
+.mod-lspd .vh-btn:hover {
+    background: rgba(243, 181, 58, 0.10);
+    border-color: var(--lspd-gold);
+}
+
+.mod-lspd .vh-btn:active { transform: scale(0.97); }
+
+.mod-lspd .vh-btn.primary {
+    background: linear-gradient(180deg, var(--lspd-gold-soft), var(--lspd-gold));
+    color: var(--lspd-black);
+    border-color: var(--lspd-gold);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mod-lspd .vh-btn.primary:hover { box-shadow: var(--lspd-shadow-glow); }
+
+.mod-lspd .vh-btn.danger {
+    color: var(--lspd-danger);
+    border-color: rgba(232, 81, 63, 0.40);
+    background: rgba(232, 81, 63, 0.10);
+}
+
+.mod-lspd .vh-btn.danger:hover {
+    background: rgba(232, 81, 63, 0.18);
+    border-color: var(--lspd-danger);
+}
+
+.mod-lspd .vh-btn.ghost { background: transparent; }
+
+.mod-lspd .vh-btn.lspd-btn-block { width: 100%; justify-content: center; }
+
+.mod-lspd .vh-input {
+    padding: 9px 12px;
+    border-radius: var(--lspd-r-btn);
+
+    background: rgba(12, 10, 6, 0.55);
+    border: 1px solid var(--lspd-glass-border);
+    color: var(--lspd-text);
+
+    font-family: var(--lspd-font-body);
+    font-size: 13px;
+    width: 100%;
+
+    transition: border-color var(--lspd-t-fast),
+                box-shadow var(--lspd-t-fast);
+}
+
+.mod-lspd .vh-input:focus {
+    border-color: var(--lspd-gold);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(243, 181, 58, 0.18);
+}
+
+
+/* ============================================================
+   CAMPO DE FORMULARIO (label + input)
+   ============================================================ */
+
+.mod-lspd .lspd-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lspd-gap-xs);
+    margin-bottom: var(--lspd-gap-md);
+}
+
+.mod-lspd .lspd-field label {
+    font-family: var(--lspd-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--lspd-text-dim);
+}
+
+
+/* ============================================================
+   TELAS DE PORTAO — login / trocar senha / negado (centralizadas)
+   ============================================================ */
+
+.mod-lspd .lspd-gate {
+    align-items: center;
+    justify-content: center;
+}
+
+.mod-lspd .lspd-gate-card {
+    width: min(380px, 90%);
+    padding: var(--lspd-gap-xl);
+    box-shadow: var(--lspd-shadow-3);
+}
+
+.mod-lspd .lspd-gate-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-md);
+    margin-bottom: var(--lspd-gap-lg);
+}
+
+.mod-lspd .lspd-gate-brand > i {
+    font-size: 34px;
+    color: var(--lspd-gold);
+    filter: drop-shadow(0 0 8px rgba(243, 181, 58, 0.55));
+}
+
+.mod-lspd .lspd-gate-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mod-lspd .lspd-gate-title {
+    font-family: var(--lspd-font-display);
+    font-weight: 700;
+    font-size: 24px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lspd-sand);
+    line-height: 1;
+}
+
+.mod-lspd .lspd-gate-title strong { color: var(--lspd-gold); }
+
+.mod-lspd .lspd-gate-sub {
+    font-family: var(--lspd-font-tech);
+    font-size: 11px;
+    color: var(--lspd-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.mod-lspd .lspd-gate-hint {
+    margin: var(--lspd-gap-md) 0 0;
+    font-size: 12px;
+    color: var(--lspd-text-dim2);
+    text-align: center;
+    line-height: 1.5;
+}
+
+.mod-lspd .lspd-gate-hint b { color: var(--lspd-gold); }
+
+/* DENIED — variante de alerta */
+.mod-lspd .lspd-denied {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--lspd-gap-sm);
+}
+
+.mod-lspd .lspd-denied-icon {
+    font-size: 44px;
+    color: var(--lspd-danger);
+    margin-bottom: var(--lspd-gap-sm);
+}
+
+
+/* ============================================================
+   CONSOLE — header + brand + tabs + tools
+   ============================================================ */
+
+.mod-lspd .lspd-header {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-lg);
+
+    padding: var(--lspd-gap-md) var(--lspd-gap-xl);
+    border-bottom: 1px solid var(--lspd-glass-line);
+    background: linear-gradient(180deg, rgba(243, 181, 58, 0.06), transparent);
+    flex: 0 0 auto;
+}
+
+.mod-lspd .lspd-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-sm);
+}
+
+.mod-lspd .lspd-logo {
+    font-size: 28px;
+    color: var(--lspd-gold);
+    filter: drop-shadow(0 0 8px rgba(243, 181, 58, 0.55));
+}
+
+.mod-lspd .lspd-brand-name {
+    font-family: var(--lspd-font-display);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lspd-sand);
+    display: block;
+    line-height: 1;
+}
+
+.mod-lspd .lspd-brand-name strong { color: var(--lspd-gold); }
+
+.mod-lspd .lspd-brand-officer {
+    font-family: var(--lspd-font-tech);
+    font-size: 11px;
+    color: var(--lspd-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* TABS */
+.mod-lspd .lspd-tabs {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.mod-lspd .lspd-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 10px 16px;
+    border-radius: var(--lspd-r-btn) var(--lspd-r-btn) 0 0;
+
+    font-family: var(--lspd-font-tech);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--lspd-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    transition: color var(--lspd-t-fast), border-color var(--lspd-t-fast);
+}
+
+.mod-lspd .lspd-tab:hover { color: var(--lspd-sand); }
+
+.mod-lspd .lspd-tab.active {
+    color: var(--lspd-gold);
+    border-bottom-color: var(--lspd-gold);
+}
+
+.mod-lspd .lspd-header-tools {
+    display: flex;
+    gap: var(--lspd-gap-sm);
+}
+
+
+/* ============================================================
+   CONSOLE — body + tabviews
+   ============================================================ */
+
+.mod-lspd .lspd-body {
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
+}
+
+.mod-lspd .lspd-tabview {
+    display: none;
+    position: absolute;
+    inset: 0;
+    padding: var(--lspd-gap-lg) var(--lspd-gap-xl);
+    overflow-y: auto;
+}
+
+.mod-lspd .lspd-tabview.active { display: block; }
+
+.mod-lspd .lspd-section-title {
+    font-family: var(--lspd-font-display);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--lspd-sand);
+    margin: 0 0 var(--lspd-gap-md);
+
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-sm);
+}
+
+.mod-lspd .lspd-section-title i { color: var(--lspd-gold); font-size: 14px; }
+
+
+/* ============================================================
+   INICIO — cards de contagem + tabela de scans
+   ============================================================ */
+
+.mod-lspd .lspd-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--lspd-gap-md);
+    margin-bottom: var(--lspd-gap-lg);
+}
+
+.mod-lspd .lspd-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--lspd-gap-xs);
+    text-align: center;
+    padding: var(--lspd-gap-lg);
+}
+
+.mod-lspd .lspd-stat > i {
+    font-size: 24px;
+    color: var(--lspd-gold);
+    margin-bottom: var(--lspd-gap-xs);
+}
+
+.mod-lspd .lspd-stat-num {
+    font-family: var(--lspd-font-num);
+    font-weight: 700;
+    font-size: 32px;
+    color: var(--lspd-gold);
+    line-height: 1;
+}
+
+.mod-lspd .lspd-stat-label {
+    font-family: var(--lspd-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lspd-text-dim);
+}
+
+
+/* ============================================================
+   TABELAS (scans recentes)
+   ============================================================ */
+
+.mod-lspd .lspd-tablewrap {
+    border-radius: var(--lspd-r-card);
+    border: 1px solid var(--lspd-glass-line);
+    overflow: hidden;
+}
+
+.mod-lspd .lspd-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.mod-lspd .lspd-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: var(--lspd-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lspd-text-dim2);
+    background: rgba(12, 10, 6, 0.40);
+    border-bottom: 1px solid var(--lspd-glass-line);
+}
+
+.mod-lspd .lspd-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(243, 181, 58, 0.05);
+}
+
+.mod-lspd .lspd-table tr:last-child td { border-bottom: none; }
+
+.mod-lspd .lspd-table-empty {
+    text-align: center;
+    padding: 32px !important;
+    color: var(--lspd-text-dim2);
+}
+
+/* flag BOLO na tabela de scans */
+.mod-lspd .lspd-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: var(--lspd-r-pill);
+
+    font-family: var(--lspd-font-tech);
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mod-lspd .lspd-flag.on {
+    background: rgba(232, 81, 63, 0.14);
+    color: var(--lspd-danger);
+    border: 1px solid rgba(232, 81, 63, 0.40);
+}
+
+.mod-lspd .lspd-flag.off {
+    background: rgba(243, 181, 58, 0.08);
+    color: var(--lspd-text-dim2);
+    border: 1px solid var(--lspd-glass-line);
+}
+
+
+/* ============================================================
+   LISTAS — bolos + procurados
+   ============================================================ */
+
+.mod-lspd .lspd-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lspd-gap-sm);
+}
+
+.mod-lspd .lspd-row {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-md);
+
+    padding: var(--lspd-gap-md) var(--lspd-gap-lg);
+    border-radius: var(--lspd-r-card);
+    background: var(--lspd-glass-bg-2);
+    border: 1px solid var(--lspd-glass-line);
+}
+
+.mod-lspd .lspd-row > i {
+    font-size: 18px;
+    color: var(--lspd-gold);
+}
+
+.mod-lspd .lspd-row-info { flex: 1; min-width: 0; }
+
+.mod-lspd .lspd-row-title {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-sm);
+    font-family: var(--lspd-font-display);
+    font-weight: 700;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.mod-lspd .lspd-row-meta {
+    font-size: 12px;
+    color: var(--lspd-text-dim);
+    margin-top: 3px;
+    word-break: break-word;
+}
+
+/* badge de nivel */
+.mod-lspd .lspd-level {
+    font-family: var(--lspd-font-tech);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: var(--lspd-r-pill);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(243, 181, 58, 0.14);
+    color: var(--lspd-gold);
+    border: 1px solid var(--lspd-glass-border);
+}
+
+.mod-lspd .lspd-level.lv3 {
+    background: rgba(232, 81, 63, 0.14);
+    color: var(--lspd-danger);
+    border-color: rgba(232, 81, 63, 0.40);
+}
+
+.mod-lspd .lspd-level.lv2 {
+    background: rgba(255, 154, 31, 0.14);
+    color: var(--lspd-amber);
+    border-color: rgba(255, 154, 31, 0.40);
+}
+
+
+/* ============================================================
+   FORMULARIOS — bolo / wanted / seize
+   ============================================================ */
+
+.mod-lspd .lspd-form { margin-bottom: var(--lspd-gap-lg); }
+
+.mod-lspd .lspd-form-grid {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--lspd-gap-md);
+    flex-wrap: wrap;
+}
+
+.mod-lspd .lspd-form-grid .lspd-field {
+    flex: 1 1 160px;
+    margin-bottom: 0;
+}
+
+.mod-lspd .lspd-form-grid .vh-btn { flex: 0 0 auto; }
+
+
+/* ============================================================
+   ACOES — botoes grandes + apreensao
+   ============================================================ */
+
+.mod-lspd .lspd-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--lspd-gap-md);
+    margin-bottom: var(--lspd-gap-lg);
+}
+
+.mod-lspd .lspd-action-big {
+    justify-content: center;
+    padding: 16px;
+    font-size: 15px;
+}
+
+.mod-lspd .lspd-seize { margin-bottom: 0; }
+
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.mod-lspd .lspd-empty {
+    text-align: center;
+    padding: 48px;
+    color: var(--lspd-text-dim2);
+    font-size: 14px;
+}
+
+.mod-lspd .lspd-empty i {
+    display: block;
+    font-size: 32px;
+    margin-bottom: var(--lspd-gap-sm);
+    color: var(--lspd-sand-deep);
+}
+
+
+/* ============================================================
+   TOAST — pilha flutuante (absolute ao .mod-lspd)
+   ============================================================ */
+
+.mod-lspd .lspd-toast-stack {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: var(--lspd-gap-sm);
+}
+
+.mod-lspd .lspd-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--lspd-gap-sm);
+
+    background: var(--lspd-glass-bg-2);
+    border: 1px solid var(--lspd-glass-line);
+    border-left: 3px solid var(--lspd-gold);
+    border-radius: var(--lspd-r-card);
+    padding: var(--lspd-gap-md) var(--lspd-gap-lg);
+    box-shadow: var(--lspd-shadow-2);
+
+    color: var(--lspd-text);
+    font-size: 13px;
+    max-width: 360px;
+
+    transition: opacity var(--lspd-t-norm), transform var(--lspd-t-norm);
+}
+
+.mod-lspd .lspd-toast.error   { border-left-color: var(--lspd-danger); }
+.mod-lspd .lspd-toast.success { border-left-color: var(--lspd-ok); }
+.mod-lspd .lspd-toast.warn    { border-left-color: var(--lspd-amber); }
+
+.mod-lspd .lspd-toast.fade-out {
+    opacity: 0;
+    transform: translateX(20px);
+}

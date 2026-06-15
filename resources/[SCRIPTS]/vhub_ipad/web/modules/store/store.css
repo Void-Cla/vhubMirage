@@ -1,0 +1,64 @@
+/* modules/store/store.css — Loja (player store). Escopo: .mod-store */
+
+.mod-store .store {
+  height: 100%;
+  padding: 5% 6%;
+  overflow: auto;
+  color: var(--text);
+}
+
+.mod-store .store-head { margin-bottom: 1.2vw; }
+.mod-store .store-head h1 { font-size: 1.5vw; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+.mod-store .store-sub { font-size: 0.85vw; color: var(--text-dim); margin-top: 0.2vw; }
+
+.mod-store .store-list { display: flex; flex-direction: column; gap: 0.8vw; }
+
+.mod-store .store-card {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.9vw;
+  padding: 0.9vw 1.1vw;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+
+.mod-store .store-icon {
+  width: 3vw; height: 3vw; min-width: 40px; min-height: 40px;
+  border-radius: 22%;
+  object-fit: cover;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+}
+
+.mod-store .store-info { flex: 1; display: flex; flex-direction: column; gap: 0.15vw; min-width: 0; }
+.mod-store .store-info strong { font-size: 0.95vw; font-weight: 600; }
+.mod-store .store-info small  { font-size: 0.72vw; color: var(--text-dim); text-transform: capitalize; }
+
+.mod-store .store-btn {
+  border-radius: 2vw;
+  padding: 0.45vw 1.1vw;
+  font-size: 0.8vw;
+  font-weight: 700;
+  color: #1a1500;
+  background: var(--gold);
+  transition: var(--trans);
+}
+.mod-store .store-btn:hover  { filter: brightness(1.08); }
+.mod-store .store-btn:active { transform: scale(0.96); }
+
+.mod-store .store-btn.is-remove {
+  color: #ff8a8a;
+  background: rgba(255, 107, 107, 0.14);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+}
+.mod-store .store-btn.is-system {
+  color: var(--text-faint);
+  background: var(--glass-hover);
+  border: 1px solid var(--glass-border);
+  cursor: default;
+}
+
+.mod-store .store-empty { color: var(--text-dim); font-size: 0.9vw; text-align: center; padding: 3vw 0; }

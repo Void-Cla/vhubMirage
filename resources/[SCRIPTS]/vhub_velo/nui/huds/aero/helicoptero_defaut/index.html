@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bússola Aeronave | vHub Velo</title>
+<style>
+/* ===================== RESET NUI ===================== */
+* { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+html { width:100vw; height:100vh; overflow:hidden; background:transparent !important; }
+body { width:100vw; height:100vh; overflow:hidden; position:relative; background:transparent !important; pointer-events:none; font-family:'Segoe UI', Tahoma, sans-serif; color:#fff; }
+
+/* visibilidade PADRÃO: o velo-core liga body.velo-active quando há veículo ativo */
+#bussola { opacity:0; transform:translateX(-50%) translateY(-12px); }
+body.velo-active #bussola { opacity:1; transform:translateX(-50%) translateY(0); }
+
+:root { --areia:#d8b863; --areia-soft:#e6cf94; --areia-glow:rgba(216,184,99,.55); }
+
+.bussola-container { position:absolute; left:50%; top:22px; transform:translateX(-50%); width:560px; transition:opacity .35s ease, transform .35s ease; }
+.hud-row { position:relative; z-index:1; display:flex; align-items:center; justify-content:center; }
+/* fundo personalizável pelo jogador (/velo) — var setada pelo host no documento do iframe */
+#velo-custom-bg { position:absolute; inset:-12% -3%; background-image:var(--velo-bg,none); background-size:cover; background-position:center; border-radius:14px; z-index:0; pointer-events:none; }
+
+/* ===================== VELOCIDADE (preenchida pelo velo-core via IDs padrão) ===================== */
+.speed-module { flex:0 0 84px; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; padding-right:16px; margin-right:18px; border-right:1px solid rgba(255,255,255,.18); text-align:right; }
+.speed-module .lbl { font-size:8px; font-weight:800; letter-spacing:3px; color:rgba(255,255,255,.45); text-transform:uppercase; }
+.speed-module .val { font-size:34px; font-weight:300; line-height:.9; letter-spacing:1px; color:#fff; font-variant-numeric:tabular-nums; text-shadow:0 2px 8px rgba(0,0,0,.75); }
+.speed-module .val .defaultVelo { opacity:.32; }
+.speed-module .unit { font-size:9px; font-weight:700; letter-spacing:2px; color:var(--velo-accent, var(--areia)); margin-top:2px; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+
+/* ===================== BÚSSOLA (desenhada no veloCustomRender) ===================== */
+.compass { flex:1 1 auto; position:relative; min-width:0; height:60px; }
+.heading-readout { position:absolute; left:50%; top:0; transform:translateX(-50%); z-index:6; text-align:center; pointer-events:none; white-space:nowrap; }
+.heading-readout .deg { font-size:17px; font-weight:600; letter-spacing:1px; line-height:1; color:var(--areia-soft); text-shadow:0 0 10px var(--areia-glow), 0 2px 4px rgba(0,0,0,.8); font-variant-numeric:tabular-nums; }
+.heading-readout .deg .unit { font-size:11px; opacity:.75; }
+.heading-readout .card { font-size:11px; font-weight:800; letter-spacing:2px; color:#fff; margin-left:5px; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+.tape-window { position:absolute; left:0; right:0; top:24px; height:36px; overflow:hidden; -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); mask-image:linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); }
+.tape-track { position:absolute; top:0; left:0; height:36px; will-change:transform; }
+.tape-track svg { display:block; }
+.center-pointer { position:absolute; left:50%; top:18px; transform:translateX(-50%) rotate(45deg); width:7px; height:7px; z-index:8; background:var(--areia); box-shadow:0 0 6px var(--areia-glow); }
+.center-line { position:absolute; left:50%; top:24px; transform:translateX(-50%); width:1px; height:36px; z-index:5; background:linear-gradient(180deg, var(--areia), rgba(216,184,99,0)); }
+</style>
+</head>
+<body>
+<div id="bussola" class="bussola-container">
+    <div id="velo-custom-bg"></div>
+    <div class="hud-row">
+        <!-- velocidade: velo-core preenche vehicle-speed-prefix + vehicle-speed (km/h padrão) -->
+        <div class="speed-module">
+            <div class="lbl">VEL</div>
+            <div class="val"><span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></div>
+            <div class="unit">KM/H</div>
+        </div>
+
+        <!-- compasso: desenhado no veloCustomRender a partir de state.heading -->
+        <div class="compass">
+            <div class="heading-readout">
+                <span class="deg"><span id="heading-deg">000</span><span class="unit">°</span></span>
+                <span class="card" id="heading-card">N</span>
+            </div>
+            <div class="tape-window"><div class="tape-track" id="tape-track"></div></div>
+            <div class="center-line"></div>
+            <div class="center-pointer"></div>
+        </div>
+
+        <!-- elemento canônico oculto (velo-core preenche sem efeito visual nesta HUD) -->
+        <div id="vehicle-gear" style="display:none">N</div>
+    </div>
+</div>
+
+<!-- engine universal: velocidade + visibilidade + personalização. O compasso vive no veloCustomRender. -->
+<script src="/nui/velo-core.js"></script>
+<script>
+(function () {
+    'use strict';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const PX_POR_GRAU = 4.4, ALTURA = 36;
+    const ROSA = ['N', 'N-L', 'L', 'S-L', 'S', 'S-O', 'O', 'N-O'];
+    const cardeal = a => ROSA[Math.round(((a % 360) / 45)) % 8];
+
+    const track = document.getElementById('tape-track');
+    const degEl = document.getElementById('heading-deg');
+    const cardEl = document.getElementById('heading-card');
+    const tapeWindow = document.querySelector('.tape-window');
+
+    function construirFita() {
+        const totalGraus = 720, largura = totalGraus * PX_POR_GRAU;
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('width', largura); svg.setAttribute('height', ALTURA); svg.setAttribute('viewBox', `0 0 ${largura} ${ALTURA}`);
+        for (let g = 0; g <= totalGraus; g += 5) {
+            const x = g * PX_POR_GRAU, ang = ((g % 360) + 360) % 360, isCard = ang % 45 === 0, isMajor = ang % 30 === 0;
+            const ln = document.createElementNS(SVG_NS, 'line');
+            ln.setAttribute('x1', x); ln.setAttribute('x2', x); ln.setAttribute('y1', isCard ? 3 : (isMajor ? 7 : 12)); ln.setAttribute('y2', 21);
+            ln.setAttribute('stroke', '#ffffff'); ln.setAttribute('stroke-width', isCard ? 1.6 : (isMajor ? 1.2 : 0.9)); ln.setAttribute('stroke-linecap', 'round'); ln.setAttribute('opacity', isCard ? '1' : (isMajor ? '.7' : '.4'));
+            svg.appendChild(ln);
+            if (isCard) {
+                const tx = document.createElementNS(SVG_NS, 'text'); tx.setAttribute('x', x); tx.setAttribute('y', 34); tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('font-family', "'Segoe UI', sans-serif"); tx.setAttribute('font-size', ang % 90 === 0 ? '13' : '10.5'); tx.setAttribute('font-weight', '800'); tx.setAttribute('fill', ang === 0 ? '#d8b863' : '#ffffff'); tx.textContent = cardeal(ang); svg.appendChild(tx);
+            } else if (isMajor) {
+                const tx = document.createElementNS(SVG_NS, 'text'); tx.setAttribute('x', x); tx.setAttribute('y', 33); tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('font-family', "'Segoe UI', sans-serif"); tx.setAttribute('font-size', '9'); tx.setAttribute('font-weight', '600'); tx.setAttribute('fill', '#ffffff'); tx.setAttribute('opacity', '.55'); tx.textContent = String(ang).padStart(2, '0'); svg.appendChild(tx);
+            }
+        }
+        track.appendChild(svg);
+    }
+
+    // SUAVIZAÇÃO: o heading chega a ~12Hz; um RAF interpola (caminho angular mais curto) p/ a fita
+    // deslizar LISA a 60fps. O RAF PARA quando inativo (idle ~0). velo-core dá velocidade/visibilidade.
+    let targetH = 0, dispH = 0, raf = null, lastT = null, ativo = false;
+    const shortest = (a, b) => ((a - b + 540) % 360) - 180;   // delta angular assinado mais curto
+    function desenhaCompasso(h) {
+        degEl.textContent = String(Math.round(h)).padStart(3, '0');
+        cardEl.textContent = cardeal(h);
+        const larguraJanela = tapeWindow.clientWidth || 440, centro = (h + 360) * PX_POR_GRAU;
+        track.style.transform = `translateX(${(larguraJanela / 2 - centro).toFixed(1)}px)`;
+    }
+    function tick(now) {
+        if (lastT == null) lastT = now;
+        const dt = (now - lastT) / 1000; lastT = now;
+        dispH += shortest(targetH, dispH) * Math.min(1, dt * 9);   // easing exponencial
+        desenhaCompasso(((dispH % 360) + 360) % 360);
+        raf = ativo ? requestAnimationFrame(tick) : null;
+    }
+    window.veloCustomRender = function (state) {
+        targetH = ((Number(state.heading) || 0) % 360 + 360) % 360;
+        ativo = !!(state.visible && state.active);
+        if (ativo && raf == null) { lastT = null; raf = requestAnimationFrame(tick); }
+    };
+
+    // personalização: cor de destaque vira --areia (fundo via --velo-bg já injetado pelo host)
+    window.veloOnConfig = function (cfg) { if (cfg && cfg.accent) document.documentElement.style.setProperty('--areia', cfg.accent); };
+
+    construirFita();
+    VeloCore.init({ speedPoints: [[0, -135], [400, 135]] });
+})();
+</script>
+</body>
+</html>

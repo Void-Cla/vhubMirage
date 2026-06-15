@@ -1,0 +1,281 @@
+<!-- web/app_ipad/lspd.html — app EMBUTIDO da Central LSPD no iPad.
+     Porte fiel do painel policial com identidade visual vHub.
+
+     Fragmento (sem <html>/<head>/<body>): o core do iPad injeta este markup
+     dentro de uma <div class="mod-lspd">. Sem botao de fechar (a navbar do
+     iPad fecha) e sem ESC. Sem CSS/JS inline. Tudo escopado em .mod-lspd.
+
+     Maquina de estado: APENAS uma das telas .lspd-view fica visivel por vez;
+     o JS alterna pela store('lspd').view (login | changepass | console | denied). -->
+
+<section class="lspd-shell" data-el="shell">
+
+
+    <!-- ============================================================
+         TELA: LOGIN
+         ============================================================ -->
+    <div class="lspd-view lspd-gate hidden" data-el="view-login">
+        <div class="lspd-gate-card vh-card">
+            <div class="lspd-gate-brand">
+                <i class="fa-solid fa-shield-halved"></i>
+                <div class="lspd-gate-titles">
+                    <span class="lspd-gate-title">Central <strong>LSPD</strong></span>
+                    <span class="lspd-gate-sub">Acesso restrito ao efetivo</span>
+                </div>
+            </div>
+
+            <div class="lspd-field">
+                <label>ID de personagem</label>
+                <input class="vh-input" data-el="login-charid" type="number" min="1"
+                       inputmode="numeric" placeholder="ex: 1024">
+            </div>
+
+            <div class="lspd-field">
+                <label>Senha</label>
+                <input class="vh-input" data-el="login-pass" type="password"
+                       placeholder="Sua senha">
+            </div>
+
+            <button class="vh-btn primary lspd-btn-block" data-action="login">
+                <i class="fa-solid fa-right-to-bracket"></i> Entrar
+            </button>
+
+            <p class="lspd-gate-hint">
+                Login = seu ID de personagem. Senha padrao no 1&ordm; acesso: <b>123</b>
+            </p>
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         TELA: TROCAR SENHA
+         ============================================================ -->
+    <div class="lspd-view lspd-gate hidden" data-el="view-changepass">
+        <div class="lspd-gate-card vh-card">
+            <div class="lspd-gate-brand">
+                <i class="fa-solid fa-key"></i>
+                <div class="lspd-gate-titles">
+                    <span class="lspd-gate-title">Trocar <strong>senha</strong></span>
+                    <span class="lspd-gate-sub">Defina uma senha pessoal</span>
+                </div>
+            </div>
+
+            <div class="lspd-field">
+                <label>Nova senha</label>
+                <input class="vh-input" data-el="cp-pass" type="password"
+                       placeholder="Minimo 3 caracteres">
+            </div>
+
+            <div class="lspd-field">
+                <label>Confirmar senha</label>
+                <input class="vh-input" data-el="cp-pass2" type="password"
+                       placeholder="Repita a nova senha">
+            </div>
+
+            <button class="vh-btn primary lspd-btn-block" data-action="changepass-save">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar senha
+            </button>
+
+            <p class="lspd-gate-hint">A senha deve ter de 3 a 32 caracteres.</p>
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         TELA: ACESSO NEGADO
+         ============================================================ -->
+    <div class="lspd-view lspd-gate hidden" data-el="view-denied">
+        <div class="lspd-gate-card vh-card lspd-denied">
+            <i class="fa-solid fa-ban lspd-denied-icon"></i>
+            <span class="lspd-gate-title">Acesso restrito</span>
+            <p class="lspd-gate-hint">Credenciais LSPD necessarias.</p>
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         TELA: CONSOLE (header + abas + views)
+         ============================================================ -->
+    <div class="lspd-view lspd-console hidden" data-el="view-console">
+
+        <!-- HEADER -->
+        <header class="lspd-header">
+            <div class="lspd-brand">
+                <i class="fa-solid fa-shield-halved lspd-logo"></i>
+                <div class="lspd-brand-txt">
+                    <span class="lspd-brand-name">Central <strong>LSPD</strong></span>
+                    <span class="lspd-brand-officer" data-el="officer-name">&mdash;</span>
+                </div>
+            </div>
+
+            <nav class="lspd-tabs">
+                <button class="lspd-tab active" data-tab="home">
+                    <i class="fa-solid fa-gauge-high"></i> Inicio
+                </button>
+                <button class="lspd-tab" data-tab="bolos">
+                    <i class="fa-solid fa-car-burst"></i> BOLOs
+                </button>
+                <button class="lspd-tab" data-tab="wanted">
+                    <i class="fa-solid fa-user-secret"></i> Procurados
+                </button>
+                <button class="lspd-tab" data-tab="actions">
+                    <i class="fa-solid fa-handcuffs"></i> Acoes
+                </button>
+            </nav>
+
+            <div class="lspd-header-tools">
+                <button class="vh-btn ghost" data-action="open-changepass" title="Trocar senha">
+                    <i class="fa-solid fa-key"></i>
+                </button>
+                <button class="vh-btn ghost" data-action="logout" title="Sair">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+            </div>
+        </header>
+
+
+        <!-- BODY -->
+        <main class="lspd-body">
+
+            <!-- VIEW: Inicio -->
+            <section class="lspd-tabview active" data-tabview="home">
+                <div class="lspd-cards">
+                    <div class="vh-card lspd-stat">
+                        <i class="fa-solid fa-car-burst"></i>
+                        <div class="lspd-stat-num" data-el="stat-bolos">0</div>
+                        <div class="lspd-stat-label">BOLOs ativos</div>
+                    </div>
+                    <div class="vh-card lspd-stat">
+                        <i class="fa-solid fa-user-secret"></i>
+                        <div class="lspd-stat-num" data-el="stat-wanted">0</div>
+                        <div class="lspd-stat-label">Procurados</div>
+                    </div>
+                </div>
+
+                <h3 class="lspd-section-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Leituras recentes
+                </h3>
+                <div class="lspd-tablewrap">
+                    <table class="lspd-table">
+                        <thead>
+                            <tr>
+                                <th>Placa</th><th>Tipo</th><th>Flag</th><th>Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody data-el="scans-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+
+            <!-- VIEW: BOLOs (placas) -->
+            <section class="lspd-tabview" data-tabview="bolos">
+                <div class="lspd-form vh-card hidden" data-el="bolo-form">
+                    <h3 class="lspd-section-title">
+                        <i class="fa-solid fa-plus"></i> Novo BOLO de placa
+                    </h3>
+                    <div class="lspd-form-grid">
+                        <div class="lspd-field">
+                            <label>Placa</label>
+                            <input class="vh-input" data-el="bolo-plate" type="text"
+                                   maxlength="8" placeholder="ex: 12ABC345">
+                        </div>
+                        <div class="lspd-field">
+                            <label>Motivo</label>
+                            <input class="vh-input" data-el="bolo-reason" type="text"
+                                   maxlength="120" placeholder="Motivo do alerta">
+                        </div>
+                        <div class="lspd-field">
+                            <label>Nivel</label>
+                            <select class="vh-input" data-el="bolo-level">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </div>
+                        <button class="vh-btn primary" data-action="bolo-add">
+                            <i class="fa-solid fa-bullhorn"></i> Emitir BOLO
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lspd-list" data-el="bolos-list"></div>
+            </section>
+
+
+            <!-- VIEW: Procurados (pessoas) -->
+            <section class="lspd-tabview" data-tabview="wanted">
+                <div class="lspd-form vh-card hidden" data-el="wanted-form">
+                    <h3 class="lspd-section-title">
+                        <i class="fa-solid fa-plus"></i> Novo procurado
+                    </h3>
+                    <div class="lspd-form-grid">
+                        <div class="lspd-field">
+                            <label>ID personagem</label>
+                            <input class="vh-input" data-el="wanted-charid" type="number"
+                                   min="1" inputmode="numeric" placeholder="ex: 1024">
+                        </div>
+                        <div class="lspd-field">
+                            <label>Nome</label>
+                            <input class="vh-input" data-el="wanted-name" type="text"
+                                   maxlength="64" placeholder="Nome do procurado">
+                        </div>
+                        <div class="lspd-field">
+                            <label>Motivo</label>
+                            <input class="vh-input" data-el="wanted-reason" type="text"
+                                   maxlength="120" placeholder="Motivo">
+                        </div>
+                        <div class="lspd-field">
+                            <label>Nivel</label>
+                            <select class="vh-input" data-el="wanted-level">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </div>
+                        <button class="vh-btn primary" data-action="wanted-add">
+                            <i class="fa-solid fa-user-plus"></i> Adicionar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lspd-list" data-el="wanted-list"></div>
+            </section>
+
+
+            <!-- VIEW: Acoes -->
+            <section class="lspd-tabview" data-tabview="actions">
+                <div class="lspd-actions-grid">
+                    <button class="vh-btn primary lspd-action-big" data-action="arrest">
+                        <i class="fa-solid fa-handcuffs"></i> Prender mais proximo
+                    </button>
+                    <button class="vh-btn lspd-action-big" data-action="release">
+                        <i class="fa-solid fa-unlock"></i> Soltar mais proximo
+                    </button>
+                </div>
+
+                <div class="lspd-form vh-card lspd-seize">
+                    <h3 class="lspd-section-title">
+                        <i class="fa-solid fa-truck-ramp-box"></i> Apreender veiculo
+                    </h3>
+                    <div class="lspd-form-grid">
+                        <div class="lspd-field">
+                            <label>Placa</label>
+                            <input class="vh-input" data-el="seize-plate" type="text"
+                                   maxlength="8" placeholder="ex: 12ABC345">
+                        </div>
+                        <button class="vh-btn danger" data-action="seize">
+                            <i class="fa-solid fa-tow-truck"></i> Apreender
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+
+    <!-- Pilha de toasts (dentro do shell) -->
+    <div class="lspd-toast-stack" data-el="toast-stack"></div>
+
+</section>

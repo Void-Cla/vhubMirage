@@ -1,0 +1,160 @@
+/* mdt.css — Central de Despacho / MDT (FASE C). Painel INTERATIVO (com foco). Escopo .mod-mdt.
+   Tokens em core.css. Único overlay com pointer-events: o dispatcher dá foco via Lua (SetNuiFocus). */
+
+.mod-mdt {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font);
+    color: var(--sand);
+    background: rgba(0, 0, 0, 0.38);     /* dim de fundo (painel modal com foco) */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease;
+}
+
+.mod-mdt.is-open { opacity: 1; pointer-events: auto; }
+
+
+/* ============================================================
+   PAINEL
+   ============================================================ */
+
+.mod-mdt__panel {
+    width: min(880px, 92vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(217, 193, 154, 0.10), var(--glass));
+    border: 1px solid var(--line);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+.mod-mdt__hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: radial-gradient(120% 100% at 0% 0%, rgba(243, 181, 58, 0.10), transparent 60%);
+}
+
+.mod-mdt__title { font-size: 15px; font-weight: 700; letter-spacing: 1px; color: var(--gold); }
+
+.mod-mdt__close {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--sand);
+    cursor: pointer;
+    font-size: 14px;
+}
+.mod-mdt__close:hover { background: rgba(232, 81, 63, 0.18); border-color: var(--danger); color: #fff; }
+
+
+/* ============================================================
+   CORPO (2 colunas)
+   ============================================================ */
+
+.mod-mdt__body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 16px;
+    overflow: hidden;
+}
+
+.mod-mdt__col { display: flex; flex-direction: column; min-height: 0; }
+
+.mod-mdt__col h3 {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+}
+
+.mod-mdt__list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+    min-height: 120px;
+}
+
+.mdt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.12));
+    border: 1px solid var(--line);
+}
+
+.mdt-row .plate  { font-family: var(--mono); font-weight: 800; letter-spacing: 1px; color: #fff; min-width: 86px; }
+.mdt-row .reason { flex: 1; font-size: 12px; color: rgba(217, 193, 154, 0.9); }
+.mdt-row .lvl    { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--gold); }
+.mdt-row .flag   { font-size: 10px; font-weight: 700; color: var(--danger); }
+.mdt-row .meta   { font-size: 11px; color: rgba(217, 193, 154, 0.6); }
+
+.mdt-row__del {
+    width: 24px; height: 24px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 12px;
+}
+.mdt-row__del:hover { background: rgba(232, 81, 63, 0.18); border-color: var(--danger); }
+
+.mdt-empty { font-size: 12px; color: rgba(217, 193, 154, 0.5); padding: 8px 4px; }
+
+
+/* ============================================================
+   FORM DE BOLO (só com permManageBolo)
+   ============================================================ */
+
+.mod-mdt__form { display: flex; gap: 8px; margin-top: 10px; }
+
+.mod-mdt__form input,
+.mod-mdt__form select {
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--sand);
+    background: rgba(0, 0, 0, 0.30);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 9px;
+    outline: none;
+}
+.mod-mdt__form input:focus,
+.mod-mdt__form select:focus { border-color: var(--gold); }
+
+.mod-mdt__form .js-bolo-plate  { width: 92px; font-family: var(--mono); text-transform: uppercase; }
+.mod-mdt__form .js-bolo-reason { flex: 1; }
+
+.mod-mdt__form button {
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(243, 181, 58, 0.16);
+    color: var(--gold);
+    padding: 7px 12px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 12px;
+}
+.mod-mdt__form button:hover { background: rgba(243, 181, 58, 0.28); }
+
+.mod-mdt__list::-webkit-scrollbar { width: 6px; }
+.mod-mdt__list::-webkit-scrollbar-thumb { background: rgba(217, 193, 154, 0.25); border-radius: 3px; }

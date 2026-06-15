@@ -1,0 +1,126 @@
+/* helicam.css — overlay HUD da câmera de helicóptero (FASE B). Escopado .mod-helicam.
+   Tokens em core.css. Estilo FLIR/militar: reticle central + chips de canto em vidro. */
+
+.mod-helicam {
+    position: fixed;
+    inset: 0;
+    font-family: var(--mono);
+    color: var(--sand);
+    opacity: 0;
+    pointer-events: none;          /* HUD passivo sobre a imagem da câmera */
+    transition: opacity .25s ease;
+}
+
+.mod-helicam.is-open { opacity: 1; }
+
+
+/* ============================================================
+   CHIPS DE CANTO (vidro)
+   ============================================================ */
+
+.mod-helicam__chip {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(217, 193, 154, 0.10), var(--glass));
+    border: 1px solid var(--line);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.mod-helicam__chip b   { color: var(--gold); font-weight: 700; }
+.mod-helicam__chip .v  { color: #fff; font-weight: 700; }
+
+.mod-helicam__tl { top: 3vh; left: 3vw; }
+.mod-helicam__tr { top: 3vh; right: 3vw; }
+.mod-helicam__bl { bottom: 4vh; left: 3vw; }
+
+
+/* ============================================================
+   RETICLE CENTRAL (FLIR)
+   ============================================================ */
+
+.mod-helicam__cross {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 220px;
+    height: 220px;
+    transform: translate(-50%, -50%);
+}
+
+.mod-helicam__cross::before,
+.mod-helicam__cross::after {
+    content: '';
+    position: absolute;
+    background: rgba(243, 181, 58, 0.55);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);   /* legível sobre nightvision/thermal claro */
+}
+
+.mod-helicam__cross::before { left: 50%; top: 0;  width: 1px;  height: 100%; transform: translateX(-0.5px); }
+.mod-helicam__cross::after  { top: 50%; left: 0;  height: 1px; width: 100%;  transform: translateY(-0.5px); }
+
+.mod-helicam__bracket {
+    position: absolute; width: 28px; height: 28px; border: 2px solid var(--gold);
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));   /* contraste sobre fundo claro (NV) */
+}
+.mod-helicam__bracket.tl { top: 0; left: 0;  border-right: 0; border-bottom: 0; }
+.mod-helicam__bracket.tr { top: 0; right: 0; border-left: 0;  border-bottom: 0; }
+.mod-helicam__bracket.bl { bottom: 0; left: 0;  border-right: 0; border-top: 0; }
+.mod-helicam__bracket.br { bottom: 0; right: 0; border-left: 0;  border-top: 0; }
+
+.mod-helicam.is-locked .mod-helicam__bracket { border-color: var(--danger); }
+.mod-helicam.is-locked .mod-helicam__cross::before,
+.mod-helicam.is-locked .mod-helicam__cross::after { background: rgba(232, 81, 63, 0.7); }
+
+
+/* ============================================================
+   PAINEL DE ALVO (placa / velocidade / distância)
+   ============================================================ */
+
+.mod-helicam__target {
+    position: fixed;
+    top: calc(50% + 130px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 8px 18px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(217, 193, 154, 0.10), var(--glass));
+    border: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+
+.mod-helicam__target.is-on { opacity: 1; }
+
+.mod-helicam__target .plate  { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #fff; }
+.mod-helicam__target .field  { font-size: 11px; color: rgba(217, 193, 154, 0.8); }
+.mod-helicam__target .field b { color: var(--gold); font-weight: 700; }
+
+
+/* ============================================================
+   HOLOFOTE (indicador)
+   ============================================================ */
+
+.mod-helicam__spot {
+    position: fixed;
+    bottom: 4vh;
+    right: 3vw;
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 1px;
+    display: none;
+}
+
+.mod-helicam__spot.is-on { display: block; text-shadow: 0 0 8px rgba(243, 181, 58, 0.5); }

@@ -1,0 +1,24 @@
+/* shared/tokens.css — identidade vHub (Liquid Glass + Areia + Dourado). */
+
+:root {
+  --vh-gold:      #f8c869;
+  --vh-gold-neon: rgb(248, 200, 105);
+  --vh-sand:      #e8d2a0;
+
+  --vh-glass:     rgba(20, 18, 14, 0.55);
+  --vh-glass-2:   rgba(28, 25, 19, 0.72);
+  --vh-border:    rgba(248, 200, 105, 0.22);
+  --vh-border-2:  rgba(248, 200, 105, 0.40);
+
+  --vh-text:      #f3ead6;
+  --vh-text-dim:  #b9ad93;
+  --vh-danger:    #e06a5a;
+  --vh-ok:        #8fe08c;
+
+  --vh-radius:    12px;
+  --vh-radius-sm: 8px;
+  --vh-shadow:    0 10px 34px rgba(0, 0, 0, 0.45);
+  --vh-glow:      0 0 10px rgba(248, 200, 105, 0.35);
+
+  --vh-font:      'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+}

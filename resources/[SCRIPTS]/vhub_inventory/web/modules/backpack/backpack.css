@@ -1,0 +1,93 @@
+/* modules/backpack/backpack.css — mochila (grid + peso + painel). Escopo .mod-backpack. */
+
+.mod-backpack {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* leve escurecimento so do fundo da mochila — NAO janela preta opaca */
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.35), rgba(0,0,0,0.55));
+}
+
+.mod-backpack .bp-shell {
+  width: 880px;
+  max-width: 92vw;
+  max-height: 86vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+}
+
+/* ---- painel lateral (player info + peso) ---- */
+.mod-backpack .bp-side {
+  background: var(--vh-glass);
+  border: 1px solid var(--vh-border);
+  border-radius: var(--vh-radius);
+  box-shadow: var(--vh-shadow);
+  backdrop-filter: blur(8px);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mod-backpack .bp-pname { font-size: 19px; font-weight: 700; color: var(--vh-sand); }
+.mod-backpack .bp-pmeta { font-size: 13px; color: var(--vh-text-dim); display: flex; flex-direction: column; gap: 3px; }
+.mod-backpack .bp-pmeta b { color: var(--vh-gold); font-weight: 700; }
+
+.mod-backpack .bp-weight-wrap { margin-top: auto; }
+.mod-backpack .bp-weight-label { font-size: 12px; color: var(--vh-text-dim); display: flex; justify-content: space-between; margin-bottom: 5px; }
+.mod-backpack .bp-weight-track { height: 8px; border-radius: 6px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.mod-backpack .bp-weight-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand)); transition: width .18s ease; }
+.mod-backpack .bp-weight-bar.over { background: var(--vh-danger); }
+
+/* ---- grid ---- */
+.mod-backpack .bp-main {
+  background: var(--vh-glass);
+  border: 1px solid var(--vh-border);
+  border-radius: var(--vh-radius);
+  box-shadow: var(--vh-shadow);
+  backdrop-filter: blur(8px);
+  padding: 16px;
+  overflow: auto;
+}
+
+.mod-backpack .bp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.mod-backpack .bp-title { font-size: 17px; font-weight: 700; color: var(--vh-gold); letter-spacing: .5px; text-shadow: var(--vh-glow); }
+.mod-backpack .bp-close { cursor: pointer; color: var(--vh-text-dim); font-size: 20px; line-height: 1; }
+.mod-backpack .bp-close:hover { color: var(--vh-danger); }
+
+/* ---- busca + categorias ---- */
+.mod-backpack .bp-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.mod-backpack .bp-search {
+  width: 100%; padding: 8px 12px; font-size: 13px; color: var(--vh-text);
+  background: rgba(0,0,0,0.28); border: 1px solid var(--vh-border); border-radius: var(--vh-radius-sm); outline: none;
+}
+.mod-backpack .bp-search:focus { border-color: var(--vh-gold); }
+.mod-backpack .bp-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-backpack .bp-chip {
+  padding: 4px 10px; font-size: 11px; font-weight: 600; text-transform: capitalize; cursor: pointer;
+  color: var(--vh-text-dim); background: rgba(255,255,255,0.04); border: 1px solid var(--vh-border);
+  border-radius: 20px; transition: all .12s;
+}
+.mod-backpack .bp-chip:hover  { border-color: var(--vh-gold); color: var(--vh-text); }
+.mod-backpack .bp-chip.active { background: var(--vh-gold); color: #1a1710; border-color: var(--vh-gold); }
+
+.mod-backpack .bp-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+/* visual do slot vem de shared/slots.css (compartilhado com o baú) */
+
+/* ---- toast ---- */
+.mod-backpack .bp-toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-radius-sm); padding: 10px 16px; color: var(--vh-text);
+  font-size: 13px; box-shadow: var(--vh-shadow); opacity: 0; transition: opacity .2s;
+}
+.mod-backpack .bp-toast.show { opacity: 1; }
+.mod-backpack .bp-toast.err { border-color: var(--vh-danger); color: #ffd9d2; }

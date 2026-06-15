@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vHub Velo — Bike (Digital)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="velocimetro-oculto">
+    <main id="velocimetro" class="velocimetro-container">
+        <div class="speedometerShell">
+            <!-- CAMADA 1: logos customizáveis por mostrador -->
+            <div class="custom-bg-container bg-fuel" id="custom-fuel-bg"></div>
+            <div class="custom-bg-container bg-speed" id="custom-speed-bg"></div>
+            <div class="custom-bg-container bg-rpm" id="custom-rpm-bg"></div>
+
+            <!-- CAMADA 2: SVG de fundo (pode ficar vazio para digital) -->
+            <svg class="velo-bg" viewBox="0 0 470 235" aria-hidden="true"></svg>
+
+            <!-- CAMADA 3: (não usamos ponteiros visuais, mas mantemos elementos) -->
+            <div class="needle speed-needle" id="speed-needle" aria-hidden="true"></div>
+            <div class="needle rpm-needle" id="rpm-needle" aria-hidden="true"></div>
+            <div class="needle fuel-needle" id="fuel-needle" aria-hidden="true"></div>
+            <div class="pivot pivot-speed"></div>
+            <div class="pivot pivot-rpm"></div>
+            <div class="pivot pivot-fuel"></div>
+
+            <!-- CAMADA 4: overlay digital (velocidade principal) -->
+            <div class="speedometerOverlay">
+                <div class="speedReadout">
+                    <h1 class="velo"><span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></h1>
+                    <div class="speedUnit">KM/H</div>
+                </div>
+
+                <div class="gearReadout"><strong id="vehicle-gear">N</strong></div>
+                <div class="fuelReadout"><span id="vehicle-fuel">100</span><i>%</i></div>
+                <div class="odometer" id="vehicle-odometer" aria-label="Odômetro"></div>
+
+                <!-- Status (todos disponíveis mesmo que não usados) -->
+                <div class="statusCluster">
+                    <div id="status-turn-left" class="status-icon turn off" data-status="off"></div>
+                    <div id="status-seatbelt" class="status-icon belt off" data-status="off"></div>
+                    <div id="status-helmet" class="status-icon helmet off" data-status="off"></div>
+                    <div id="status-lock" class="status-icon lock off" data-status="off"></div>
+                    <div id="status-engine" class="status-icon engine good" data-status="good"></div>
+                    <div id="status-turn-right" class="status-icon turn off" data-status="off"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Engine compartilhado -->
+    <script src="/nui/velo-core.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

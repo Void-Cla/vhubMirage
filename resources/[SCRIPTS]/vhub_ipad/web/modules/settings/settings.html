@@ -1,0 +1,28 @@
+<div class="settings">
+
+  <header class="settings-head">
+    <h1>Configurações</h1>
+  </header>
+
+  <section class="settings-card">
+    <div class="settings-row">
+      <label>Zoom do tablet</label>
+      <span class="settings-val" data-el="zoom-val">60%</span>
+    </div>
+    <input type="range" class="settings-zoom" data-el="zoom" min="30" max="100" value="60" />
+  </section>
+
+  <section class="settings-card">
+    <div class="settings-row"><label>Papel de parede</label></div>
+    <div class="settings-walls" data-el="walls"></div>
+    <div class="settings-custom">
+      <input type="text" class="settings-url" data-el="url" placeholder="URL https:// (opcional)" />
+      <button class="settings-btn" data-el="apply-url">Aplicar</button>
+    </div>
+  </section>
+
+  <section class="settings-card">
+    <button class="settings-btn settings-reset" data-el="reset">Restaurar padrão</button>
+  </section>
+
+</div>

@@ -1,10 +1,14 @@
 {
+  "_note": "GITIGNORE ESTE ARQUIVO — contém overrides pessoais. NÃO commitar.",
+
+  "model": "opus",
+  "effortLevel": "xhigh",
+
   "permissions": {
     "allow": [
-      "Bash(Remove-Item -Recurse -Force \"C:\\\\vHUB Mirage\\\\.clone\")",
-      "Bash(Get-ChildItem \"C:\\\\vHUB Mirage\" -Force)",
-      "Bash(Select-Object Name, Attributes)",
-      "Bash(Format-Table -AutoSize)"
+      "Write(resources/[CORE]/vhub/**)",
+      "Edit(.claude/contexto.md)",
+      "Write(.claude/contexto.md)"
     ]
   }
 }

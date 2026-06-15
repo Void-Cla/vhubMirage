@@ -53,7 +53,12 @@ local function applyCustomization(veh, c)
   if c.smoke  ~= nil then ToggleVehicleMod(veh, 20, c.smoke) end
   if c.xenon  ~= nil then ToggleVehicleMod(veh, 22, c.xenon) end
   if type(c.neons) == 'table' then
-    for i = 0, 3 do SetVehicleNeonLightEnabled(veh, i, c.neons[i] == true) end
+    -- chaves numericas viram string apos round-trip JSON ("0".."3") — tolerar ambas
+    for i = 0, 3 do
+      local on = c.neons[i]
+      if on == nil then on = c.neons[tostring(i)] end
+      SetVehicleNeonLightEnabled(veh, i, on == true)
+    end
   end
   if c.neon_colour then SetVehicleNeonLightsColour(veh, table.unpack(c.neon_colour)) end
 end
@@ -79,6 +84,35 @@ local function collectCustomization(veh)
   return c
 end
 
+-- bones de janela por  ndice (janela inexistente no modelo reporta "quebrada"
+-- no native  bone-check obrigat rio antes de aplicar)
+local WINDOW_BONES = {
+  [0]='window_lf', [1]='window_rf', [2]='window_lr', [3]='window_rr',
+  [4]='window_lm', [5]='window_rm', [6]='windscreen', [7]='windscreen_r',
+}
+
+-- aplica o estado f sico do PRONTU RIO (fuel/health/dano) na entidade rec m-criada
+-- (criador da entidade = dono de rede neste momento, sem gate de controle)
+local function applyPhysicalState(veh, st)
+  if type(st) ~= 'table' then return end
+  -- CRITICO: '+ 0.0' força subtipo FLOAT (Lua 5.4) — inteiro do msgpack passado
+  -- a native float é bit-reinterpretado (1000 → 1.4e-42 = motor/fuel zerados)
+  if type(st.fuel)          == 'number' then SetVehicleFuelLevel(veh, st.fuel + 0.0) end
+  if type(st.engine_health) == 'number' then SetVehicleEngineHealth(veh, st.engine_health + 0.0) end
+  if type(st.body_health)   == 'number' then SetVehicleBodyHealth(veh, st.body_health + 0.0) end
+  local d = st.damage
+  if type(d) ~= 'table' then return end
+  for _, i in ipairs(d.doors or {}) do SetVehicleDoorBroken(veh, i, true) end
+  for _, i in ipairs(d.windows or {}) do
+    local bone = WINDOW_BONES[i]
+    if bone and GetEntityBoneIndexByName(veh, bone) ~= -1 then SmashVehicleWindow(veh, i) end
+  end
+  if GetVehicleTyresCanBurst(veh) then
+    for _, i in ipairs(d.tyres or {})     do SetVehicleTyreBurst(veh, i, false, 1000.0) end
+    for _, i in ipairs(d.tyres_rim or {}) do SetVehicleTyreBurst(veh, i, true, 1000.0) end
+  end
+end
+
 -- ----------------------------------------------------------------------------
 -- SPAWN  apaga duplicata local + scan global antes de criar
 -- ----------------------------------------------------------------------------
@@ -99,6 +133,7 @@ local function spawnVehicle(snap, pos, entrar)
   SetEntityAsMissionEntity(veh, true, true)
   SetVehicleHasBeenOwnedByPlayer(veh, true)
   applyCustomization(veh, snap.customization)
+  applyPhysicalState(veh, snap.state)   -- PRONTU RIO: fuel/health/dano (p s-customization)
   if snap.locked then
     SetVehicleDoorsLocked(veh, 2)
     SetVehicleDoorsLockedForAllPlayers(veh, true)
@@ -199,6 +234,18 @@ despawnLocal = function(plate)
   scanAndDeleteByPlate(plate)
 end
 
+-- encontra entidade local pela placa (fallback p/ handle stale apos migracao/cull)
+local function findByPlate(plate)
+  local target = normPlate(plate)
+  if target == '' then return nil end
+  for veh in enumerateVehicles() do
+    if DoesEntityExist(veh) then
+      local raw = GetVehicleNumberPlateText(veh)
+      if raw and normPlate(raw) == target then return veh end
+    end
+  end
+end
+
 RegisterNetEvent(E.DO_DESPAWN)
 AddEventHandler(E.DO_DESPAWN, function(plate)
   despawnLocal(plate)
@@ -257,13 +304,57 @@ end)
 AddEventHandler('vhub_garage:collectClientState', function(plate, cb)
   if type(cb) ~= 'function' then return end
   local veh = state.veiculos[plate]
+  if not veh or not DoesEntityExist(veh) then
+    -- handle pode ficar stale (migracao de ownership/cull): re-resolve pela placa
+    -- para nao guardar SILENCIOSAMENTE sem customization (mods sumiam no restart)
+    veh = findByPlate(plate)
+    if veh then state.veiculos[plate] = veh end
+  end
   if not veh or not DoesEntityExist(veh) then cb(nil); return end
   local c = GetEntityCoords(veh, true)
+  -- dano estrutural persist vel (espelha a coleta do vehcontrol; bone-check de janela)
+  local dmg = { doors = {}, windows = {}, tyres = {}, tyres_rim = {} }
+  for i = 0, 5 do if IsVehicleDoorDamaged(veh, i) then dmg.doors[#dmg.doors+1] = i end end
+  for i = 0, 7 do
+    local bone = WINDOW_BONES[i]
+    if bone and GetEntityBoneIndexByName(veh, bone) ~= -1 and not IsVehicleWindowIntact(veh, i) then
+      dmg.windows[#dmg.windows+1] = i
+    end
+  end
+  if GetVehicleTyresCanBurst(veh) then
+    for i = 0, 7 do
+      if IsVehicleTyreBurst(veh, i, true) then dmg.tyres_rim[#dmg.tyres_rim+1] = i
+      elseif IsVehicleTyreBurst(veh, i, false) then dmg.tyres[#dmg.tyres+1] = i end
+    end
+  end
   cb({
     customization = collectCustomization(veh),
     locked        = GetVehicleDoorLockStatus(veh) >= 2,
     position      = { x = c.x, y = c.y, z = c.z, h = GetEntityHeading(veh) },
+    fuel          = GetVehicleFuelLevel(veh),
+    engine_health = GetVehicleEngineHealth(veh),
+    body_health   = GetVehicleBodyHealth(veh),
+    damage        = dmg,
   })
+end)
+
+-- ----------------------------------------------------------------------------
+-- Reparo pago: conserta a entidade VIVA (o servidor j  elevou o prontu rio)
+-- ----------------------------------------------------------------------------
+RegisterNetEvent(E.DO_REPAIR)
+AddEventHandler(E.DO_REPAIR, function(plate)
+  Citizen.CreateThread(function()
+    local veh = state.veiculos[plate] or findByPlate(plate)
+    if not veh or not DoesEntityExist(veh) then return end
+    NetworkRequestControlOfEntity(veh)
+    local t = 0
+    while not NetworkHasControlOfEntity(veh) and t < 20 do Citizen.Wait(0); t = t + 1 end
+    if not NetworkHasControlOfEntity(veh) then return end
+    SetVehicleFixed(veh)
+    SetVehicleEngineHealth(veh, 1000.0)
+    SetVehicleBodyHealth(veh, 1000.0)
+    SetVehicleDirtLevel(veh, 0.0)
+  end)
 end)
 
 -- ----------------------------------------------------------------------------

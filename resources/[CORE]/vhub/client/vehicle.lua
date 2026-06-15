@@ -10,14 +10,24 @@ local function adaptiveDelay(speed_kmh, rpm)
   return 250
 end
 
+-- Normaliza placa para comparação — espelha a normalizePlate do servidor
+-- (upper + colapsa espaços + trim). GetVehicleNumberPlateText devolve a placa
+-- com PADDING de espaços (8 chars) e o servidor manda a placa normalizada.
+local function plateKey(p)
+  local s = tostring(p or ""):upper():gsub("%s+", " ")
+  return s:match("^%s*(.-)%s*$") or ""
+end
+
 RegisterNetEvent("vHub:vehicleStateLoad")
 AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
   -- Aplica estado recebido do servidor ao veículo local se o jogador estiver no mesmo veículo
+  -- HOTFIX 2026-06-11: sem normalizar os dois lados a comparação NUNCA casava e o
+  -- fuel/engine/body salvos jamais eram aplicados (fuel "preso" no default nativo 65).
   local ped = PlayerPedId()
   local veh = GetVehiclePedIsIn(ped, false)
-  if veh and veh ~= 0 then
+  if veh and veh ~= 0 and DoesEntityExist(veh) and type(state) == "table" then
     local myplate = GetVehicleNumberPlateText(veh) or ""
-    if myplate == plate then
+    if plateKey(myplate) == plateKey(plate) then
       if state.fuel and SetVehicleFuelLevel then pcall(SetVehicleFuelLevel, veh, state.fuel) end
       if state.engine_health then pcall(SetVehicleEngineHealth, veh, state.engine_health) end
       if state.body_health and SetVehicleBodyHealth then pcall(SetVehicleBodyHealth, veh, state.body_health) end

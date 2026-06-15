@@ -98,7 +98,11 @@ S:prepare("vh/veh_key",
   "SELECT key_uid FROM vh_vehicles WHERE plate = @plate")
 S:prepare("vh/veh_by_key",
   "SELECT plate FROM vh_vehicles WHERE key_uid = @key_uid")
+-- NOTA(hotfix 2026-06-04): estes dois usavam @dkey, mas o _set/_get compartilhado em
+-- state.lua SEMPRE liga o parametro como `key` (igual a user/char data acima). Com @dkey
+-- o bind ficava nulo → escrita falhava ("Column 'dkey' cannot be null") e leitura filtrava
+-- dkey=NULL (nunca casava) → vh_vehicle_data ficou morto desde o freeze. Alinhado a @key.
 S:prepare("vh/set_vd",
-  "REPLACE INTO vh_vehicle_data(plate, dkey, dvalue) VALUES(@plate, @dkey, @value)")
+  "REPLACE INTO vh_vehicle_data(plate, dkey, dvalue) VALUES(@plate, @key, @value)")
 S:prepare("vh/get_vd",
-  "SELECT dvalue FROM vh_vehicle_data WHERE plate = @plate AND dkey = @dkey")
+  "SELECT dvalue FROM vh_vehicle_data WHERE plate = @plate AND dkey = @key")

@@ -34,6 +34,8 @@ M.query   = pquery
 -- Inicializa o schema (cria tabelas se n o existirem)
 -- ----------------------------------------------------------------------------
 function M:initSchema()
+  -- O DDL ainda mora aqui ate a FASE 6. O espelho/backfill vh_vehicles migrou
+  -- para vhub_conce (escritor unico de vh_vehicles desde a FASE 1).
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if not schema then return false end
   local p = promise.new()
@@ -42,206 +44,71 @@ function M:initSchema()
 end
 
 -- ----------------------------------------------------------------------------
--- vhub_vehicles
+-- vhub_vehicles  (PROXY -> vhub_conce: escritor unico desde a FASE 1)
+-- O dado e a verdade vivem no vhub_conce; aqui apenas encaminhamos a chamada para
+-- manter os ~16 call-sites do garage inalterados ate a FASE 6.
 -- ----------------------------------------------------------------------------
-function M:plateExists(plate)
-  return pscalar('SELECT 1 FROM vhub_vehicles WHERE plate = ? LIMIT 1', { plate }) ~= nil
-end
-
-function M:getVehicle(plate)
-  local r = pquery('SELECT * FROM vhub_vehicles WHERE plate = ? LIMIT 1', { plate })
-  return r and r[1] or nil
-end
-
-function M:listByOwner(char_id)
-  return pquery('SELECT * FROM vhub_vehicles WHERE char_id = ?', { char_id })
-end
-
-function M:listByStatus(status)
-  return pquery('SELECT * FROM vhub_vehicles WHERE status = ?', { status })
-end
-
--- cria registro inicial (compra)  retorna true/false
-function M:createVehicle(row)
-  local now = os.time()
-  return pexec([[
-    INSERT INTO vhub_vehicles
-      (plate, model, vtype, category, char_id, status, customization, locked,
-       position, ipva_paid_until, rented_until, purchase_price, purchase_at,
-       last_seen_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  ]], {
-    row.plate, row.model, row.vtype, row.category, row.char_id,
-    row.status or 'garage',
-    row.customization,         -- JSON string ou null
-    row.locked and 1 or 0,
-    row.position,
-    row.ipva_paid_until, row.rented_until,
-    row.purchase_price or 0, row.purchase_at or now,
-    row.last_seen_at or now, now, now,
-  }) ~= nil
-end
-
-function M:updateStatus(plate, status)
-  return pexec(
-    'UPDATE vhub_vehicles SET status = ?, updated_at = ? WHERE plate = ?',
-    { status, os.time(), plate })
-end
-
-function M:updateOwner(plate, char_id)
-  return pexec(
-    'UPDATE vhub_vehicles SET char_id = ?, updated_at = ? WHERE plate = ?',
-    { char_id, os.time(), plate })
-end
-
-function M:updatePosition(plate, posJson)
-  return pexec(
-    'UPDATE vhub_vehicles SET position = ?, last_seen_at = ?, updated_at = ? WHERE plate = ?',
-    { posJson, os.time(), os.time(), plate })
-end
-
+-- existe linha para a placa?
+function M:plateExists(plate)               return exports.vhub_conce:plateExists(plate) end
+-- retorna a linha de negocio do veiculo (read-only)
+function M:getVehicle(plate)                return exports.vhub_conce:getVehicle(plate) end
+-- veiculos cujo dono real e char_id
+function M:listByOwner(char_id)             return exports.vhub_conce:listByOwner(char_id) end
+-- veiculos em um status
+function M:listByStatus(status)             return exports.vhub_conce:listByStatus(status) end
+-- cria registro inicial (compra) + espelho vh_vehicles (feito no conce)
+function M:createVehicle(row)               return exports.vhub_conce:createVehicle(row) end
+-- muda status (garage/out/impound/auction/rental/sold)
+function M:updateStatus(plate, status)      return exports.vhub_conce:updateStatus(plate, status) end
+-- atualiza ultima posicao conhecida
+function M:updatePosition(plate, posJson)   return exports.vhub_conce:updatePosition(plate, posJson) end
+-- atualiza estetica + trava
 function M:updateCustomization(plate, custJson, locked)
-  return pexec(
-    'UPDATE vhub_vehicles SET customization = ?, locked = ?, updated_at = ? WHERE plate = ?',
-    { custJson, locked and 1 or 0, os.time(), plate })
+  return exports.vhub_conce:updateCustomization(plate, custJson, locked)
 end
-
-function M:updateIpva(plate, paidUntil)
-  return pexec(
-    'UPDATE vhub_vehicles SET ipva_paid_until = ?, updated_at = ? WHERE plate = ?',
-    { paidUntil, os.time(), plate })
-end
-
-function M:updateRental(plate, rentedUntil)
-  return pexec(
-    'UPDATE vhub_vehicles SET rented_until = ?, updated_at = ? WHERE plate = ?',
-    { rentedUntil, os.time(), plate })
-end
-
-function M:deleteVehicle(plate)
-  return pexec('DELETE FROM vhub_vehicles WHERE plate = ?', { plate })
-end
+-- atualiza vencimento de IPVA
+function M:updateIpva(plate, paidUntil)     return exports.vhub_conce:updateIpva(plate, paidUntil) end
+-- atualiza vencimento de aluguel
+function M:updateRental(plate, rentedUntil) return exports.vhub_conce:updateRental(plate, rentedUntil) end
+-- remove veiculo + espelho vh_vehicles (feito no conce)
+function M:deleteVehicle(plate)             return exports.vhub_conce:deleteVehicle(plate) end
 
 -- ----------------------------------------------------------------------------
--- vhub_vehicle_keys (autoriza  o l gica;  tem f sico mora no vhub_inventory)
+-- vhub_vehicle_keys  (PROXY -> vhub_conce: escritor unico desde a FASE 1)
 -- ----------------------------------------------------------------------------
+-- concede/atualiza autorizacao logica de chave
 function M:grantKey(plate, char_id, kind, granted_by, expires_at)
-  return pexec([[
-    INSERT INTO vhub_vehicle_keys (plate, char_id, kind, granted_by, expires_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE granted_by = VALUES(granted_by),
-                            expires_at = VALUES(expires_at),
-                            created_at = VALUES(created_at)
-  ]], { plate, char_id, kind or 'shared', granted_by, expires_at, os.time() })
+  return exports.vhub_conce:grantKey(plate, char_id, kind, granted_by, expires_at)
 end
-
+-- revoga chave (kind especifico, ou todas menos 'owner')
 function M:revokeKey(plate, char_id, kind)
-  if kind then
-    return pexec(
-      'DELETE FROM vhub_vehicle_keys WHERE plate = ? AND char_id = ? AND kind = ?',
-      { plate, char_id, kind })
-  end
-  return pexec(
-    'DELETE FROM vhub_vehicle_keys WHERE plate = ? AND char_id = ? AND kind != ?',
-    { plate, char_id, 'owner' })
+  return exports.vhub_conce:revokeKey(plate, char_id, kind)
 end
-
+-- char_id tem autorizacao valida (nao expirada) para a placa?
 function M:hasValidKey(plate, char_id)
-  local now = os.time()
-  local r = pquery([[
-    SELECT 1 FROM vhub_vehicle_keys
-    WHERE plate = ? AND char_id = ? AND (expires_at IS NULL OR expires_at > ?)
-    LIMIT 1
-  ]], { plate, char_id, now })
-  return r and #r > 0
+  return exports.vhub_conce:hasValidKey(plate, char_id)
 end
-
+-- lista autorizacoes de uma placa
 function M:listKeys(plate)
-  return pquery('SELECT * FROM vhub_vehicle_keys WHERE plate = ?', { plate })
+  return exports.vhub_conce:listKeys(plate)
 end
-
+-- lista autorizacoes validas de um char_id
 function M:listKeysOfChar(char_id)
-  local now = os.time()
-  return pquery([[
-    SELECT * FROM vhub_vehicle_keys
-    WHERE char_id = ? AND (expires_at IS NULL OR expires_at > ?)
-  ]], { char_id, now })
+  return exports.vhub_conce:listKeysOfChar(char_id)
 end
-
+-- remove autorizacoes expiradas
 function M:purgeExpiredKeys()
-  return pexec(
-    'DELETE FROM vhub_vehicle_keys WHERE expires_at IS NOT NULL AND expires_at < ?',
-    { os.time() })
+  return exports.vhub_conce:purgeExpiredKeys()
 end
 
 -- ----------------------------------------------------------------------------
--- vhub_auctions / vhub_auction_bids
+-- vhub_auctions / vhub_auction_bids  (PROXY -> vhub_ferinha desde a FASE 4)
+-- A logica de leilao (criar/lance/finalizar/cancelar/escrow/cron) mora no ferinha.
+-- So a leitura usada pelo painel admin (info) permanece como proxy.
 -- ----------------------------------------------------------------------------
-function M:createAuction(row)
-  local p = promise.new()
-  ox():insert([[
-    INSERT INTO vhub_auctions
-      (plate, seller_id, min_bid, buyout, fee_paid, ends_at, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
-  ]], { row.plate, row.seller_id, row.min_bid, row.buyout,
-        row.fee_paid or 0, row.ends_at, os.time() },
-     function(id) p:resolve(id) end)
-  return Citizen.Await(p)
-end
-
-function M:getAuction(id)
-  local r = pquery('SELECT * FROM vhub_auctions WHERE id = ? LIMIT 1', { id })
-  return r and r[1] or nil
-end
-
+-- leilao ativo de uma placa (info admin)
 function M:getAuctionByPlate(plate)
-  local r = pquery(
-    'SELECT * FROM vhub_auctions WHERE plate = ? AND status = ? LIMIT 1',
-    { plate, 'active' })
-  return r and r[1] or nil
-end
-
-function M:listActiveAuctions()
-  return pquery([[
-    SELECT * FROM vhub_auctions
-    WHERE status = 'active' AND ends_at > ?
-    ORDER BY ends_at ASC
-  ]], { os.time() })
-end
-
-function M:listExpiringAuctions()
-  return pquery([[
-    SELECT * FROM vhub_auctions
-    WHERE status = 'active' AND ends_at <= ?
-  ]], { os.time() })
-end
-
-function M:setAuctionBid(auction_id, bidder_id, amount)
-  return pexec([[
-    UPDATE vhub_auctions
-       SET current_bid = ?, current_bidder = ?
-     WHERE id = ? AND status = 'active'
-  ]], { amount, bidder_id, auction_id })
-end
-
-function M:setAuctionStatus(auction_id, status)
-  return pexec('UPDATE vhub_auctions SET status = ? WHERE id = ?',
-    { status, auction_id })
-end
-
-function M:addBid(auction_id, bidder_id, amount)
-  return pexec([[
-    INSERT INTO vhub_auction_bids (auction_id, bidder_id, amount, created_at)
-    VALUES (?, ?, ?, ?)
-  ]], { auction_id, bidder_id, amount, os.time() })
-end
-
-function M:listBids(auction_id)
-  return pquery([[
-    SELECT * FROM vhub_auction_bids
-    WHERE auction_id = ?
-    ORDER BY amount DESC, created_at DESC
-  ]], { auction_id })
+  return exports.vhub_ferinha:getAuctionByPlate(plate)
 end
 
 -- ----------------------------------------------------------------------------
@@ -280,31 +147,14 @@ function M:impoundList()
 end
 
 -- ----------------------------------------------------------------------------
--- vhub_dealership_stock
+-- vhub_dealership_stock  (PROXY -> vhub_conce: escritor unico desde a FASE 1)
 -- ----------------------------------------------------------------------------
-function M:stockGet(model)
-  local r = pquery(
-    'SELECT * FROM vhub_dealership_stock WHERE model = ? LIMIT 1', { model })
-  return r and r[1] or nil
-end
-
-function M:stockSet(model, qty, custom_price)
-  return pexec([[
-    INSERT INTO vhub_dealership_stock (model, qty, custom_price, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE qty = VALUES(qty),
-                            custom_price = VALUES(custom_price),
-                            updated_at = VALUES(updated_at)
-  ]], { model, qty or -1, custom_price, os.time() })
-end
-
-function M:stockDecrement(model)
-  return pexec([[
-    UPDATE vhub_dealership_stock
-       SET qty = qty - 1, updated_at = ?
-     WHERE model = ? AND qty > 0
-  ]], { os.time(), model })
-end
+-- estoque atual do modelo (ou nil = ilimitado)
+function M:stockGet(model)               return exports.vhub_conce:stockGet(model) end
+-- define estoque/preco custom do modelo
+function M:stockSet(model, qty, price)   return exports.vhub_conce:stockSet(model, qty, price) end
+-- decrementa estoque ao vender (se limitado)
+function M:stockDecrement(model)         return exports.vhub_conce:stockDecrement(model) end
 
 -- ----------------------------------------------------------------------------
 -- vhub_vehicle_log

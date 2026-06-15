@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${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}"
+      }
+    },
+
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\vHUB Mirage"
+      ]
+    }
+  }
+}

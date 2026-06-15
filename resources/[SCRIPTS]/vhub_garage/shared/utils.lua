@@ -64,6 +64,33 @@ function VHubGarage.U.jdec(s)
   local ok, v = pcall(json.decode, s); return ok and v or nil
 end
 
+-- whitelist de chaves aceitas em customization (payload do cliente e hostil)
+local CUST_KEYS = {
+  colours = true, extra_colours = true, plate_index = true, wheel_type = true,
+  window_tint = true, livery = true, turbo = true, smoke = true, xenon = true,
+  mods = true, neons = true, neon_colour = true, model = true,
+}
+
+-- filtra customization vinda do cliente: whitelist de chaves + cap de 8 KB no JSON
+function VHubGarage.U.sanitizeCustomization(c)
+  if type(c) ~= 'table' then return nil end
+  local out = {}
+  for k, v in pairs(c) do
+    if CUST_KEYS[k] then out[k] = v end
+  end
+  local j = VHubGarage.U.jenc(out)
+  if not j or #j > 8192 then return nil end
+  return out
+end
+
+-- número finito clampado, ou nil (rejeita NaN/±inf ANTES do clamp — payload hostil)
+function VHubGarage.U.finiteNum(v, lo, hi)
+  if type(v) ~= 'number' or v ~= v or math.abs(v) == math.huge then return nil end
+  if lo and v < lo then v = lo end
+  if hi and v > hi then v = hi end
+  return v
+end
+
 -- valida coords (anti-cheat client)
 function VHubGarage.U.validCoords(p)
   if type(p) ~= 'table' then return false end

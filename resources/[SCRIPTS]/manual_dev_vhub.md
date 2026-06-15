@@ -1,22 +1,27 @@
 # vHub Mirage — Manual de Desenvolvimento
 
 > **Quem deve ler:** todo dev que toca em `resources/[SCRIPTS]/vhub_*` ou em qualquer recurso que dependa do core vHub.
-> **Premissa:** o core (`[CORE]/vhub`) está **CORE FROZEN v1.0 (2026-05-22)** — kernel imutável por 12+ meses. Toda nova feature vive em resource externo.
-> **Meta operacional:** servidor com 3.000+ jogadores em resmon **server-total < 0.3 ms/tick**, **client-idle < 0.10 ms**.
+> **Premissa:** o core (`[CORE]/vhub`) está **CORE FROZEN v1.0 (2026-05-22)** — kernel imutável, mudanças apenas **aditivas** com gate duplo (única exceção registrada: contratos `commitVehicleState`/`getVehicleState` da IT.2).
+> **Meta operacional (honesta, mensurável):** custo por player **O(1)** dentro dos **Orçamentos do CLAUDE.md** (idle CORE ≤ 0.05 ms, script ≤ 0.02 ms, tick p95 ≤ 0.10 ms/script, NUI fechada 0.00 ms), operando no **teto da plataforma** (OneSync Infinity = 2048 slots/processo) com 40 % de folga. Acima do teto = multi-instância sobre o KV do CORE — nunca prometa números que a plataforma não entrega.
+> **Lei-mestra deste manual:** *peça ao dono, nunca escreva no que não é seu.* Todo dado tem UMA linha no **Registro de Ownership** (`CLAUDE.md`); seu script lê por export e escreve por **contrato de commit**.
 
 ## Contrato pós-freeze (o que o core garante)
 
 | Garantia | Onde |
 |---|---|
-| **`compat: none`** — sem shim vRP. APIs vHub diretas | `server/init.lua` (sem `compat.lua`) |
+| **`compat: none`** — sem shim vRP. APIs vHub diretas | `server/init.lua` |
 | **Ordem fixa de carga** | `kernel → state → sql → notify → auth → vehicle → security → boot → exports` |
 | **Batch SQL atômico** | `BATCH_MAX=800`, `BATCH_INT=3000ms`, autosave chunked com yield/50 |
-| **Login N→1 round-trip** | `vHub.SQL.uidByIdsIn(n)` agrupa identifiers em `IN (?, ?, ?)` |
-| **State Bag com threshold** | fuel ±0.5 / eng ±5 / body ±5 / odo ±0.05 km — bypass automático ao cruzar 0 |
+| **Login N→1 round-trip** | `vHub.SQL.uidByIdsIn(n)` |
+| **State Bag com threshold** | fuel ±0.5 / eng ±5 / body ±5 / odo ±0.05 km — bypass ao cruzar 0 |
 | **Adaptive client report** | `client/vehicle.lua` 2000/1000/250 ms por speed/rpm |
-| **GC ativo** | `_byNet` cron 5min; `Kernel._rate` purgado em `playerDropped` |
-| **Schema único e idempotente** | `sql/schema.sql` aplicado em `bootstrap.lua:307` a cada boot |
+| **GC ativo** | `_byNet` cron 5 min; `Kernel._rate` purgado em `playerDropped` |
+| **Schema único e idempotente** | `sql/schema.sql` aplicado no boot |
 | **Tipos PK canônicos** | `vh_users.id`, `vh_characters.id` = `INT UNSIGNED AUTO_INCREMENT` |
+| **Escrita de estado físico do veículo** | **`exports.vhub:commitVehicleState(plate, patch, reason)`** — único caminho p/ terceiros (IT.2); valida, clampa, marca dirty, sincroniza bags e loga o `reason` |
+| **Leitura de estado físico** | `exports.vhub:getVehicleState(plate)` (snapshot) no servidor; State Bags no cliente |
+| **Spawn do ped** | dono único = `vhub_player_state` (`spawnAt`, `teleport`, `giveWeapons`, `set*`) — nenhum script toca o ped |
+| **Replay institucional** | `vHub:playerSpawn`/`vHub:characterLoad` são **re-disparados para todas as sessões** em `onResourceStart` de qualquer resource — todo handler precisa de replay-guard (L-17) |
 
 **Schemas externos com FK ao core DEVEM usar `INT UNSIGNED`** (signed dispara `errno 150`).
 
@@ -27,52 +32,48 @@
 | Princípio | Tradução prática |
 |---|---|
 | **Servidor é a única fonte de verdade crítica** | Dinheiro, inventário, ban, propriedade → SQL/VRAM server. Cliente nunca decide. |
-| **Cliente é tela, não cérebro** | Cliente renderiza, interage, envia *intenção*. Servidor valida e persiste. |
-| **VRAM-first, SQL é backup** | Leitura: VRAM → SQL. Escrita: VRAM + enfileira batch. Sem round-trip síncrono no caminho quente. |
-| **Native-first** | Antes de codar helper, ver se existe native FiveM/GTA (`GetVehicleNumberPlateText`, `NetworkRequestControlOfEntity`, etc.). |
-| **Evento, não polling** | `AddEventHandler` + State Bags antes de `while true do Wait(N)`. Polling só quando absolutamente necessário (frame loop ativo). |
-| **Batch, não unitário** | SQL via `setUData/setCData` → batch. Nunca executar query unitária no caminho quente. |
-| **Cada cliente é processador** | Cálculos locais (HUD, física, animação) ficam no cliente; servidor recebe **delta** validado. |
-| **Falha graciosa** | `pcall` em pontos de fronteira (export externo, payload de cliente). Nunca derrubar o tick do servidor. |
-| **Saídas em PT-BR, código em inglês** | Comentário, log de usuário, NUI = PT-BR. Identificadores, eventos, funções = inglês. |
+| **Um dono por dado (L-04/L-13)** | Antes de criar/escrever um dado: qual a linha dele no Registro de Ownership? Sem linha = sem dado. Chave de outro domínio = proibido escrever. |
+| **Peça, não escreva** | Estado do veículo → `commitVehicleState`. Ped → `spawnAt/teleport`. Dinheiro → exports do `vhub_money`. Seu script expressa *intenção*; o owner valida e comita. |
+| **Cliente é tela, não cérebro** | Cliente renderiza, interage, envia intenção. Servidor valida e persiste. |
+| **VRAM-first, SQL é backup** | Leitura: VRAM → SQL. Escrita: VRAM + batch. Sem round-trip síncrono no caminho quente. |
+| **Native-first** | Antes de helper custom, procurar native (`metas/fivem_natives_organizadas_ptbr.md`). Com OneSync o **servidor** também tem natives de entidade (`NetworkGetEntityFromNetworkId`, `GetEntityCoords`, `GetVehicleNumberPlateText`). |
+| **Evento + State Bag, não polling** | `AddStateBagChangeHandler`/`AddEventHandler` antes de `while true`. Estado de entidade para todos = State Bag, **nunca** `TriggerClientEvent(-1)`. |
+| **Batch, não unitário** | Persistência de domínio via `setCData/setUData` (batch do core) ou multi-insert no oxmysql. |
+| **Replay-safe por padrão** | Handler de evento institucional é idempotente (L-17). |
+| **Deletar é entrega (L-15)** | Todo `.lua` referenciado no manifest **no mesmo commit**; substituiu um arquivo → remova o antigo. O hook bloqueia órfão e módulo-fantasma. |
+| **Falha graciosa** | `pcall` nas fronteiras (export externo, payload). Nunca derrubar o tick. |
+| **Saídas em PT-BR** | Comentário, log de usuário, NUI = PT-BR. Identificadores: convenção dominante do arquivo; arquivo novo = inglês (L-08). |
 
 ---
 
 ## 1. Anatomia de um resource vHub
 
-Padrão obrigatório:
-
 ```
 resources/[SCRIPTS]/vhub_<dominio>/
 ├── shared/
-│   ├── config.lua        ← constantes, coords, taxas, cooldowns
+│   ├── config.lua        ← constantes, coords, taxas, cooldowns, TABELA DE RATES
 │   ├── events.lua        ← VHub<Dom>.E.* (constantes string)
-│   └── utils.lua         ← helpers puros (fmtMoney, validators)
+│   └── utils.lua         ← helpers puros
 ├── server/
-│   ├── sql.lua           ← queries via exports.oxmysql (NÃO usar S:prepare cross-resource)
-│   ├── core.lua          ← sessões, perms locais, exports
-│   ├── init.lua          ← bootstrap (LoadResourceFile schema, sessions)
-│   ├── <feature>.lua     ← cada feature isolada (1 responsabilidade)
-│   └── exports.lua       ← API pública para outros resources
+│   ├── sql.lua           ← queries via exports.oxmysql (NUNCA S:prepare cross-resource)
+│   ├── core.lua          ← sessões, hasPerm local, rate helper
+│   ├── init.lua          ← bootstrap (schema, sessões, replay-guard)
+│   ├── <feature>.lua     ← 1 responsabilidade por arquivo (L-09)
+│   └── exports.lua       ← API pública (contrato p/ outros resources)
 ├── client/
 │   ├── init.lua          ← state local, NUI focus, callbacks
 │   ├── zones.lua         ← markers/blips/[E] event-driven
-│   └── <feature>.lua     ← cada feature isolada
-├── nui/                  ← (se houver UI)
-│   ├── assets/{bg.png, logo.png}
-│   ├── css/style.css
-│   ├── index.html
-│   └── js/{app, sand, view-*}.js
+│   └── <feature>.lua
+├── nui/                  ← (se houver UI — padrão do guardião designer)
 ├── sql/
-│   └── schema.sql        ← CREATE TABLE IF NOT EXISTS ...
+│   └── schema.sql        ← CREATE TABLE IF NOT EXISTS vhub_<dom>_*
 └── fxmanifest.lua
 ```
 
-**Razões da estrutura:**
-- `shared/` carrega primeiro — define namespace e helpers usados por server+client.
-- `server/init.lua` faz `LoadResourceFile(name, 'sql/schema.sql')` + setup de sessões.
-- `server/<feature>.lua` cada um com **1 responsabilidade** (princípio L-09). Função curta, sem deus-arquivo.
-- `nui/` segue padrão do [guardião designer](../.claude/agents/vhub_guardiao_designer.md).
+Regras novas da estrutura (pós-auditoria):
+- **L-15 mecânica:** o hook `post_lua_check.sh` bloqueia qualquer `.lua` que não esteja no `fxmanifest.lua` do resource — crie a entrada no manifest **junto** com o arquivo.
+- **Anti-fantasma:** `shared/events.lua` define **tabela global** (`VHubDom = VHubDom or {}; VHubDom.E = {...}`). Jamais `local Events = {...} return Events` — o loader de manifest descarta o return (foi exatamente o padrão morto encontrado no spawnselector).
+- Tabelas SQL próprias com prefixo do domínio (`vhub_<dom>_*`). **Proibido** `INSERT/UPDATE/DELETE` em `vh_users`, `vh_characters`, `vh_vehicles`, `vh_*_data` — essas pertencem ao core/owners; seu script só referencia por FK e conversa por export.
 
 ---
 
@@ -90,88 +91,143 @@ version     '1.0.0'
 description '<frase única em PT-BR>'
 
 dependencies {
-  'vhub',           -- SEMPRE
-  'oxmysql',        -- SE tiver SQL próprio
-  'vhub_inventory', -- SE consumir items
-  'vhub_money',     -- SE mexer dinheiro
-  'vhub_identity',  -- SE precisar de identidade
-  'vhub_groups',    -- SE checar perms
+  'vhub',               -- SEMPRE
+  'oxmysql',            -- SE tiver SQL próprio
+  'vhub_player_state',  -- SE mover/equipar o ped (teleport, armas, custom)
+  'vhub_inventory',     -- SE consumir items/chaves
+  'vhub_money',         -- SE mexer dinheiro
+  'vhub_groups',        -- SE checar perms
 }
 
-shared_scripts {
-  'shared/config.lua',
-  'shared/events.lua',
-  'shared/utils.lua',
-}
+shared_scripts { 'shared/config.lua', 'shared/events.lua', 'shared/utils.lua' }
 
 server_scripts {
   'server/sql.lua',
   'server/core.lua',
   'server/init.lua',
-  -- features
   'server/<feature>.lua',
   'server/exports.lua',
 }
 
-client_scripts {
-  'client/init.lua',
-  'client/zones.lua',
-  'client/<feature>.lua',
-}
+client_scripts { 'client/init.lua', 'client/zones.lua', 'client/<feature>.lua' }
 
 ui_page 'nui/index.html'
-
-files {
-  'nui/index.html',
-  'nui/css/style.css',
-  'nui/js/app.js',
-  'nui/js/sand.js',
-  'nui/js/<view>.js',
-  'nui/assets/bg.png',
-  'nui/assets/logo.png',
-}
+files   { 'nui/index.html', 'nui/css/style.css', 'nui/js/app.js', 'nui/assets/bg.png', 'nui/assets/logo.png' }
 ```
 
-**Por que essa ordem?** O runtime FiveM carrega `shared → server → client`. Dentro de cada bloco, lê linha a linha — então `sql.lua` tem que vir antes de `core.lua` que usa as queries.
+Ordem: o runtime carrega `shared → server → client`, linha a linha dentro de cada bloco — `sql.lua` antes de quem o usa. **Todo arquivo novo entra aqui no mesmo commit (L-15).**
 
 ---
 
-## 3. Receitas canônicas (snippets prontos)
+## 3. O ciclo orgânico — onde o seu script se pluga (sem competir com o core)
 
-### 3.1 Acessar o usuário e dados persistentes
+Cada domínio tem um dono e um ciclo. Seu script **escuta os eventos do ciclo** e **pede ações pelos contratos** — nunca recria o ciclo por fora.
+
+### 3.1 Ciclo do jogador
+
+```
+conexão → vHub:ready (client) → Auth (core) ─┬→ vHub:characterLoad(user)       ← carregue sua sessão aqui
+                                             └→ vHub:playerSpawn(user, first)  ← REPLAY-GUARD obrigatório
+player_state aplica ped → [selector elege coordenada] → release
+                                             └→ client: 'vhub_player_state:spawned'(first)  ← inicie HUD/zonas aqui
+morte → vHub:playerDeath(user) | queda → playerDropped
+```
+
+Handler canônico (sessão + replay-guard L-17):
 
 ```lua
--- server/<feature>.lua  — em handler de evento, dentro de Citizen.CreateThread
-RegisterNetEvent('vhub_dom:doSomething')
-AddEventHandler('vhub_dom:doSomething', function(payload)
+-- server/init.lua — sessão por personagem (replay-safe)
+local sessions, _seen = {}, {}
+
+-- carrega sessão do domínio quando o personagem entra
+AddEventHandler('vHub:characterLoad', function(user)
+  if not user then return end
+  sessions[user.source] = sessions[user.source] or { char_id = user.char_id }
+end)
+
+-- reage ao spawn UMA vez por spawn real (core re-dispara em onResourceStart!)
+AddEventHandler('vHub:playerSpawn', function(user, first)
+  if not user then return end
+  local spawns = tonumber(user.spawns) or 0
+  if _seen[user.source] == spawns then return end   -- replay → no-op
+  _seen[user.source] = spawns
+  -- ... setup por spawn (blips, estado de zona)
+end)
+
+AddEventHandler('playerDropped', function()
+  sessions[source] = nil; _seen[source] = nil       -- L: sem leak por src
+end)
+```
+
+Mexer no ped — **sempre pelo dono**:
+
+```lua
+exports.vhub_player_state:teleport(src, x, y, z, h)        -- mover
+exports.vhub_player_state:giveWeapons(src, weapons, clear) -- armar
+exports.vhub_player_state:setHealth(src, 200)              -- curar
+exports.vhub_player_state:setCustomization(src, custom)    -- visual
+-- Provedor de coordenada de spawn (estilo selector): escute
+-- 'vhub_player_state:chooseSpawn'(src) e devolva via spawnAt(src, pos|nil).
+```
+
+**Proibido (L-16):** `SetPlayerModel`, `NetworkResurrectLocalPlayer`, `SetEntityCoords` no ped em fluxo de spawn fora do owner. O hook avisa; o gate reprova.
+
+### 3.2 Ciclo do veículo
+
+```
+COMPRA (conce: registerVehicle → espelho vh_vehicles) → SPAWN (garage: valida chave/owner/status/proximidade)
+→ ENTRADA (vehcontrol: vEnter → core registra driver) → USO (telemetria 4 Hz do core acumula fuel/odo/dano)
+→ COMMIT (autosave/eventos via _save) → GUARDAR (garage: store) → PÁTIO (boot-scan/admin) → RECUPERAÇÃO
+```
+
+Seu script **lê** e **pede**:
+
+```lua
+-- LER estado físico (servidor): snapshot do owner
+local s = exports.vhub:getVehicleState(plate)        -- {fuel, engine_health, body_health, odometer, ...} | nil
+
+-- LER no cliente: State Bags do core (delta-gated) — zero evento custom
+local fuel = Entity(veh).state.vh_fuel               -- chaves vh_* (ver _syncBags no core)
+AddStateBagChangeHandler('vh_fuel', nil, function(bag, _, v) ... end)
+
+-- ESCREVER: SEMPRE pelo contrato (valida, clampa, dirty, syncBags, loga reason)
+exports.vhub:commitVehicleState(plate, { fuel = 100.0 }, 'vhub_<dom>:refuel')
+exports.vhub:commitVehicleState(plate, { engine_health = 1000, body_health = 1000 }, 'vhub_<dom>:repair')
+
+-- REAGIR a commits de qualquer origem (auditável pelo reason)
+AddEventHandler('vHub:vehicleCommitted', function(vd, patch, reason) ... end)
+```
+
+**Proibido (L-13/L-14):** `setVData(...)` fora do core (hook **bloqueia**) e mutar `vd.state` obtido por `getVHub()`/`getVehicle()` — leitura só.
+
+Veículo **persistente** nasce e morre pelos donos do ciclo: registre via exports do `vhub_conce`, spawn/guarde via `vhub_garage` (assinaturas no `server/exports.lua` de cada um). Veículo **efêmero** (missão/corrida) pode ser criado pelo seu script **se e somente se**: placa com prefixo reservado do domínio (ex.: `RC` + id), nunca passa por `commitVehicleState`, despawn garantido por timeout + `playerDropped`, e entidade marcada mission p/ delete confiável (§4.7 do despawn). Efêmero que vira persistente = bug de ownership.
+
+### 3.3 Usuário e dados do SEU domínio (API pública KV)
+
+```lua
+RegisterNetEvent('vhub_dom:server:Acao')
+AddEventHandler('vhub_dom:server:Acao', function(payload)
   local src = source
-  Citizen.CreateThread(function()         -- OBRIGATÓRIO se for usar Await
+  if not Core.rate(src, 'acao', 1000) then return end       -- §4.6: throttle declarado
+  Citizen.CreateThread(function()                            -- OBRIGATÓRIO p/ Await
     local user = exports.vhub:getUser(src)
     if not user or not user.char_id then return end
+    if type(payload) ~= 'table' then return end              -- shape primeiro
 
-    -- Leitura: VRAM-first (sem round-trip se já cacheado)
-    local saldo = exports.vhub:getCData(user.char_id, 'banco') or 0
-
-    -- Escrita: batch (não bloqueia tick)
-    exports.vhub:setCData(user.char_id, 'banco', saldo + 100)
+    local saldo = exports.vhub:getCData(user.char_id, 'meu_dom_saldo') or 0
+    exports.vhub:setCData(user.char_id, 'meu_dom_saldo', saldo + 100)  -- batch
   end)
 end)
 ```
 
-**Regras:**
-- Sempre `getUser(src)` antes de qualquer coisa. Sem user válido → return.
-- Sempre `Citizen.CreateThread` se a função usar `Await` internamente (todos os `get*Data` usam).
-- `setCData` é **batch** — não confunda com query síncrona.
+Regras: `set/getUData/CData/GData` são a API pública **para chaves do SEU domínio** — prefixe a chave (`meu_dom_*`), declare-a na linha do Registro de Ownership, e jamais escreva em chave alheia (ex.: `banco` é do `vhub_money`). O hook lembra; o guardião de persistência audita.
 
-### 3.2 Validar permissão
+### 3.4 Permissão (3 caminhos, 1 função)
 
 ```lua
--- 3 caminhos canônicos:
--- 1) uid == 1 (owner) → bypass
--- 2) ACE vhub.<perm>  → operador setou no server.cfg
--- 3) vhub_groups:hasPermission(src, perm) → grupo concedeu
-
-local function hasPerm(src, perm)
+-- server/core.lua
+-- verifica permissão: owner(uid=1) > ACE > grupos
+function Core.hasPerm(src, perm)
   local uid = exports.vhub:getUID(src)
   if uid == 1 then return true end
   if IsPlayerAceAllowed(src, 'vhub.' .. perm) then return true end
@@ -179,344 +235,139 @@ local function hasPerm(src, perm)
 end
 ```
 
-**Anti-pattern:** rodar 3 chamadas duplicadas pelo código. **Pattern:** uma função `hasPerm` em `server/core.lua` do seu resource.
-
-### 3.3 Transação SQL atômica via core
+### 3.5 Transação atômica via core (≥ 2 escritas juntas)
 
 ```lua
--- Ex: transferência de dinheiro (player A → B)
 local tx = vHub.State:begin()
-vHub.setCData(a_char, 'banco', a_saldo - valor, tx)
-vHub.setCData(b_char, 'banco', b_saldo + valor, tx)
+vHub.setCData(a_char, 'meu_dom_saldo', a - v, tx)
+vHub.setCData(b_char, 'meu_dom_saldo', b + v, tx)
 local ok, err = vHub.State:commit(tx)
-if not ok then
-  exports.vhub:notify(src, 'Falha: ' .. err)
-end
+if not ok then exports.vhub:notify(src, 'Falha: ' .. tostring(err)) end
 ```
 
-**Quando usar TX:** sempre que ≥ 2 escritas precisam suceder/falhar juntas. Para escrita única, `setCData` direto basta.
-
-### 3.4 SQL próprio em resource externo
-
-**Decisão #8 do contexto.md:** resources externos **NÃO usam** `S:prepare/S:query` do core (FiveM serializa tabelas em exports e modificações em `self._prepared` não persistem).
-
-Padrão correto:
+### 3.6 SQL próprio (Decisão #8: nunca S:prepare cross-resource)
 
 ```lua
 -- server/sql.lua
-local ox = function() return exports['oxmysql'] end
-
 local function pquery(sql, args)
   local p = promise.new()
-  ox():query(sql, args or {}, function(r) p:resolve(r or {}) end)
+  exports.oxmysql:query(sql, args or {}, function(r) p:resolve(r or {}) end)
   return Citizen.Await(p)
 end
 local function pexec(sql, args)
   local p = promise.new()
-  ox():execute(sql, args or {}, function(r) p:resolve(r) end)
+  exports.oxmysql:execute(sql, args or {}, function(r) p:resolve(r) end)
   return Citizen.Await(p)
 end
-M.query = pquery; M.execute = pexec
-
--- Schema aplicado em onResourceStart
-AddEventHandler('onResourceStart', function(res)
-  if res ~= GetCurrentResourceName() then return end
-  Citizen.CreateThread(function()
-    local schema = LoadResourceFile(res, 'sql/schema.sql')
-    if schema then ox():execute(schema, {}, function() end) end
-  end)
-end)
+SQL = { query = pquery, execute = pexec }
 ```
 
-#### 3.4.1 Schema externo — regras canônicas pós-freeze
+Schema externo — regras canônicas: `CREATE TABLE IF NOT EXISTS` idempotente; `ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`; FK ao core **`INT UNSIGNED`** com `ON DELETE CASCADE ON UPDATE CASCADE`; `updated_at ... ON UPDATE CURRENT_TIMESTAMP`; KV próprio em `BLOB` (64 KB) — `MEDIUMBLOB` só com justificativa de tamanho × frequência. Tabela própria = `vhub_<dom>_*`; tabelas `vh_*` do core são intocáveis por SQL de script.
 
-| Regra | Por quê |
-|---|---|
-| **`CREATE TABLE IF NOT EXISTS`** | Idempotente, schema aplicado a cada `onResourceStart` |
-| **`ENGINE=InnoDB`** | Suporte a transações e FK |
-| **`DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`** | Unicode/emoji em nomes |
-| **FK ao core → `INT UNSIGNED`** | `vh_users.id` e `vh_characters.id` são `INT UNSIGNED`; FK com tipo divergente dispara MySQL `errno 150` |
-| **`ON DELETE CASCADE ON UPDATE CASCADE`** | Apagar usuário/personagem purga dados dependentes automaticamente |
-| **`updated_at DATETIME ... ON UPDATE CURRENT_TIMESTAMP`** | Observabilidade gratuita |
-| **`dvalue BLOB` (não MEDIUMBLOB)** | Limite 64 KB; suficiente para 99% dos casos. msgpack binário |
-
-Exemplo correto (`vhub_identity/sql/schema.sql`):
-
-```sql
-CREATE TABLE IF NOT EXISTS `vh_identity` (
-  `char_id`      INT UNSIGNED     NOT NULL,  -- DEVE casar com vh_characters.id
-  `firstname`    VARCHAR(50)      NOT NULL DEFAULT '',
-  ...
-  PRIMARY KEY (`char_id`),
-  CONSTRAINT `fk_identity_char` FOREIGN KEY (`char_id`)
-    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
-
-⚠️ Se seu valor pode exceder 64 KB (inventário gigante, log binário), usar `MEDIUMBLOB`. Mas pense antes — frequência de write × tamanho × N players = potencial flood de batch SQL.
-
-### 3.5 Export sensível com `_invoker_allowed`
+### 3.7 Export sensível com `_invoker_allowed`
 
 ```lua
 -- server/exports.lua
-local TRUSTED = {
-  ['vhub_admin'] = true,
-  ['vhub_garage'] = true,  -- exemplo
-}
-
+local TRUSTED = { ['vhub_admin'] = true }
 local function _invoker_allowed()
   local caller = GetInvokingResource()
-  if not caller then return true end   -- chamada local OK
+  if not caller then return true end
   return TRUSTED[caller] == true
 end
-
 exports('adminDeleteThing', function(id)
   if not _invoker_allowed() then return false end
-  -- ... operação destrutiva
+  -- ...
   return true
 end)
 ```
 
-**Regra L-07 + L-04:** export que muta estado **DEVE** validar invoker. Export read-only pode ser público.
+Export que **muta** = invoker validado. Export read-only pode ser público. Todo export novo é contrato (guardião de contratos): assinatura estável, retorno semântico, sem expor internals `_`.
 
-### 3.6 Spawn de veículo (servidor decide, cliente executa)
+### 3.8 Despawn confiável de entidade própria
 
-```lua
--- SERVIDOR — fonte da verdade do veículo (existência, dono, status)
-RegisterNetEvent('vhub_dom:reqSpawn')
-AddEventHandler('vhub_dom:reqSpawn', function(plate)
-  local src = source
-  Citizen.CreateThread(function()
-    -- 1) validar autoridade (servidor decide se pode)
-    local v = SQL:getVehicle(plate); if not v then return end
-    if v.char_id ~= getCharId(src) then return end
-    if v.status == 'impound' then return end
+Padrão do `vhub_garage/client/vehicles.lua`: `TaskLeaveVehicle(ped, veh, 16)` → `NetworkRequestControlOfEntity` + aguardar `NetworkHasControlOfEntity` → `SetEntityAsMissionEntity(veh, true, true)` → `DeleteEntity` → varredura `FindFirstVehicle/FindNextVehicle` apagando duplicatas pela placa nativa. `DecorSetString` não existe mais no FiveM.
 
-    -- 2) marcar como "out" no banco
-    SQL:updateStatus(plate, 'out')
-
-    -- 3) mandar cliente criar a entidade
-    TriggerClientEvent('vhub_dom:doSpawn', src, {
-      plate = plate, model = v.model,
-      pos = { x=g.x, y=g.y, z=g.z, h=g.h },
-    })
-  end)
-end)
-```
+### 3.9 NUI — abrir, fechar, callbacks (resumo; padrão completo no guardião designer)
 
 ```lua
--- CLIENTE — executa, sem decidir
-RegisterNetEvent('vhub_dom:doSpawn')
-AddEventHandler('vhub_dom:doSpawn', function(data)
-  Citizen.CreateThread(function()
-    local hash = GetHashKey(data.model)
-    RequestModel(hash); while not HasModelLoaded(hash) do Citizen.Wait(50) end
-    local veh = CreateVehicle(hash, data.pos.x, data.pos.y, data.pos.z + 0.5, data.pos.h, true, false)
-    SetVehicleNumberPlateText(veh, data.plate)
-    SetEntityAsMissionEntity(veh, true, true)
-    SetPedIntoVehicle(PlayerPedId(), veh, -1)
-    SetModelAsNoLongerNeeded(hash)
-  end)
-end)
-```
-
-### 3.7 Despawn confiável (mata duplicatas)
-
-Veja [vhub_garage/client/vehicles.lua](../resources/[SCRIPTS]/vhub_garage/client/vehicles.lua) — usa:
-1. `TaskLeaveVehicle(ped, veh, 16)` (flag 16 = warp out, sem animação).
-2. `NetworkRequestControlOfEntity` + espera real `NetworkHasControlOfEntity`.
-3. `SetEntityAsMissionEntity(veh, true, true)` + `DeleteEntity(veh)`.
-4. **`scanAndDeleteByPlate`** — varre `FindFirstVehicle`/`FindNextVehicle` e apaga duplicatas pela placa nativa.
-
-**Não use `DecorSetString`** — foi removido do FiveM. A placa do chassi (`GetVehicleNumberPlateText`) é replicada por sync nativo.
-
-### 3.8 NUI — abrir, fechar, callbacks
-
-Veja seção 7 do [`vhub_guardiao_designer.md`](../.claude/agents/vhub_guardiao_designer.md). Resumo:
-
-```lua
--- CLIENTE
-local function open()
-  SetNuiFocus(true, true)
-  SendNUIMessage({ action = 'open', data = { ... } })
-end
-local function close()
-  SetNuiFocus(false, false)
-end
-RegisterNUICallback('close', function(_, cb) close(); cb({ok=true}) end)
 RegisterNUICallback('act', function(data, cb)
-  -- Apenas relay para o servidor — NUNCA decidir
-  TriggerServerEvent('vhub_dom:act:' .. data.kind, data.fields)
-  cb({ok=true})
+  TriggerServerEvent('vhub_dom:server:Act', data)  -- só intenção; servidor decide
+  cb({ ok = true })
 end)
 ```
 
-```javascript
-// NUI/js/app.js
-window.addEventListener('message', e => {
-  if (e.data.action === 'open') { /* render */ }
-  if (e.data.action === 'close') { /* hide */ }
-});
-async function call(cb, data) {
-  return fetch(`https://${GetParentResourceName()}/${cb}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data || {}),
-  }).then(r => r.json().catch(() => ({})));
-}
-```
+NUI nunca envia campo calculável (`cost/owner/balance`); `SetNuiFocus(false,false)` em todo close; RAF/interval mortos com NUI fechada (0.00 ms).
 
 ---
 
-## 4. Padrões de performance (resmon < 0.3 ms)
+## 4. Padrões de performance (Orçamentos = contrato, L-18)
 
-### 4.1 Frame loop só quando NECESSÁRIO
+### 4.1 Frame loop só quando NECESSÁRIO (duas threads: fria + quente)
 
-❌ **Errado:**
-```lua
-Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(0)
-    -- desenha marker sempre, mesmo longe
-    DrawMarker(1, x, y, z, ...)
-  end
-end)
-```
-
-✅ **Correto:**
 ```lua
 local proximo = false
-
--- thread fria — só checa proximidade 1x/s
-Citizen.CreateThread(function()
+Citizen.CreateThread(function()           -- fria: 1 Hz
   while true do
     Citizen.Wait(1000)
-    local d = #(GetEntityCoords(PlayerPedId()) - vector3(x, y, z))
-    proximo = d < 30.0
+    proximo = #(GetEntityCoords(PlayerPedId()) - vector3(x, y, z)) < 30.0
   end
 end)
-
--- thread quente — só roda quando perto
-Citizen.CreateThread(function()
+Citizen.CreateThread(function()           -- quente: só perto
   while true do
     if not proximo then Citizen.Wait(500)
-    else
-      Citizen.Wait(0)
-      DrawMarker(1, x, y, z, ...)
-    end
+    else Citizen.Wait(0); DrawMarker(1, x, y, z, ...) end
   end
 end)
 ```
 
-**Ganho:** 99% do tempo o frame loop está dormindo. resmon idle ≈ 0.
+### 4.2 State Bag antes de evento custom
 
-### 4.2 State Bag antes de RegisterNetEvent
+Servidor decide → `Player(src).state:set('vhub_dom_role', v, true)` / `Entity(ent).state:set(...)`. Cliente lê `LocalPlayer.state.x` ou `AddStateBagChangeHandler`. **Estado de entidade para todos os clientes = State Bag, nunca `TriggerClientEvent(-1)`** (broadcast só para evento discreto/efeito momentâneo).
 
-Para dados que o servidor já decidiu e precisam estar **disponíveis** em vários scripts client:
+### 4.3 Cache de export externo + invalidação por evento
 
-❌ **Errado:** RegisterNetEvent + TriggerServerEvent toda vez que precisa ler.
-
-✅ **Correto:**
 ```lua
--- SERVIDOR
-Player(src).state:set('vhub_dom_role', 'police', true)
-
--- CLIENTE (em qualquer resource)
-local role = LocalPlayer.state.vhub_dom_role
--- ou listener:
-AddStateBagChangeHandler('vhub_dom_role', `player:${GetPlayerServerId(PlayerId())}`,
-  function(_, _, value) handle(value) end)
-```
-
-State Bag é **replicado por sync nativo do GTA** — sem custo de rede extra, sem evento custom, sem polling.
-
-### 4.3 Cache de export externo
-
-❌ **Errado:**
-```lua
-function getRole(src)
-  return exports.vhub_groups:hasPermission(src, 'police')
-end
--- chamado a cada interação
-```
-
-Cada `exports.X:func()` é um round-trip cross-resource. Em 3k players, hot path quebra.
-
-✅ **Correto:**
-```lua
-local _role_cache = {}
-AddEventHandler('vhub_groups:changed', function(src) _role_cache[src] = nil end)
-AddEventHandler('playerDropped', function() _role_cache[source] = nil end)
-
+local _cache = {}
+AddEventHandler('vhub_groups:changed', function(src) _cache[src] = nil end)
+AddEventHandler('playerDropped', function() _cache[source] = nil end)
 local function getRole(src)
-  if _role_cache[src] ~= nil then return _role_cache[src] end
+  if _cache[src] ~= nil then return _cache[src] end
   local v = exports.vhub_groups:hasPermission(src, 'police')
-  _role_cache[src] = v
-  return v
+  _cache[src] = v; return v
 end
 ```
 
-**Regra:** sempre que o valor for relativamente estável (perm, identidade, role), cachear e invalidar via evento.
+### 4.4 Adaptive rate em report cliente (espelhar o core)
 
-### 4.4 Adaptive rate em report cliente
+morto 5000 ms · a pé 1000 ms · dirigindo 250 ms. O core já faz isso para veículo; replique a curva no seu HUD/report.
 
-O core pós-freeze JÁ aplica isso em [client/vehicle.lua](../resources/[CORE]/vhub/client/vehicle.lua):
-- parado (`speed_kmh < 1`) → **2000 ms** (0.5Hz)
-- idle/motor baixo (`rpm < 0.2`) → **1000 ms** (1Hz)
-- dirigindo → **250 ms** (4Hz)
-- fora de veículo → **1000 ms**
+### 4.5 Batch no SQL próprio
 
-Para um resource novo de UI/HUD, replicar o padrão:
+1 multi-insert `VALUES (?,?),(?,?)...` em vez de N execuções; ou enfileire no batch do core via `setCData` quando o dado é de personagem.
+
+### 4.6 Rate-limit declarado por evento (scripts não têm o Kernel:net)
 
 ```lua
-local function adaptiveDelay()
-  local ped = PlayerPedId()
-  if IsEntityDead(ped) then return 5000 end       -- morto: 0.2Hz
-  if not IsPedInAnyVehicle(ped, false) then return 1000 end  -- a pé: 1Hz
-  return 250                                       -- dirigindo: 4Hz
+-- server/core.lua — throttle O(1) por (src, chave)
+local _last = {}
+-- retorna true se a ação respeita o intervalo mínimo (ms)
+function Core.rate(src, key, ms)
+  local now = GetGameTimer()
+  local k = src .. ':' .. key
+  if (now - (_last[k] or 0)) < ms then return false end
+  _last[k] = now; return true
 end
-
-Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(adaptiveDelay())
-    -- coleta + envia
-  end
+AddEventHandler('playerDropped', function()
+  local p = source .. ':'
+  for k in pairs(_last) do if k:sub(1, #p) == p then _last[k] = nil end end
 end)
 ```
 
-**Ganho real:** com 3k drivers e 30% parado em semáforo, sai de 12k events/s para ~1.5k events/s (-87%).
+Tabela de intervalos vive em `shared/config.lua` (`CFG.rates = { acao = 1000, ... }`) — evento novo nasce com rate declarado (checklist 6.6).
 
-### 4.5 Batch de SQL próprio
+### 4.7 Doutrina de Escala no código
 
-Se o resource grava muito (ex: log de ações), use o **batch do core**:
-
-```lua
--- ruim: 100 INSERTs unitários
-for _, log in ipairs(logs) do
-  exports.oxmysql:execute('INSERT INTO logs ...', { ... })
-end
-
--- bom: 1 multi-insert
-local values, args = {}, {}
-for _, log in ipairs(logs) do
-  values[#values+1] = '(?, ?, ?)'
-  args[#args+1] = log.actor; args[#args+1] = log.action; args[#args+1] = log.payload
-end
-exports.oxmysql:execute(
-  'INSERT INTO logs (actor, action, payload) VALUES ' .. table.concat(values, ','),
-  args
-)
-```
-
-Ou enfileira no batch do core via `vHub.setCData` se for dado de personagem.
-
-### 4.6 NUI custom < 0.05 ms idle
-
-- `vhubSand.stop()` em `close` (mata `requestAnimationFrame`).
-- `setInterval` ou timer JS → `clearInterval` em `close`.
-- `MutationObserver`/`ResizeObserver` apenas com debounce.
-- Backdrop com `backdrop-filter` é **caro em GPU** — só renderiza quando NUI visível (`display: none` quando fechado).
-- Fontes via Google Fonts: preconnect já é padrão; preload se for crítica.
+`GetPlayers()` para lógica de domínio exige justificativa no gate (multi-instância quebra a suposição). Custo por player O(1): nada de loop server iterando todos os players por tick para recomputar algo que um evento/bag entrega.
 
 ---
 
@@ -524,96 +375,64 @@ Ou enfileira no batch do core via `vHub.setCData` se for dado de personagem.
 
 | Antipadrão | Por quê | Pattern |
 |---|---|---|
-| `while true do Wait(0)` sempre ativo | resmon spike, não desliga | Frame loop **condicional** (item 4.1) |
-| `TriggerServerEvent` em response a `Wait(0)` (4Hz fixo) | 12k events/s em 3k drivers | Adaptive rate (4.4) |
-| `exports.X:func()` em loop quente | round-trip × N | Cache + invalidação por evento (4.3) |
-| `SetEntityCoords` sem `RequestCollisionAtCoord` + wait | player cai no void | Sempre carregar colisão antes |
-| `DecorSetString` | **removido do FiveM** | `SetVehicleNumberPlateText` (placa nativa) ou State Bag |
-| `print()` solto | poluição de log | `vHub.Logger:info/warn/error` |
-| Lógica de negócio em NUI JS | bypassável | Server decide; NUI só envia intenção |
-| `Citizen.Await` fora de thread | crash | `Citizen.CreateThread` + `vHub.assertThread()` |
-| `exports.oxmysql:query` em loop hot | satura DB | Batch ou multi-insert |
-| Tabela `[src]` sem limpeza em `playerDropped` | memory leak | Sempre handler de drop |
-| Polling de player position via `GetEntityCoords` em loop frame | CPU spike | State Bag + listener |
-| Validar payload no client | trivialmente burlado | Server revalida tudo |
-| `for _ in pairs(big_table)` na thread principal | stall | Wait(0) a cada N (P0-5) |
-| `SetTimeout` recursivo sem cap | stack overflow | Trocar por `Citizen.CreateThread` + while |
-| FK `char_id INT` (signed) ao core | `errno 150` na criação | Sempre `INT UNSIGNED` em FK para `vh_users.id`/`vh_characters.id` |
-| `dvalue MEDIUMBLOB` em tabela KV nova | desperdiça buffer InnoDB | `BLOB` (64 KB) basta para 99%; só usar MEDIUMBLOB se realmente passa de 64 KB |
-| Chamar `_G.vRP`/`_G.Proxy`/`_G.Tunnel` | shim foi removido — `nil` em runtime | Usar `exports.vhub:*` direto |
-| Listener de `vHub:doSpawn`/`vHub:savePos` | eventos aposentados na decisão #7 | Usar `vhub_player_state:apply` (resource externo) |
-| Bloquear thread principal por > 5 ms | autosave atrasa, replicação trava | `Citizen.Wait(0)` a cada N iterações (padrão 50) |
+| `setVData(...)` fora do core | viola L-13; foi a causa do last-write-wins em `vh_vehicle_data` (8 casos históricos) — **hook bloqueia** | `commitVehicleState(plate, patch, reason)` |
+| Mutar `vd.state`/internos via `getVHub()`/`getVehicle()` | L-14; repair-hack e corrupção de sessão | leitura: `getVehicleState`; escrita: contrato |
+| Escrever chave KV de outro domínio (`setCData(cid,'banco',...)` fora do money) | segunda verdade (L-04/L-13) | chave própria prefixada + linha no Registro |
+| `SetPlayerModel`/`SetEntityCoords` de spawn fora do `vhub_player_state` | 3 escritores disputaram o ped (caso real) | `spawnAt`/`teleport`/provider `chooseSpawn` |
+| Handler `vHub:playerSpawn` sem replay-guard | core re-dispara em `onResourceStart` → re-teleporte global (caso real) | snapshot de `user.spawns` (§3.1) |
+| Arquivo `.lua` fora do manifest / módulo `return M` sem global | código morto/fantasma (5 casos reais, 1 com `os.exit`) — **hook bloqueia** | manifest no mesmo commit; `VHubX = M` |
+| `os.exit()`, version-check HTTP, anti-tamper vendor | derruba/expõe o servidor | deletar na chegada |
+| `TriggerClientEvent(-1, ...)` p/ estado de entidade | N mensagens × players; bag faz delta de graça | State Bag |
+| Comentar a lei violando-a (`-- L-04` num segundo escritor) | corrói toda a constituição — violação agravada | cumprir ou renegociar no gate |
+| `while true do Wait(0)` sempre ativo | resmon spike | frame loop condicional (4.1) |
+| `exports.X:func()` em loop quente | round-trip × N | cache + invalidação (4.3) |
+| `SetEntityCoords` sem `RequestCollisionAtCoord` + wait | player cai no void | carregar colisão antes |
+| `DecorSetString` | removido do FiveM | placa nativa / State Bag |
+| `print()` solto | poluição | `vHub.Logger` |
+| Lógica de negócio em NUI JS | bypassável | servidor decide |
+| `Citizen.Await` fora de thread | crash | `CreateThread` + `assertThread` |
+| `oxmysql:query` em loop hot / N+1 | satura DB | batch/multi-insert |
+| Tabela `[src]` sem limpeza em `playerDropped` | leak | handler de drop sempre |
+| Payload sem validação de shape/range | exploit trivial | validar antes do domínio |
+| FK signed ao core / `MEDIUMBLOB` por padrão | `errno 150` / buffer | `INT UNSIGNED` / `BLOB` |
+| `_G.vRP/Proxy/Tunnel` | shim removido | `exports.vhub:*` |
+| Bloquear tick > 5 ms | autosave atrasa | `Wait(0)` a cada N (50) |
 
 ---
 
-## 6. Checklist de release (todo PR de resource passa)
+## 6. Checklist de release (Definition of Done — todo PR passa)
+
+### 6.0 Ownership e governança
+- [ ] Linha do **Registro de Ownership** criada/atualizada (dado novo → chave, owner, leitores, persistência, contrato)?
+- [ ] Grep de fechamento limpo: `setVData` fora do core = 0; `getVHub` só leitura; spawn de ped só no owner?
+- [ ] Todo `.lua` novo referenciado no `fxmanifest.lua` (L-15)? Arquivos substituídos foram deletados?
+- [ ] Smoke test descrito e executável; rollback em 1 linha?
 
 ### 6.1 Estrutura
-- [ ] Pastas seguem o template da seção 1?
-- [ ] `fxmanifest.lua` declara todas as dependências?
-- [ ] `schema.sql` (se houver) usa `CREATE TABLE IF NOT EXISTS`?
-- [ ] FK para `vh_users.id` ou `vh_characters.id` declarada como `INT UNSIGNED`?
-- [ ] Schema tem `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`?
-- [ ] FK ao core com `ON DELETE CASCADE ON UPDATE CASCADE`?
+- [ ] Pastas no template (§1)? Dependências declaradas? Schema `IF NOT EXISTS`, InnoDB/utf8mb4, FK `INT UNSIGNED` + CASCADE? Tabelas com prefixo `vhub_<dom>_`?
 
 ### 6.2 Servidor
-- [ ] Toda função pública tem comentário PT-BR de uma linha (L-10)?
-- [ ] `Citizen.CreateThread` em toda função que usa `Await` (L-09)?
-- [ ] Validação server-side em **toda** decisão crítica (L-01)?
-- [ ] Export sensível tem `_invoker_allowed` (L-07)?
-- [ ] Sem SQL inline — usa `exports.oxmysql:query/execute` em wrapper?
-- [ ] Handler `playerDropped` limpa qualquer tabela `[src]`?
+- [ ] Comentário PT-BR por função pública (L-10)? `CreateThread` onde há `Await`? Validação server-side em toda decisão crítica? Export sensível com `_invoker_allowed`? `playerDropped` limpa toda tabela `[src]`? Handlers institucionais com replay-guard (L-17)?
 
 ### 6.3 Cliente
-- [ ] Frame loop está condicional (não roda em idle)?
-- [ ] `SetNuiFocus(false, false)` em todo close?
-- [ ] `requestAnimationFrame` cancelado quando NUI fecha?
-- [ ] Cache de export externo (perm, identidade)?
+- [ ] Frame loop condicional? Estado de veículo lido por State Bag? `SetNuiFocus(false,false)` em todo close? Cache de export externo?
 
 ### 6.4 NUI
-- [ ] Theme vHub aplicado (logo, areia, dourado, liquid glass)? Ver [guardião designer](../.claude/agents/vhub_guardiao_designer.md).
-- [ ] `<meta charset="UTF-8">` + `<html lang="pt-BR">`?
-- [ ] Sem acentos quebrados (grep `c o`, `s o`, `n o`)?
-- [ ] Glossário PT-BR (Curar/Expulsar/Prender, não Heal/Kick/Jail)?
+- [ ] Theme vHub (guardião designer)? `lang="pt-BR"` + UTF-8? RAF/interval/observer mortos no close?
 
-### 6.5 Performance
-- [ ] Medido com `resmon` em ambiente com 50+ players simulados?
-- [ ] Server resmon < 0.1 ms/tick idle?
-- [ ] Client resmon < 0.05 ms/tick idle (quando NUI fechado)?
-- [ ] DB latency média < 5 ms por query simples?
+### 6.5 Performance (Orçamentos)
+- [ ] resmon idle ≤ 0.02 ms (script) / ativo p95 ≤ 0.10 ms? Client idle fora de contexto 0.00 ms? NUI fechada 0.00 ms? resmon antes/depois anexado se tocou hot path?
 
 ### 6.6 Segurança
-- [ ] Payload do cliente é validado (tipos, ranges, tamanho)?
-- [ ] Rate limit em events de cliente (opts.rate)?
-- [ ] Logs de ações sensíveis (`Core:audit` ou equivalente)?
+- [ ] Shape/range/tamanho do payload validados ANTES do domínio? **Rate declarado em `CFG.rates` para todo evento de cliente** (§4.6)? Ações sensíveis logadas com `reason`?
 
 ---
 
-## 7. Como medir resmon (e bater 0.3 server-total)
+## 7. Como medir resmon
 
-### 7.1 Comandos in-game
-```
-resmon          # janela com todos os resources, cpu/mem
-strdbg          # streaming debugger
-status          # players connected
-profiler record # gravação detalhada
-```
-
-### 7.2 O que olhar
-- **server-tick**: tempo médio que o servidor leva por tick. Alvo: < 0.3 ms com 100+ players.
-- **resource cpu**: cada resource deve ficar < 0.05 ms idle e < 0.2 ms ativo.
-- **net out**: tráfego enviado. Picos > 1 MB/s indicam State Bag flood.
-
-### 7.3 Estratégia top-down
-1. Rodar servidor em estado idle (sem ações). Anotar baseline.
-2. Conectar 1 player. Anotar delta.
-3. Simular pico (10/50/100 players via `txAdmin` simulator). Identificar resources que escalam **superlinear**.
-4. Atacar os 3 mais caros — geralmente são scripts com loop frame ativo.
-
-### 7.4 Threshold de alerta
-- Server tick > 0.5 ms → vermelho.
-- Single resource > 0.3 ms → vermelho.
-- Net out > 500 KB/s constante → vermelho.
+`resmon` · `profiler record` · `status`. Olhar: server-tick médio, cpu por resource, net out.
+Baseline idle → +1 player → pico simulado (txAdmin) → atacar quem escala **superlinear** (quase sempre frame loop ativo ou broadcast).
+Alertas: server tick > 0.5 ms · resource > 0.3 ms · net out > 500 KB/s constante = vermelho. Metas por resource: tabela de Orçamentos do `CLAUDE.md` (é contrato — estourou, renegocia no gate antes de mergear).
 
 ---
 
@@ -624,50 +443,31 @@ profiler record # gravação detalhada
 | VRAM-first | ❌ | ⚠️ | ⚠️ | ⚠️ | ✅ |
 | Batch SQL transacional | ❌ | ❌ | ❌ | ⚠️ | ✅ |
 | Driver plugável (`registerStateDriver`) | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Authoritative server bag (State Bag canônica) | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
-| `NetworkSetEntityOwner` em driver | ❌ | ❌ | ❌ | ⚠️ | ✅ |
+| State Bag canônica com gating delta | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
+| `NetworkSetEntityOwner` controlado | ❌ | ❌ | ❌ | ⚠️ | ✅ |
 | Rate-limit por evento O(1) | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Spawn nativo (sem `spawnmanager`) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Spawn com dono único + provider de coordenada | ❌ | ❌ | ❌ | ❌ | ✅ |
 | `assertThread` em APIs com Await | ❌ | ❌ | ❌ | ❌ | ✅ |
 | `_invoker_allowed` em exports sensíveis | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
-| TX com rollback validável | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Adaptive client report (não-fixed Hz) | ❌ | ❌ | ❌ | ❌ | ✅ |
-| State Bag com gating delta | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Schema único com FK CASCADE em todas as deps | ❌ | ❌ | ❌ | ⚠️ | ✅ |
-
-**Conclusão técnica:** o vHub é o primeiro GTARP brasileiro que alinha:
-1. **Memory-first** (VRAM como source of truth runtime)
-2. **Persistência preguiçosa** (batch transacional `BATCH_MAX=800`)
-3. **Autoridade GTA explícita** (NetworkSetEntityOwner controlado)
-4. **Modularidade** (driver SQL plugável; spawn delegado a resource externo)
-5. **Performance adaptativa** (cliente reduz Hz quando parado; servidor descarta delta abaixo do threshold)
-6. **Zero legado** (`compat: none` — sem shim vRP/Proxy/Tunnel)
+| **Contrato de commit p/ estado de veículo (escritor único + reason auditável)** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Adaptive client report | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Governança executável (leis com detector mecânico) | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
-## 9. Como criar um novo resource em 15 minutos
+## 9. Novo resource em 15 minutos (ciclo completo)
 
-1. Copiar a estrutura template (seção 1) para `resources/[SCRIPTS]/vhub_<dom>/`.
-2. Editar `fxmanifest.lua` (seção 2).
-3. Em `shared/config.lua`: criar `VHub<Dom> = {}; VHub<Dom>.cfg = { ... }`.
-4. Em `shared/events.lua`: criar `VHub<Dom>.E = { ... }`.
-5. Em `server/init.lua`: load schema + sessões:
-```lua
-AddEventHandler('onResourceStart', function(res)
-  if res ~= GetCurrentResourceName() then return end
-  Citizen.CreateThread(function()
-    local schema = LoadResourceFile(res, 'sql/schema.sql')
-    if schema then exports.oxmysql:execute(schema, {}, function() end) end
-  end)
-end)
-AddEventHandler('vHub:characterLoad', function(user) sessions[user.source] = user end)
-AddEventHandler('playerDropped', function() sessions[source] = nil end)
-```
-6. Em `server/<feature>.lua`: handlers de net + lógica.
-7. Em `client/init.lua`: NUI open/close + callbacks.
-8. Em `nui/`: copiar `bg.png` + `logo.png` do `vhub_garage` e seguir o **guardião designer**.
-9. Em `sql/schema.sql`: usar template canônico (ver 3.4.1) — **FK ao core sempre `INT UNSIGNED`**.
-10. `restart vhub_<dom>` e validar resmon.
+0. **Linha do Registro de Ownership** (dado, owner, leitores, persistência, contrato) + gate `vhub_arquiteto`. Sem isso, não há passo 1.
+1. Copiar template (§1); **cada arquivo entra no fxmanifest na hora** (§2).
+2. `shared/config.lua`: `VHubDom = VHubDom or {}; VHubDom.cfg = {...}; VHubDom.cfg.rates = { acao = 1000 }`.
+3. `shared/events.lua`: `VHubDom.E = { SRV_ACT = 'vhub_dom:server:Act', CLI_X = 'vhub_dom:client:X' }` (global — sem `return`).
+4. `server/init.lua`: schema idempotente + sessões com replay-guard (§3.1).
+5. `server/core.lua`: `hasPerm` (§3.4) + `rate` (§4.6).
+6. `server/<feature>.lua`: handlers `shape → rate → getUser → domínio`; mundo físico **sempre pelos contratos** (`commitVehicleState`, `spawnAt/teleport`, exports money/inventory/garage).
+7. `client/`: zonas frias/quentes (§4.1), leituras por State Bag (§4.2), NUI relay puro (§3.9).
+8. `sql/schema.sql`: prefixo `vhub_<dom>_`, FK `INT UNSIGNED` CASCADE.
+9. `restart vhub_<dom>` → resmon idle dentro do orçamento → smoke do §6.0.
+10. Gate final `vhub_guardiao_revisao` (DoD completo).
 
 ---
 
@@ -675,23 +475,22 @@ AddEventHandler('playerDropped', function() sessions[source] = nil end)
 
 | Situação | Agente |
 |---|---|
-| Mudança estrutural, novo módulo, dúvida de ownership | `vhub_arquiteto` |
-| Tocar API pública, exports, schema, `shared/events.lua` | `vhub_guardiao_contrato` |
-| Tocar auth, permissão, evento cliente, spawn, ban | `vhub_guardiao_seguranca` |
-| Tocar entity, ped, netid, State Bag, spawn, vehicle | `vhub_guardiao_natives` |
-| Tocar thread, loop, batch SQL, serialização | `vhub_guardiao_performance` |
-| Criar módulo, helper, refactor | `vhub_guardiao_simplicidade` |
-| Tocar NUI, CEF, HUD, client/, SendNUIMessage | `vhub_guardiao_designer` |
-| Gate final antes de commit relevante | `vhub_guardiao_revisao` |
-
-Invocação via `Agent` tool com `subagent_type` correspondente. **Sempre** rodar `vhub_guardiao_revisao` no final.
+| Estrutural, novo módulo, ownership, linha do Registro | `vhub_arquiteto` |
+| `set*Data`, schema, batch/flush, contrato de commit, round-trip | `vhub_guardiao_persistencia` |
+| API pública, exports, eventos, descontinuação | `vhub_guardiao_contrato` |
+| Auth, permissão, payload, spawn, claim de entidade | `vhub_guardiao_seguranca` |
+| Entity, ped, netid, State Bag, bucket | `vhub_guardiao_natives` |
+| Thread, loop, batch, serialização, orçamento | `vhub_guardiao_performance` |
+| Módulo/helper novo, refactor, código morto | `vhub_guardiao_simplicidade` |
+| NUI/CEF/HUD | `vhub_guardiao_designer` / `vhub_designer` |
+| Gate final | `vhub_guardiao_revisao` |
 
 ---
 
 ## 11. Resumo em uma linha
 
-> **"Servidor decide, cliente executa. VRAM é verdade, SQL é backup. Native antes de helper. Evento antes de polling. Batch antes de unitário. PT-BR para o player, inglês para a máquina."**
+> **"Servidor decide, cliente executa. VRAM é verdade, SQL é backup. Um dono por dado: peça ao dono, nunca escreva no que não é seu. Native antes de helper, evento antes de polling, batch antes de unitário, replay-safe por padrão. PT-BR para o player."**
 
-Se o seu código viola alguma dessas 6 — pare e revise.
+Se o seu código viola alguma dessas — pare, consulte o Registro de Ownership e o agente da área.
 
-— **Manual** — vHub Mirage — versão 1.1 (pós Frozen v1.0) — 2026-05-22
+— **Manual** — vHub Mirage — **versão 2.0** (pós-auditoria Void-Zero + IT.1/IT.2 + Governança v2) — 2026-06-10

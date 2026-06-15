@@ -6,7 +6,7 @@ VHubGarage = VHubGarage or {}
 VHubGarage.cfg = {
   -- ---------- Taxas e custos -----------------------------------------------
   taxa_force_out      = 50,      -- recolocar ve culo que est  "out" (perdeu, esqueceu)
-  taxa_placa_custom   = 200,     -- ao comprar com placa personalizada
+  taxa_placa_custom   = 2000,     -- ao comprar com placa personalizada
   fator_revenda_loja  = 0.60,    -- venda concession ria
   fator_test_drive    = 0.01,    -- 1% do pre o
   test_drive_segundos = 180,     -- 3 minutos
@@ -20,6 +20,8 @@ VHubGarage.cfg = {
   ipva_porcentagem    = 0.01,    -- 1% do pre o do ve culo
   patio_taxa          = 500,     -- taxa base de libera  o
   patio_taxa_porcent  = 0.05,    -- + 5% do pre o do ve culo
+  patio_boot_scan     = true,      -- recolhe veiculos "out" orfaos no boot real (IT.3)
+  patio_boot_destino  = 'impound', -- 'impound' (cobra taxa) | 'garage' (devolve gratis)
   reparo_taxa_engine  = 0.0015,  -- 0,15% do pre o por ponto de dano (motor)
   reparo_taxa_body    = 0.0008,  -- 0,08% do pre o por ponto de dano (carro aria)
   clone_chave_taxa    = 800,     -- clonar chave (item extra no invent rio)
@@ -33,7 +35,7 @@ VHubGarage.cfg = {
   spawn_offset_plane = { x = 0.0, y = 25.0, z = 0.0 },
   spawn_offset_heli  = { x = 0.0, y = 0.0,  z = 0.0 },
 
-  raio_guardar       = 18.0,     -- raio para guardar ve culo na garagem
+  raio_guardar       = 5.0,     -- raio para guardar ve culo na garagem
   report_intervalo_s = 30,       -- cliente reporta posi  o/customiza  o a cada 30s
 
   -- ---------- Garagens (multi-tipo) ----------------------------------------

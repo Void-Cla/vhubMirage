@@ -1,0 +1,103 @@
+{
+	"Rules": [
+		{
+			"title": "Kural 1 ",
+			"rule": "Rol Dışına çıkılması yasaktır. /me ooc , /do ooc komutlarının kullanılması yasaktır."
+		},
+		{
+			"title": "Kural 2 ",
+			"rule": "'ADK' ve 'DDK' yasaktır."
+		},
+		{
+			"title": "Kural 3 ",
+			"rule": "Video Kayıtsız İşlem Yapılmamaktadır."
+		},
+		{
+			"title": "Kural 4 ",
+			"rule": "Trash Talk yasaktır."
+		},
+		{
+			"title": "Kural 5 ",
+			"rule": "Combatlog yasaktır."
+		},
+		{
+			"title": "Kural 6 ",
+			"rule": " 1 oluşum 1 oluşum ile gang up yapamaz."
+		},
+		{
+			"title": "Kural 7 ",
+			"rule": "Pvp grafik paketleri , zoom gibi pluginler kullanılması yasaktır."
+		},
+		{
+			"title": "Kural 8 ",
+			"rule": "Bir soygun vb birşey yaptığınızda ben çalıdaydım aracın plakasını aldım veya ben çalıda yaşıyordum sizleri gördüm tarzı rollere girmeniz için video kayıtınız olmalıdır."
+		},
+		{
+			"title": "Kural 9 ",
+			"rule": "Bir çatışmada yaralanıp 'H' çekmeniz durumunda 20 dakika boyunca oradaki role dahil olamazsınız, O süreci hatırlayamaz, ona dair roller çeviremezsiniz."
+		},
+		{
+			"title": "Kural 10 ",
+			"rule": "Vurulan kişiler kimin vurduğunu hatırlayamaz tedavi olduktan sonra. (Son 20 DK unutulur)"
+		},
+		{
+			"title": "Kural 11 ",
+			"rule": "Sosyal alanlarda bağırarak küfür etmek yasaktır aranızda küfürleşebilirsiniz ama başka birisi bu küfürleri duymak zorunda değil"
+		}
+	],
+
+	"Gallery": ["1.png", "2.png", "3.png", "4.png", "5.png", "6.png", "7.png", "8.png", "9.png"],
+
+	"Team": [
+		{
+			"img": "dvx.png",
+			"rank": "Owner",
+			"name": "Toxic"
+		},
+		{
+			"img": "pxaq.png",
+			"rank": "Owner",
+			"name": "Toxic"
+		}
+	],
+
+	"Updates": [
+		{
+			"img": "",
+			"title": "Fps sorunu düzeltildi.",
+			"update": "Araç içinde olan fps düşüş sorunu düzeltildi."
+		},
+		{
+			"img": "",
+			"title": "Araç bozulma sorunu düzeltildi.",
+			"update": "Araçların bozuk çıkma sıkıntısı çözüldü."
+		}
+	],
+
+	"Music": [
+		{
+			"name": "Mantém",
+			"author": "WIU & Matuê",
+			"path": "musics/son.mp3"
+		}
+	],
+
+	"Keys": {
+		"1": {
+			"title": "Telefon",
+			"description": "Telefonu açmanızı sağlar"
+		},
+		"2": {
+			"title": "Envanter",
+			"description": "Envanteri açmanızı sağlar"
+		},
+		"3": {
+			"title": "Radialmenu",
+			"description": "Radialmenu açmanızı sağlar"
+		}
+	},
+
+	"Discord": "https://www.discord.gg/toxicfivem",
+	"Instagram": "https://www.tiktok.com/@35rpofficialdcd",
+	"Youtube": "https://www.youtube.com/watch?v=-7cGOnFH0Kc&list=RDWSks7yPXlh4&index=2d"
+}

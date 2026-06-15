@@ -1,0 +1,23 @@
+/* shared/slots.css — visual de um slot de item (compartilhado por mochila e baú). */
+
+.slot {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--vh-border);
+  border-radius: var(--vh-radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color .12s, background .12s;
+}
+.slot[data-filled]        { cursor: grab; background: var(--vh-glass-2); border-color: var(--vh-border-2); }
+.slot[data-filled]:hover  { border-color: var(--vh-gold); }
+.slot.drop-hot            { border-color: var(--vh-gold); background: rgba(248, 200, 105, 0.10); }
+.slot.dim                 { opacity: 0.22; filter: grayscale(0.6); }   /* nao casa com a busca/filtro */
+
+.slot .ic  { position: absolute; inset: 8px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.slot .qt  { position: absolute; right: 4px; bottom: 3px; font-size: 12px; font-weight: 700; color: var(--vh-text); text-shadow: 0 1px 2px #000; }
+.slot .ini { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--vh-text-dim); }
+.slot .pl  {
+  position: absolute; left: 3px; top: 3px; max-width: calc(100% - 6px);
+  padding: 1px 4px; border-radius: 4px; font-size: 9px; font-weight: 700; letter-spacing: .5px;
+  color: #1a1710; background: var(--vh-gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

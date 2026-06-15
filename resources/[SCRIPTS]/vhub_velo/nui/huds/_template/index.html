@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <!-- ============================================================
+         TEMPLATE DE VELOCÍMETRO vHub — molde de LINHA DE PRODUÇÃO.
+
+         Para criar um HUD novo (2 passos, zero Lua):
+           1. Copie ESTA pasta → nui/huds/<categoria>/<seu_nome>/ e troque só o CSS/markup.
+           2. Registre 1 linha em shared/config.lua → Config.Huds["<categoria>"].
+
+         REGRAS DO PADRÃO:
+           - Raiz OBRIGATÓRIA: <div id="velo-root">  (velo-core alterna .velo-active no veículo).
+           - Use os IDs padrão (só os que quiser — velo-core é NULL-SAFE, ignora os ausentes):
+               vehicle-speed-prefix + vehicle-speed · vehicle-gear · speed-needle · rpm-needle ·
+               fuel-needle · [data-odo-digit] .odoColumn (6×) · status-turn-left/right · status-seatbelt · status-lock
+           - Inclua /nui/velo-core.js (root-relative — funciona em qualquer pasta) e chame VeloCore.init() no fim.
+           - Fundo e cor personalizáveis pelo jogador (/velo): use var(--velo-bg) e var(--velo-accent).
+           - Lógica extra opcional: window.veloCustomRender = (state) => { ... }  (roda a cada update).
+           - NÃO registre o _template no Config.Huds (ele é só molde; não aparece na galeria).
+         ============================================================ -->
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            background: transparent !important; user-select: none;
+            font-family: system-ui, 'Segoe UI', sans-serif;
+        }
+
+        /* raiz do HUD — velo-core alterna .velo-active conforme o veículo */
+        #velo-root {
+            position: absolute; right: 22px; bottom: 22px;
+            width: 240px; padding: 16px; border-radius: 16px; color: #d9c19a;
+            /* FUNDO personalizável pelo jogador (var --velo-bg); fallback = vidro vHub */
+            background-image: var(--velo-bg, none);
+            background-color: rgba(12, 10, 6, 0.55);
+            background-size: cover; background-position: center;
+            border: 1px solid rgba(217, 193, 154, 0.22);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            opacity: 0; transform: translateY(12px);
+            transition: opacity .25s ease, transform .25s ease;
+        }
+        #velo-root.velo-active { opacity: 1; transform: translateY(0); }
+
+        .t-row { display: flex; align-items: baseline; gap: 8px; }
+        .t-speed { font-family: 'Consolas', monospace; font-weight: 800; line-height: 1; }
+        .t-speed #vehicle-speed-prefix { font-size: 26px; color: rgba(217, 193, 154, 0.30); }
+        /* COR de destaque personalizável (var --velo-accent) */
+        .t-speed #vehicle-speed { font-size: 46px; color: #fff; text-shadow: 0 0 12px var(--velo-accent, #f3b53a); }
+        .t-unit { font-size: 11px; letter-spacing: 2px; font-weight: 700; color: var(--velo-accent, #f3b53a); }
+        .t-gear { margin-left: auto; font-family: 'Consolas', monospace; font-size: 22px; font-weight: 800;
+            color: var(--velo-accent, #f3b53a); }
+
+        .t-fuel { margin-top: 12px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.35); overflow: hidden; }
+        .t-fuel > i { display: block; height: 100%; width: 100%; transform-origin: left;
+            background: var(--velo-accent, #f3b53a); transition: transform .2s ease; }
+
+        /* odômetro: 6 dígitos rolantes (velo-core anima via [data-odo-digit] .odoColumn, altura 11px) */
+        .t-odo { margin-top: 10px; display: flex; gap: 2px; }
+        .odoDigit { width: 11px; height: 11px; overflow: hidden; border-radius: 2px; background: rgba(0, 0, 0, 0.4); }
+        .odoColumn { display: flex; flex-direction: column; will-change: transform; }
+        .odoColumn span { height: 11px; display: flex; align-items: center; justify-content: center;
+            font-family: 'Consolas', monospace; font-size: 9px; color: #d9c19a; }
+
+        /* indicadores: velo-core seta data-status on/off */
+        .t-status { margin-top: 10px; display: flex; gap: 12px; font-size: 11px; font-weight: 700; }
+        .t-status > div { opacity: .25; transition: opacity .15s ease, color .15s ease; }
+        .t-status > div[data-status="on"] { opacity: 1; }
+        #status-turn-left[data-status="on"], #status-turn-right[data-status="on"], #status-seatbelt[data-status="on"] { color: #37e0a1; }
+        #status-lock[data-status="on"] { color: #e8513f; }
+    </style>
+</head>
+<body>
+    <div id="velo-root">
+
+        <div class="t-row">
+            <span class="t-speed"><span id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></span>
+            <span class="t-unit">KM/H</span>
+            <span class="t-gear" id="vehicle-gear">N</span>
+        </div>
+
+        <div class="t-fuel"><i id="t-fuel-bar"></i></div>
+
+        <div class="t-odo">
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+            <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+        </div>
+
+        <div class="t-status">
+            <div id="status-turn-left">&#9664;</div>
+            <div id="status-seatbelt">CINTO</div>
+            <div id="status-lock">TRAVA</div>
+            <div id="status-turn-right">&#9654;</div>
+        </div>
+    </div>
+
+    <!-- lógica extra OPCIONAL desta HUD (roda a cada update) -->
+    <script>
+        window.veloCustomRender = function (state) {
+            var bar = document.getElementById('t-fuel-bar');
+            if (bar) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, (state.fuel_percent || 0) / 100)).toFixed(3) + ')';
+        };
+    </script>
+
+    <!-- engine universal: telemetria, gauges, odômetro RAF, personalização --velo-bg/--velo-accent.
+         Use SEMPRE o caminho root-relative /nui/velo-core.js (funciona em qualquer profundidade). -->
+    <script src="/nui/velo-core.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            VeloCore.init(window.veloOpts || {});   // curvas de ponteiro opcionais: window.veloOpts = { speedPoints:[...] }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+/* modules/hotbar/hotbar.css — barra de atalhos (sempre visivel, base-centro). */
+
+.mod-hotbar {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+  display: flex; gap: 8px; z-index: 50;
+}
+
+/* usa .slot (de slots.css) p/ ser alvo do drag; aqui so o tamanho fixo */
+.mod-hotbar .hb-cell {
+  width: 52px; height: 52px; aspect-ratio: auto;
+  background: rgba(20, 18, 14, 0.55);
+}
+
+.mod-hotbar .hb-key {
+  position: absolute; left: 4px; top: 2px; z-index: 2;
+  font-size: 10px; font-weight: 700; color: var(--vh-gold); text-shadow: 0 1px 2px #000;
+}

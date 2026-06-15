@@ -1,6 +1,8 @@
 # FXServer
 build/
 cache/
+tools/
+metas/
 
 # Exemplos e bases de referência
 exemplos de base/

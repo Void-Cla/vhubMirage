@@ -1,0 +1,24 @@
+/* web/shared/reset.css — reset canônico vHub. */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body { width: 100%; height: 100%; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input  { font-family: inherit; }
+img    { display: block; max-width: 100%; }
+ul, ol { list-style: none; }
+
+.hidden { display: none !important; }

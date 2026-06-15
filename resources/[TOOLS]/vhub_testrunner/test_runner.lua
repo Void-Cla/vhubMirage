@@ -83,6 +83,112 @@ function tests.test_exports_protection()
   return (ok_blocked and ok_allowed)
 end
 
+-- Regressão A1 (IT.6 / Void-Zero): round-trip de vh_vehicle_data (write → flush → read).
+-- Trava o bug @dkey→@key (decisão #20). Se as prepared vh/set_vd|get_vd regredirem para
+-- @dkey, o write falha silencioso e o read volta nil → este teste fica vermelho na hora.
+function tests.test_vdata_roundtrip()
+  if not (vHub.State and vHub.State._ready) then
+    safePrint("State._ready=false — pulando test_vdata_roundtrip"); return nil
+  end
+  local done = promise.new()
+  Citizen.CreateThread(function()
+    local plate = "TRVD01"
+    -- ancora a FK (vh_vehicle_data → vh_vehicles)
+    Citizen.Await(vHub.State:exec("vh/veh_create", { plate = plate, key_uid = nil }))
+    local marcador = { fuel = 42.5, odometer = 123.4, probe = GetGameTimer() }
+    vHub.setVData(plate, "state", marcador)   -- enfileira + invalida VRAM
+    vHub.State:_flush()
+    Citizen.Wait(800)                          -- janela do batch
+    local lido = vHub.getVData(plate, "state") -- VRAM invalidada → vem do banco
+    done:resolve(type(lido) == "table"
+      and lido.probe == marcador.probe
+      and math.abs((lido.fuel or 0) - 42.5) < 0.001)
+  end)
+  return Citizen.Await(done)
+end
+
+-- Regressão blindagem b64 (decisão A2 2026-06-11): _pack grava 'b64:'+base64 e
+-- _unpack decodifica — o msgpack binário era MANGLED na fronteira Lua→JS do
+-- oxmysql (bytes >= 0x80 viravam pares UTF-8; perda total na leitura). Cobre:
+-- payload binário completo 0x00–0xFF, valor string que colide com o prefixo
+-- 'b64:' e segundo ciclo write→flush→read (re-serialização estável).
+function tests.test_blob_armor_roundtrip()
+  if not (vHub.State and vHub.State._ready) then
+    safePrint("State._ready=false — pulando test_blob_armor_roundtrip"); return nil
+  end
+  local done = promise.new()
+  Citizen.CreateThread(function()
+    local plate = "TRVD02"
+    -- ancora a FK (vh_vehicle_data → vh_vehicles)
+    Citizen.Await(vHub.State:exec("vh/veh_create", { plate = plate, key_uid = nil }))
+
+    local bytes = {}
+    for b = 0, 255 do bytes[#bytes + 1] = string.char(b) end
+    local payload = {
+      raw     = table.concat(bytes),     -- binário completo (o mangle era fatal aqui)
+      colisao = "b64:texto_legitimo",    -- colisão de prefixo DENTRO do valor
+      fuel    = 73.25,
+    }
+
+    vHub.setVData(plate, "state", payload)   -- enfileira + invalida VRAM
+    vHub.State:_flush()
+    Citizen.Wait(800)
+    local lido = vHub.getVData(plate, "state")
+    local ok1 = type(lido) == "table"
+      and lido.raw == payload.raw
+      and lido.colisao == "b64:texto_legitimo"
+      and math.abs((lido.fuel or 0) - 73.25) < 0.001
+
+    -- segundo ciclo write→flush→read: formato estável, sem dupla blindagem
+    vHub.setVData(plate, "state", payload)
+    vHub.State:_flush()
+    Citizen.Wait(800)
+    local lido2 = vHub.getVData(plate, "state")
+    local ok2 = type(lido2) == "table" and lido2.raw == payload.raw
+
+    done:resolve(ok1 == true and ok2 == true)
+  end)
+  return Citizen.Await(done)
+end
+
+-- Regressão PRONTUÁRIO (sprint que supera #21): round-trip de vhub_vehicle_state
+-- via escritor único do conce. Cobre: normalização de placa suja (" trvs01 " →
+-- TRVS01, anti ghost-row #23), merge de patch parcial (campo ausente preservado)
+-- e fail-closed p/ placa sem registro de negócio.
+function tests.test_vstate_roundtrip()
+  local done = promise.new()
+  Citizen.CreateThread(function()
+    local plate = 'TRVS01'
+    pcall(function() exports.vhub_conce:deleteVehicle(plate) end)   -- limpa resto de run anterior
+    local created = false
+    pcall(function()
+      created = exports.vhub_conce:createVehicle({
+        plate = plate, model = 'sultan', vtype = 'car', category = 'test',
+        char_id = nil, status = 'out',
+      }) == true
+    end)
+    if not created then
+      safePrint("conce indisponível — pulando test_vstate_roundtrip"); done:resolve(nil)
+      return
+    end
+
+    -- placa suja DEVE normalizar p/ a mesma linha
+    local ok1 = exports.vhub_conce:saveVehicleState(' trvs01 ', { fuel = 47.5 }, 'pump')
+    -- patch parcial: engine muda, fuel do write anterior PRESERVADO
+    local ok2 = exports.vhub_conce:saveVehicleState(plate, { engine_health = 612.0 }, 'store')
+    local st  = exports.vhub_conce:getVehicleState(plate)
+    local merged = type(st) == 'table'
+      and math.abs((st.fuel or 0) - 47.5) < 0.01
+      and math.abs((st.engine_health or 0) - 612.0) < 0.01
+    -- fail-closed: placa inexistente nunca escreve
+    local ok3 = exports.vhub_conce:saveVehicleState('ZZNOPE99', { fuel = 1.0 }, 'pump')
+
+    pcall(function() exports.vhub_conce:deleteVehicle(plate) end)
+    done:resolve(ok1 == true and ok2 == true and merged == true and ok3 == false)
+  end)
+  return Citizen.Await(done)
+end
+
 local function run_all()
   if not tests.check_vhub_loaded() then
     safePrint("vHub não carregado — garanta que vhub esteja iniciado antes de executar os testes")

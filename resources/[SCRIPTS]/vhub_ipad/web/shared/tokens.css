@@ -1,0 +1,37 @@
+/* web/shared/tokens.css — tema do tablet (device-dark + accent Dourado vHub). */
+
+:root {
+  /* device (dark — o iPad é um "aparelho" próprio) */
+  --ipad-frame-edge: #4a4a4d;
+  --ipad-bezel:      #1a1a1c;
+  --screen-bg:       #000;
+
+  /* superfícies / vidro */
+  --glass:        rgba(20, 20, 24, 0.55);
+  --glass-strong: rgba(16, 16, 20, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-hover:  rgba(255, 255, 255, 0.08);
+
+  /* texto */
+  --text:     rgba(255, 255, 255, 0.92);
+  --text-dim: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.32);
+
+  /* accent de AÇÃO = Dourado vHub (identidade) */
+  --gold:      #f3b53a;
+  --gold-soft: rgba(243, 181, 58, 0.18);
+  --gold-line: rgba(243, 181, 58, 0.45);
+
+  /* geometria da tela (overlay sobre o retângulo do SVG, viewBox 1180x820) */
+  --screen-left:   5.085%;   /* 60/1180 */
+  --screen-top:    7.317%;   /* 60/820  */
+  --screen-width:  89.83%;   /* 1060/1180 */
+  --screen-height: 85.366%;  /* 700/820 */
+  --screen-radius: 1.4vw;
+
+  /* barras */
+  --statusbar-h: 6%;
+  --navbar-h:    9%;
+
+  --trans: 0.18s ease;
+}

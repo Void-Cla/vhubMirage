@@ -19,6 +19,7 @@ local _ready = false
 -- _by_src[src] = entry (mesmo objeto)
 Core._by_char = {}
 Core._by_src  = {}
+Core._loading = {}   -- [char_id]=true durante load_entry (guard p/ crédito offline concorrente)
 Core.metrics  = { loads = 0, saves = 0, save_skipped = 0, transactions = 0 }
 
 local function ms() return GetGameTimer() end
@@ -63,10 +64,12 @@ end
 function Core.load_entry(src, char_id)
   if not char_id or char_id <= 0 then return nil end
 
+  Core._loading[char_id] = true   -- guard: cobre a janela SELECT→atribuição (race de crédito offline)
   local row = SQL.load_account(char_id, Cfg.WALLET_INITIAL, Cfg.BANK_INITIAL)
   local entry = new_entry(src, char_id, row)
   Core._by_char[char_id] = entry
   Core._by_src[src]      = entry
+  Core._loading[char_id] = nil
   Core.metrics.loads = Core.metrics.loads + 1
 
   -- Se for nova conta, registra a transacao de saldo inicial
@@ -315,6 +318,42 @@ function Core.give_bank(src, amount, reason, actor_char_id, kind)
     reason         = tostring(reason or 'admin_give'),
   })
   Core.metrics.transactions = Core.metrics.transactions + 1
+  return true
+end
+
+-- TRUSTED: credita o BANCO por char_id, ONLINE ou OFFLINE (payout/refund de leilao).
+-- Online → crédito vivo (cache + HUD). Offline → incremento atômico no DB + auditoria.
+-- Fecha a corrida de login: se o char entrou durante o incremento, recarrega a cache do DB.
+function Core.give_bank_char(char_id, amount, reason)
+  local cid = tonumber(char_id) or 0
+  local n   = H.amount(amount)
+  if cid <= 0 or n <= 0 then return false, 'arg_invalido' end
+
+  local entry = Core._by_char[cid]
+  if entry then
+    return Core.give_bank(entry.src, n, reason, 0, H.KIND.ADMIN_GIVE)   -- online: crédito vivo
+  end
+
+  -- offline: incremento atômico no DB (não depende de cache)
+  SQL.add_bank_offline(cid, n)
+  SQL.tx_insert({
+    actor_char_id = 0, target_char_id = cid, kind = H.KIND.ADMIN_GIVE, amount = n,
+    source_account = H.ACCOUNT.NONE, target_account = H.ACCOUNT.BANK,
+    balance_wallet = 0, balance_bank = 0, reason = tostring(reason or 'offline_credit'),
+  })
+  -- fecha a corrida de login: se um load está em andamento (guard _loading) espera concluir;
+  -- depois, se o char ficou online, recarrega a cache do DB (que já contém o incremento) —
+  -- senão a row stale do SELECT do login sobrescreveria o crédito no próximo flush.
+  local tries = 0
+  while Core._loading[cid] and tries < 50 do Citizen.Wait(10); tries = tries + 1 end
+  local now = Core._by_char[cid]
+  if now then
+    local row = SQL.load_account(cid, Cfg.WALLET_INITIAL, Cfg.BANK_INITIAL)
+    now.wallet, now.bank        = row.wallet, row.bank
+    now.total_in, now.total_out = row.total_in, row.total_out   -- evita drift de métrica
+    now.dirty = false
+    Core.sync_state_bag(now)
+  end
   return true
 end
 

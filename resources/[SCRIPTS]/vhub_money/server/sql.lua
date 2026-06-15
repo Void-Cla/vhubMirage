@@ -91,6 +91,16 @@ function S.save_accounts_batch(rows)
   ]], params)
 end
 
+-- Credita o BANCO de um char_id OFFLINE de forma atomica no DB (bank += amount).
+-- Usado por payout/refund de leilao quando o alvo nao esta online (sem cache VRAM).
+function S.add_bank_offline(char_id, amount)
+  return S.execute([[
+    INSERT INTO vh_money_accounts (char_id, wallet, bank, total_in)
+    VALUES (?, 0, ?, ?)
+    ON DUPLICATE KEY UPDATE bank = bank + VALUES(bank), total_in = total_in + VALUES(total_in)
+  ]], { char_id, amount, amount })
+end
+
 -- ── Transactions (log auditavel) ─────────────────────────────────────────────
 
 -- Append-only. Fire-and-forget: nao bloqueia o caller.

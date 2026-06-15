@@ -1,22 +1,67 @@
--- client/modes/drift.lua — pontuacao por angulo + velocidade lateral.
+-- client/modes/drift.lua — BANCO da pontuacao de drift.
+--
+-- A mecanica + a fabricacao da pontuacao bruta vivem no resource "Drift"
+-- (exports.Drift:getTelemetry). Aqui aplicamos a regra de BANCO:
+--   • pontos do drift atual ficam "pendentes" (em risco);
+--   • a cada BANK_MS sem bater, o lote pendente vira pontuacao VALIDA (bancada);
+--   • bater (impacto) descarta o lote pendente — o ja bancado permanece.
+--
+-- active.drift_score = bancado (enviado ao server por sync.lua — o VALIDO).
+-- active.drift_live  = bancado + pendente (so para o HUD; cai ao bater).
 
 VHubRachaModes = VHubRachaModes or {}
 local Cfg = VHubRachaCfg
-local V   = VHubRachaVeh
+
+local BANK_MS = (Cfg.DRIFT and Cfg.DRIFT.BANK_MS) or 5000
+
+
+-- ============================================================
+-- TELEMETRIA DO RESOURCE "Drift"
+-- ============================================================
+
+-- snapshot nil-safe; degrada sem pontuar se o resource "Drift" nao estiver ativo.
+local function drift_telemetry()
+  if not exports.Drift then return nil end
+  local ok, snap = pcall(function() return exports.Drift:getTelemetry() end)
+  if not ok or type(snap) ~= 'table' then return nil end
+  return snap
+end
+
+
+-- ============================================================
+-- LIFECYCLE
+-- ============================================================
 
 VHubRachaModes.drift = {
   id = 'drift',
+
+  -- prepara o estado de banco no inicio da corrida (grid).
   start = function(active)
-    active.drift_score      = 0
-    active.drift_combo      = 1.0
-    active.drift_active_ms  = 0
-    active.drift_break_ms   = 0
-    active.drift_last_speed = 0
+    active.drift_score   = 0      -- bancado (pontuacao valida)
+    active.drift_live    = 0      -- bancado + pendente (HUD)
+    active.drift_combo   = 1.0
+    active._pending      = 0      -- lote em risco (zera ao bater)
+    active._window_ms    = 0      -- tempo acumulado no lote atual
+    active._last_total   = nil    -- baseline do total monotonico do Drift
+    active._last_crashes = nil
   end,
+
   on_start = function(_a) end,
   on_checkpoint = function(_a, _i) end,
-  on_finish = function(_a, _p) end,
+
+  -- chegada limpa: banca o lote pendente (o player nao bateu, entao mantem).
+  on_finish = function(active, _p)
+    if not active then return end
+    active.drift_score = (active.drift_score or 0) + math.floor(active._pending or 0)
+    active._pending    = 0
+    active.drift_live  = active.drift_score
+  end,
 }
+
+
+-- ============================================================
+-- BANK LOOP — consome o Drift e banca a cada BANK_MS sem bater
+-- ============================================================
 
 CreateThread(function()
   local last_t = GetGameTimer()
@@ -27,53 +72,45 @@ CreateThread(function()
       Wait(250)
       last_t = GetGameTimer()
     else
-      Wait(80)
+      Wait(100)   -- 10Hz: suficiente p/ o banco; o server faz o cap fino por segundo.
       local now = GetGameTimer()
-      local dt_ms = now - last_t
+      local dt = now - last_t
       last_t = now
-      if dt_ms < 1 then dt_ms = 80 end
+      if dt < 1 then dt = 100 end
 
-      local ped = PlayerPedId()
-      local veh = V.ped_vehicle(ped)
-      if veh == 0 then
-        active.drift_combo = 1.0
-        active.drift_active_ms = 0
-      else
-        local fwd, lat = V.local_velocity(veh)
-        local speed = math.abs(fwd) + math.abs(lat)
-        local angle_deg = 0
-        if speed > 1.0 then
-          angle_deg = math.deg(math.atan(math.abs(lat), math.abs(fwd)))
+      local snap = drift_telemetry()
+      if snap then
+        -- baseline na 1a leitura (ignora pontos fabricados antes da corrida).
+        if active._last_total == nil then
+          active._last_total   = snap.total   or 0
+          active._last_crashes = snap.crashes or 0
         end
-        local on_air = V.is_in_air(veh)
-        local cfg = Cfg.DRIFT
 
-        local last_s = active.drift_last_speed or 0
-        local impact = math.abs(speed - last_s)
-        active.drift_last_speed = speed
-        local impact_hit = impact > (cfg.IMPACT_THRESHOLD or 8)
+        local d_total = (snap.total   or 0) - active._last_total
+        local crashed = (snap.crashes or 0) ~= active._last_crashes
+        active._last_total   = snap.total   or 0
+        active._last_crashes = snap.crashes or 0
 
-        if not on_air and angle_deg >= cfg.MIN_ANGLE_DEG
-           and fwd >= cfg.MIN_SPEED_KMH and not impact_hit then
-          active.drift_active_ms = (active.drift_active_ms or 0) + dt_ms
-          active.drift_break_ms = 0
-          local elapsed_sec = active.drift_active_ms / 1000
-          local mult = 1.0
-          for i, threshold in ipairs(cfg.COMBO_THRESHOLDS or {}) do
-            if elapsed_sec >= threshold then mult = cfg.COMBO_MULT[i] or mult end
-          end
-          active.drift_combo = mult
-          local pts_per_sec = (angle_deg * fwd) / (cfg.POINTS_DIVISOR or 40)
-          if pts_per_sec > (cfg.CAP_PER_SEC or 150) then pts_per_sec = cfg.CAP_PER_SEC or 150 end
-          local pts = math.floor((pts_per_sec * mult) * (dt_ms / 1000))
-          if pts > 0 then active.drift_score = (active.drift_score or 0) + pts end
-        else
-          active.drift_break_ms = (active.drift_break_ms or 0) + dt_ms
-          if active.drift_break_ms >= (cfg.BREAK_MS or 700) or impact_hit then
-            active.drift_active_ms = 0
-            active.drift_combo = impact_hit and (cfg.IMPACT_PENALTY or 0.5) or 1.0
+        if crashed then
+          -- bateu: perde o lote pendente; o bancado permanece.
+          active._pending   = 0
+          active._window_ms = 0
+        elseif d_total > 0 then
+          active._pending = (active._pending or 0) + d_total
+        end
+
+        -- janela de banco: lote sobrevive BANK_MS sem bater → vira valido.
+        if (active._pending or 0) > 0 then
+          active._window_ms = (active._window_ms or 0) + dt
+          if active._window_ms >= BANK_MS then
+            active.drift_score = (active.drift_score or 0) + math.floor(active._pending)
+            active._pending   = 0
+            active._window_ms = 0
           end
         end
+
+        active.drift_combo = snap.combo or active.drift_combo or 1.0
+        active.drift_live  = (active.drift_score or 0) + math.floor(active._pending or 0)
       end
     end
   end

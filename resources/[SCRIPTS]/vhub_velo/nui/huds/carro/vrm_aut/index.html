@@ -1,0 +1,223 @@
+<!doctype html>
+<!--
+=====================================================================
+ VELOCIMETRO VOID-HUB  —  NUI FiveM (km/h · RPM · Fuel · status)
+=====================================================================
+ ESTRUTURA (3 mostradores tangentes num canvas SVG de 470 x 235):
+   • FUEL   centro (72,100)  raio 46   — combustivel + % + arco baixo
+   • SPEED  centro (210,100) raio 92   — km/h + odometro + marcha
+   • RPM    centro (370,100) raio 68   — rotacao x1000
+
+ CAMADAS (z-index crescente):
+   1. .custom-bg-container  — logos/fotos da faccao (configuravel via /velo)
+   2. svg.velo-bg           — moldura, ticks, letras e ICONES DE STATUS
+   3. .needle / .pivot      — ponteiros e seus eixos
+   4. .speedometerOverlay   — leitura digital (%, km/h, marcha, odometro)
+
+ COMO O JOGO ALIMENTA A UI (ver client.lua):
+   SendNUIMessage({ type = 'velocimetro:update', data = { ... } })
+   Campos aceitos no data: visible, active, speed_kmh, rpm_percent,
+   fuel_percent, gear_label, odometer, engine_health, locked, belt,
+   turn_left, turn_right.  (o client.lua atual so manda os 4 primeiros)
+
+ MODO PREVIEW: fora do FiveM (host != cfx-nui-*) a UI renderiza
+ valores de exemplo para facilitar o ajuste visual no navegador.
+=====================================================================
+-->
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velocimetro Void-Hub</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<!-- fundo transparente em jogo; a classe .preview e adicionada via JS so fora do FiveM -->
+<body class="velocimetro-oculto">
+
+    <main id="velocimetro" class="velocimetro-container">
+        <div class="speedometerShell">
+
+            <!-- =========================================================
+                 CAMADA 1: imagens customizadas (logos / fotos)
+                 ========================================================= -->
+            <div class="custom-bg-container bg-fuel"  id="custom-fuel-bg"></div>
+            <div class="custom-bg-container bg-speed" id="custom-speed-bg"></div>
+            <div class="custom-bg-container bg-rpm"   id="custom-rpm-bg"></div>
+
+            <!-- =========================================================
+                 CAMADA 2: moldura SVG  (viewBox 470 x 235)
+                 Mostradores TANGENTES (um encosta no outro):
+                   FUEL  centro (72,100)  r=46
+                   SPEED centro (210,100) r=92   (tangente: 72+46+92=210)
+                   RPM   centro (370,100) r=68   (tangente: 210+92+68=370)
+                 ========================================================= -->
+            <svg class="velo-bg" viewBox="0 0 470 235" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+
+                <!-- ================ FUEL (esq, pequeno r=46) ================ -->
+                <g id="dial-fuel" transform="translate(72 100)">
+                    <circle r="46" fill="#08080c" stroke="#26282e" stroke-width="1.5"/>
+                    <circle r="40" fill="none" stroke="#15161a" stroke-width="1"/>
+                    <!-- Arco vermelho de combustível baixo: colado nos ticks vermelhos (i=3→4, ângulos 67.5°→135°, raio 35) -->
+                    <path d="M 32.3 -13.4 A 35 35 0 0 1 24.7 24.7" fill="none" stroke="#ff2a2a" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+                    <!-- Letras F (esq) / E (dir) -->
+                    <text x="-25" y="20" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="10" font-weight="800" fill="#c8c9cd">F</text>
+                    <text x="25"  y="20" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="10" font-weight="800" fill="#ff2a2a">E</text>
+                    <!-- Mini ícone de bomba -->
+                    <g transform="translate(0 -30)" fill="#5a5c63">
+                        <rect x="-4" y="-5" width="6" height="10" rx="1"/>
+                        <rect x="-3" y="-4" width="4" height="3.5" fill="#08080c"/>
+                    </g>
+                </g>
+
+                <!-- ================ KM/H (centro, grande r=92) ================ -->
+                <g id="dial-speed" transform="translate(210 100)">
+                    <circle r="92" fill="#08080c" stroke="#2a2c34" stroke-width="2"/>
+                    <circle r="80" fill="none" stroke="#15161a" stroke-width="1"/>
+                </g>
+
+                <!-- ================ RPM (dir, médio r=68) ================ -->
+                <g id="dial-rpm" transform="translate(370 100)">
+                    <circle r="68" fill="#08080c" stroke="#26282e" stroke-width="2"/>
+                    <circle r="58" fill="none" stroke="#15161a" stroke-width="1"/>
+                    <!-- Zona vermelha entre os ticks 8 e 10 -->
+                    <path d="M 21.5 -56.0 A 60 60 0 0 1 52.0 -30.0"
+                          fill="none" stroke="#ff2a2a" stroke-width="3" stroke-linecap="round" opacity="0.95"/>
+                </g>
+
+                <!-- ================ TICKS (gerados pelo JS) ================ -->
+                <g id="ticks-fuel"></g>
+                <g id="ticks-speed"></g>
+                <g id="ticks-rpm"></g>
+
+                <!-- Letreiros pequenos -->
+                <text x="72"  y="158" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8.5" font-weight="700" fill="#7a7c83" letter-spacing="1.5">FUEL</text>
+                <text x="370" y="158" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-size="8.5" font-weight="700" fill="#7a7c83" letter-spacing="1.5">RPM x1000</text>
+
+                <!-- =========================================================
+                     STÁTUS: ícones soltos ao redor (sem caixa)
+                     ========================================================= -->
+
+                <!-- =========================================================
+                     TIRA DE STATUS — uma única linha compacta centralizada
+                     sob o mostrador KM/H (cx=210). Telltales lado a lado,
+                     pesos visuais equalizados, sem espalhar pela tela.
+                       seta-esq · lock · cinto · motor · seta-dir
+                     posições: 158 · 184 · 210 · 236 · 262   (gap 26)   y=218
+                     ========================================================= -->
+                <g id="status-turn-left" class="status-icon turn off" transform="translate(158 218)">
+                    <path d="M -8 0 L 2.2 -6.6 L 2.2 -2.6 L 8 -2.6 L 8 2.6 L 2.2 2.6 L 2.2 6.6 Z" fill="currentColor"/>
+                </g>
+                <g id="status-lock" class="status-icon lock locked" transform="translate(184 218)">
+                    <path class="shackle" d="M -4.5 -1.5 v-3.5 a4.5 4.5 0 0 1 9 0 v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <rect x="-6.5" y="-1.5" width="13" height="10" rx="1.5" fill="currentColor"/>
+                    <circle cx="0" cy="3" r="1.3" fill="#0a0b0f"/>
+                </g>
+                <g id="status-belt" class="status-icon belt off" transform="translate(210 218)">
+                    <circle cx="0" cy="-7" r="2.7" fill="currentColor"/>
+                    <path d="M -4.5 7 v-3.6 a4.5 3.6 0 0 1 9 0 v3.6 Z" fill="currentColor"/>
+                    <path d="M -4.5 -2.6 L 4.5 7" stroke="#0a0b0f" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                </g>
+                <g id="status-engine" class="status-icon engine good" transform="translate(236 218)">
+                    <rect x="-6.5" y="-3.5" width="12" height="9" rx="1" fill="currentColor"/>
+                    <rect x="-3.5" y="-6.5" width="2.7" height="3" fill="currentColor"/>
+                    <rect x="1"   y="-6.5" width="2.7" height="3" fill="currentColor"/>
+                    <rect x="5.5" y="-1"   width="2.7" height="4.5" fill="currentColor"/>
+                    <rect x="-8.5" y="1.5" width="2"  height="2.7" fill="currentColor"/>
+                </g>
+                <g id="status-turn-right" class="status-icon turn off" transform="translate(262 218)">
+                    <path d="M 8 0 L -2.2 -6.6 L -2.2 -2.6 L -8 -2.6 L -8 2.6 L -2.2 2.6 L -2.2 6.6 Z" fill="currentColor"/>
+                </g>
+            </svg>
+
+            <!-- =========================================================
+                 CAMADA 3: ponteiros
+                 ========================================================= -->
+            <div class="needle fuel-needle"  id="fuel-needle"  aria-hidden="true"></div>
+            <div class="needle speed-needle" id="speed-needle" aria-hidden="true"></div>
+            <div class="needle rpm-needle"   id="rpm-needle"   aria-hidden="true"></div>
+
+            <div class="pivot pivot-fuel"></div>
+            <div class="pivot pivot-speed"></div>
+            <div class="pivot pivot-rpm"></div>
+
+            <!-- =========================================================
+                 CAMADA 4: overlay digital
+                 ========================================================= -->
+            <div class="speedometerOverlay">
+
+                <!-- % combustível -->
+                <div class="fuelReadout">
+                    <span id="vehicle-fuel">100</span><i>%</i>
+                </div>
+
+                <!-- Velocidade + KM/H + odômetro (caixinhas de dígito) -->
+                <div class="speedReadout">
+                    <h1 class="velo">
+                        <span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span>
+                    </h1>
+                    <div class="speedUnit">KM/H</div>
+                    <div class="odometer" id="vehicle-odometer" aria-label="Odômetro"></div>
+                </div>
+
+                <!-- Marcha -->
+                <div class="gearReadout" aria-label="Marcha atual">
+                    <strong id="vehicle-gear">N</strong>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =========================================================
+         /velo  Painel de configuração
+         ========================================================= -->
+    <aside id="velo-config" class="velo-config" aria-hidden="true">
+        <div class="config-card">
+            <header>
+                <div class="title">
+                    <span class="dot"></span>
+                    <h2>Personalizar Velocímetro</h2>
+                </div>
+                <button type="button" id="config-close" class="close" aria-label="Fechar">×</button>
+            </header>
+
+            <p class="hint">Cole o link direto (<code>.png</code> / <code>.jpg</code>) de qualquer CDN. Deixe vazio para usar a logo padrão.</p>
+
+            <div class="field">
+                <label for="input-fuel">Combustível — imagem central</label>
+                <input id="input-fuel" type="url" placeholder="https://cdn.exemplo.com/logo-faccao.png" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="input-speed">KM/H — imagem central</label>
+                <input id="input-speed" type="url" placeholder="https://cdn.exemplo.com/foto-perfil.png" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="input-rpm">RPM — imagem central</label>
+                <input id="input-rpm" type="url" placeholder="https://cdn.exemplo.com/logo-rpm.png" autocomplete="off">
+            </div>
+
+            <div class="row colors">
+                <div class="field">
+                    <label for="color-fuel">Cor ponteiro Fuel</label>
+                    <input id="color-fuel" type="color" value="#37e0a1">
+                </div>
+                <div class="field">
+                    <label for="color-speed">Cor ponteiro KM/H</label>
+                    <input id="color-speed" type="color" value="#ff8c00">
+                </div>
+                <div class="field">
+                    <label for="color-rpm">Cor ponteiro RPM</label>
+                    <input id="color-rpm" type="color" value="#ff2a2a">
+                </div>
+            </div>
+
+            <footer>
+                <button type="button" id="config-reset" class="ghost">Restaurar padrão</button>
+                <button type="button" id="config-save"  class="primary">Salvar</button>
+            </footer>
+        </div>
+    </aside>
+
+    <script src="/nui/velo-core.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

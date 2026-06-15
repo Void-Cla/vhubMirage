@@ -1,0 +1,12 @@
+LICENSE
+
+This mod is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+https://creativecommons.org/licenses/by-nc-nd/4.0/
+
+In short:
+- You may use this content on your FiveM server or in GTA V singleplayer.
+- You may NOT sell or commercially distribute this content.
+- You may NOT modify or create derivative works from this content.
+- You MUST credit the creator ("DWN MAPS") when using or sharing this content.
+
+© 2025 DWN MAPS. All rights reserved.

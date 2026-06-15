@@ -1,0 +1,30 @@
+/* modules/hud/hud.css — Player Info HUD. SEM fundo: so texto + glow (lição do racha). */
+
+.mod-hud {
+  position: fixed;
+  left: 18px;
+  bottom: 16px;
+  pointer-events: none;          /* HUD nao captura mouse */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  line-height: 1.15;
+}
+
+.mod-hud .hud-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--vh-sand);
+  letter-spacing: 0.3px;
+}
+
+.mod-hud .hud-line {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--vh-text-dim);
+}
+
+.mod-hud .hud-id {
+  color: var(--vh-gold);
+  font-weight: 700;
+  text-shadow: var(--vh-glow);
+}

@@ -10,6 +10,7 @@ description 'Garagem centralizada: garage + concession ria + leil o + p tio + al
 
 dependencies {
   'vhub',
+  'vhub_conce',
   'vhub_inventory',
   'vhub_money',
   'vhub_identity',

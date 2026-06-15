@@ -84,6 +84,7 @@ Citizen.CreateThread(function()
       end
       TriggerClientEvent(E.DO_DESPAWN, -1, r.plate)
       SQL:revokeKey(r.plate, r.char_id, 'rental')
+      -- prontu rio morre junto no deleteVehicle  nada a persistir antes
       SQL:deleteVehicle(r.plate)
       Core:log(r.plate, 'rent_expired', r.char_id, {})
     end

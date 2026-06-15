@@ -1,0 +1,185 @@
+/*
+ * style-buttons.css — grade de botoes de controle
+ * vhub_vehcontrol
+ */
+
+
+/* ============================================================
+   AREA DE CONTROLES
+   ============================================================ */
+
+.vc-controls {
+  position: relative;
+  z-index: 1;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vc-section-label {
+  font-family: var(--vh-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--vh-text-dim2);
+  padding: 0 2px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -2px;
+}
+
+.vc-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(243,181,58,0.18), rgba(243,181,58,0));
+}
+
+
+/* ============================================================
+   GRADE DE BOTOES
+   ============================================================ */
+
+.vc-btn-grid {
+  display: grid;
+  gap: 6px;
+}
+
+/* Portas — 3 colunas */
+.vc-doors      { grid-template-columns: repeat(3, 1fr); }
+/* Janelas — 4 colunas */
+.vc-windows    { grid-template-columns: repeat(4, 1fr); }
+/* Controles gerais — 3 colunas */
+.vc-ctrl       { grid-template-columns: repeat(3, 1fr); }
+
+
+/* ============================================================
+   BOTAO BASE
+   ============================================================ */
+
+.vc-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px 7px;
+  border-radius: var(--vh-r-btn);
+  border: 1px solid rgba(243,181,58,0.14);
+  background:
+    linear-gradient(180deg, rgba(217,193,154,0.08), rgba(12,10,6,0.45));
+  color: var(--vh-text-dim);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  overflow: hidden;
+  transition:
+    background var(--vh-t-norm),
+    border-color var(--vh-t-norm),
+    color var(--vh-t-norm),
+    box-shadow var(--vh-t-norm),
+    transform var(--vh-t-fast);
+}
+
+/* Brilho sutil no topo (efeito vidro) */
+.vc-btn::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,213,115,0), rgba(255,213,115,0.35), rgba(255,213,115,0));
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.vc-btn svg {
+  width: 17px;
+  height: 17px;
+  color: var(--vh-gold);
+  transition: color var(--vh-t-norm), transform var(--vh-t-norm), filter var(--vh-t-norm);
+  filter: drop-shadow(0 0 2px rgba(243,181,58,0.25));
+}
+
+.vc-btn span {
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* hover */
+.vc-btn:hover {
+  background:
+    linear-gradient(180deg, rgba(243,181,58,0.16), rgba(243,181,58,0.06));
+  border-color: rgba(243,181,58,0.5);
+  color: var(--vh-text);
+  box-shadow:
+    0 4px 14px rgba(243,181,58,0.15),
+    inset 0 0 0 1px rgba(255,213,115,0.08);
+  transform: translateY(-1px);
+}
+
+.vc-btn:hover svg {
+  color: var(--vh-gold-soft);
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 6px rgba(255,213,115,0.55));
+}
+
+/* press */
+.vc-btn:active {
+  transform: translateY(0) scale(0.95);
+  background: rgba(243,181,58,0.20);
+}
+
+
+/* ============================================================
+   ESTADO ATIVO (toggle ligado)
+   ============================================================ */
+
+.vc-btn-toggle.is-on {
+  background:
+    linear-gradient(180deg, rgba(243,181,58,0.22), rgba(243,181,58,0.10));
+  border-color: var(--vh-gold);
+  color: var(--vh-gold-soft);
+  box-shadow:
+    0 0 14px rgba(243,181,58,0.30),
+    inset 0 0 0 1px rgba(255,213,115,0.18);
+}
+
+.vc-btn-toggle.is-on svg {
+  color: var(--vh-gold-soft);
+  filter: drop-shadow(0 0 6px rgba(255,213,115,0.7));
+}
+
+
+/* ============================================================
+   BOTAO DE EMERGENCIA (pisca-alerta)
+   ============================================================ */
+
+.vc-btn-emergency-cell svg {
+  color: var(--vh-amber);
+}
+
+.vc-btn-emergency-cell.is-on {
+  background:
+    linear-gradient(180deg, rgba(255,154,31,0.24), rgba(255,154,31,0.10));
+  border-color: var(--vh-amber);
+  color: var(--vh-amber);
+  box-shadow:
+    0 0 14px rgba(255,154,31,0.40),
+    inset 0 0 0 1px rgba(255,154,31,0.20);
+}
+
+.vc-btn-emergency-cell.is-on svg {
+  color: var(--vh-amber);
+  animation: vc-blink 1s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(255,154,31,0.8));
+}
+
+@keyframes vc-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}

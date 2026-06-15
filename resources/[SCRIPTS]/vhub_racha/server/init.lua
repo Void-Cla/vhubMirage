@@ -83,14 +83,8 @@ end)
 
 -- ── Net events ─────────────────────────────────────────────────────────────
 
-local function send_open(src)
-  if not src or src <= 0 then return end
-  if not B.READY then
-    TriggerClientEvent(E.NOTIFY, src, 'O sistema ainda esta carregando, aguarde...', 'info')
-    return
-  end
-
-  local lobbies = ST.public_lobbies()
+-- monta os dados do painel — REUSO: NUI propria do racha E app embutido do iPad
+local function build_panel_data()
   local catalog = {}
   for id, t in pairs(ST.catalog()) do
     catalog[#catalog + 1] = {
@@ -104,9 +98,9 @@ local function send_open(src)
   end
   table.sort(catalog, function(a, b) return a.label < b.label end)
 
-  TriggerClientEvent(E.NUI_OPENED, src, {
+  return {
     catalog = catalog,
-    lobbies = lobbies,
+    lobbies = ST.public_lobbies(),
     ranking = R.top('sprint', 'time', 10),
     history = R.recent({}, 15),
     cfg = {
@@ -114,10 +108,98 @@ local function send_open(src)
       brand_tag  = Cfg.BRAND_TAG,
       max_fee    = Cfg.MAX_ENTRY_FEE,
     },
-  })
+  }
+end
+
+local function send_open(src)
+  if not src or src <= 0 then return end
+  if not B.READY then
+    TriggerClientEvent(E.NOTIFY, src, 'O sistema ainda esta carregando, aguarde...', 'info')
+    return
+  end
+  TriggerClientEvent(E.NUI_OPENED, src, build_panel_data())
 end
 
 RegisterNetEvent(E.NUI_OPEN, function() send_open(source) end)
+
+-- export publico: outro resource abre o painel do racha (ponto de integracao, ex: vhub_ipad).
+-- Acopla iPad<->racha SO por export (sem depender da string do evento NUI_OPEN).
+-- Guarda: so abre para um jogador REALMENTE conectado (src arbitrario de terceiro = no-op).
+exports('openPanel', function(src)
+  if type(src) ~= 'number' or not GetPlayerName(src) then return false end
+  send_open(src)
+  return true
+end)
+
+-- relay do APP EMBUTIDO do iPad (broker vhub_ipad). Reusa a lógica do painel
+-- (LB.* / R.* / ED.*) e responde pelo push do iPad (appPush). Contrato de 11 ações
+-- espelhando o painel /racha. Roda em thread PRÓPRIA: as funções usam Citizen.Await
+-- e o yield NÃO pode cruzar a fronteira C do export (senão a corrotina é abandonada).
+exports('ipadRelay', function(src, action, data)
+  if type(src) ~= 'number' or not GetPlayerName(src) then return false end
+  if not B.READY then return false end
+  data = (type(data) == 'table') and data or {}
+
+  CreateThread(function()
+    local ok, err = pcall(function()
+      local inst_id = tostring(data.inst_id or '')
+
+      -- ── painel / lobbies ──────────────────────────────────────
+      if action == 'open' or action == 'refresh' then
+        exports.vhub_ipad:appPush(src, 'racha', 'data', build_panel_data())
+
+      elseif action == 'create' then
+        local cok, cdata = LB.create(src, data)
+        if cok then
+          TriggerClientEvent(E.NOTIFY, src, 'Lobby criado. Vá ao ponto de largada e confirme.', 'success')
+          exports.vhub_ipad:closeIpad(src)   -- vai à largada (totem in-game assume)
+        else
+          exports.vhub_ipad:appPush(src, 'racha', 'result', { ok = false, kind = 'create', data = cdata })
+        end
+
+      elseif action == 'join' then
+        local jok, jdata = LB.join(src, inst_id)
+        if jok then
+          TriggerClientEvent(E.NOTIFY, src, 'Você entrou. Vá ao ponto de largada e confirme.', 'success')
+          exports.vhub_ipad:closeIpad(src)
+        else
+          exports.vhub_ipad:appPush(src, 'racha', 'result', { ok = false, kind = 'join', data = jdata })
+        end
+
+      -- ── consultas (read-only) ─────────────────────────────────
+      elseif action == 'ranking' then
+        local rows = R.top(tostring(data.kind or 'sprint'), tostring(data.mode or 'wins'), 50)
+        exports.vhub_ipad:appPush(src, 'racha', 'ranking', { rows = rows })
+
+      elseif action == 'history' then
+        local rows = R.recent(data, 30)
+        exports.vhub_ipad:appPush(src, 'racha', 'history', { rows = rows })
+
+      elseif action == 'results' then
+        local results = R.results_of(tonumber(data.history_id) or 0)
+        exports.vhub_ipad:appPush(src, 'racha', 'results', { results = results })
+
+      -- ── editor (in-game, keyboard): abre edição → fecha o iPad ─
+      elseif action == 'editor_open' then
+        ED.open(src)
+        exports.vhub_ipad:closeIpad(src)
+
+      elseif action == 'editor_phase' then
+        ED.set_phase(src, tostring(data.phase or 'idle'))
+
+      elseif action == 'editor_discard' then
+        ED.discard(src)
+
+      elseif action == 'editor_save' then
+        ED.save(src, data)
+        exports.vhub_ipad:appPush(src, 'racha', 'data', build_panel_data())
+      end
+    end)
+    if not ok then print('[vhub_racha] ipadRelay ERRO: ' .. tostring(err)) end
+  end)
+
+  return true
+end)
 
 -- Lobby
 RegisterNetEvent(E.LOBBY_CREATE, function(payload)

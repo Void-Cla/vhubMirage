@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="core.css" />
+    <link rel="stylesheet" href="modules/radar/radar.css" />
+    <link rel="stylesheet" href="modules/helicam/helicam.css" />
+    <link rel="stylesheet" href="modules/mdt/mdt.css" />
+</head>
+<body>
+    <!-- ============ RADAR (terrestre) — overlay passivo ============ -->
+    <div id="radar" class="mod-radar" aria-hidden="true">
+        <div class="mod-radar__unit" id="radar-patrol">
+            <span class="mod-radar__unit-val">0</span>
+            <span class="mod-radar__unit-lbl">KMH</span>
+        </div>
+        <div class="mod-radar__cams">
+            <section class="mod-radar__cam" data-cam="front">
+                <header class="mod-radar__cam-hd">Frente</header>
+                <div class="mod-radar__speed" data-empty="true"><span class="mod-radar__speed-val">--</span></div>
+                <div class="mod-radar__plate">------</div>
+            </section>
+            <section class="mod-radar__cam" data-cam="rear">
+                <header class="mod-radar__cam-hd">Trás</header>
+                <div class="mod-radar__speed" data-empty="true"><span class="mod-radar__speed-val">--</span></div>
+                <div class="mod-radar__plate">------</div>
+            </section>
+        </div>
+        <div class="mod-radar__lock" id="radar-lock" hidden>● Travado</div>
+    </div>
+
+    <!-- ============ HELICAM (aéreo) — HUD passivo sobre a câmera ============ -->
+    <div id="helicam" class="mod-helicam" aria-hidden="true">
+        <div class="mod-helicam__chip mod-helicam__tl"><b>FLIR</b> <span class="v js-vision">HDEO</span></div>
+        <div class="mod-helicam__chip mod-helicam__tr"><b>ZOOM</b> <span class="v js-zoom">0%</span></div>
+        <div class="mod-helicam__chip mod-helicam__bl"><b>ALT</b> <span class="v js-alt">0 m</span> &nbsp;·&nbsp; <b>HDG</b> <span class="v js-hdg">0°</span></div>
+
+        <div class="mod-helicam__cross">
+            <span class="mod-helicam__bracket tl"></span>
+            <span class="mod-helicam__bracket tr"></span>
+            <span class="mod-helicam__bracket bl"></span>
+            <span class="mod-helicam__bracket br"></span>
+        </div>
+
+        <div class="mod-helicam__target">
+            <span class="plate js-tplate">------</span>
+            <span class="field"><b>VEL</b> <span class="js-tspeed">--</span> km/h</span>
+            <span class="field"><b>DIST</b> <span class="js-tdist">--</span> m</span>
+        </div>
+
+        <div class="mod-helicam__spot">● HOLOFOTE</div>
+    </div>
+
+    <!-- ============ MDT / Central de Despacho — painel INTERATIVO (com foco) ============ -->
+    <div id="mdt" class="mod-mdt" aria-hidden="true">
+        <div class="mod-mdt__panel">
+            <header class="mod-mdt__hd">
+                <span class="mod-mdt__title">MDT · Central de Despacho</span>
+                <button class="mod-mdt__close" data-act="close" title="Fechar (Esc)">✕</button>
+            </header>
+            <div class="mod-mdt__body">
+                <section class="mod-mdt__col">
+                    <h3>BOLOs ativos (<span class="js-bolo-count">0</span>)</h3>
+                    <div class="mod-mdt__list js-bolos"></div>
+                    <form class="mod-mdt__form js-bolo-form" hidden>
+                        <input class="js-bolo-plate" maxlength="8" placeholder="PLACA" />
+                        <input class="js-bolo-reason" maxlength="120" placeholder="Motivo" />
+                        <select class="js-bolo-level">
+                            <option value="1">Atenção</option>
+                            <option value="2">Perigoso</option>
+                            <option value="3">Alto risco</option>
+                        </select>
+                        <button type="submit">+ BOLO</button>
+                    </form>
+                </section>
+                <section class="mod-mdt__col">
+                    <h3>Scans recentes</h3>
+                    <div class="mod-mdt__list js-scans"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- dispatcher (define LSPD) ANTES dos módulos que registram -->
+    <script src="app.js"></script>
+    <script src="modules/radar/radar.js"></script>
+    <script src="modules/helicam/helicam.js"></script>
+    <script src="modules/mdt/mdt.js"></script>
+</body>
+</html>

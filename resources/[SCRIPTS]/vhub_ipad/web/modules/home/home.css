@@ -1,0 +1,53 @@
+/* modules/home/home.css — home screen (grade de ícones). Escopo: .mod-home */
+
+.mod-home .home {
+  height: 100%;
+  padding: 5% 6%;
+  overflow: auto;
+}
+
+.mod-home .home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 7% 4%;
+  align-content: start;
+}
+
+.mod-home .home-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5vw;
+}
+
+.mod-home .home-icon-img {
+  width: 4.6vw;
+  height: 4.6vw;
+  min-width: 54px;
+  min-height: 54px;
+  border-radius: 24%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transition: transform var(--trans);
+}
+
+.mod-home .home-icon-img img { width: 100%; height: 100%; object-fit: cover; }
+
+.mod-home .home-icon-label {
+  max-width: 6.4vw;
+  font-size: 0.72vw;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-home .home-icon:hover  .home-icon-img { transform: translateY(-2px) scale(1.05); }
+.mod-home .home-icon:active .home-icon-img { transform: scale(0.95); }
+.mod-home .home-icon.is-off { opacity: 0.45; }

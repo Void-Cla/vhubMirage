@@ -1,0 +1,339 @@
+/* =================================================================
+   RESET NUI
+   ================================================================= */
+* {
+    margin: 0; padding: 0; box-sizing: border-box;
+    user-select: none; -webkit-user-select: none;
+}
+html {
+    width: 100vw; height: 100vh; overflow: hidden;
+    background: transparent !important;
+}
+body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    position: relative;
+    background: transparent !important;
+    pointer-events: none;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    color: #fff;
+}
+/* PREVIEW (apenas fora do FiveM): habilita o cursor para testar o /velo.
+   Fundo permanece TRANSPARENTE \u2014 requisito de overlay NUI.
+   Para testar no navegador com um fundo escuro, descomente a linha abaixo. */
+body.preview {
+    pointer-events: auto;
+    /* background: radial-gradient(120% 80% at 50% 100%, #1a1f2b 0%, #08090d 70%) !important; */
+}
+/* visibilidade PADRÃO: o velo-core liga body.velo-active quando há veículo ativo */
+#velocimetro { opacity: 0; transform: translateY(20px); transition: opacity .3s ease, transform .3s ease; }
+body.velo-active #velocimetro { opacity: 1; transform: translateY(0); }
+
+/* =================================================================
+   POSIÇÃO E SHELL  (canvas SVG = 470 x 235)
+   ================================================================= */
+.velocimetro-container {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    width: 470px;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    /* Defaults aplicáveis pelo host via --velo-accent / --velo-bg */
+    --velo-accent: #ff8c00;
+    --velo-bg: none;
+}
+.speedometerShell {
+    position: relative;
+    width: 470px;
+    aspect-ratio: 470 / 235;
+    filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.5));
+}
+.velo-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* =================================================================
+   FUNDOS CUSTOMIZÁVEIS (logos / fotos) — % do shell (470x235)
+   Centros: FUEL(72,100), SPEED(210,100), RPM(370,100).
+   ================================================================= */
+.custom-bg-container {
+    position: absolute;
+    border-radius: 50%;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.55;
+    mix-blend-mode: screen;
+}
+/* FUEL: logo pequeno d=68 */
+.bg-fuel  { width: 14.468%; height: 28.936%; left:  8.085%; top: 28.085%; }
+/* SPEED: logo grande d=150 */
+.bg-speed { width: 31.915%; height: 63.830%; left: 28.723%; top: 10.638%; }
+/* RPM: logo médio d=104 */
+.bg-rpm   { width: 22.128%; height: 44.255%; left: 67.660%; top: 20.426%; }
+
+/* =================================================================
+   PONTEIROS  (rotate 0deg = aponta pra cima; pivô = base)
+   Centro vertical dos dials = 100/235 = 42.553%
+   ================================================================= */
+.needle {
+    position: absolute;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 6;
+    will-change: transform;
+    transition: transform 0.12s linear;
+}
+.fuel-needle {
+    width: 2.5px;  height: 40px;
+    left: calc(15.319% - 1.25px);
+    top:  calc(42.553% - 40px);
+    transform-origin: 50% 100%;
+    transform: rotate(-135deg);
+    background: linear-gradient(180deg, #d6fff1, #37e0a1);
+    box-shadow: 0 4px 10px rgba(55, 224, 161, 0.45);
+}
+.speed-needle {
+    width: 4px;  height: 78px;
+    left: calc(44.681% - 2px);
+    top:  calc(42.553% - 78px);
+    transform-origin: 50% 100%;
+    transform: rotate(-135deg);
+    background: linear-gradient(180deg, #fff4cf, #ff8c00);
+    box-shadow: 0 4px 14px rgba(255, 140, 0, 0.45);
+}
+.rpm-needle {
+    width: 3px;  height: 54px;
+    left: calc(78.723% - 1.5px);
+    top:  calc(42.553% - 54px);
+    transform-origin: 50% 100%;
+    transform: rotate(-135deg);
+    background: linear-gradient(180deg, #ffd9d9, #ff2a2a);
+    box-shadow: 0 4px 12px rgba(255, 42, 42, 0.45);
+}
+
+/* Pivôs */
+.pivot {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5a5d66 0%, #16171b 65%, #0a0a0d 100%);
+    border: 1px solid #2a2c33;
+    z-index: 7;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+.pivot-fuel  { width: 8px;  height: 8px;  left: calc(15.319% - 4px); top: calc(42.553% - 4px); }
+.pivot-speed { width: 16px; height: 16px; left: calc(44.681% - 8px); top: calc(42.553% - 8px); }
+.pivot-rpm   { width: 12px; height: 12px; left: calc(78.723% - 6px); top: calc(42.553% - 6px); }
+
+/* =================================================================
+   OVERLAY DIGITAL
+   ================================================================= */
+.speedometerOverlay { position: absolute; inset: 0; pointer-events: none; }
+
+/* % combustível dentro do FUEL */
+.fuelReadout {
+    position: absolute;
+    left: 15.319%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    z-index: 8;
+    text-shadow: 0 0 6px rgba(55, 224, 161, 0.5);
+}
+.fuelReadout i { font-style: normal; font-size: 8px; color: #37e0a1; margin-left: 1px; }
+
+/* Velocidade + KM/H + odômetro centralizados no KM/H */
+.speedReadout {
+    position: absolute;
+    left: 44.681%;
+    top: 29%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 8;
+    width: 150px;
+}
+.velo {
+    color: #fff;
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    line-height: 0.9;
+    text-shadow: 0 6px 14px rgba(0,0,0,0.55);
+    display: inline-flex;
+    align-items: flex-end;
+}
+.defaultVelo { color: rgba(255, 255, 255, 0.18); }
+.speedUnit {
+    margin-top: 2px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #ff8c00;
+    text-shadow: 0 0 6px rgba(255,140,0,0.4);
+}
+
+/* ----- ODÔMETRO: caixinhas de dígito (hodômetro real) ----- */
+.odometer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1.5px;
+    margin-top: 8px;
+}
+.odo-digit {
+    width: 12px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #26282f 0%, #0c0d11 100%);
+    border: 1px solid #3a3d45;
+    border-radius: 2.5px;
+    color: #eef0f3;
+    font-size: 12px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -2px 3px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+}
+/* última casa = "drum" das unidades (cor âmbar como nos painéis reais) */
+.odo-digit.tenth {
+    background: linear-gradient(180deg, #ffa733 0%, #d96f00 100%);
+    border-color: #ffb24d;
+    color: #1a0e00;
+    text-shadow: none;
+}
+.odometer::after {
+    content: 'km';
+    margin-left: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #6e7077;
+}
+
+/* Marcha dentro do RPM */
+.gearReadout {
+    position: absolute;
+    left: 78.723%;
+    top: 52%;
+    transform: translate(-50%, -50%);
+    z-index: 8;
+}
+.gearReadout strong {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-shadow: 0 0 8px rgba(255, 42, 42, 0.7);
+}
+
+/* =================================================================
+   STATUS ICONS
+   ================================================================= */
+.status-icon { transition: color 0.2s ease, opacity 0.2s ease; }
+
+.status-icon.turn    { color: #2a2c34; }
+.status-icon.turn.on { color: #37e0a1; animation: blink 0.55s steps(2, start) infinite; }
+@keyframes blink {
+    0%, 49%   { opacity: 1; filter: drop-shadow(0 0 6px #37e0a1); }
+    50%, 100% { opacity: 0.25; filter: none; }
+}
+
+.status-icon.lock.unlocked { color: #37e0a1; }
+.status-icon.lock.locked   { color: #ff2a2a; }
+.status-icon.lock.unlocked .shackle { transform: translateX(2px) rotate(-18deg); transform-origin: -5px -2px; }
+
+.status-icon.belt.on  { color: #37e0a1; }
+.status-icon.belt.off { color: #ff2a2a; }
+
+.status-icon.engine.good   { color: #37e0a1; }
+.status-icon.engine.warn   { color: #9a9ca3; }
+.status-icon.engine.danger { color: #ff2a2a; animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px #ff2a2a); }
+    50%      { filter: drop-shadow(0 0 12px #ff2a2a); }
+}
+
+/* =================================================================
+   /velo CONFIG PANEL
+   ================================================================= */
+.velo-config {
+    position: fixed; inset: 0;
+    background: rgba(2, 4, 8, 0.72);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 999;
+    pointer-events: auto;
+}
+.velo-config.open { display: flex; }
+.config-card {
+    width: 420px; max-width: 92vw;
+    background: linear-gradient(180deg, #14161c 0%, #0a0b0f 100%);
+    border: 1px solid #2a2c34;
+    border-radius: 14px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04);
+    color: #e8e9ec;
+}
+.config-card header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.config-card .title { display: flex; align-items: center; gap: 10px; }
+.config-card .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff8c00; box-shadow: 0 0 10px rgba(255,140,0,0.7); }
+.config-card h2 { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; }
+.config-card .close {
+    background: transparent; border: none; color: #9a9ca3;
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 0 6px;
+}
+.config-card .close:hover { color: #fff; }
+.config-card .hint { font-size: 11px; color: #8b8d94; margin-bottom: 14px; line-height: 1.45; }
+.config-card .hint code { background: #0a0a0d; padding: 1px 5px; border-radius: 3px; color: #ff8c00; font-size: 10.5px; }
+.config-card .field { margin-bottom: 12px; }
+.config-card label {
+    display: block; font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: #9a9ca3; margin-bottom: 5px;
+}
+.config-card input[type="url"] {
+    width: 100%; height: 34px;
+    background: #0a0b0f; border: 1px solid #25272f; border-radius: 7px;
+    padding: 0 11px; font-size: 12px; color: #e8e9ec;
+    outline: none; transition: border-color 0.15s ease; font-family: inherit;
+}
+.config-card input[type="url"]:focus { border-color: #ff8c00; }
+.config-card .row.colors { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.config-card input[type="color"] {
+    width: 100%; height: 32px;
+    border: 1px solid #25272f; border-radius: 6px;
+    background: #0a0b0f; cursor: pointer; padding: 2px;
+}
+.config-card footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.config-card button {
+    flex: 1; height: 36px;
+    border-radius: 8px; border: none;
+    font-weight: 700; font-size: 12px; letter-spacing: 0.5px;
+    cursor: pointer; font-family: inherit;
+    transition: transform 0.08s ease, background 0.15s ease;
+}
+.config-card button:active { transform: translateY(1px); }
+.config-card .ghost { background: transparent; color: #9a9ca3; border: 1px solid #25272f; }
+.config-card .ghost:hover { color: #fff; border-color: #3a3c44; }
+.config-card .primary { background: linear-gradient(180deg, #ff9a1f 0%, #ff7a00 100%); color: #1a0e00; }
+.config-card .primary:hover { filter: brightness(1.08); }
+
+/* =================================================================
+   ESCALA RESPONSIVA
+   Ajusta o zoom do conjunto conforme a largura da tela do jogador.
+   ================================================================= */
+@media (max-width: 1366px) { .velocimetro-container { zoom: 0.96; } }
+@media (max-width: 1100px) { .velocimetro-container { zoom: 0.86; } }
+@media (max-width: 900px)  { .velocimetro-container { zoom: 0.74; } }

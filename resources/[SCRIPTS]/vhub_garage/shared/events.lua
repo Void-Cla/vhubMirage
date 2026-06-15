@@ -11,6 +11,7 @@ VHubGarage.E.DO_SPAWN         = 'vhub_garage:doSpawn'           -- spawn de ve c
 VHubGarage.E.DO_DESPAWN       = 'vhub_garage:doDespawn'         -- despawn de ve culo
 VHubGarage.E.DO_TESTDRIVE     = 'vhub_garage:doTestDrive'       -- test drive (tempor rio)
 VHubGarage.E.SPAWN_OUT        = 'vhub_garage:spawnOut'          -- re-spawn de ve culos que estavam fora
+VHubGarage.E.DO_REPAIR        = 'vhub_garage:doRepair'          -- conserta entidade viva (p s-reparo pago)
 VHubGarage.E.RESCUE_DONE      = 'vhub_garage:rescueDone'        -- p tio liberado
 VHubGarage.E.UPDATE_AUCTION   = 'vhub_garage:updateAuction'     -- broadcast de leil o atualizado
 

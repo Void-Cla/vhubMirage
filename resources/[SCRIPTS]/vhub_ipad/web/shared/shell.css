@@ -1,0 +1,142 @@
+/* web/shared/shell.css — layout do shell do tablet (frame + tela + barras). */
+
+
+/* ============================================================
+   BODY — escondido até a NUI mandar abrir
+   ============================================================ */
+
+body { display: none; align-items: center; justify-content: center; }
+body.visible { display: flex; }
+
+
+/* ============================================================
+   CONTAINER + FRAME SVG
+   ============================================================ */
+
+#ipad-container {
+  position: relative;
+  width: 60vw;                 /* sobrescrito pelo zoom (settings) */
+  max-width: 100%;
+  filter: drop-shadow(0 30px 60px rgba(0, 0, 0, 0.5));
+  transition: width var(--trans);
+}
+
+#ipad-frame { width: 100%; height: auto; display: block; }
+
+
+/* ============================================================
+   TELA — overlay HTML exatamente sobre o retângulo preto do SVG
+   ============================================================ */
+
+#ipad-screen {
+  position: absolute;
+  left:   var(--screen-left);
+  top:    var(--screen-top);
+  width:  var(--screen-width);
+  height: var(--screen-height);
+  border-radius: var(--screen-radius);
+  overflow: hidden;
+  background: var(--screen-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+#ipad-wallpaper {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+/* leve escurecida para legibilidade dos ícones/UI */
+#ipad-wallpaper::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.35) 100%);
+}
+
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+
+#ipad-statusbar {
+  position: relative;
+  z-index: 3;
+  height: var(--statusbar-h);
+  min-height: 22px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4%;
+  color: var(--text);
+  font-size: 0.78vw;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+#ipad-statusbar .status-icons { display: flex; gap: 0.6vw; align-items: center; }
+
+
+/* ============================================================
+   ÁREA DE APP (#vhub-app) — módulos montam aqui
+   ============================================================ */
+
+#vhub-app {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/* cada módulo preenche a área e some quando .hidden */
+#vhub-app > [class^="mod-"] {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  animation: modIn 0.16s ease;
+}
+
+@keyframes modIn {
+  from { opacity: 0; transform: scale(0.985); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+
+/* ============================================================
+   NAVBAR (◀ ⌂ ×) — sempre visível na base
+   ============================================================ */
+
+#ipad-navbar {
+  position: relative;
+  z-index: 3;
+  height: var(--navbar-h);
+  min-height: 34px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6%;
+  background: var(--glass-strong);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-top: 1px solid var(--glass-border);
+}
+
+#ipad-navbar button {
+  width: 2.6vw; height: 2.6vw;
+  min-width: 30px; min-height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3vw;
+  color: var(--text-dim);
+  background: var(--glass-hover);
+  border: 1px solid var(--glass-border);
+  transition: var(--trans);
+}
+#ipad-navbar button:hover  { color: var(--text); background: var(--gold-soft); border-color: var(--gold-line); }
+#ipad-navbar button:active { transform: scale(0.92); }
+#ipad-navbar button[data-nav="close"]:hover { color: #ff6b6b; background: rgba(255,107,107,0.14); border-color: rgba(255,107,107,0.4); }

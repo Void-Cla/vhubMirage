@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub Inventory</title>
+
+  <!-- identidade + reset (fundo transparente; sem CDN de fontes — usa stack local) -->
+  <link rel="stylesheet" href="shared/tokens.css" />
+  <link rel="stylesheet" href="shared/reset.css" />
+  <link rel="stylesheet" href="shared/slots.css" />
+  <link rel="stylesheet" href="shared/interact.css" />
+  <link rel="stylesheet" href="modules/hud/hud.css" />
+  <link rel="stylesheet" href="modules/hotbar/hotbar.css" />
+  <link rel="stylesheet" href="modules/backpack/backpack.css" />
+  <link rel="stylesheet" href="modules/container/container.css" />
+</head>
+
+<body>
+  <!-- raizes dos modulos (escondidas ate montar) -->
+  <div id="hud-root" class="hidden"></div>
+  <div id="hotbar-root" class="hidden"></div>
+  <div id="backpack-root" class="hidden"></div>
+  <div id="container-root" class="hidden"></div>
+
+  <!-- modal de quantidade (compartilhado; escondido ate ser pedido) -->
+  <div id="qty-modal" class="hidden">
+    <div class="qm-box">
+      <div class="qm-title">QUANTIDADE</div>
+      <div class="qm-row">
+        <input type="number" class="qm-input" min="1" />
+        <span class="qm-max"></span>
+      </div>
+      <input type="range" class="qm-slider" min="1" />
+      <div class="qm-actions">
+        <button class="qm-all">Tudo</button>
+        <button class="qm-cancel">Cancelar</button>
+        <button class="qm-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- L3 — engine (ordem: bus -> store -> bridge -> core) -->
+  <script src="runtime/bus.js"></script>
+  <script src="runtime/store.js"></script>
+  <script src="runtime/bridge.js"></script>
+  <script src="runtime/core.js"></script>
+
+  <!-- helpers compartilhados -->
+  <script src="shared/utils.js"></script>
+  <script src="shared/interact.js"></script>
+
+  <!-- L4 — componentes (createModule -> onInit registra listeners) -->
+  <script src="modules/hud/hud.js"></script>
+  <script src="modules/hotbar/hotbar.js"></script>
+  <script src="modules/backpack/backpack.js"></script>
+  <script src="modules/container/container.js"></script>
+
+  <!-- bootstrap: HUD e hotbar sempre visiveis; backpack/baú montam sob demanda (lazy) -->
+  <script>vhub.mount('hud'); vhub.mount('hotbar');</script>
+</body>
+</html>

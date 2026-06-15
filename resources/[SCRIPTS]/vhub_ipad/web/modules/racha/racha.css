@@ -1,0 +1,762 @@
+/* modules/racha/racha.css — painel COMPLETO do racha embutido no iPad.
+ *
+ * Porte fiel da identidade visual de vhub_racha:
+ *   • tokens.css (paleta Areia + Dourado, glass, sombras, raios, tipografia)
+ *   • components.css (vh-btn / vh-card / vh-input / vh-chip / vh-toast / vh-panel)
+ *   • panel.css (shell + 5 views + modal + toast)
+ *
+ * TUDO escopado sob `.mod-racha` para NAO vazar no shell do iPad. Os tokens
+ * vHub sao redefinidos como CSS vars LOCAIS de .mod-racha (com prefixo --vh-*)
+ * — nao colidem com os tokens do iPad (--gold, --glass, --text...).
+ *
+ * Adaptacoes de layout p/ a tela do iPad (#vhub-app = position:absolute inset:0):
+ *   • .panel-shell preenche o container (inset:0, height:100%) em vez de 5vh/5vw fixo
+ *   • .panel-modal / .panel-toast-stack / .vh-panel sao ABSOLUTE ao .mod-racha
+ *     (nao position:fixed ao viewport) — vidro fica DENTRO da tela
+ *   • sem #vhub-bg full-screen (a tela do iPad ja e a superficie)
+ */
+
+
+/* ============================================================
+   TOKENS LOCAIS — paleta canonica vHub (escopo .mod-racha)
+   ============================================================ */
+
+.mod-racha {
+
+    /* PALETA — areia dominante, dourado de acento, danger restrito */
+    --vh-sand:        #d9c19a;
+    --vh-sand-dim:    #a89572;
+    --vh-sand-deep:   #5a4a30;
+
+    --vh-gold:        #f3b53a;
+    --vh-gold-soft:   #ffd573;
+
+    --vh-amber:       #ff9a1f;
+
+    --vh-black:       #0c0a06;
+    --vh-black-2:     #1a1610;
+
+    --vh-danger:      #e8513f;
+    --vh-ok:          #6bbf6b;
+
+    --vh-text:        #f0e6d2;
+    --vh-text-dim:    #c4ad84;
+    --vh-text-dim2:   #8a7a5a;
+
+    /* GLASS — overlay translucido (canonico L-D1, opacidade <= 0.55) */
+    --vh-glass-bg:     linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
+    --vh-glass-bg-2:   linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.40));
+    --vh-glass-border: rgba(243,181,58,0.18);
+    --vh-glass-line:   rgba(243,181,58,0.10);
+    --vh-glass-blur:   blur(14px) saturate(140%);
+
+    /* SOMBRAS — sempre com componente dourado (L-D4) */
+    --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
+    --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
+    --vh-shadow-3:    0 24px 60px rgba(0,0,0,0.60), 0 0 32px rgba(243,181,58,0.12);
+    --vh-shadow-glow: 0 0 20px rgba(255,213,115,0.45);
+
+    /* RAIOS */
+    --vh-r-pan:  16px;
+    --vh-r-card: 12px;
+    --vh-r-btn:  8px;
+    --vh-r-pill: 999px;
+
+    /* TIPOGRAFIA */
+    --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
+    --vh-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+    --vh-font-tech:    'Rajdhani', 'Inter', sans-serif;
+    --vh-font-num:     'Orbitron', 'Barlow Condensed', sans-serif;
+    --vh-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+    /* ESPACAMENTOS */
+    --vh-gap-xs: 4px;
+    --vh-gap-sm: 8px;
+    --vh-gap-md: 12px;
+    --vh-gap-lg: 18px;
+    --vh-gap-xl: 24px;
+
+    /* TRANSICOES */
+    --vh-t-fast: 0.14s ease;
+    --vh-t-norm: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* a propria .mod-racha e a superficie — fonte + cor base */
+    font-family: var(--vh-font-body);
+    color: var(--vh-text);
+}
+
+.mod-racha .hidden { display: none !important; }
+
+
+/* ============================================================
+   COMPONENTES CANONICOS — vh-panel / vh-card / vh-btn / vh-input
+                           vh-toast / vh-chip (escopados .mod-racha)
+   ============================================================ */
+
+/* PANEL — container (no iPad: absolute ao .mod-racha, nao fixed) */
+.mod-racha .vh-panel {
+    position: absolute;
+    inset: 5%;
+    z-index: 2;
+
+    border-radius: var(--vh-r-pan);
+    background: var(--vh-glass-bg);
+    border: 1px solid var(--vh-glass-border);
+    box-shadow: var(--vh-shadow-3);
+
+    backdrop-filter: var(--vh-glass-blur);
+    -webkit-backdrop-filter: var(--vh-glass-blur);
+
+    overflow: hidden;
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+}
+
+/* CARD — secao interna */
+.mod-racha .vh-card {
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+    border-radius: var(--vh-r-card);
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    box-shadow: var(--vh-shadow-1);
+}
+
+/* BUTTON — base + variantes */
+.mod-racha .vh-btn {
+    font-family: var(--vh-font-body);
+    font-weight: 600;
+    font-size: 13px;
+
+    padding: 9px 16px;
+    border-radius: var(--vh-r-btn);
+
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text);
+
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    transition: transform var(--vh-t-fast),
+                background var(--vh-t-norm),
+                border-color var(--vh-t-norm),
+                box-shadow var(--vh-t-norm);
+}
+
+.mod-racha .vh-btn:hover {
+    background: rgba(243, 181, 58, 0.10);
+    border-color: var(--vh-gold);
+}
+
+.mod-racha .vh-btn:active { transform: scale(0.97); }
+
+.mod-racha .vh-btn.primary {
+    background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
+    color: var(--vh-black);
+    border-color: var(--vh-gold);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mod-racha .vh-btn.primary:hover { box-shadow: var(--vh-shadow-glow); }
+
+.mod-racha .vh-btn.danger {
+    color: var(--vh-danger);
+    border-color: rgba(232, 81, 63, 0.40);
+    background: rgba(232, 81, 63, 0.10);
+}
+
+.mod-racha .vh-btn.ghost { background: transparent; }
+
+/* INPUT — input / select / textarea */
+.mod-racha .vh-input {
+    padding: 9px 12px;
+    border-radius: var(--vh-r-btn);
+
+    background: rgba(12, 10, 6, 0.55);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text);
+
+    font-family: var(--vh-font-body);
+    font-size: 13px;
+
+    transition: border-color var(--vh-t-fast),
+                box-shadow var(--vh-t-fast);
+}
+
+.mod-racha .vh-input:focus {
+    border-color: var(--vh-gold);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(243, 181, 58, 0.18);
+}
+
+/* TOAST — notificacao flutuante (no iPad: posicionada no canto da tela) */
+.mod-racha .vh-toast {
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+    border-left: 3px solid var(--vh-gold);
+    border-radius: var(--vh-r-card);
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    box-shadow: var(--vh-shadow-1);
+
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+    font-size: 13px;
+    max-width: 360px;
+}
+
+.mod-racha .vh-toast.error   { border-left-color: var(--vh-danger); }
+.mod-racha .vh-toast.success { border-left-color: var(--vh-ok); }
+.mod-racha .vh-toast.warn    { border-left-color: var(--vh-amber); }
+
+/* CHIP — badge / tag pill */
+.mod-racha .vh-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 4px 10px;
+    border-radius: var(--vh-r-pill);
+
+    background: rgba(243, 181, 58, 0.10);
+    border: 1px solid var(--vh-glass-border);
+    color: var(--vh-text-dim);
+
+    font-family: var(--vh-font-tech);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+
+/* ============================================================
+   SHELL — painel principal (glass motorsport: blur 18px)
+   Adaptado: preenche o container do iPad (inset:0, height:100%).
+   ============================================================ */
+
+.mod-racha .panel-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+
+    border-radius: 0;
+    background: var(--vh-glass-bg);
+    box-shadow: none;
+
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+
+    overflow: hidden;
+    color: var(--vh-text);
+    font-family: var(--vh-font-body);
+}
+
+
+/* ============================================================
+   HEADER — brand + tabs
+   ============================================================ */
+
+.mod-racha .panel-header {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-lg);
+
+    padding: var(--vh-gap-md) var(--vh-gap-xl);
+    border-bottom: 1px solid var(--vh-glass-line);
+    background: linear-gradient(180deg, rgba(243,181,58,0.06), transparent);
+    flex: 0 0 auto;
+}
+
+.mod-racha .panel-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-logo {
+    height: 34px;
+    width: auto;
+    filter: drop-shadow(0 0 8px rgba(243,181,58,0.55));
+}
+
+.mod-racha .panel-logo-fallback {
+    font-size: 28px;
+    color: var(--vh-gold);
+}
+
+.mod-racha .panel-brand-name {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-sand);
+    display: block;
+    line-height: 1;
+}
+
+.mod-racha .panel-brand-name strong { color: var(--vh-gold); }
+
+.mod-racha .panel-brand-tag {
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+
+/* TABS */
+.mod-racha .panel-tabs {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.mod-racha .panel-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+
+    padding: 10px 16px;
+    border-radius: var(--vh-r-btn) var(--vh-r-btn) 0 0;
+
+    font-family: var(--vh-font-tech);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+
+    border-bottom: 2px solid transparent;
+    transition: color var(--vh-t-fast), border-color var(--vh-t-fast);
+}
+
+.mod-racha .panel-tab:hover { color: var(--vh-sand); }
+
+.mod-racha .panel-tab.active {
+    color: var(--vh-gold);
+    border-bottom-color: var(--vh-gold);
+}
+
+.mod-racha .panel-tab-badge {
+    background: var(--vh-gold);
+    color: var(--vh-black);
+    border-radius: var(--vh-r-pill);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    margin-left: 2px;
+}
+
+
+/* ============================================================
+   BODY — views
+   ============================================================ */
+
+.mod-racha .panel-body {
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
+}
+
+.mod-racha .panel-view {
+    display: none;
+    position: absolute;
+    inset: 0;
+    padding: var(--vh-gap-lg) var(--vh-gap-xl);
+    overflow-y: auto;
+}
+
+.mod-racha .panel-view.active { display: block; }
+
+
+/* TOOLBAR */
+.mod-racha .panel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+    margin-bottom: var(--vh-gap-lg);
+    flex-wrap: wrap;
+}
+
+.mod-racha .panel-search {
+    position: relative;
+    flex: 1;
+    max-width: 420px;
+}
+
+.mod-racha .panel-search i {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--vh-text-dim2);
+    font-size: 13px;
+}
+
+.mod-racha .panel-search .vh-input {
+    width: 100%;
+    padding-left: 34px;
+}
+
+.mod-racha .panel-count {
+    font-family: var(--vh-font-tech);
+    font-size: 12px;
+    color: var(--vh-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: auto;
+}
+
+.mod-racha .panel-count b { color: var(--vh-gold); }
+
+
+/* ============================================================
+   GRID DE PISTAS
+   ============================================================ */
+
+.mod-racha .panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--vh-gap-md);
+}
+
+.mod-racha .panel-track {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-track-head {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-track-head > i {
+    color: var(--vh-gold);
+    font-size: 16px;
+}
+
+.mod-racha .panel-track-title {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+.mod-racha .vh-chip.illegal {
+    background: rgba(232,81,63,0.12);
+    border-color: rgba(232,81,63,0.4);
+    color: var(--vh-danger);
+}
+
+.mod-racha .panel-track-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vh-gap-sm) var(--vh-gap-md);
+    font-size: 12px;
+    color: var(--vh-text-dim);
+}
+
+.mod-racha .panel-track-meta b { color: var(--vh-text); }
+.mod-racha .panel-track-meta i { color: var(--vh-text-dim2); }
+
+.mod-racha .panel-track-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--vh-gap-sm);
+    padding-top: var(--vh-gap-sm);
+    border-top: 1px solid var(--vh-glass-line);
+}
+
+.mod-racha .panel-track-fee {
+    font-family: var(--vh-font-num);
+    font-weight: 700;
+    color: var(--vh-gold);
+}
+
+
+/* ============================================================
+   LISTA DE LOBBIES
+   ============================================================ */
+
+.mod-racha .panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-lobby {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-md);
+
+    padding: var(--vh-gap-md) var(--vh-gap-lg);
+    border-radius: var(--vh-r-card);
+    background: var(--vh-glass-bg-2);
+    border: 1px solid var(--vh-glass-line);
+}
+
+.mod-racha .panel-lobby > i {
+    font-size: 18px;
+    color: var(--vh-gold);
+}
+
+.mod-racha .panel-lobby-info { flex: 1; }
+
+.mod-racha .panel-lobby-title {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.mod-racha .panel-lobby-state {
+    font-family: var(--vh-font-tech);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: var(--vh-r-pill);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mod-racha .panel-lobby-state.lobby,
+.mod-racha .panel-lobby-state.pending {
+    background: rgba(243,181,58,0.14);
+    color: var(--vh-gold);
+}
+
+.mod-racha .panel-lobby-mode {
+    font-family: var(--vh-font-tech);
+    font-size: 10px;
+    color: var(--vh-text-dim2);
+    border: 1px solid var(--vh-glass-line);
+    border-radius: var(--vh-r-pill);
+    padding: 1px 7px;
+}
+
+.mod-racha .panel-lobby-meta {
+    font-size: 12px;
+    color: var(--vh-text-dim);
+    margin-top: 3px;
+}
+
+.mod-racha .panel-lobby-meta b { color: var(--vh-text); }
+
+
+/* ============================================================
+   TABELAS (ranking + historico)
+   ============================================================ */
+
+.mod-racha .panel-tablewrap {
+    border-radius: var(--vh-r-card);
+    border: 1px solid var(--vh-glass-line);
+    overflow: hidden;
+}
+
+.mod-racha .panel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.mod-racha .panel-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--vh-text-dim2);
+    background: rgba(12,10,6,0.40);
+    border-bottom: 1px solid var(--vh-glass-line);
+}
+
+.mod-racha .panel-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(243,181,58,0.05);
+}
+
+.mod-racha .panel-table tr:last-child td { border-bottom: none; }
+
+.mod-racha .panel-table td.gold   { color: var(--vh-gold); font-weight: 700; }
+.mod-racha .panel-table td.silver { color: #cfd2d6; font-weight: 700; }
+.mod-racha .panel-table td.bronze { color: #d99a5a; font-weight: 700; }
+
+.mod-racha .panel-table-empty {
+    text-align: center;
+    padding: 32px !important;
+    color: var(--vh-text-dim2);
+}
+
+
+/* ============================================================
+   EDITOR
+   ============================================================ */
+
+.mod-racha .panel-editor {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--vh-gap-lg);
+}
+
+.mod-racha .panel-editor-phases {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-editor-phases .vh-btn { justify-content: flex-start; }
+
+.mod-racha .panel-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: var(--vh-gap-md);
+}
+
+.mod-racha .panel-form-row label {
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vh-text-dim);
+}
+
+.mod-racha .panel-form-row.checks {
+    flex-direction: row;
+    gap: var(--vh-gap-lg);
+}
+
+.mod-racha .panel-form-row.checks label {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: var(--vh-text);
+}
+
+.mod-racha .panel-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vh-gap-sm);
+    margin-top: var(--vh-gap-md);
+}
+
+
+/* ============================================================
+   MODAL — criar lobby (absolute ao .mod-racha, nao fixed ao viewport)
+   ============================================================ */
+
+.mod-racha .panel-modal {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mod-racha .panel-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(12,10,6,0.55);
+    backdrop-filter: blur(6px);
+}
+
+.mod-racha .panel-modal-box {
+    position: relative;
+    inset: auto;
+    width: min(480px, 92%);
+    padding: var(--vh-gap-xl);
+}
+
+.mod-racha .panel-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--vh-gap-lg);
+}
+
+.mod-racha .panel-modal-title {
+    font-family: var(--vh-font-display);
+    font-weight: 700;
+    font-size: 22px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+    color: var(--vh-gold);
+}
+
+.mod-racha .panel-modal-track {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    margin-bottom: var(--vh-gap-lg);
+    font-family: var(--vh-font-display);
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.mod-racha .panel-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--vh-gap-sm);
+    margin-top: var(--vh-gap-lg);
+}
+
+
+/* ============================================================
+   EMPTY STATE + TOAST
+   ============================================================ */
+
+.mod-racha .panel-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 48px;
+    color: var(--vh-text-dim2);
+    font-size: 14px;
+}
+
+.mod-racha .panel-empty i {
+    display: block;
+    font-size: 32px;
+    margin-bottom: var(--vh-gap-sm);
+    color: var(--vh-sand-deep);
+}
+
+.mod-racha .panel-toast-stack {
+    position: absolute;
+    top: 16px; right: 16px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-sm);
+}
+
+.mod-racha .panel-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    transition: opacity var(--vh-t-norm), transform var(--vh-t-norm);
+}
+
+.mod-racha .panel-toast.fade-out {
+    opacity: 0;
+    transform: translateX(20px);
+}

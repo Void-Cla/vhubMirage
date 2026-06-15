@@ -1,0 +1,35 @@
+/* modules/container/container.css — baú: dual-pane (mochila | baú). Slot vem de shared/slots.css. */
+
+.mod-container {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.35), rgba(0,0,0,0.55));
+}
+
+.mod-container .ct-shell {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  width: 920px; max-width: 94vw; max-height: 86vh;
+}
+
+.mod-container .ct-panel {
+  background: var(--vh-glass); border: 1px solid var(--vh-border); border-radius: var(--vh-radius);
+  box-shadow: var(--vh-shadow); backdrop-filter: blur(8px); padding: 16px;
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+.mod-container .ct-head  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.mod-container .ct-title { font-size: 16px; font-weight: 700; color: var(--vh-gold); letter-spacing: .5px; text-shadow: var(--vh-glow); }
+.mod-container .ct-close { cursor: pointer; color: var(--vh-text-dim); font-size: 20px; line-height: 1; }
+.mod-container .ct-close:hover { color: var(--vh-danger); }
+
+.mod-container .ct-grid  { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; overflow: auto; flex: 1; align-content: start; }
+
+.mod-container .ct-foot   { margin-top: 12px; }
+.mod-container .ct-wlabel { display: flex; justify-content: space-between; font-size: 12px; color: var(--vh-text-dim); margin-bottom: 5px; }
+.mod-container .ct-track  { height: 8px; border-radius: 6px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.mod-container .ct-bar    { height: 100%; width: 0%; background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand)); transition: width .18s; }
+.mod-container .ct-bar.over { background: var(--vh-danger); }
+
+.mod-container .ct-toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: var(--vh-glass-2); border: 1px solid var(--vh-border-2); border-radius: var(--vh-radius-sm); padding: 10px 16px; color: var(--vh-text); font-size: 13px; box-shadow: var(--vh-shadow); opacity: 0; transition: opacity .2s; }
+.mod-container .ct-toast.show { opacity: 1; }
+.mod-container .ct-toast.err  { border-color: var(--vh-danger); color: #ffd9d2; }

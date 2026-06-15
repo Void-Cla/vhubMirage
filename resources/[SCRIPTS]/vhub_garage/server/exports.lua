@@ -14,6 +14,7 @@ local TRUSTED = {
   ['vhub_groups']    = true,
   ['vhub_player_state'] = true,
   ['vhub_admin']     = true,
+  ['vhub_lspdtool']  = true,   -- apreensão policial via forceImpound (porta declarada)
 }
 
 local function _invoker_allowed()
@@ -52,8 +53,8 @@ exports('forceTransfer', function(plate, new_char_id)
   local p = VHubGarage.U.normalizePlate(plate); if not p then return false end
   local cid = tonumber(new_char_id); if not cid then return false end
   Citizen.CreateThread(function()
-    SQL:updateOwner(p, cid)
-    SQL:grantKey(p, cid, 'owner', cid, nil)
+    -- f sico viaja com a placa no prontu rio  nada a persistir na transfer ncia
+    exports.vhub_conce:transferOwner(p, cid)   -- char_id + owner antigo/novo (autoridade unica)
     Core:log(p, 'force_transfer', cid, {})
   end)
   return true

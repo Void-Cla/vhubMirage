@@ -10,6 +10,7 @@ local SQL  = VHubGarage.SQL
 local Core = VHubGarage.Core
 local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
+local U    = VHubGarage.U
 
 -- ----------------------------------------------------------------------------
 -- Boot
@@ -18,6 +19,38 @@ AddEventHandler('onResourceStart', function(res)
   if res ~= GetCurrentResourceName() then return end
   Citizen.CreateThread(function()
     SQL:initSchema()
+    -- Backfill da ancora fisica: vhub_vehicles JA existe aqui (initSchema acabou de criar).
+    -- O conce sobe ANTES do garage, entao nao consegue popular vh_vehicles no proprio boot;
+    -- e o garage que dispara, garantindo a FK que habilita a persistencia fisica em
+    -- vh_vehicle_data (fuel/odo/dano). Sem isto a FK rejeita TODA gravacao de estado fisico.
+    pcall(function() exports.vhub_conce:backfillMirror() end)
+    pcall(function() exports.vhub_conce:backfillOwnerKeys() end)
+    -- PRONTU RIO (vhub_vehicle_state): backfill 1x da customization legada +
+    -- limpeza de  rf os. S  AQUI (p s-DDL de vhub_vehicles, NUNCA no boot do
+    -- conce)  guarda dupla interna impede wipe em DB parcial/restore.
+    pcall(function() exports.vhub_conce:backfillVehicleState() end)
+    pcall(function() exports.vhub_conce:reconcileVehicleState() end)
+    -- Cache read-only do catalogo canonico (dono = vhub_conce desde a FASE 2).
+    -- Todos os read-sites de VHubGarage.catalog passam a ler este cache.
+    VHubGarage.catalog = exports.vhub_conce:getCatalog() or VHubGarage.catalog
+
+    -- ── Boot-scan do patio (IT.3 / Void-Zero) ───────────────────────────────
+    -- Só roda em BOOT REAL do servidor (0 players). Em restart do resource com
+    -- players online as entidades ainda existem — recolher seria roubo de carro.
+    -- Auditoria por veiculo via Core:log (persistida em vhub_vehicle_log).
+    if CFG.patio_boot_scan ~= false and #GetPlayers() == 0 then
+      local destino = CFG.patio_boot_destino or 'impound'
+      for _, v in ipairs(SQL:listByStatus('out') or {}) do
+        if destino == 'garage' then
+          SQL:updateStatus(v.plate, 'garage')
+        else
+          SQL:updateStatus(v.plate, 'impound')
+          SQL:impoundPut(v.plate, 'recolhido (queda do servidor)', CFG.patio_taxa or 0, nil)
+        end
+        Core:log(v.plate, 'boot_scan', nil, { destino = destino })
+      end
+    end
+
     print('[vhub_garage] schema verificado')
     -- envia setup a quem est  online (resource restart em produ  o)
     for _, src in ipairs(GetPlayers()) do
@@ -65,21 +98,26 @@ AddEventHandler(E.REQ_LIST, function()
   local src = source
   local cid = Core:getCharId(src); if not cid then return end
   Citizen.CreateThread(function()
-    local mine = SQL:listByOwner(cid) or {}
-    local keys = SQL:listKeysOfChar(cid) or {}
-    -- agrega ve culos onde sou dono OU tenho chave
-    local seen, snaps = {}, {}
-    for _, v in ipairs(mine) do
-      seen[v.plate] = true; snaps[#snaps+1] = Core:vehicleSnapshot(v)
+    -- FASE 3a (self-heal): todo veiculo que o player POSSUI deve ter sua chave-item
+    -- (chave original do dono). Garante que o dono nao some da lista por-chave.
+    local owned = SQL:listByOwner(cid) or {}
+    for _, v in ipairs(owned) do
+      if not Core.hasKeyItem(src, v.plate) then Core.giveKeyItem(src, v.plate) end
     end
-    for _, k in ipairs(keys) do
-      if not seen[k.plate] then
-        local v = SQL:getVehicle(k.plate)
+
+    -- FASE 3c: lista POR CHAVE-ITEM no inventario (nao julga dono char_id).
+    -- Quem tem a chave ve/opera; quem nao tem, nao ve. O cron 24h devolve posse temporaria.
+    local plates = exports.vhub_inventory:getVehicleKeys(src) or {}
+    local seen, snaps = {}, {}
+    for _, plate in ipairs(plates) do
+      local p = U.normalizePlate(plate)
+      if p and not seen[p] then
+        seen[p] = true
+        local v = SQL:getVehicle(p)
         if v then
           local snap = Core:vehicleSnapshot(v)
-          snap.role = k.kind   -- 'shared', 'clone', 'rental'
+          snap.role = (v.char_id == cid) and 'owner' or 'key'   -- dono real x portador de chave
           snaps[#snaps+1] = snap
-          seen[k.plate] = true
         end
       end
     end
@@ -138,12 +176,5 @@ AddEventHandler(E.REQ_CATALOG, function(conc_id)
   end)
 end)
 
--- ----------------------------------------------------------------------------
--- Limpeza peri dica de chaves expiradas (1x por hora)
--- ----------------------------------------------------------------------------
-Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(60 * 60 * 1000)
-    SQL:purgeExpiredKeys()
-  end
-end)
+-- A limpeza/devolução de chaves expiradas agora é do cron de vhub_conce (FASE 3b):
+-- conce:returnExpiredHoldings() revoga a linha + tira a chave-item + devolve o carro.

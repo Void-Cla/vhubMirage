@@ -1,0 +1,105 @@
+/*
+ * style-core.css — tokens vHub + reset base
+ * vhub_vehcontrol — identidade Liquid Glass + Areia + Dourado
+ */
+
+/* ============================================================
+   TOKENS
+   ============================================================ */
+
+:root {
+  /* Cores */
+  --vh-sand:        #d9c19a;
+  --vh-sand-dim:    #a89572;
+  --vh-sand-deep:   #5a4a30;
+  --vh-gold:        #f3b53a;
+  --vh-gold-soft:   #ffd573;
+  --vh-amber:       #ff9a1f;
+  --vh-black:       #0c0a06;
+  --vh-black-2:     #1a1610;
+  --vh-danger:      #e8513f;
+  --vh-ok:          #6bbf6b;
+
+  --vh-text:        #f0e6d2;
+  --vh-text-dim:    #c4ad84;
+  --vh-text-dim2:   #8a7a5a;
+
+  /* Glass */
+  --vh-glass-bg:    linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.58));
+  --vh-glass-bg-2:  linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.42));
+  --vh-glass-border: rgba(243,181,58,0.22);
+  --vh-glass-line:  rgba(243,181,58,0.10);
+
+  /* Sombras */
+  --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
+  --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
+  --vh-shadow-3:    0 24px 64px rgba(0,0,0,0.68), 0 0 32px rgba(243,181,58,0.14);
+  --vh-shadow-glow: 0 0 18px rgba(255,213,115,0.45);
+
+  /* Raios */
+  --vh-r-pan:  18px;
+  --vh-r-card: 12px;
+  --vh-r-btn:  10px;
+  --vh-r-pill: 999px;
+
+  /* Tipografia */
+  --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
+  --vh-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Espaçamentos */
+  --vh-gap-xs: 4px;
+  --vh-gap-sm: 6px;
+  --vh-gap-md: 10px;
+  --vh-gap-lg: 14px;
+  --vh-gap-xl: 20px;
+
+  /* Transições */
+  --vh-t-fast: 0.14s ease;
+  --vh-t-norm: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ============================================================
+   RESET MÍNIMO
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html {
+  font-family: var(--vh-font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  background: none;
+}
+
+img { display: block; }
+svg { display: block; flex-shrink: 0; }
+
+
+/* ============================================================
+   UTILITÁRIO
+   ============================================================ */
+
+.hidden {
+  display: none !important;
+}

@@ -78,9 +78,10 @@ VHubMoneyCfg = {
   ADMIN_ACE        = 'vhub.money.admin',
   ADMIN_PERMISSION = 'vhub.money.admin',
   TRUSTED_RESOURCES = {
-    ['vhub']        = true,
-    ['vhub_admin']  = true,
-    ['vhub_garage'] = true,
+    ['vhub']         = true,
+    ['vhub_admin']   = true,
+    ['vhub_garage']  = true,
+    ['vhub_ferinha'] = true,   -- leilao: payout/refund offline por char_id (giveBankChar)
   },
 
   -- ─── Comandos ───────────────────────────────────────────────────────────

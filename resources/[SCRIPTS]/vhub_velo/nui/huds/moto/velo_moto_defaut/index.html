@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Velocímetro Moto | vHub Velo</title>
+<style>
+/* ===================== RESET NUI ===================== */
+* { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+html { width:100vw; height:100vh; overflow:hidden; background:transparent !important; }
+body { width:100vw; height:100vh; overflow:hidden; position:relative; background:transparent !important; pointer-events:none; font-family:'Segoe UI', Tahoma, sans-serif; color:#fff; }
+
+/* visibilidade PADRÃO: o velo-core liga body.velo-active quando há veículo ativo */
+#moto { opacity:0; transform:translateY(18px); }
+body.velo-active #moto { opacity:1; transform:translateY(0); }
+
+/* ===================== SHELL (280 x 300) ===================== */
+.moto-container { position:absolute; right:22px; bottom:22px; width:280px; transition:opacity .35s ease, transform .35s ease; }
+.moto-shell { position:relative; z-index:1; width:280px; aspect-ratio:280/300; filter:drop-shadow(0 14px 26px rgba(0,0,0,.55)); }
+.moto-bg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
+/* LOGO personalizável (/velo): disco CIRCULAR clipado no centro do mostrador — NÃO vaza do círculo */
+.center-logo { position:absolute; left:50%; top:46.67%; transform:translate(-50%,-50%); width:46%; aspect-ratio:1; border-radius:50%; overflow:hidden; background-size:cover; background-position:center; background-repeat:no-repeat; z-index:2; pointer-events:none; opacity:.5; mix-blend-mode:screen; }
+
+/* ponteiro de velocidade (velo-core rotaciona via #speed-needle) */
+.needle { position:absolute; border-radius:4px; pointer-events:none; z-index:6; will-change:transform; transition:transform .12s linear; }
+.speed-needle { width:4px; height:104px; left:calc(50% - 2px); top:calc(46.67% - 104px); transform-origin:50% 100%; transform:rotate(-135deg); background:linear-gradient(180deg,#fff4cf,var(--velo-accent,#ff8c00)); box-shadow:0 4px 14px rgba(255,140,0,.45); }
+.pivot { position:absolute; width:16px; height:16px; border-radius:50%; left:calc(50% - 8px); top:calc(46.67% - 8px); z-index:7; pointer-events:none; background:radial-gradient(circle at 35% 30%, #5a5d66 0%, #16171b 65%, #0a0a0d 100%); border:1px solid #2a2c33; box-shadow:0 2px 6px rgba(0,0,0,.6); }
+
+/* ===================== OVERLAY DIGITAL ===================== */
+.overlay { position:absolute; inset:0; pointer-events:none; }
+.gearReadout { position:absolute; left:50%; top:30%; transform:translate(-50%,-50%); z-index:8; }
+.gearReadout strong { font-size:16px; font-weight:800; letter-spacing:1px; text-shadow:0 0 8px rgba(255,140,0,.7); }
+.speedReadout { position:absolute; left:50%; top:48%; transform:translate(-50%,-50%); text-align:center; z-index:8; }
+.velo { font-size:52px; font-weight:800; line-height:.9; letter-spacing:1px; text-shadow:0 6px 14px rgba(0,0,0,.55); display:inline-flex; align-items:flex-end; }
+.defaultVelo { color:rgba(255,255,255,.16); }
+.speedUnit { margin-top:2px; font-size:10px; font-weight:700; letter-spacing:3px; color:var(--velo-accent,#ff8c00); text-shadow:0 0 6px rgba(255,140,0,.4); }
+
+/* odômetro de dígitos */
+.odometer { position:absolute; left:50%; top:60%; transform:translateX(-50%); display:flex; align-items:center; gap:1.5px; z-index:8; }
+.odo-digit { width:13px; height:18px; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#26282f 0%,#0c0d11 100%); border:1px solid #3a3d45; border-radius:2.5px; color:#eef0f3; font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; box-shadow:inset 0 1px 0 rgba(255,255,255,.07), inset 0 -2px 3px rgba(0,0,0,.5); text-shadow:0 1px 1px rgba(0,0,0,.6); }
+.odo-digit.tenth { background:linear-gradient(180deg,#ffa733 0%,#d96f00 100%); border-color:#ffb24d; color:#1a0e00; text-shadow:none; }
+.odometer::after { content:'km'; margin-left:4px; font-size:8px; font-weight:700; color:#6e7077; }
+
+.fuelReadout { position:absolute; left:50%; top:70%; transform:translateX(-50%); z-index:8; font-size:12px; font-weight:800; color:#fff; text-shadow:0 0 6px rgba(55,224,161,.5); }
+.fuelReadout i { font-style:normal; font-size:8px; color:#37e0a1; margin-left:1px; }
+
+/* ===================== STATUS ICONS ===================== */
+.status-icon { transition:color .2s ease, opacity .2s ease; }
+.status-icon.turn { color:#2a2c34; }
+.status-icon.turn.on { color:#37e0a1; animation:blink .55s steps(2,start) infinite; }
+@keyframes blink { 0%,49%{opacity:1;filter:drop-shadow(0 0 6px #37e0a1);} 50%,100%{opacity:.25;filter:none;} }
+.status-icon.lock.unlocked { color:#37e0a1; }
+.status-icon.lock.locked { color:#ff2a2a; }
+.status-icon.helmet.on { color:#37e0a1; }
+.status-icon.helmet.off { color:#ff2a2a; }
+.status-icon.engine.good { color:#37e0a1; }
+.status-icon.engine.warn { color:#9a9ca3; }
+.status-icon.engine.danger { color:#ff2a2a; animation:pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{filter:drop-shadow(0 0 6px #ff2a2a);} 50%{filter:drop-shadow(0 0 12px #ff2a2a);} }
+
+@media (max-width:1100px){ .moto-container{ zoom:.9; } }
+@media (max-width:900px){ .moto-container{ zoom:.78; } }
+</style>
+</head>
+<body>
+
+<main id="moto" class="moto-container">
+    <div class="moto-shell">
+        <div class="center-logo" id="center-logo"></div>
+
+        <svg class="moto-bg" viewBox="0 0 280 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <circle cx="140" cy="140" r="134" fill="#08080c" stroke="#2a2c34" stroke-width="2"/>
+            <circle cx="140" cy="140" r="120" fill="none" stroke="#15161a" stroke-width="1"/>
+            <path id="rpm-track" fill="none" stroke="#1c1d22" stroke-width="7" stroke-linecap="round"/>
+            <path id="rpm-fill"  fill="none" stroke="#ff8c00" stroke-width="7" stroke-linecap="round"/>
+            <path id="fuel-track" fill="none" stroke="#1c1d22" stroke-width="6" stroke-linecap="round"/>
+            <path id="fuel-fill"  fill="none" stroke="#37e0a1" stroke-width="6" stroke-linecap="round"/>
+            <g id="ticks-speed"></g>
+            <text x="92"  y="270" text-anchor="middle" font-size="11" font-weight="800" fill="#c8c9cd">F</text>
+            <text x="188" y="270" text-anchor="middle" font-size="11" font-weight="800" fill="#ff2a2a">E</text>
+            <text x="140" y="252" text-anchor="middle" font-size="8.5" font-weight="700" fill="#7a7c83" letter-spacing="2">RPM</text>
+            <g id="status-turn-left" class="status-icon turn off" transform="translate(20 140)"><path d="M -11 0 L 3 -9 L 3 -3.5 L 11 -3.5 L 11 3.5 L 3 3.5 L 3 9 Z" fill="currentColor"/></g>
+            <g id="status-turn-right" class="status-icon turn off" transform="translate(260 140)"><path d="M 11 0 L -3 -9 L -3 -3.5 L -11 -3.5 L -11 3.5 L -3 3.5 L -3 9 Z" fill="currentColor"/></g>
+            <g id="status-lock" class="status-icon lock locked" transform="translate(110 290)"><path class="shackle" d="M -5 -2 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="-7" y="-2" width="14" height="11" rx="1.5" fill="currentColor"/><circle cx="0" cy="3" r="1.4" fill="#0a0b0f"/></g>
+            <g id="status-helmet" class="status-icon helmet off" transform="translate(140 290)"><path d="M -9 4 a9 9 0 0 1 18 0 Z" fill="currentColor"/><rect x="-9" y="3" width="18" height="3" rx="1.5" fill="currentColor"/><path d="M -2 4 a3 3 0 0 1 6 0 Z" fill="#0a0b0f"/></g>
+            <g id="status-engine" class="status-icon engine good" transform="translate(170 290)"><rect x="-7" y="-4" width="13" height="10" rx="1" fill="currentColor"/><rect x="-4" y="-7" width="3" height="3" fill="currentColor"/><rect x="1" y="-7" width="3" height="3" fill="currentColor"/><rect x="6" y="-1" width="3" height="5" fill="currentColor"/><rect x="-9" y="2" width="2" height="3" fill="currentColor"/></g>
+        </svg>
+
+        <div class="needle speed-needle" id="speed-needle"></div>
+        <div class="pivot"></div>
+
+        <div class="overlay">
+            <div class="gearReadout"><strong id="vehicle-gear">N</strong></div>
+            <div class="speedReadout">
+                <h1 class="velo"><span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></h1>
+                <div class="speedUnit">KM/H</div>
+            </div>
+            <div class="odometer" id="vehicle-odometer"></div>
+            <div class="fuelReadout"><span id="vehicle-fuel">100</span><i>%</i></div>
+        </div>
+    </div>
+</main>
+
+<!-- engine universal: velocidade (#speed-needle + dígitos) + marcha + visibilidade. Arcos RPM/fuel,
+     odômetro e ícones de status são desenhados no veloCustomRender a partir do state. -->
+<script src="/nui/velo-core.js"></script>
+<script>
+(function () {
+    'use strict';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const CX = 140, CY = 140, RPM_R = 98, FUEL_R = 108;
+    const A_START = -135, A_END = 135, FUEL_L = 225, FUEL_R_ANG = 135, SPEED_R = 122;
+
+    const clamp = (v, a, b) => { const n = Number(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, n)) : a; };
+    const polar = (cx, cy, r, a) => { const rad = a * Math.PI / 180; return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) }; };
+    function arcPath(cx, cy, r, a0, a1) { const s = polar(cx, cy, r, a0), e = polar(cx, cy, r, a1); const large = Math.abs(a1 - a0) > 180 ? 1 : 0; return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`; }
+
+    const rpmFill = document.getElementById('rpm-fill');
+    const fuelFill = document.getElementById('fuel-fill');
+    const fuelValue = document.getElementById('vehicle-fuel');
+    const odoValue = document.getElementById('vehicle-odometer');
+    const iconTurnL = document.getElementById('status-turn-left');
+    const iconTurnR = document.getElementById('status-turn-right');
+    const iconLock = document.getElementById('status-lock');
+    const iconHelmet = document.getElementById('status-helmet');
+
+    function gerarTicks() {
+        const g = document.getElementById('ticks-speed'), steps = 6, labels = ['0', '50', '100', '150', '200', '250', '300'], span = A_END - A_START;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps, ang = A_START + span * t, p1 = polar(CX, CY, SPEED_R - 9, ang), p2 = polar(CX, CY, SPEED_R, ang);
+            const ln = document.createElementNS(SVG_NS, 'line');
+            ln.setAttribute('x1', p1.x.toFixed(1)); ln.setAttribute('y1', p1.y.toFixed(1)); ln.setAttribute('x2', p2.x.toFixed(1)); ln.setAttribute('y2', p2.y.toFixed(1));
+            ln.setAttribute('stroke', '#c8c9cd'); ln.setAttribute('stroke-width', '2.5'); ln.setAttribute('stroke-linecap', 'round'); g.appendChild(ln);
+            if (i < steps) for (let k = 1; k < 5; k++) {
+                const st = (i + k / 5) / steps, sa = A_START + span * st, s1 = polar(CX, CY, SPEED_R - 4, sa), s2 = polar(CX, CY, SPEED_R, sa);
+                const sl = document.createElementNS(SVG_NS, 'line'); sl.setAttribute('x1', s1.x.toFixed(1)); sl.setAttribute('y1', s1.y.toFixed(1)); sl.setAttribute('x2', s2.x.toFixed(1)); sl.setAttribute('y2', s2.y.toFixed(1)); sl.setAttribute('stroke', '#5a5c63'); sl.setAttribute('stroke-width', '1'); g.appendChild(sl);
+            }
+            const lp = polar(CX, CY, SPEED_R - 22, ang), tx = document.createElementNS(SVG_NS, 'text');
+            tx.setAttribute('x', lp.x.toFixed(1)); tx.setAttribute('y', (lp.y + 4).toFixed(1)); tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('font-size', '12'); tx.setAttribute('font-weight', '700'); tx.setAttribute('fill', '#c8c9cd'); tx.textContent = labels[i]; g.appendChild(tx);
+        }
+        document.getElementById('rpm-track').setAttribute('d', arcPath(CX, CY, RPM_R, A_START, A_END));
+        document.getElementById('fuel-track').setAttribute('d', arcPath(CX, CY, FUEL_R, FUEL_R_ANG, FUEL_L));
+    }
+
+    let lastOdo = null;
+    function renderOdo(km) {
+        const s = String(Math.max(0, Math.floor(Number(km) || 0))).padStart(6, '0');
+        if (s === lastOdo) return; lastOdo = s;
+        odoValue.innerHTML = '';
+        for (let i = 0; i < s.length; i++) { const c = document.createElement('span'); c.className = 'odo-digit' + (i === s.length - 1 ? ' tenth' : ''); c.textContent = s[i]; odoValue.appendChild(c); }
+    }
+    const setIcon = (el, base, st) => el.setAttribute('class', 'status-icon ' + base + ' ' + st);
+    const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--velo-accent').trim() || '#ff8c00';
+
+    // velo-core chama isto a cada update: arcos RPM/fuel + odômetro + status (velocidade/marcha = velo-core)
+    window.veloCustomRender = function (state) {
+        const rpm = clamp(state.rpm_percent, 0, 100), fuel = clamp(state.fuel_percent, 0, 100);
+
+        const rpmEnd = A_START + (rpm / 100) * (A_END - A_START);
+        rpmFill.setAttribute('d', rpm <= 0.5 ? '' : arcPath(CX, CY, RPM_R, A_START, rpmEnd));
+        rpmFill.setAttribute('stroke', rpm >= 80 ? '#ff2a2a' : accent());
+
+        const fEnd = FUEL_L - (1 - fuel / 100) * (FUEL_L - FUEL_R_ANG);
+        fuelFill.setAttribute('d', fuel <= 0.5 ? '' : arcPath(CX, CY, FUEL_R, fEnd, FUEL_L));
+        fuelFill.setAttribute('stroke', fuel <= 20 ? '#ff2a2a' : '#37e0a1');
+        fuelValue.textContent = Math.round(fuel);
+
+        renderOdo(state.odometer_km);
+
+        setIcon(iconTurnL, 'turn', state.turn_left ? 'on' : 'off');
+        setIcon(iconTurnR, 'turn', state.turn_right ? 'on' : 'off');
+        setIcon(iconLock, 'lock', state.locked ? 'locked' : 'unlocked');
+        setIcon(iconHelmet, 'helmet', state.seatbelt ? 'on' : 'off');  // cinto do core = capacete na moto
+    };
+
+    // logo central padrão (decorativa). Cor de destaque vem de --velo-accent (galeria /velo).
+    document.getElementById('center-logo').style.backgroundImage = "url('https://raw.githubusercontent.com/Void-Cla/vhub-assets/main/logo.png')";
+
+    gerarTicks();
+    // speedPoints 0..300 = mesma escala linear do ponteiro antigo (lerpAngle)
+    VeloCore.init({ speedPoints: [[0, -135], [300, 135]], rpmPoints: [[0, -135], [10, 60]] });
+})();
+</script>
+</body>
+</html>

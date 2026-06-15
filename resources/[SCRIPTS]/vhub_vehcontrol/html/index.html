@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub — Controle do Veículo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style-core.css" />
+  <link rel="stylesheet" href="style-dashboard.css" />
+  <link rel="stylesheet" href="style-buttons.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       PAINEL — compacto, meio-esquerdo, arrastavel pelo header.
+       (O velocímetro NÃO vive mais aqui: é o resource `vhub_velo`.)
+       ============================================================ -->
+  <div id="vc-panel" class="vc-panel hidden">
+
+    <!-- brilho ambient gold no topo (puramente decorativo) -->
+    <div class="vc-aura" aria-hidden="true"></div>
+
+    <!-- Cabeçalho (área de arraste) -->
+    <header class="vc-header" data-drag-handle>
+      <div class="vc-grip" aria-hidden="true">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="vc-brand">
+        <span class="vc-brand-title">vHub</span>
+        <span class="vc-brand-sub">Veículo</span>
+      </div>
+      <button class="vc-close" id="btn-close" aria-label="Fechar">&#x2715;</button>
+    </header>
+
+    <!-- Combustível dedicado, full width -->
+    <div class="vc-fuel" title="Combustível">
+      <svg class="vc-fuel-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 20V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3l2-2 2 2V20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="4" y="10" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <div class="vc-fuel-bar-bg"><div class="vc-fuel-bar" id="fuel-bar"></div></div>
+      <span class="vc-fuel-pct" id="fuel-pct">—</span>
+    </div>
+
+    <!-- Botões de controle -->
+    <div class="vc-controls">
+
+      <!-- Portas -->
+      <div class="vc-section-label">Portas</div>
+      <div class="vc-btn-grid vc-doors">
+        <button class="vc-btn" data-action="door" data-door="lfdoor" title="Porta dianteira esquerda">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M14 10h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>F.Esq</span>
+        </button>
+        <button class="vc-btn" data-action="door" data-door="rfdoor" title="Porta dianteira direita">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>F.Dir</span>
+        </button>
+        <button class="vc-btn" data-action="door" data-door="lrdoor" title="Porta traseira esquerda">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M14 10h-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 1"/></svg>
+          <span>T.Esq</span>
+        </button>
+        <button class="vc-btn" data-action="door" data-door="rrdoor" title="Porta traseira direita">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2 1"/></svg>
+          <span>T.Dir</span>
+        </button>
+        <button class="vc-btn" data-action="door" data-door="hood" title="Capô">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 12 Q10 4 17 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3 12h14" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span>Capô</span>
+        </button>
+        <button class="vc-btn" data-action="door" data-door="trunk" title="Porta-malas">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 8 Q10 16 17 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.5"/></svg>
+          <span>Mala</span>
+        </button>
+      </div>
+
+      <!-- Janelas -->
+      <div class="vc-section-label">Janelas</div>
+      <div class="vc-btn-grid vc-windows">
+        <button class="vc-btn" data-action="window" data-window="lfdoor" title="Janela dianteira esquerda">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 15V7l6-4 6 4v8" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 15V11h4v4" stroke="currentColor" stroke-width="1.3"/></svg>
+          <span>FE</span>
+        </button>
+        <button class="vc-btn" data-action="window" data-window="rfdoor" title="Janela dianteira direita">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 15V7l6-4 6 4v8" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 15V11h4v4" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1"/></svg>
+          <span>FD</span>
+        </button>
+        <button class="vc-btn" data-action="window" data-window="lrdoor" title="Janela traseira esquerda">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="8" width="5" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="12" y="8" width="5" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+          <span>TE</span>
+        </button>
+        <button class="vc-btn" data-action="window" data-window="rrdoor" title="Janela traseira direita">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="8" width="5" height="7" rx="1" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1"/><rect x="12" y="8" width="5" height="7" rx="1" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1"/></svg>
+          <span>TD</span>
+        </button>
+      </div>
+
+      <!-- Controles -->
+      <div class="vc-section-label">Controles</div>
+      <div class="vc-btn-grid vc-ctrl">
+        <button class="vc-btn vc-btn-toggle" id="btn-engine" data-action="engine" title="Ligar/Desligar motor">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 10h2l1-3h8l1 3h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="5" y="10" width="10" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7M12 10V7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span>Motor</span>
+        </button>
+        <button class="vc-btn vc-btn-toggle" id="btn-lock" data-action="lock" title="Travar/Destravar">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="5" y="10" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14" r="1.5" fill="currentColor"/></svg>
+          <span>Trava</span>
+        </button>
+        <button class="vc-btn vc-btn-toggle" id="btn-lights" data-action="lights" title="Luzes externas">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.05 5.05l1.41 1.41M13.54 13.54l1.41 1.41M5.05 14.95l1.41-1.41M13.54 6.46l1.41-1.41" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span>Luzes</span>
+        </button>
+        <button class="vc-btn vc-btn-toggle" id="btn-light" data-action="light" title="Luz interna">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3a5 5 0 0 1 3 9v2H7v-2a5 5 0 0 1 3-9Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 17h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Luz Int.</span>
+        </button>
+        <button class="vc-btn" data-action="seat" title="Trocar banco">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 16V9a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v4H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Banco</span>
+        </button>
+        <button class="vc-btn vc-btn-emergency-cell" id="btn-emergency" data-action="emergency" title="Pisca-alerta">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3L2 17h16L10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Alerta</span>
+        </button>
+      </div>
+
+    </div><!-- /vc-controls -->
+  </div><!-- /vc-panel -->
+
+  <script src="app.js"></script>
+</body>
+</html>

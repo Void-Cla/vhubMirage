@@ -67,6 +67,12 @@ exports('giveBank', function(src, valor, reason)
   return Core.give_bank(tonumber(src) or 0, valor, reason or 'export_give_bank')
 end)
 
+-- credita o BANCO por char_id, online OU offline (payout/refund de leilao seguro)
+exports('giveBankChar', function(char_id, valor, reason)
+  if not _invoker_allowed() then return false, 'forbidden' end
+  return Core.give_bank_char(tonumber(char_id) or 0, valor, reason or 'export_give_bank_char')
+end)
+
 exports('setWallet', function(src, valor, reason)
   if not _invoker_allowed() then return false, 'forbidden' end
   return Core.set_wallet(tonumber(src) or 0, valor, reason or 'export_set_wallet')

@@ -1,179 +1,103 @@
-# vHub Mirage — Protocolo de Agentes (Claude Sonnet 4.6)
+# vHub Mirage — Protocolo de Agentes v2.0
 
-## Leitura obrigatória antes de qualquer ação
+> Leis, Registro de Ownership, Orçamentos e Condições de Parada vivem em `CLAUDE.md` (fonte única). Este arquivo define **como os agentes operam**. Duplicar lei aqui = drift; referenciar, não copiar.
 
-```
-.claude/contexto.md          ← memória institucional viva (LEIA SEMPRE PRIMEIRO)
-metas/plan.md               ← roadmap por sprint com critérios de aceite
-metas/implementar.md        ← decisões técnicas congeladas
-metas/fivem_natives_organizadas_ptbr.md ← referência de natives FiveM (consultar antes de custom)
-```
-
----
-
-## Verdades imutáveis do projeto
-
-| Lei | Regra |
-|-----|-------|
-| **L-01** | Servidor é autoritativo para toda verdade crítica |
-| **L-02** | Cliente processa estado local não-crítico (UI, física, HUD); servidor valida e persiste |
-| **L-03** | Fallback de dado cliente = rollback para último estado válido do servidor |
-| **L-04** | Sem segunda fonte de verdade; sem ownership duplicado |
-| **L-05** | Native FiveM antes de infraestrutura custom |
-| **L-06** | Sem loop/polling — preferir evento, State Bag ou timer mínimo |
-| **L-07** | Sem novo resource/módulo sem ownership e lifecycle explícitos |
-| **L-08** | Código em inglês; comentários, saídas e `lang.*` em PT-BR |
-| **L-09** | Funções curtas, sem redundância, máximo reaproveitamento sem acoplamento rígido |
-| **L-10** | Toda função pública comentada com uma linha objetiva em PT-BR |
-| **L-11** | vRP-compat (`server/compat.lua`) deve permanecer funcional até vHub ter nome no mercado |
-| **L-12** | Transações SQL são atômicas e exclusivamente server-side |
-
-
-## Leis de componentização (A-01 a A-08)
-
-Complementam L-01..L-12 e governam a arquitetura **NUI / runtime JS / componente**. Vale para novos resources e refactors de UI.
-
-| Lei | Regra |
-|-----|-------|
-| **A-01** | Separação de camada — Lua kernel não renderiza UI; JS não decide regra de negócio crítica |
-| **A-02** | Todo módulo NUI novo nasce com lifecycle padronizado (onInit / onMount / onShow / onHide / onDestroy) |
-| **A-03** | Comunicação inter-módulo passa pelo event bus; sem acesso direto a DOM/estado de outro módulo |
-| **A-04** | Estado por domínio em `store.<domain>` — sem segunda fonte de verdade dentro da NUI |
-| **A-05** | Lazy load — módulo só é montado quando navegado; `unmount` libera memória de fato |
-| **A-06** | Native bridge centralizado — JS não chama native fora de `vhub.native.*` |
-| **A-07** | Cleanup obrigatório no `onDestroy`: `cancelAnimationFrame`, `clearInterval`, `removeEventListener`, `observer.disconnect` |
-| **A-08** | `SendNUIMessage` em hot path usa batching/delta sync — nunca 60fps de payload bruto |
-
-### Camadas de ownership (mapa rápido)
-
-| Camada | Tecnologia | Owner natural |
-|--------|------------|---------------|
-| **L1** Kernel  | Lua server  | `vhub_arquiteto` + `vhub_guardiao_seguranca` + `vhub_guardiao_natives` |
-| **L2** HAL     | Lua client  | `vhub_guardiao_natives` + `vhub_guardiao_performance` |
-| **L3** Runtime | JS engine   | `vhub_guardiao_runtime` |
-| **L4** Componente | JS módulo | `vhub_guardiao_runtime` + `vhub_guardiao_designer` |
-
----
-
-## Economia de tokens — protocolo obrigatório
-
-- **Leia `.claude/contexto.md` antes de qualquer chamada a agente** — evita reenviar contexto que já está registrado
-- Envie ao agente somente: objetivo, restrições, diff e arquivos tocados
-- Jamais reenviar histórico completo se `.claude/contexto.md` e leitura local bastarem
-- Respostas dos agentes: formato fixo, sem recapitular o pedido, sem expor raciocínio interno
-- Cada agente para na menor evidência suficiente para o veredito
-- `SEM ACHADOS CRÍTICOS` quando não houver problema real — não fabricar achados
-- Gate pesado (`vhub_guardiao_revisao`) somente quando houver diff relevante ou risco estrutural
-
----
-
-## Fluxo preferencial multi-agente
+## Leitura obrigatória (nesta ordem)
 
 ```
-1. Ler .claude/contexto.md
-2. Mapear arquivos tocados (explorer local)
-3. Consultar vhub_arquiteto → ownership, placement, fase
-4. Acionar em PARALELO apenas os guardiões relevantes ao risco:
-   ├── vhub_guardiao_contrato   (se tocar API/export/schema)
-   ├── vhub_guardiao_seguranca  (se tocar auth/permissão/entrada cliente)
-   ├── vhub_guardiao_natives    (se tocar entity/ped/netid/State Bag/spawn)
-   ├── vhub_guardiao_performance (se tocar thread/loop/batch/flush)
-   ├── vhub_guardiao_simplicidade (se criar módulo/helper/camada nova)
-   ├── vhub_guardiao_designer   (se tocar NUI/CEF/identidade visual)
-   └── vhub_guardiao_runtime    (se tocar web/runtime, lifecycle, eventbus, store, router, native bridge)
-5. worker executa SOMENTE após forma aprovada
-6. vhub_guardiao_revisao faz gate final quando diff tem código relevante
-7. vhub_guardiao_revisao atualiza .claude/contexto.md se houver contexto durável novo
-8. Agente pai consolida → APROVAR ou REPROVAR
+CLAUDE.md                      ← leis L-01..L-18, Registro de Ownership, orçamentos
+.claude/contexto.md            ← SOMENTE índice + seções citadas pela tarefa (cap 20 KB)
+arquivos reais tocados         ← código > qualquer documento
 ```
 
----
+Hierarquia de verdade: **1) código/manifests atuais → 2) CLAUDE.md → 3) contexto.md → 4) metas/**. Divergência doc×código: prevalece o código; registrar risco ativo.
 
-## Padrões de código obrigatórios
+## Fluxo multi-agente
 
-### Lua 5.4 — estrutura mínima de módulo server-side
-```lua
--- módulo.lua — <descrição de uma linha em PT-BR>
-local M = {}; M.__index = M; vHub.NomeModulo = M
-
--- inicializa o módulo com driver e config validados
-function M:init(cfg, driver) ... end
-
--- retorna M para encadeamento opcional
-return M
+```
+1. contexto.md (índice) + mapear arquivos tocados
+2. vhub_arquiteto → ownership, placement, fase (linha no Registro se dado novo)
+3. Guardiões PERTINENTES em PARALELO (matriz de invocação no CLAUDE.md):
+   persistencia | contrato | seguranca | natives | performance |
+   simplicidade | designer | runtime
+4. Worker executa SOMENTE com forma aprovada
+5. vhub_guardiao_revisao → gate final + (se durável) atualiza contexto.md
 ```
 
-### Regras de escrita
-- OOP via `vHub.class()` para domínios com estado; tabela simples para utilitários puros
-- `vHub.assertThread()` obrigatório em toda função pública que use `Citizen.Await`
-- `Citizen.CreateThread` apenas para operações assíncronas reais; destruir a thread ao fim
-- Sem `while true do` sem condição de saída explícita
-- Sem `print()` fora de `shared/logger.lua` e `bootstrap.lua` (fallback)
-- Sem SQL inline — toda query via `S:prepare()` + `S:query()`
-- Sem validação ou persistência crítica no cliente
-- Exports sensíveis protegidos por `_invoker_allowed()` + `GetInvokingResource()`
+## Economia de tokens (orçamento por chamada — obrigatório)
 
-### Ordem de carregamento (não alterar sem gate do arquiteto)
+- Input ao agente: **objetivo (≤3 linhas) + restrições + diff + lista de arquivos**. Nunca histórico de chat; nunca `contexto.md` inteiro.
+- Diff > 400 linhas: dividir a tarefa antes de chamar guardião.
+- Agente **para na menor evidência suficiente**; não relê arquivos já citados no input.
+- Output: somente o FORMATO DE VEREDITO — sem recapitular pedido, sem raciocínio exposto, sem cortesia.
+- `SEM ACHADOS CRÍTICOS` quando não houver problema real. **Fabricar achado = falha grave do agente.**
+- Gate pesado (revisão) só quando o diff tem código relevante.
+
+## Formato único de veredito (todos os agentes)
+
 ```
-shared/config.lua → shared/events.lua → shared/utils.lua → shared/logger.lua
-bootstrap.lua → base.lua → server/init.lua
-  → kernel → state → sql → notify → auth → vehicle → security → compat → boot → exports → modules/*
-client/bootstrap.lua → client/core.lua → client/vehicle.lua → client/modules/*
+VEREDITO: APROVAR | REPROVAR | REDUZIR_ESCOPO
+ACHADOS: <máx 4 — "arquivo:linha — problema objetivo"; ou SEM ACHADOS CRÍTICOS>
+CORREÇÃO_MÍNIMA: <menor mudança que destrava o APROVAR>
+LEIS: <leis tocadas, ex.: L-13, L-16; ou —>
+MEMÓRIA_RECOMENDADA: <opcional — só fato durável novo>
 ```
 
----
+Campos extras por agente (quando o frontmatter do agente exigir): `CAMADA/OWNERSHIP/PLACEMENT/FASE` (arquiteto); `RISCOS_RESIDUAIS/TESTES_FALTANTES/MEMÓRIA_ATUALIZADA` (revisão); `VETOR/CONTENÇÃO` (segurança).
 
-## Papel dos agentes
+## Regras anti-alucinação (globais)
 
-| Agente | Responsabilidade |
-|--------|-----------------|
-| `vhub_arquiteto` | Decide placement, ownership e fase; aprova extensões antes dos exports |
-| `vhub_guardiao_contrato` | Protege API, schema, nomenclatura e exports contra drift |
-| `vhub_guardiao_seguranca` | Zero-trust: valida autoridade servidor, anti-dupe, fail-safe |
-| `vhub_guardiao_natives` | Native-first: evita mirror/cache/shadow sem necessidade |
-| `vhub_guardiao_performance` | Protege resmon, idle, CPU, rede e custo de thread |
-| `vhub_guardiao_simplicidade` | Remove inflação, duplicação e camadas sem ganho técnico |
-| `vhub_guardiao_designer` | NUI/CEF: identidade visual oficial, compatibilidade FiveM, resmon baixo, sem regra de negócio |
-| `vhub_guardiao_runtime` | Engine NUI (`web/runtime`), lifecycle, eventbus, store, router, native bridge, lazy load, A-01..A-08 |
-| `vhub_guardiao_revisao` | Gate final: regressão, risco, testes, memória institucional |
+- Toda crítica cita `arquivo:linha/função` real do diff ou declara `SEM PROVA` e **não bloqueia**.
+- Nunca assumir comportamento de native/runtime sem fonte (`metas/fivem_natives_organizadas_ptbr.md` ou código).
+- Achado repetido por outro guardião no mesmo ciclo: citar e não reexplicar.
 
----
+## Padrões de detecção prioritários (lições da auditoria 2026-06)
 
-## Condições de parada obrigatória
+Cada guardião, no seu domínio, procura PRIMEIRO os padrões que já furaram este projeto:
 
-Se qualquer agente encontrar um dos itens abaixo, **pare imediatamente e reduza escopo**:
+| Padrão histórico | Quem detecta |
+|---|---|
+| `set*Data(` fora do CORE; mutação via `getVHub()` | persistencia (bloqueia), seguranca |
+| Bind de prepared divergente do `_set/_get` (`@dkey` vs `key`) | persistencia |
+| `SetEntityCoords/SetPlayerModel` de spawn fora do owner | natives, seguranca |
+| Handler `playerSpawn/characterLoad` sem replay-guard | revisao, seguranca |
+| Arquivo órfão do manifest; módulo-fantasma (interface só via `return M`) | simplicidade (bloqueia) |
+| `os.exit`, HTTP externo, anti-tamper vendor | seguranca |
+| `TriggerClientEvent(-1)` para estado de entidade (em vez de State Bag) | natives, performance |
+| Comentário citando lei em código que a viola | revisao (violação agravada) |
 
-- Segunda fonte de verdade para o mesmo dado
-- Novo resource sem ownership e lifecycle documentados
-- Cliente decidindo verdade crítica sem validação server-side
-- SQL no owner errado ou inline fora de `state.lua`/`sql.lua`
-- Fallback estrutural sendo tratado como caminho normal
-- Validação ou persistência crítica duplicada
-- Loop sem condição de saída (potencial loop infinito)
-- Export sensível sem `_invoker_allowed()`
+## Papel dos agentes (resumo — detalhe no frontmatter de cada um)
 
----
-
-## Plano de sprints (resumo de status)
-
-| Sprint | Foco | Status |
-|--------|------|--------|
-| SPRINT 0 | `shared/` foundation | ✅ Concluído |
-| SPRINT 1 | Estabilidade (race, flush, assertThread) | ✅ Aplicado — smoke tests pendentes |
-| SPRINT 2 | Organização (split `base.lua`, compat vRP) | 🔄 Gate arquiteto pendente |
-| SPRINT 3 | Client-side (State Bags, report) | 🔄 Inicial criado |
-| SPRINT 4 | Segurança (ACE, payload hardening) | ⏳ Pendente |
-| SPRINT 5 | Performance (flush tuning, GC, threads) | ⏳ Pendente |
-| SPRINT 6 | Observabilidade (logger estruturado, health) | ⏳ Pendente |
-| SPRINT 7 | Testes e validação (smoke, integração DB) | ⏳ Pendente |
-
----
+| Agente | Responsabilidade núcleo |
+|---|---|
+| `vhub_arquiteto` | Placement, ownership, fase; aprova linha nova no Registro |
+| `vhub_guardiao_persistencia` | L-13: escritor único, contratos de commit, batch/flush, schema↔prepared, round-trip |
+| `vhub_guardiao_contrato` | API/exports/eventos/schema estáveis; compat vRP |
+| `vhub_guardiao_seguranca` | Zero-trust: payload, autoridade, replay, anti-dupe, fail-safe |
+| `vhub_guardiao_natives` | Native-first; State Bag antes de evento; autoridade de entidade |
+| `vhub_guardiao_performance` | Orçamentos do CLAUDE.md como contrato; custo por player O(1) |
+| `vhub_guardiao_simplicidade` | Anti-inflação; L-15 código morto; ownership único |
+| `vhub_guardiao_designer` / `vhub_designer` | NUI/CEF/identidade visual |
+| `vhub_guardiao_runtime` | Engine NUI, lifecycle A-01..A-08 |
+| `vhub_guardiao_revisao` | Gate final; único escritor de `contexto.md` |
 
 ## Memória institucional
 
-- **Escritor oficial**: `vhub_guardiao_revisao` — único agente com escrita em `.claude/contexto.md`
-- Registrar apenas: ownership, contrato, risco ativo, decisão congelada, fluxo validado, lacuna real
-- Se `.claude/contexto.md` divergir do código, prevalece o código
-- Nunca registrar: secrets, logs brutos, stacktrace completo, especulação sem fonte
+- Escritor único: `vhub_guardiao_revisao`. Cap 20 KB; estrutura fixa (ver CLAUDE.md → Política de Memória); excedente → `.claude/contexto_arquivo/AAAA-MM.md`.
+- Registrar apenas: ownership, contrato, risco ativo, decisão congelada, fluxo validado, lacuna real.
+- Nunca: secrets, logs brutos, stacktrace, especulação.
 
-— Assinado: `vhub_guardiao_revisao` | Migrado para Claude Sonnet 4.6
+## Leis de componentização A-01..A-08 (NUI) — inalteradas
+
+| Lei | Regra |
+|---|---|
+| A-01 | Lua kernel não renderiza UI; JS não decide regra crítica |
+| A-02 | Módulo NUI nasce com lifecycle onInit/onMount/onShow/onHide/onDestroy |
+| A-03 | Inter-módulo só via event bus |
+| A-04 | Estado por domínio em `store.<domain>` — sem 2ª verdade na NUI |
+| A-05 | Lazy load real; `unmount` libera memória de fato |
+| A-06 | Native bridge centralizado (`vhub.native.*`) |
+| A-07 | Cleanup obrigatório no `onDestroy` (RAF/interval/listener/observer) |
+| A-08 | `SendNUIMessage` hot path: batching/delta, ≤ 10 Hz |
+
+— Protocolo v2.0 | Escritor: `vhub_guardiao_revisao`

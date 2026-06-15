@@ -1,0 +1,55 @@
+/* shared/interact.css — fantasma do arraste + modal de quantidade. */
+
+/* ---- ghost (segue o cursor; nao captura mouse) ---- */
+.vh-ghost {
+  position: fixed; z-index: 9999; width: 54px; height: 54px;
+  margin-left: -27px; margin-top: -27px; pointer-events: none;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6)); opacity: 0.92;
+}
+
+/* ---- modal de quantidade ---- */
+#qty-modal {
+  position: fixed; inset: 0; z-index: 9998;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45);
+}
+#qty-modal .qm-box {
+  width: 300px; background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-radius); box-shadow: var(--vh-shadow); backdrop-filter: blur(8px);
+  padding: 18px; display: flex; flex-direction: column; gap: 14px;
+}
+#qty-modal .qm-title { font-size: 15px; font-weight: 700; color: var(--vh-gold); text-align: center; letter-spacing: .5px; }
+#qty-modal .qm-row   { display: flex; align-items: baseline; gap: 8px; justify-content: center; }
+#qty-modal .qm-input {
+  width: 90px; text-align: center; font-size: 22px; font-weight: 700; color: var(--vh-text);
+  background: rgba(0,0,0,0.3); border: 1px solid var(--vh-border); border-radius: var(--vh-radius-sm);
+  padding: 6px 4px; outline: none;
+}
+#qty-modal .qm-input:focus { border-color: var(--vh-gold); }
+#qty-modal .qm-max   { font-size: 14px; color: var(--vh-text-dim); }
+#qty-modal .qm-slider { width: 100%; accent-color: var(--vh-gold); }
+#qty-modal .qm-actions { display: flex; gap: 8px; }
+#qty-modal .qm-actions button {
+  flex: 1; padding: 9px 0; border-radius: var(--vh-radius-sm); border: 1px solid var(--vh-border);
+  background: rgba(255,255,255,0.04); color: var(--vh-text); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+#qty-modal .qm-actions button:hover { border-color: var(--vh-gold); }
+#qty-modal .qm-ok  { background: var(--vh-gold); color: #1a1710; border-color: var(--vh-gold); }
+#qty-modal .qm-all { color: var(--vh-sand); }
+
+/* ---- menu de contexto (right-click) ---- */
+.vh-ctx {
+  position: fixed; z-index: 9997; min-width: 130px;
+  background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-radius-sm); box-shadow: var(--vh-shadow); backdrop-filter: blur(8px);
+  padding: 5px; overflow: hidden;
+}
+.vh-ctx-item {
+  padding: 8px 12px; font-size: 13px; color: var(--vh-text); cursor: pointer;
+  border-radius: 6px; transition: background .1s;
+}
+.vh-ctx-item:hover { background: rgba(248,200,105,0.14); color: var(--vh-gold); }
+.vh-ctx-item.disabled { color: var(--vh-text-dim); opacity: .5; cursor: default; }
+.vh-ctx-item.disabled:hover { background: transparent; color: var(--vh-text-dim); }

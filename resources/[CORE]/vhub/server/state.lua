@@ -228,6 +228,73 @@ end
 -- ── Serialização segura ────────────────────────────────────────────────
 -- REGRA CRÍTICA: sempre serializa uma CÓPIA rasa da tabela para evitar
 --   referências circulares e acúmulo de dados ao reler do banco.
+--
+-- BLINDAGEM b64 (hotfix 2026-06-11, gate vhub_arquiteto A2): o msgpack
+--   binário era MANGLED na fronteira Lua→JS do oxmysql — todo byte >= 0x80
+--   virava par UTF-8 (latin1→utf8) no write e a leitura voltava ilegível
+--   ("Falha ao desserializar msgpack"), perdendo datatable/vd.state.
+--   Todo dvalue agora é gravado como base64 ASCII com prefixo 'b64:' e
+--   decodificado aqui na leitura — cobre o driver interno (bootstrap) e
+--   qualquer driver externo (o transporte vira string opaca ASCII-safe).
+--   Drivers NUNCA re-encodam/decodam o payload (contrato de escrita).
+--   O guard de 60 KB do _set passa a valer PÓS-encode (payload raw ~45 KB),
+--   protegendo o BLOB de 64 KB por construção. Linha legada sem prefixo
+--   segue o caminho msgpack raw (replay-safe, sem migração).
+
+local B64_PREFIX = "b64:"
+local _b64enc, _b64dec = {}, {}
+do
+  local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  for i = 1, 64 do
+    _b64enc[i - 1] = chars:sub(i, i)
+    _b64dec[chars:byte(i)] = i - 1
+  end
+end
+
+-- codifica string binária em base64 (puro Lua 5.4, bitwise — sem dependência)
+local function _b64encode(s)
+  local out, oi = {}, 0
+  local n   = #s
+  local rem = n % 3
+  for i = 1, n - rem, 3 do
+    local a, b, c = s:byte(i, i + 2)
+    local v = (a << 16) | (b << 8) | c
+    oi = oi + 1
+    out[oi] = _b64enc[(v >> 18) & 63] .. _b64enc[(v >> 12) & 63]
+           .. _b64enc[(v >> 6) & 63]  .. _b64enc[v & 63]
+  end
+  if rem == 1 then
+    local v = s:byte(n) << 16
+    oi = oi + 1
+    out[oi] = _b64enc[(v >> 18) & 63] .. _b64enc[(v >> 12) & 63] .. "=="
+  elseif rem == 2 then
+    local a, b = s:byte(n - 1, n)
+    local v = (a << 16) | (b << 8)
+    oi = oi + 1
+    out[oi] = _b64enc[(v >> 18) & 63] .. _b64enc[(v >> 12) & 63]
+           .. _b64enc[(v >> 6) & 63] .. "="
+  end
+  return table.concat(out)
+end
+
+-- decodifica base64 em string binária (ignora '=' e bytes fora do alfabeto)
+local function _b64decode(s)
+  local out, oi = {}, 0
+  local buf, bits = 0, 0
+  for i = 1, #s do
+    local d = _b64dec[s:byte(i)]
+    if d then
+      buf  = (buf << 6) | d
+      bits = bits + 6
+      if bits >= 8 then
+        bits = bits - 8
+        oi = oi + 1
+        out[oi] = string.char((buf >> bits) & 255)
+      end
+    end
+  end
+  return table.concat(out)
+end
 
 local function _pack(val)
   if val == nil then return "" end
@@ -244,9 +311,9 @@ local function _pack(val)
         copia[k] = v
       end
     end
-    return msgpack.pack(copia)
+    return B64_PREFIX .. _b64encode(msgpack.pack(copia))
   end
-  return msgpack.pack(val)
+  return B64_PREFIX .. _b64encode(msgpack.pack(val))
 end
 
 local function _unpack(raw)
@@ -257,6 +324,10 @@ local function _unpack(raw)
     raw = table.concat(chars)
   end
   if type(raw) ~= "string" or raw == "" then return nil end
+  -- desblinda 'b64:' (formato pós-hotfix); sem prefixo = linha legada (msgpack raw)
+  if raw:sub(1, 4) == B64_PREFIX then
+    raw = _b64decode(raw:sub(5))
+  end
   local ok, val = pcall(msgpack.unpack, raw)
   if not ok then
     vHub.Logger:warn("state", "Falha ao desserializar msgpack — dado corrompido?")

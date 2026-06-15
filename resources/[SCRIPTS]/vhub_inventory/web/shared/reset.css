@@ -1,0 +1,17 @@
+/* shared/reset.css — base minima; fundo SEMPRE transparente (NUI sobre o jogo). */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;          /* nunca janela preta */
+  font-family: var(--vh-font);
+  color: var(--vh-text);
+  user-select: none;
+}
+
+img { -webkit-user-drag: none; }
+
+.hidden { display: none !important; }

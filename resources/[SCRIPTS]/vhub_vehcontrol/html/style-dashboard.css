@@ -1,0 +1,211 @@
+/*
+ * style-dashboard.css — painel compacto + combustivel
+ * vhub_vehcontrol — Liquid Glass areia/dourado 50% (backdrop-filter, CEF Chromium)
+ */
+
+
+/* ============================================================
+   PAINEL — meio esquerdo, compacto, arrastavel
+   Posicao padrao via top/left; JS de arraste sobrescreve em runtime
+   ============================================================ */
+
+.vc-panel {
+  position: fixed;
+  top: 50%;
+  left: 18px;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 236px;
+
+  border-radius: var(--vh-r-pan);
+  /* VIDRO LIQUIDO com AREIA — sem fundo cheio: o efeito vive SO atras do painel.
+     Base escura translucida + leve tinta de areia no topo + halo gold sutil; o
+     backdrop-filter desfoca o jogo atras (FiveM CEF Chromium). Opacidade baixa de
+     proposito (era 50% solido = parecia "background"); agora le como vidro fosco. */
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.10), rgba(243,181,58,0) 60%),
+    linear-gradient(180deg, rgba(217,193,154,0.14), rgba(12,10,6,0.55));
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+  border: 1px solid var(--vh-glass-border);
+  box-shadow:
+    var(--vh-shadow-3),
+    inset 0 1px 0 rgba(255,213,115,0.12),
+    inset 0 0 0 1px rgba(0,0,0,0.35);
+
+  color: var(--vh-text);
+  font-family: var(--vh-font-body);
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow var(--vh-t-norm);
+}
+
+.vc-panel.is-dragging {
+  box-shadow:
+    0 32px 80px rgba(0,0,0,0.75),
+    0 0 40px rgba(243,181,58,0.22),
+    inset 0 1px 0 rgba(255,213,115,0.18);
+  cursor: grabbing;
+}
+
+/* Halo dourado no topo (puramente decorativo) */
+.vc-aura {
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 120px;
+  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.18), rgba(243,181,58,0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+
+/* ============================================================
+   CABEÇALHO — grip + marca + fechar (area de arraste)
+   ============================================================ */
+
+.vc-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 9px 10px;
+  border-bottom: 1px solid var(--vh-glass-line);
+  background: linear-gradient(180deg, rgba(12,10,6,0.45), rgba(12,10,6,0.15));
+  cursor: grab;
+}
+
+.vc-header:active { cursor: grabbing; }
+
+/* indicador "dots" estilo arrastavel */
+.vc-grip {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  grid-auto-rows: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity var(--vh-t-fast);
+}
+.vc-grip span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--vh-sand-dim);
+}
+.vc-header:hover .vc-grip { opacity: 1; }
+.vc-header:hover .vc-grip span { background: var(--vh-gold); }
+
+.vc-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-brand-title {
+  font-family: var(--vh-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--vh-sand);
+}
+
+.vc-brand-sub {
+  font-family: var(--vh-font-display);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--vh-gold);
+  padding: 2px 6px;
+  border: 1px solid rgba(243,181,58,0.35);
+  border-radius: var(--vh-r-pill);
+  background: rgba(243,181,58,0.08);
+  line-height: 1;
+}
+
+.vc-close {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--vh-r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vh-text-dim);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: color var(--vh-t-fast), background var(--vh-t-fast), border-color var(--vh-t-fast);
+}
+
+.vc-close:hover {
+  color: #fff;
+  background: rgba(232,81,63,0.22);
+  border-color: rgba(232,81,63,0.45);
+}
+.vc-close:active { transform: scale(0.90); }
+
+
+/* ============================================================
+   COMBUSTIVEL — barra dedicada, full width
+   ============================================================ */
+
+.vc-fuel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--vh-glass-line);
+  background: rgba(12,10,6,0.28);
+}
+
+.vc-fuel-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--vh-gold);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(243,181,58,0.35));
+}
+
+.vc-fuel-bar-bg {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--vh-r-pill);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(243,181,58,0.18);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+  overflow: hidden;
+  position: relative;
+}
+
+.vc-fuel-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: var(--vh-r-pill);
+  background:
+    linear-gradient(90deg, var(--vh-amber), var(--vh-gold) 45%, var(--vh-gold-soft));
+  box-shadow:
+    0 0 10px rgba(243,181,58,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  transform-origin: left;
+  transform: scaleX(1);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vc-fuel-pct {
+  font-family: var(--vh-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--vh-sand);
+  line-height: 1;
+  flex-shrink: 0;
+  min-width: 30px;
+  text-align: right;
+}

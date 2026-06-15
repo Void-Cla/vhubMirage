@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Ajustes para o iframe */
+        body { background: transparent !important; }
+        .velocimetro-container { position: absolute; bottom: 20px; right: 20px; }
+
+        /* personalização do jogador (host/velo-core setam --velo-bg / --velo-accent) */
+        #velo-custom-bg {
+            position: absolute; inset: -8%;
+            background-image: var(--velo-bg, none);
+            background-size: cover; background-position: center;
+            border-radius: 18px; pointer-events: none; z-index: 0;
+        }
+        .speedometerShell { position: relative; z-index: 1; }
+        .needle { filter: drop-shadow(0 0 5px var(--velo-accent, transparent)); }
+    </style>
+</head>
+<body>
+    <!-- HUD-padrão (needles). velo-core liga body.velo-active e preenche os IDs padrão.
+         Fundo/cor vêm das CSS vars --velo-bg/--velo-accent (galeria /velo) — sem veloOnConfig próprio. -->
+    <main id="velocimetro" class="velocimetro-container">
+        <div id="velo-custom-bg"></div>
+
+        <div class="speedometerShell">
+            <img src="dashboard_fivem.svg" class="velo-bg" alt="velocimetro">
+
+            <!-- ponteiros (velo-core rotaciona pelos IDs padrão) -->
+            <div class="needle speed-needle" id="speed-needle" aria-hidden="true"></div>
+            <div class="needle rpm-needle"   id="rpm-needle"   aria-hidden="true"></div>
+            <div class="needle fuel-needle"  id="fuel-needle"  aria-hidden="true"></div>
+
+            <div class="speedometerOverlay">
+                <!-- marcha -->
+                <div class="gearReadout" aria-label="Marcha atual"><strong id="vehicle-gear">N</strong></div>
+
+                <!-- velocidade (3 dígitos: prefixo apagado + valor) -->
+                <div class="speedReadout">
+                    <h1 class="velo"><span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></h1>
+                </div>
+
+                <!-- odômetro: 6 colunas roláveis (velo-core anima via [data-odo-digit] .odoColumn) -->
+                <div class="odoReadout" id="odo-readout" aria-label="Quilômetros rodados">
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
+                </div>
+
+                <!-- status: velo-core seta data-status=on/off (seta, trava, cinto) -->
+                <div class="statusCluster" id="status-cluster" aria-label="Indicadores do veículo">
+                    <div class="statusIcon turn-left" id="status-turn-left" data-status="off" aria-label="Seta esquerda">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-7 6 7 6"/><path d="M19 6l-7 6 7 6" opacity="0.55"/></svg>
+                    </div>
+                    <div class="statusIcon lock" id="status-lock" data-status="off" aria-label="Trava do veículo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" class="lock-shackle"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg>
+                    </div>
+                    <div class="statusIcon seatbelt" id="status-seatbelt" data-status="off" aria-label="Cinto de segurança">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><path d="M6 3l12 14"/><circle cx="12" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>
+                    </div>
+                    <div class="statusIcon turn-right" id="status-turn-right" data-status="off" aria-label="Seta direita">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l7 6-7 6"/><path d="M5 6l7 6-7 6" opacity="0.55"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- engine universal: telemetria, gauges, odômetro RAF, visibilidade (body.velo-active), personalização -->
+    <script src="/nui/velo-core.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            VeloCore.init({
+                speedPoints: [[0, -135], [400, 135]],
+                rpmPoints:   [[0, -135], [10, 60]],
+                fuelPoints:  [[0, -120], [50, -25], [100, 70]],
+            });
+        });
+    </script>
+</body>
+</html>

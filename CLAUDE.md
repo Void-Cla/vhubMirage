@@ -369,3 +369,84 @@ function onStoreClick(event) {
 - `resources/[TOOLS]/vhub_testrunner/` — runner server-side (comando: `vhub_run_tests`)
 - `tools/limpardadossql.ps1` / `tools/fix_vhub_db.ps1` — manutenção de dados SQL
 - **ATENÇÃO**: testrunner executa queries reais → usar APENAS em ambiente de teste
+
+---
+
+## Roteamento de modelos (obrigatório)
+
+### Sessão interativa (padrão)
+
+O model padrão é `opusplan` — Opus 4.8 em PLAN MODE, Sonnet 4.6 em EXECUTE MODE.
+
+```bash
+# Padrão recomendado (já configurado no settings.json)
+# Plan mode → Opus 4.8 (raciocínio profundo)
+# Execute mode → Sonnet 4.6 (rápido, econômico)
+```
+
+### Quando mudar o modelo durante a sessão
+
+| Contexto | Comando | Motivo |
+|---------|---------|--------|
+| Auditoria de segurança / bug crítico | `/model opus` + `/effort xhigh` | Máxima precisão, sem compromisso |
+| Implementação conhecida | `/model sonnet` | Rápido, tokens mínimos |
+| Revisão simples / busca de pattern | `/model sonnet` + `/effort low` | Mínimo de custo |
+| Design de nova feature complexa | `/model opus` + `/effort high` | Raciocínio estrutural |
+| Sessão longa com codebase grande | `/model opus[1m]` | Contexto 1M tokens |
+
+### Mapa de modelos por agente
+
+| Agente | Model | Effort | Por que |
+|--------|-------|--------|---------|
+| `vhub_arquiteto` | Opus 4.7 | xhigh | Decisões estruturais requerem raciocínio profundo. 4.7 tem xhigh como padrão |
+| `vhub_guardiao_revisao` | Opus 4.8 | xhigh | Gate final: máxima precisão, zero tolerância a erro |
+| `vhub_guardiao_seguranca` | Opus 4.8 | high | Zero-trust: precisão crítica, 4.8 mais confiável em edge cases |
+| `vhub_designer` | Opus 4.7 | high | Design técnico + criativo requer capacidade acima da média |
+| `vhub_guardiao_contrato` | Sonnet 4.6 | high | Pattern matching contra contratos conhecidos |
+| `vhub_guardiao_natives` | Sonnet 4.6 | high | Lookup de referência + pattern check |
+| `vhub_guardiao_performance` | Sonnet 4.6 | high | Análise de padrões de performance |
+| `vhub_guardiao_designer` | Sonnet 4.6 | high | Verificação de identidade visual |
+| `vhub_guardiao_runtime` | Sonnet 4.6 | high | Patterns arquiteturais JS (A-01..A-08) |
+| `vhub_guardiao_simplicidade` | Sonnet 4.6 | medium | Checks simples, não requer raciocínio profundo |
+
+### Economia de tokens na prática
+
+- **Guardiões em paralelo** com Sonnet: ~60% mais barato que todos com Opus
+- **opusplan** para sessão interativa: Opus só durante planejamento (5-10% do tempo)
+- **ultrathink** no prompt: para raciocínio extra profundo sem mudar o modelo de sessão
+- Incluir `contexto.md` no prompt do agente: evita reenviar histórico completo
+
+### Keyword ultrathink
+
+Inclua `ultrathink` no prompt para solicitar raciocínio mais profundo naquele turno sem mudar o modelo:
+
+```
+# Exemplo — análise de regressão profunda sem trocar de modelo
+"Analise ultrathink este diff para identificar regressões sutis..."
+```
+
+---
+
+## Auto-memory
+
+O Claude Code gera memórias automáticas das conversas (`autoMemory: true` no settings.json).
+Estas memórias ficam em `.claude/memory/` e são carregadas em sessões futuras.
+
+**IMPORTANTE**: As memórias automáticas COMPLEMENTAM, não substituem o `contexto.md`.
+- `contexto.md` = verdade institucional (escrita por `vhub_guardiao_revisao`)
+- `.claude/memory/` = padrões de uso e preferências detectados automaticamente
+
+Se houver conflito, **prevalece o `contexto.md`**.
+
+---
+
+## Hook de proteção do CORE
+
+O `settings.json` tem duas proteções para o CORE FROZEN v1.0:
+
+1. **Deny rule**: `"Write(resources/[CORE]/vhub/**)"` — Claude Code não pode escrever diretamente
+2. **settings.local.json**: Para edições emergenciais, adicione manualmente ao `.claude/settings.local.json`:
+   ```json
+   { "permissions": { "allow": ["Write(resources/[CORE]/vhub/**)"] } }
+   ```
+   ⚠️ `.claude/settings.local.json` está no `.gitignore` — nunca commitar.

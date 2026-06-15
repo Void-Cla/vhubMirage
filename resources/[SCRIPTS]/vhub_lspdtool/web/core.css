@@ -1,0 +1,23 @@
+/* core.css — tokens + reset COMPARTILHADOS da NUI do lspdtool (radar, helicam, mdt).
+   Identidade vHub: Liquid Glass + Areia + Dourado. Fontes do sistema (sem CDN). */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent;      /* CEF transparente — NUNCA pintar a tela inteira */
+    overflow: hidden;
+    user-select: none;
+}
+
+:root {
+    --sand:   #d9c19a;
+    --gold:   #f3b53a;
+    --danger: #e8513f;
+    --ok:     #6fcf73;
+    --glass:  rgba(12, 10, 6, 0.55);
+    --line:   rgba(217, 193, 154, 0.22);
+    --font:   system-ui, 'Segoe UI', sans-serif;
+    --mono:   'Consolas', 'SF Mono', ui-monospace, monospace;
+}

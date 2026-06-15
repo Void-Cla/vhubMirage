@@ -1,5 +1,5 @@
 -- server/maintenance.lua  reparo na garagem + recep  o de report do cliente
--- KM/dano/fuel s o gerenciados pelo CORE do vHub (vHub.Vehicle).
+-- KM/dano/fuel vivem no PRONTU RIO (vhub_vehicle_state, escritor  nico = conce).
 -- Aqui recebemos delta de customization/posi  o (n o-cr ticos) e oferecemos reparo pago.
 ---@diagnostic disable: undefined-global
 
@@ -30,8 +30,10 @@ AddEventHandler(E.REPORT_STATE, function(plate, payload)
         h = tonumber(payload.position.h) or 0.0,
       }))
     end
-    if type(payload.customization) == 'table' then
-      SQL:updateCustomization(p, U.jenc(payload.customization), payload.locked == true)
+    -- payload do cliente e hostil → whitelist de chaves + cap de tamanho
+    local cust = U.sanitizeCustomization(payload.customization)
+    if cust then
+      SQL:updateCustomization(p, U.jenc(cust), payload.locked == true)
     end
   end)
 end)
@@ -51,13 +53,13 @@ AddEventHandler(E.ACT_REPAIR, function(plate)
       Core.notify(src, 'Sem autoriza  o.'); return
     end
 
-    -- state do core (pode estar nil em VRAM); usa export getVehicle do core
-    local core_vd
-    local ok, vd = pcall(function() return exports.vhub:getVehicle(p) end)
-    if ok then core_vd = vd end
+    -- sa de REAL persistida no prontu rio (a leitura antiga via export do CORE
+    -- devolvia uma C PIA serializada, quase sempre nil  custo de reparo errado)
+    local st
+    pcall(function() st = exports.vhub_conce:getVehicleState(p) end)
 
-    local eng  = (core_vd and core_vd.state and core_vd.state.engine_health) or 1000
-    local body = (core_vd and core_vd.state and core_vd.state.body_health)   or 1000
+    local eng  = (st and st.engine_health) or 1000
+    local body = (st and st.body_health)   or 1000
     local dmg_eng  = math.max(0, 1000 - eng)
     local dmg_body = math.max(0, 1000 - body)
     local entry = VHubGarage.catalog[v.model] or {}
@@ -71,13 +73,10 @@ AddEventHandler(E.ACT_REPAIR, function(plate)
       Core.notify(src, ('Saldo insuficiente. Reparo: R$ %d.'):format(custo)); return
     end
 
-    -- restaura health no core (state bag) via export se houver
-    if core_vd and core_vd.state then
-      core_vd.state.engine_health = 1000.0
-      core_vd.state.body_health   = 1000.0
-      core_vd.dirty = true
-      pcall(function() core_vd:_syncBags() end)
-    end
+    -- reparo TRUSTED no prontu rio (eleva health + limpa dano) e conserta a
+    -- entidade VIVA no client (a vers o antiga mutava c pia = no-op real)
+    pcall(function() exports.vhub_conce:repairVehicleState(p) end)
+    TriggerClientEvent(E.DO_REPAIR, src, p)
     Core:log(p, 'repair', cid, { custo = custo, dmg_eng = dmg_eng, dmg_body = dmg_body })
     Core.notify(src, ('Ve culo reparado. R$ %d cobrados.'):format(custo))
   end)

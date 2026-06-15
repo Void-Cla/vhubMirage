@@ -90,34 +90,20 @@ function M.takeKeyItem(src, plate)
   end) == true
 end
 
-function M.listKeyItems(src)
-  local k = safe(function() return exports.vhub_inventory:getVehicleKeys(src) end)
-  return type(k) == 'table' and k or {}
-end
-
 function M.hasPerm(src, perm)
   return safe(function()
     return exports.vhub_groups:hasPermission(src, perm)
   end) == true
 end
 
-function M.identityFullName(src)
-  return safe(function() return exports.vhub_identity:getFullName(src) end) or '?'
-end
-
-function M.charByRegistration(reg)
-  return safe(function() return exports.vhub_identity:getCharByRegistration(reg) end)
-end
-
 -- ----------------------------------------------------------------------------
 -- Verificar se o jogador pode operar a placa (autoriza  o l gica)
---   true se for dono ou tiver chave v lida no DB
+--   Delega ao vhub_conce (autoridade unica de chave/placa desde a FASE 1).
+--   canOperate = chave-item fisica + (e dono OU autorizacao valida no DB).
+--   Os 3 call-sites ja gateiam hasKeyItem antes, entao a delegacao e behavior-neutral.
 -- ----------------------------------------------------------------------------
 function M:authorized(src, plate)
-  local cid = self:getCharId(src); if not cid then return false end
-  local v = SQL:getVehicle(plate); if not v then return false end
-  if v.char_id == cid then return true end
-  return SQL:hasValidKey(plate, cid)
+  return exports.vhub_conce:canOperate(src, plate) == true
 end
 
 -- ----------------------------------------------------------------------------
