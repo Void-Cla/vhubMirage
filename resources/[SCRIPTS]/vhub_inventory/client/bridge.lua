@@ -62,11 +62,18 @@ end)
 -- NUI -> SERVIDOR (intencao) / handshake
 -- ============================================================
 
+-- token de cache-bust do CDN, fixo POR BOOT do resource client.
+-- ATENCAO: a lib `os` NAO existe no client do FiveM (os.time => index nil). Usar
+-- GetGameTimer() (native, sempre disponivel): muda a cada boot/restart => CEF
+-- revalida o icone (trocou no CDN, troca aqui sem cache preso).
+local CDN_VER = GetGameTimer()
+
 -- handshake: NUI pronta -> recebe catalogo + CDN + dimensoes (uma vez)
 RegisterNUICallback('nui_ready', function(_, cb)
   cb({
     catalog = Inventory.Items,
     cdn     = Inventory.CDN,
+    cdn_ver = CDN_VER,
     size    = Inventory.Backpack.slots,
     max     = Inventory.Backpack.max_weight,
     hotbar  = Inventory.Hotbar.slots,

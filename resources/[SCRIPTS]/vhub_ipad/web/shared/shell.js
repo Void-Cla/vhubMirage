@@ -112,6 +112,7 @@
       wallpapers: data.wallpapers  || [],
     });
     if (typeof data.cdn === 'string') vhub.cdn = data.cdn;
+    if (data.cdn_ver != null) vhub.cdnVer = data.cdn_ver;   // cache-bust por boot
 
     applyPrefs();
     document.body.classList.add('visible');

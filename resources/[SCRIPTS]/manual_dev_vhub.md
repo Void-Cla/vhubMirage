@@ -194,8 +194,10 @@ AddStateBagChangeHandler('vh_fuel', nil, function(bag, _, v) ... end)
 exports.vhub:commitVehicleState(plate, { fuel = 100.0 }, 'vhub_<dom>:refuel')
 exports.vhub:commitVehicleState(plate, { engine_health = 1000, body_health = 1000 }, 'vhub_<dom>:repair')
 
--- REAGIR a commits de qualquer origem (auditável pelo reason)
-AddEventHandler('vHub:vehicleCommitted', function(vd, patch, reason) ... end)
+-- REAGIR a commits de qualquer origem (emitido pelo VState do conce — escritor único)
+-- Shape (primitivo L-19): { plate, source, changed={customization, health, fuel} }
+AddEventHandler('vHub:vehicleCommitted', function(ev) ... end)
+-- ex.: ev.plate, ev.source, ev.changed.customization
 ```
 
 **Proibido (L-13/L-14):** `setVData(...)` fora do core (hook **bloqueia**) e mutar `vd.state` obtido por `getVHub()`/`getVehicle()` — leitura só.

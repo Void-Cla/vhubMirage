@@ -13,9 +13,11 @@ local TRUSTED = {
   ['vhub_ferinha']    = true,
   ['vhub_admin']      = true,
   ['vhub_inventory']  = true,
-  ['vhub_vehcontrol'] = true,   -- telemetria física → saveVehicleState (PRONTUÁRIO)
+  ['vhub_vehcontrol'] = true,   -- telemetria física + engine de skill → saveVehicleState (telemetry/handling)
   ['vhub_legacyfuel'] = true,   -- bomba de combustível → saveVehicleState {fuel}
   ['vhub_testrunner'] = true,   -- testes server-side (somente ambiente de teste)
+  ['vhub_custom']     = true,   -- oficina (bennys/mec/oficina) → saveVehicleState (cosmetic/tune/repair)
+  ['vhub_nitro']      = true,   -- nitro → saveVehicleState (customization.nitro, source='nitro')
 }
 
 local function _invoker_allowed()
@@ -101,7 +103,8 @@ exports('getVehicleState', function(plate)
   return VHubConce.VState:get(plate)
 end)
 
--- aplica patch parcial validado (telemetria/store/bomba); source define as regras
+-- aplica patch parcial validado (telemetria/store/bomba/cosmetic/tune/repair); source define as regras
+-- customization é mesclada por chave sobre o persistido (não substituída) — ver VState:save
 exports('saveVehicleState', function(plate, patch, source)
   if not _invoker_allowed() then return false end
   return VHubConce.VState:save(plate, patch, source)
@@ -147,3 +150,26 @@ end)
 exports('buy',        function(src, model, placa, conc) if not _invoker_allowed() then return { ok = false } end return VHubConce.buy(src, model, placa, conc) end)
 exports('sellToShop', function(src, plate)              if not _invoker_allowed() then return { ok = false } end return VHubConce.sellToShop(src, plate)        end)
 exports('testDrive',  function(src, model, conc)        if not _invoker_allowed() then return { ok = false } end return VHubConce.testDrive(src, model, conc)   end)
+
+
+-- ============================================================
+-- ZONAS (config de localização — dono desde a decisão #25)
+-- vec3/vec4 são de uso LOCAL; ao cruzar a fronteira do export, a coord vai
+-- ACHATADA p/ primitivo {x,y,z[,h]} (msgpack mangle o vetor nativo — L-19).
+-- ============================================================
+
+-- lista achatada das concessionárias p/ o garage agregar no SETUP (read-only, estática)
+exports('getZones', function()
+  if not _invoker_allowed() then return {} end
+  local out = {}
+  for _, c in ipairs(VHubConce.cfg.concessionarias or {}) do
+    local ts = c.test_spawn
+    out[#out + 1] = {
+      id = c.id, label = c.label,
+      x = c.coord.x, y = c.coord.y, z = c.coord.z, raio = c.raio,
+      tipos = c.tipos, blip = c.blip,
+      test_spawn = ts and { x = ts.x, y = ts.y, z = ts.z, h = ts.w } or nil,
+    }
+  end
+  return out
+end)

@@ -45,8 +45,14 @@
       <span class="vc-fuel-pct" id="fuel-pct">—</span>
     </div>
 
+    <!-- Abas: Controles | Ficha do Veículo -->
+    <div class="vc-tabs" role="tablist">
+      <button class="vc-tab is-active" data-tab="controls" role="tab">Controles</button>
+      <button class="vc-tab" data-tab="ficha" role="tab">Ficha</button>
+    </div>
+
     <!-- Botões de controle -->
-    <div class="vc-controls">
+    <div class="vc-controls" data-tab-body="controls">
 
       <!-- Portas -->
       <div class="vc-section-label">Portas</div>
@@ -128,6 +134,93 @@
       </div>
 
     </div><!-- /vc-controls -->
+
+    <!-- ============================================================
+         FICHA DO VEÍCULO (read-only nesta fase — engine de skill)
+         ============================================================ -->
+    <div class="vc-ficha hidden" data-tab-body="ficha">
+
+      <!-- carro sem p1 (não suporta skill): mensagem -->
+      <div class="vc-ficha-empty hidden" id="ficha-empty">
+        Este veículo não possui ficha de performance.
+      </div>
+
+      <div id="ficha-body">
+        <!-- Cabeçalho: tier + score -->
+        <div class="vc-ficha-head">
+          <div class="vc-tier-badge" id="ficha-tier">—</div>
+          <div class="vc-ficha-headinfo">
+            <div class="vc-ficha-score"><span id="ficha-score">0</span><small>/1000</small></div>
+            <div class="vc-ficha-sub">Tier base <span id="ficha-tierbase">—</span> · teto <span id="ficha-tiermax">—</span></div>
+          </div>
+          <button class="vc-ficha-editbtn" id="btn-ficha-edit" title="Calibrar pontos">Calibrar</button>
+        </div>
+
+        <!-- Pontos: usados / total (modo leitura) OU livres restantes (modo edição) -->
+        <div class="vc-ficha-budget">
+          <span id="ficha-budget-label">Pontos</span>
+          <strong><span id="ficha-used">0</span> / <span id="ficha-budget">0</span></strong>
+        </div>
+
+        <!-- Distribuição (5 eixos) — leitura: barras · edição: sliders -->
+        <div class="vc-section-label">Distribuição</div>
+        <div class="vc-bars" id="ficha-alloc"></div>
+
+        <!-- Afinidade por pista (5 contextos) — some em modo edição -->
+        <div id="ficha-affinity-wrap">
+          <div class="vc-section-label">Afinidade</div>
+          <div class="vc-bars" id="ficha-affinity"></div>
+        </div>
+
+        <!-- ============================================================
+             NITRO (decisão #30) — liga/desliga + nível 1..10 + abastecer.
+             Estado vem da placa (sheet.nitro); escrita delegada ao vhub_nitro.
+             Some em modo edição (calibração de pontos é outra coisa).
+             ============================================================ -->
+        <div id="ficha-nitro-wrap">
+          <div class="vc-section-label">Nitro</div>
+
+          <!-- sem kit: instrução -->
+          <div class="vc-nitro-nokit hidden" id="nitro-nokit">
+            Instale o <strong>Kit de Nitro</strong> na oficina para liberar.
+          </div>
+
+          <!-- com kit: controles -->
+          <div id="nitro-body" class="hidden">
+            <!-- linha 1: liga/desliga + carga -->
+            <div class="vc-nitro-row">
+              <button class="vc-nitro-toggle" id="nitro-toggle" title="Ligar/desligar nitro">
+                <span class="vc-nitro-dot"></span><span id="nitro-toggle-lbl">Desligado</span>
+              </button>
+              <span class="vc-nitro-charge">Carga <strong id="nitro-qty">0</strong>%</span>
+            </div>
+
+            <!-- linha 2: nível 1..10 (durabilidade ↔ velocidade) -->
+            <div class="vc-nitro-level">
+              <div class="vc-nitro-level-head">
+                <span>Durabilidade</span>
+                <strong id="nitro-level-val">Nível 1</strong>
+                <span>Velocidade</span>
+              </div>
+              <input class="vc-bar-slider" type="range" id="nitro-level" min="1" max="10" step="1" value="1">
+            </div>
+
+            <!-- linha 3: abastecer com a garrafa -->
+            <button class="vc-btn vc-btn-primary" id="nitro-charge" title="Consome 1 Garrafa de Nitro">
+              Abastecer (+1 Garrafa)
+            </button>
+          </div>
+        </div>
+
+        <!-- Rodapé do modo edição: confirmar/cancelar (oculto em modo leitura) -->
+        <div class="vc-ficha-editftr hidden" id="ficha-editftr">
+          <button class="vc-btn" id="btn-ficha-cancel">Cancelar</button>
+          <button class="vc-btn vc-btn-primary" id="btn-ficha-save">Salvar calibração</button>
+        </div>
+      </div>
+
+    </div><!-- /vc-ficha -->
+
   </div><!-- /vc-panel -->
 
   <script src="app.js"></script>

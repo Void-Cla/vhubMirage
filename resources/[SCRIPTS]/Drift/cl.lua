@@ -60,8 +60,8 @@ local MIN_BOOST_ANGLE = 20.0   -- graus minimos para o boost ativar
 -- e a autoridade final (faz o cap por segundo). Aqui so geramos a pontuacao bruta.
 local SCORE_MIN_ANGLE   = 15.0          -- graus minimos para pontuar
 local SCORE_MIN_SPEED   = 30.0          -- km/h minimos para pontuar
-local SCORE_DIVISOR     = 40.0          -- divisor base (angulo*velocidade/divisor)
-local SCORE_CAP_PER_SEC = 150.0         -- teto bruto por segundo (antes do combo)
+local SCORE_DIVISOR     = 65.0          -- divisor base (angulo*velocidade/divisor)
+local SCORE_CAP_PER_SEC = 100.0         -- teto bruto por segundo (antes do combo)
 local CRASH_HEALTH_DROP = 8.0           -- queda de body health que conta como "bateu"
 local COMBO_BREAK_MS    = 700           -- graca antes do combo cair (oscilacao normal)
 local COMBO_THRESHOLDS  = { 5.0, 12.0, 25.0 }   -- segundos de drift continuo

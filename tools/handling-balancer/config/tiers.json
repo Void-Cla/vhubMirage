@@ -1,0 +1,22 @@
+{
+  "_doc": "Matriz-Ouro por tier (seed). Valores de REFERENCIA, a validar em pista (script.md §12). O motor le este arquivo; nenhuma regra mora no codigo. budget = orcamento de pontos da Fase 2 (soma de base_alloc == budget). reference = carro nativo GTA5 de baliza.",
+  "_campos": {
+    "drive": "fInitialDriveForce alvo (coeficiente da engine, NAO Newtons)",
+    "drag": "fInitialDragCoeff alvo (paredao de vento contra upgrades)",
+    "maxVel": "fInitialDriveMaxFlatVel alvo (teto do drive force base)",
+    "driveInertia": "fDriveInertia alvo (resposta de aceleracao)",
+    "gripMax": "fTractionCurveMax alvo",
+    "gripMin": "fTractionCurveMin alvo",
+    "brakeForce": "fBrakeForce alvo (modelo proprio, NAO escala com potencia)",
+    "antiRollBar": "fAntiRollBarForce alvo (estabilidade base)",
+    "budget": "orcamento de pontos da Fase 2 por tier"
+  },
+  "tiers": {
+    "D":  { "reference": "blista",   "massBase": 1100, "drive": 0.140, "drag": 11.5, "maxVel": 125, "driveInertia": 1.00, "gripMax": 2.05, "gripMin": 1.90, "brakeForce": 0.70, "antiRollBar": 0.55, "budget": 500 },
+    "C":  { "reference": "kuruma",   "massBase": 1400, "drive": 0.180, "drag": 10.5, "maxVel": 130, "driveInertia": 1.00, "gripMax": 2.15, "gripMin": 2.00, "brakeForce": 0.80, "antiRollBar": 0.60, "budget": 600 },
+    "B":  { "reference": "elegy",    "massBase": 1500, "drive": 0.220, "drag": 10.0, "maxVel": 132, "driveInertia": 1.10, "gripMax": 2.30, "gripMin": 2.15, "brakeForce": 0.90, "antiRollBar": 0.65, "budget": 700 },
+    "A":  { "reference": "banshee",  "massBase": 1400, "drive": 0.260, "drag":  9.5, "maxVel": 135, "driveInertia": 1.20, "gripMax": 2.45, "gripMin": 2.30, "brakeForce": 1.00, "antiRollBar": 0.70, "budget": 800 },
+    "S":  { "reference": "zentorno", "massBase": 1500, "drive": 0.310, "drag":  9.2, "maxVel": 138, "driveInertia": 1.30, "gripMax": 2.65, "gripMin": 2.50, "brakeForce": 1.10, "antiRollBar": 0.75, "budget": 900 },
+    "S+": { "reference": "krieger",  "massBase": 1500, "drive": 0.350, "drag":  9.0, "maxVel": 140, "driveInertia": 1.40, "gripMax": 2.80, "gripMin": 2.65, "brakeForce": 1.20, "antiRollBar": 0.80, "budget": 1000 }
+  }
+}

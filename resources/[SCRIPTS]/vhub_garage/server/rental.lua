@@ -9,18 +9,15 @@ local U    = VHubGarage.U
 local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
 
-local function getConc(id)
-  for _, c in ipairs(CFG.concessionarias) do
-    if c.id == id then return c end
-  end
-end
+-- decisao #25: concessionaria resolvida pelo resolver unico do Core (config no
+-- vhub_conce, lida do cache do PULL) — sem copia local de getConc.
 
 RegisterNetEvent(E.ACT_RENT)
 AddEventHandler(E.ACT_RENT, function(model, conc_id, horas)
   local src = source
   local cid = Core:getCharId(src); if not cid then return end
   local entry = VHubGarage.catalog[model]; if not entry then return end
-  local conc  = getConc(conc_id); if not conc then return end
+  local conc  = Core:resolveConc(conc_id); if not conc then return end
   horas = tonumber(horas) or CFG.aluguel_periodo_h
   if horas < 1 then horas = 1 elseif horas > 168 then horas = 168 end
 

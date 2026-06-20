@@ -146,6 +146,16 @@ Inventory.Items = {
     legalidade = 'legal', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'ferramenta',
   },
+  ['caixadeferramentas'] = {
+    nome = 'Caixa de Ferramentas', peso = 2.00, stack = true, max = 10,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, categoria = 'ferramenta',
+  },
+  ['nitro'] = {
+    nome = 'Garrafa de Nitro', peso = 1.50, stack = true, max = 10,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, categoria = 'ferramenta',
+  },
   ['lockpick'] = {
     nome = 'Lockpick', peso = 0.10, stack = false,
     legalidade = 'ilegal', negociavel = true, perdivel = true,

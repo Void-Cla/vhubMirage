@@ -206,9 +206,22 @@
         if (refs.lap && data.lap != null && data.laps != null) {
             refs.lap.textContent = `${data.lap}/${data.laps}`;
         }
-        // Atualiza o valor do drift; a VISIBILIDADE do chip e por modo (onShowMsg)
-        if (refs.drift && data.drift_score != null) {
-            refs.drift.textContent = String(data.drift_score);
+        // Drift: pts vivos, % bancado e combo
+        if (refs.drift != null && data.drift_score != null) {
+            refs.drift.textContent = String(Math.floor(data.drift_score));
+        }
+        if (refs.driftPct != null) {
+            const live   = Math.max(1, data.drift_score  || 0);
+            const banked = Math.min(live, data.drift_banked || 0);
+            const pct    = Math.round((banked / live) * 100);
+            refs.driftPct.textContent = pct + '%';
+        }
+        if (refs.driftCombo != null && data.drift_combo != null) {
+            const c = Number(data.drift_combo) || 1;
+            refs.driftCombo.textContent = 'x' + c.toFixed(1) + ' COMBO';
+            // cor progressiva
+            refs.driftCombo.className = 'hud-drift-combo'
+                + (c >= 3.0 ? ' combo-4' : c >= 2.0 ? ' combo-3' : c >= 1.5 ? ' combo-2' : '');
         }
 
         // Re-sync timer se servidor reportou drift > 120ms
@@ -265,6 +278,8 @@
             refs.finishTime   = el.querySelector('[data-el="finish-time"]');
             refs.finishPayout = el.querySelector('[data-el="finish-payout"]');
             refs.cpDist       = el.querySelector('[data-el="cp-dist"]');
+            refs.driftPct     = el.querySelector('[data-el="drift-pct"]');
+            refs.driftCombo   = el.querySelector('[data-el="drift-combo"]');
 
             // Comeca escondido (RACE_PREPARE mostra)
             el.classList.add('hidden');

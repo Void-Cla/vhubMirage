@@ -16,10 +16,13 @@
       return 'linear-gradient(90deg, #6bd06b, #b9e2a0)';
     },
 
-    // URL do icone via CDN dinamico: base + '/<id>.png' (so o identificador)
+    // URL do icone via CDN dinamico: base + '/<id>.png' (so o identificador).
+    // ?v=<cdn_ver> (fixo por boot) revalida o icone ao subir o servidor: trocou
+    // no CDN -> URL nova -> CEF refaz o fetch em vez de servir o cache antigo.
     itemIcon(id) {
       const base = (vhub.config && vhub.config.cdn) || '';
-      return `${base}/${id}.png`;
+      const ver  = vhub.config && vhub.config.cdn_ver;
+      return `${base}/${id}.png${ver ? '?v=' + ver : ''}`;
     },
 
     // rotulo do item a partir do catalogo recebido no handshake

@@ -3,6 +3,13 @@
 -- cache read-only deste catálogo no boot (VHubGarage.catalog) só para exibição.
 --   nome: rótulo PT-BR | preco: base concessionária | tipo: car/bike/...
 --   categoria: subcategoria visual | stats: {vel,acel,freio,dir} 0-100 | tags: opcionais
+--   p1: bloco do ENGINE DE SKILL (decisão #27) — identidade física do .meta selado.
+--       Gerado por tools/handling-balancer (out/catalog-patch.json), mesclado À MÃO aqui.
+--       Campos: tier_base/tier_max (obrigatórios p/ habilitar skill), base_alloc (distribuição
+--       natural do tier; soma == BUDGET[tier_base]), archetype/grip_modifier/drive_bias/
+--       susp_raise/mass/inertia_z/low_speed_loss (opcionais — afinidade; default seguro se ausentes),
+--       seal (hash do .meta p/ auditoria). Carro SEM p1 = sem tier/skill (fail-closed, UI degrada).
+--       BUDGET por tier: D=500 C=600 B=700 A=800 S=900 S+=1000.
 ---@diagnostic disable: undefined-global, lowercase-global
 
 VHubConce         = VHubConce or {}
@@ -22,9 +29,21 @@ VHubConce.catalog = {
   t20       = { nome='Pegassi T20',  preco=2200000, tipo='car',  categoria='super',     stats={vel=99,acel=96,freio=90,dir=92}, tags={'premium','exclusivo'} },
   turismor  = { nome='Turismo R',    preco=500000,  tipo='car',  categoria='super',     stats={vel=92,acel=88,freio=86,dir=88} },
   entityxf  = { nome='Entity XF',    preco=795000,  tipo='car',  categoria='super',     stats={vel=94,acel=90,freio=86,dir=92} },
-  
-  a80       = { nome='Toyota Supra A80', preco=420000, tipo='car', categoria='sport',    stats={vel=90,acel=88,freio=78,dir=86}, tags={'mod'} },
-  skyline   = { nome='Nissan Skyline R34', preco=380000, tipo='car', categoria='sport',  stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'} },
+  TOYOTASUPRA = { nome='Toyota Supra A80', preco=420000, tipo='car', categoria='sport', stats={vel=90,acel=88,freio=78,dir=86}, tags={'mod'},
+    p1 = { handling_name='toyotasupra', tier_base='S', tier_max='S+', base_alloc={potencia=180,grip=180,frenagem=180,aero=180,suspensao=180} } },
+  SKYLINER34 = { nome='Nissan Skyline R34', preco=380000, tipo='car', categoria='sport', stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'},
+    p1 = { handling_name='skyliner34', tier_base='S', tier_max='S+', base_alloc={potencia=180,grip=180,frenagem=180,aero=180,suspensao=180} } },
+  NISSAN370Z = { nome='Nissan 370z', preco=380000, tipo='car', categoria='sport', stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'},
+    p1 = { handling_name='nissan370z', tier_base='A', tier_max='S', base_alloc={potencia=160,grip=160,frenagem=160,aero=160,suspensao=160} } },
+  f8t = { nome='Ferrari F8', preco=380000, tipo='car', categoria='sport', stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'},
+    p1 = { handling_name='f8t', tier_base='S', tier_max='S+', archetype='rwd_heavy', grip_modifier=0.92,
+           base_alloc={potencia=180,grip=180,frenagem=180,aero=180,suspensao=180},
+           drive_bias=0.0, susp_raise=-0.015, mass=1600, inertia_z=1.6, low_speed_loss=1.0,
+           seal='sha256:c65806cc6e8a382bd931fa29274e3265b0b078c02eb20c3594c4f53524fb30fa' } },
+  FUSCA68 = { nome='Volkswagen Fusca 68', preco=380000, tipo='car', categoria='sport', stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'},
+    p1 = { handling_name='fusca68', tier_base='C', tier_max='B', base_alloc={potencia=120,grip=120,frenagem=120,aero=120,suspensao=120} } },
+  m3e46 = { nome='BMW M3 E46', preco=380000, tipo='car', categoria='sport', stats={vel=88,acel=86,freio=76,dir=84}, tags={'mod'},
+    p1 = { handling_name='m3e46', tier_base='A', tier_max='S', base_alloc={potencia=160,grip=160,frenagem=160,aero=160,suspensao=160} } },
 
   -- ---------- MOTOS ----------
   bati801   = { nome='Bati 801',     preco=15000,  tipo='bike', categoria='esportiva',  stats={vel=84,acel=88,freio=64,dir=82} },

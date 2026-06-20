@@ -1,0 +1,16 @@
+{
+  "_doc": "Onde o pipeline varre handling.meta. roots sao relativos a RAIZ DO REPO (resolvidos a partir de tools/handling-balancer/ -> ../../). Path-agnostico: os arquivos reais vivem em [SCRIPTS]/carmod ([CAR]/carmod esta vazio, move adiado). FiveM resolve resource por NOME, nao por caminho.",
+  "roots": [
+    "resources/[SCRIPTS]/carmod",
+    "resources/[CAR]/carmod"
+  ],
+  "exclude": [
+    "backup",
+    "_archive",
+    "node_modules",
+    ".backups"
+  ],
+  "matchFiles": [
+    "handling.meta"
+  ]
+}

@@ -48,6 +48,11 @@ end
 -- OPEN / CLOSE (sessão)
 -- ============================================================
 
+-- token de cache-bust do CDN, fixo POR BOOT do resource (os.time no load).
+-- Anexado às URLs de ícone (?v=) p/ revalidar ao subir o servidor: trocou o
+-- ícone no CDN → reinicia → CEF refaz o fetch (URL nova) em vez de servir cache.
+local CDN_VER = os.time()
+
 -- monta o payload completo enviado à NUI no open (verdade server)
 local function buildOpenPayload(src)
   local apps, version = Registry:snapshotFor(src)
@@ -55,6 +60,7 @@ local function buildOpenPayload(src)
     api_level       = CFG.API_LEVEL,
     catalog_version = version,
     cdn             = CFG.CDN,
+    cdn_ver         = CDN_VER,
     apps            = apps,
     installed       = State.installedList(src),
     prefs           = State.prefs(src),

@@ -69,7 +69,7 @@ VHubRachaCfg = {
   -- Mantenha CAP_PER_SEC / COMBO_MULT alinhados com os do resource "Drift".
   DRIFT = {
     BANK_MS          = 5000,   -- ms de drift sem bater p/ o lote virar valido
-    CAP_PER_SEC      = 150,    -- teto server-side por segundo (anti-cheat)
+    CAP_PER_SEC      = 100,    -- teto server-side (alinhado com SCORE_CAP_PER_SEC do Drift)
     COMBO_MULT       = { 1.5, 2.0, 3.0 },
   },
 

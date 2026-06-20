@@ -107,6 +107,18 @@ function M:authorized(src, plate)
 end
 
 -- ----------------------------------------------------------------------------
+-- Resolver  nico de concession ria por id (decis o #25)
+--   A config de localiza  o da concession ria vive em vhub_conce; o garage
+--   faz PULL no boot (VHubGarage.concessionarias). Fonte  nica para os 3
+--   call-sites antigos de getConc (dealership/rental/REQ_CATALOG) — sem c pia.
+-- ----------------------------------------------------------------------------
+function M:resolveConc(id)
+  for _, c in ipairs(VHubGarage.concessionarias or {}) do
+    if c.id == id then return c end
+  end
+end
+
+-- ----------------------------------------------------------------------------
 -- Notifica  o ao cliente (wrapper sobre evento padr o)
 -- ----------------------------------------------------------------------------
 function M.notify(src, msg)

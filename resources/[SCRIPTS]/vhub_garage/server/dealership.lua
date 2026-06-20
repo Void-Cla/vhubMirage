@@ -5,15 +5,10 @@
 ---@diagnostic disable: undefined-global
 
 local Core = VHubGarage.Core
-local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
 
--- resolve a concessionaria pela id (zona/config local e do garage)
-local function getConc(id)
-  for _, c in ipairs(CFG.concessionarias) do
-    if c.id == id then return c end
-  end
-end
+-- decisao #25: a config da concessionaria mora no vhub_conce; resolvemos pelo
+-- resolver unico do Core (le o cache do PULL) — sem copia local de getConc.
 
 
 -- ============================================================
@@ -22,7 +17,7 @@ end
 RegisterNetEvent(E.ACT_BUY)
 AddEventHandler(E.ACT_BUY, function(model, placa_custom, conc_id)
   local src  = source
-  local conc = getConc(conc_id)
+  local conc = Core:resolveConc(conc_id)
   Citizen.CreateThread(function()
     local r = exports.vhub_conce:buy(src, model, placa_custom, conc) or {}
     if r.msg then Core.notify(src, r.msg) end
@@ -55,7 +50,7 @@ end)
 RegisterNetEvent(E.ACT_TESTDRIVE)
 AddEventHandler(E.ACT_TESTDRIVE, function(model, conc_id)
   local src  = source
-  local conc = getConc(conc_id)
+  local conc = Core:resolveConc(conc_id)
   Citizen.CreateThread(function()
     local r = exports.vhub_conce:testDrive(src, model, conc) or {}
     if r.ok then

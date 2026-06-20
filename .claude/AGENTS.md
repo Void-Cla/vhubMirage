@@ -5,7 +5,7 @@
 ## Leitura obrigatória (nesta ordem)
 
 ```
-CLAUDE.md                      ← leis L-01..L-18, Registro de Ownership, orçamentos
+CLAUDE.md                      ← leis L-01..L-12 + estendidas (L-19 vec3/vec4), Registro de Ownership, orçamentos
 .claude/contexto.md            ← SOMENTE índice + seções citadas pela tarefa (cap 20 KB)
 arquivos reais tocados         ← código > qualquer documento
 ```

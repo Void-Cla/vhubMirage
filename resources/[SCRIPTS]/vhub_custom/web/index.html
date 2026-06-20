@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vHub Oficina</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="overlay" class="overlay hidden mod-oficina">
+
+  <!-- ambiente: blueprint + warm vignette (CEF safe, sem imagens externas) -->
+  <div class="env" aria-hidden="true">
+    <div class="env-grid"></div>
+    <div class="env-glow env-glow-a"></div>
+    <div class="env-glow env-glow-b"></div>
+    <div class="env-scan"></div>
+  </div>
+
+  <div class="panel">
+
+    <!-- corner brackets, puro decorativo -->
+    <span class="corner c-tl"></span>
+    <span class="corner c-tr"></span>
+    <span class="corner c-bl"></span>
+    <span class="corner c-br"></span>
+
+    <!-- ══════════════════════════════════════════════════
+         HEADER
+         ══════════════════════════════════════════════════ -->
+    <header class="hdr">
+      <div class="hdr-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22"><path fill="currentColor" d="M6 5h6l4 10 4-10h6l-8 22h-4z"/></svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">vHub</span>
+          <span class="brand-sub">OFICINA MECÂNICA</span>
+        </div>
+      </div>
+
+      <div class="hdr-left">
+        <div id="tier-badge" class="tier-badge t-D">D</div>
+        <div class="hdr-info">
+          <div id="veh-nome" class="veh-nome">—</div>
+          <div id="veh-sub"  class="veh-sub">—</div>
+        </div>
+      </div>
+
+      <div class="hdr-score">
+        <div class="score-row">
+          <span class="score-lbl">PERFORMANCE SCORE</span>
+          <span id="score-base" class="score-val">0</span>
+          <span class="score-max">/ 1000</span>
+        </div>
+        <div class="sm-track">
+          <div class="sm-zone z-D"></div>
+          <div class="sm-zone z-C"></div>
+          <div class="sm-zone z-B"></div>
+          <div class="sm-zone z-A"></div>
+          <div class="sm-zone z-S"></div>
+          <div class="sm-zone z-Sp"></div>
+          <div id="sm-cur-base" class="sm-cursor sm-base"></div>
+        </div>
+        <div class="sm-labels">
+          <span class="t-D">D</span>
+          <span class="t-C">C</span>
+          <span class="t-B">B</span>
+          <span class="t-A">A</span>
+          <span class="t-S">S</span>
+          <span class="t-Sp">S+</span>
+        </div>
+      </div>
+
+      <button id="btn-close" class="btn-close" title="Fechar">✕</button>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════
+         BODY — 3 colunas
+         ══════════════════════════════════════════════════ -->
+    <div class="body">
+
+      <!-- COL 1: nav de componentes -->
+      <nav class="comp-nav-wrap">
+        <div class="col-title">
+          <span class="ct-bar"></span>
+          <span>COMPONENTES</span>
+        </div>
+        <div id="comp-nav" class="comp-nav"></div>
+      </nav>
+
+      <!-- COL 2: cards de opção do componente selecionado -->
+      <section id="comp-detail" class="comp-detail"></section>
+
+      <!-- COL 3: ficha real (distribuição de pontos) — leitura ou calibração -->
+      <aside class="comp-stats">
+        <div class="stats-title-row">
+          <div class="stats-title">DISTRIBUIÇÃO</div>
+          <button id="btn-calibrar" class="btn-calibrar">Calibrar</button>
+        </div>
+
+        <div id="stat-rows" class="stat-rows"></div>
+
+        <div class="score-compare hidden" id="score-compare">
+          <div class="sc-row">
+            <span class="sc-lbl">ATUAL</span>
+            <span id="sc-base-num" class="sc-num">0</span>
+            <span id="sc-base-tier" class="sc-tier t-D">D</span>
+          </div>
+          <div class="sc-row">
+            <span class="sc-lbl">CALIBRADO</span>
+            <span id="sc-prev-num" class="sc-num sc-gold">0</span>
+            <span id="sc-prev-tier" class="sc-tier t-D">D</span>
+          </div>
+        </div>
+
+        <div id="tier-hint" class="tier-hint hidden"></div>
+
+        <div class="calib-ftr hidden" id="calib-ftr">
+          <button id="btn-calib-cancel" class="btn-cancel">Cancelar</button>
+          <button id="btn-calib-save" class="btn-apply"><span class="ba-label">Salvar (R$ 2.500)</span></button>
+        </div>
+      </aside>
+    </div><!-- /body -->
+
+    <!-- ══════════════════════════════════════════════════
+         FOOTER
+         ══════════════════════════════════════════════════ -->
+    <footer class="ftr">
+      <div id="cap-info" class="cap-info">—</div>
+      <div class="ftr-right">
+        <div class="total-wrap">
+          <span class="total-lbl">ORÇAMENTO TOTAL</span>
+          <span id="total-cost" class="total-val">R$ 0</span>
+        </div>
+        <button id="btn-nitro-kit" class="btn-cancel" title="Instala o kit de nitro neste veículo">⛽ KIT NITRO (R$ 5.000)</button>
+        <button id="btn-cancel" class="btn-cancel">CANCELAR</button>
+        <button id="btn-apply"  class="btn-apply"  disabled>
+          <span class="ba-label">APLICAR TUNING</span>
+          <span class="ba-chev" aria-hidden="true">›</span>
+        </button>
+      </div>
+    </footer>
+
+  </div><!-- /panel -->
+</div><!-- /overlay -->
+
+<script src="oficina.js"></script>
+</body>
+</html>

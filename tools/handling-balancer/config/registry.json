@@ -1,0 +1,37 @@
+{
+  "_doc": "handlingName (normalizado UPPERCASE+trim) -> classificacao de tier. Carro fora daqui = IGNORADO + reportado por `scan` (nunca tocado silenciosamente). tier_base = chao fisico do .meta; tier_max = teto com upgrades full (anti-salto na Fase 2). Use `node balance.js scan` para listar os handlingName reais e detectar orfaos/duplicatas.",
+  "vehicles": {
+    "NISSAN370Z": {
+      "tier_base": "A",
+      "tier_max": "S"
+    },
+    "TOYOTASUPRA": {
+      "tier_base": "S",
+      "tier_max": "S+"
+    },
+    "SKYLINER34": {
+      "tier_base": "S",
+      "tier_max": "S+"
+    },
+    "FERRARIF8": {
+      "tier_base": "A",
+      "tier_max": "S"
+    },
+    "FUSCA68": {
+      "tier_base": "C",
+      "tier_max": "B"
+    },
+    "BMWE46GTR": {
+      "tier_base": "S+",
+      "tier_max": "S+"
+    },
+    "M3E46": {
+      "tier_base": "A",
+      "tier_max": "S"
+    },
+    "F8T": {
+      "tier_base": "S",
+      "tier_max": "S+"
+    }
+  }
+}

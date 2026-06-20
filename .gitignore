@@ -1,7 +1,13 @@
 # FXServer
 build/
 cache/
-tools/
+# tools/ ignorado, MAS git ainda desce no dir (tools/* em vez de tools/) para
+# permitir a excecao abaixo — versionar o pipeline handling-balancer (codigo +
+# config + selo p/ gate de CI). O proprio tool .gitignore exclui out/.backups/report.
+tools/*
+!tools/handling-balancer/
+!tools/test_tier_rules.lua
+!tools/test_b64_roundtrip.lua
 metas/
 
 # Exemplos e bases de referência

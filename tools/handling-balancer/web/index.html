@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vHub · Handling Balancer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ornamento de fundo -->
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+    <span class="grid-overlay"></span>
+  </div>
+
+  <div class="app">
+
+    <!-- ============================================================ -->
+    <!-- SIDEBAR · CATÁLOGO                                            -->
+    <!-- ============================================================ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-brand">
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="30" height="30">
+            <defs>
+              <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#f5d77a"/>
+                <stop offset="100%" stop-color="#c98a2b"/>
+              </linearGradient>
+            </defs>
+            <path d="M4 6 L16 28 L28 6 L22 6 L16 18 L10 6 Z" fill="url(#lg)"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <span class="brand-mark">vHub</span>
+          <span class="brand-title">Handling Balancer</span>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <label class="sb-search">
+          <span class="ico" aria-hidden="true">⌕</span>
+          <input id="sb-search-input" type="search" placeholder="Buscar carro, modelo, pasta…" />
+        </label>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-section-title">Filtrar por tier</div>
+        <div class="sb-tiers" id="sb-tiers">
+          <button class="sb-tier is-active" data-tier="all">Todos</button>
+          <button class="sb-tier" data-tier="D">D</button>
+          <button class="sb-tier" data-tier="C">C</button>
+          <button class="sb-tier" data-tier="B">B</button>
+          <button class="sb-tier" data-tier="A">A</button>
+          <button class="sb-tier" data-tier="S">S</button>
+          <button class="sb-tier" data-tier="S+">S+</button>
+        </div>
+      </div>
+
+      <div class="sb-section sb-list-section">
+        <div class="sb-section-title sb-list-title">
+          <span>Catálogo</span>
+          <span class="sb-count" id="sb-count">0</span>
+        </div>
+        <ul class="sb-list" id="sb-list" role="listbox" aria-label="Carros"></ul>
+      </div>
+
+      <div class="sb-foot">
+        <button id="btn-reload" class="btn btn-ghost btn-full" title="Recarregar a lista de carros">
+          <span class="btn-ico">↻</span> Recarregar catálogo
+        </button>
+        <span class="sb-foot-hint">offline · cirúrgico · selado</span>
+      </div>
+    </aside>
+
+    <!-- ============================================================ -->
+    <!-- MAIN · DETALHE DO CARRO SELECIONADO                           -->
+    <!-- ============================================================ -->
+    <main class="main">
+      <header class="topbar">
+        <button class="btn btn-ghost btn-sb-toggle" id="btn-sb-toggle" aria-label="Mostrar catálogo">☰</button>
+        <div class="topbar-crumb">
+          <span class="cr-root">Frota</span>
+          <span class="cr-sep">›</span>
+          <span class="cr-cur" id="cr-current">Selecione um carro</span>
+        </div>
+        <div class="topbar-actions">
+          <span class="topbar-hint">FiveM · física balanceada por tier</span>
+        </div>
+      </header>
+
+      <!-- estado de carregamento / vazio -->
+      <div id="status" class="status"></div>
+
+      <!-- placeholder quando nenhum carro selecionado -->
+      <section class="welcome" id="welcome">
+        <div class="welcome-card">
+          <h1 class="welcome-title">Balanceie a frota com precisão de engenharia</h1>
+          <p class="welcome-text">
+            Ferramenta <strong>offline</strong> para padronizar a física dos carros mod por
+            <strong>Tier</strong>. Selecione um veículo no catálogo à esquerda para abrir a
+            ficha técnica, comparar com outros do mesmo tier e aplicar o balanceamento
+            cirúrgico — apenas os 8 campos de performance mudam, com backup e selo.
+          </p>
+          <ul class="legend">
+            <li><span class="lg-dot lg-calc"></span><div><b>Calculado</b><span>tier estimado pela física atual</span></div></li>
+            <li><span class="lg-dot lg-want"></span><div><b>Desejado</b><span>tier que você quer para o carro</span></div></li>
+            <li><span class="lg-dot lg-mid"></span><div><b>Média</b><span>meio-termo — sem teleporte para o topo</span></div></li>
+          </ul>
+          <div class="welcome-stats" id="welcome-stats"></div>
+        </div>
+      </section>
+
+      <!-- lista de cards (apenas o ativo é exibido via CSS) -->
+      <div id="cars" class="cars"></div>
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TEMPLATE DE CARRO                                             -->
+  <!-- ============================================================ -->
+  <template id="tpl-car">
+    <article class="card" data-handling="">
+      <span class="card-glow" aria-hidden="true"></span>
+
+      <!-- identidade -->
+      <div class="card-head">
+        <div class="ident">
+          <h2 class="car-name"></h2>
+          <div class="car-sub">
+            <span class="chip chip-model" title="Nome de spawn / modelo"></span>
+            <span class="chip chip-dt"></span>
+            <span class="chip chip-folder" title="Pasta do mod"></span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-rename"><span class="btn-ico">✎</span> Renomear</button>
+      </div>
+
+      <!-- painel de rename -->
+      <div class="rename-panel" hidden>
+        <div class="section-title"><span class="st-bar"></span>Renomear modelo</div>
+        <label class="field">
+          <span>Novo nome (sem espaços; letras, números, _)</span>
+          <input type="text" class="rename-input" placeholder="ex.: nissan_r34" />
+        </label>
+        <div class="rename-actions">
+          <button class="btn btn-soft btn-rename-preview">Pré-visualizar mudanças</button>
+          <button class="btn btn-primary btn-rename-apply" disabled>Renomear em todos os arquivos</button>
+        </div>
+        <div class="rename-result"></div>
+      </div>
+
+      <!-- áudio custom -->
+      <div class="audio" hidden>
+        <div class="audio-head">
+          <span class="label">Áudio do veículo</span>
+          <span class="audio-status"></span>
+        </div>
+        <div class="audio-body"></div>
+        <div class="audio-actions" hidden>
+          <button class="btn btn-soft btn-audio-preview">Ver o que será corrigido</button>
+          <button class="btn btn-primary btn-audio-fix" disabled>Consertar áudio</button>
+        </div>
+        <div class="audio-result"></div>
+      </div>
+
+      <!-- grid de análise + comparação -->
+      <div class="dash-grid">
+
+        <!-- análise / score -->
+        <div class="analysis panel">
+          <div class="section-title"><span class="st-bar"></span>Análise de performance</div>
+          <div class="analysis-head">
+            <div class="tier-calc">
+              <span class="label">Tier calculado</span>
+              <span class="tier-badge tier-badge-calc"></span>
+              <span class="score"></span>
+            </div>
+            <div class="pwr" title="Power-to-weight (força ÷ massa)"></div>
+          </div>
+
+          <!-- barra de score 0/1000 com zonas por tier -->
+          <div class="score-meter" data-score-meter>
+            <div class="sm-track">
+              <span class="sm-zone z-D"  title="D"></span>
+              <span class="sm-zone z-C"  title="C"></span>
+              <span class="sm-zone z-B"  title="B"></span>
+              <span class="sm-zone z-A"  title="A"></span>
+              <span class="sm-zone z-S"  title="S"></span>
+              <span class="sm-zone z-Sp" title="S+"></span>
+              <span class="sm-cursor" data-sm-cursor></span>
+              <span class="sm-peers"  data-sm-peers aria-hidden="true"></span>
+            </div>
+            <div class="sm-axis">
+              <span>0</span><span>200</span><span>400</span><span>600</span><span>800</span><span>1000</span>
+            </div>
+          </div>
+
+          <div class="bars"></div>
+          <div class="notes"></div>
+        </div>
+
+        <!-- comparação relacional (radar) -->
+        <div class="compare panel" data-compare>
+          <div class="section-title">
+            <span class="st-bar"></span>Comparativo de tier
+            <span class="cmp-hint" data-cmp-hint></span>
+          </div>
+          <div class="cmp-radar" data-cmp-radar></div>
+          <ul class="cmp-legend">
+            <li><span class="lg-dot is-self"></span> Este carro</li>
+            <li><span class="lg-dot is-avg"></span> Média do tier</li>
+            <li><span class="lg-dot is-best"></span> Melhor do tier</li>
+          </ul>
+          <div class="cmp-peers" data-cmp-peers></div>
+        </div>
+      </div>
+
+      <!-- decisão de tier -->
+      <div class="decision panel">
+        <div class="section-title"><span class="st-bar"></span>Decisão de tier</div>
+        <div class="decision-row">
+          <div class="dec-block">
+            <span class="label">Calculado</span>
+            <span class="tier-badge tier-badge-calc2"></span>
+          </div>
+          <div class="dec-block">
+            <span class="label">Desejado</span>
+            <select class="desired-select"></select>
+          </div>
+          <div class="dec-block">
+            <span class="label">Como decidir</span>
+            <div class="mode-toggle">
+              <button class="mode-btn" data-mode="calculado">Calculado</button>
+              <button class="mode-btn is-active" data-mode="media">Média</button>
+              <button class="mode-btn" data-mode="desejado">Meu desejado</button>
+            </div>
+          </div>
+          <div class="dec-block dec-final">
+            <span class="label">Final</span>
+            <span class="tier-badge tier-badge-final"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- prévia do balanceamento -->
+      <div class="preview panel">
+        <div class="preview-head">
+          <div class="section-title"><span class="st-bar"></span>Prévia do balanceamento <em>(antes → depois)</em></div>
+          <span class="preview-tier"></span>
+        </div>
+        <table class="diff">
+          <thead><tr><th>Campo</th><th>Atual</th><th></th><th>Alvo</th></tr></thead>
+          <tbody class="diff-body"></tbody>
+        </table>
+        <div class="preview-warn"></div>
+      </div>
+
+      <!-- ações -->
+      <div class="card-foot">
+        <button class="btn btn-primary btn-apply">
+          <span class="btn-ico">⚡</span> Aplicar balanceamento (Final)
+        </button>
+        <span class="apply-result"></span>
+      </div>
+    </article>
+  </template>
+
+  <!-- toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+  <script src="enhance.js"></script>
+</body>
+</html>

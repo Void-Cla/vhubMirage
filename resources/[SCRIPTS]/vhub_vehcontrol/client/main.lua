@@ -62,7 +62,8 @@ local function closePanel()
   SendNUIMessage({ type = 'ui', status = false })
 end
 
-local function openPanel()
+-- abre o painel. editTab=true (uso da caixa de ferramentas) já mostra a Ficha em modo edição
+local function openPanel(editTab)
   if open or IsNuiFocused() then return end
   local v = controlledVehicle()
   if v == 0 then return end
@@ -70,9 +71,34 @@ local function openPanel()
   winDown = {}
   open = true
   setFocus(true)
-  SendNUIMessage({ type = 'ui', status = true, windows = Config.viewWindows == true })
+  SendNUIMessage({ type = 'ui', status = true, windows = Config.viewWindows == true, editTab = editTab == true })
   SendNUIMessage({ type = 'emergency', emergencystatus = (sigL and sigR) })
+  -- pede a ficha derivada do veículo (aba Ficha) — servidor responde com SHEET
+  if plate then TriggerServerEvent(VHubVeh.E.REQ_SHEET, plate) end
 end
+
+-- servidor devolve a ficha derivada (flat) → repassa à NUI
+RegisterNetEvent(VHubVeh.E.SHEET)
+AddEventHandler(VHubVeh.E.SHEET, function(sheet)
+  SendNUIMessage({ type = 'sheet', data = sheet or nil })
+end)
+
+-- uso do item "caixa de ferramentas" perto do veículo: abre direto na Ficha em edição
+RegisterNetEvent(VHubVeh.E.OPEN_EDIT)
+AddEventHandler(VHubVeh.E.OPEN_EDIT, function()
+  if controlledVehicle() == 0 then
+    if Config.notify then Config.notify('Nenhum veículo próximo.') end
+    return
+  end
+  openPanel(true)
+end)
+
+-- resultado da recalibração (toolbox ou oficina) → feedback nativo + ficha atualizada
+RegisterNetEvent(VHubVeh.E.RECAL_DONE)
+AddEventHandler(VHubVeh.E.RECAL_DONE, function(ok, msg, kind, sheet)
+  if msg ~= '' and Config.notify then Config.notify(msg) end
+  SendNUIMessage({ type = 'recalDone', ok = ok == true, kind = kind, data = sheet or nil })
+end)
 
 -- comando de chat (sempre disponivel)
 if Config.command and Config.command ~= '' then
@@ -331,6 +357,7 @@ CreateThread(function()
     if vc_plate then
       local v = vc_veh
       if v ~= 0 and DoesEntityExist(v) then sendSnapshot(v, vc_plate, true) end
+      TriggerEvent(VHubVeh.E.LEFT_VEHICLE, vc_veh)   -- restaura o handling base do modelo (F5)
       vc_plate, vc_applied = nil, false
     end
   end
@@ -354,6 +381,8 @@ CreateThread(function()
           if vc_plate ~= pl then
             vc_plate, vc_applied, vc_lastReq, vc_reqTries = pl, false, 0, 0
             vc_odoAcc, vc_lastSnap = 0.0, GetGameTimer()
+            -- gatilho event-driven da física de skill (client/handling.lua aplica) — L-06
+            TriggerEvent(VHubVeh.E.BECAME_DRIVER, v, pl)
           end
           -- pede o estado salvo ate o applyState chegar (3 tentativas / 2.5s)
           if not vc_applied and vc_reqTries < 3 then
@@ -420,8 +449,8 @@ end)
 -- ============================================================
 
 -- Quando a chave é usada do inventário, abre o painel
-RegisterNetEvent(E .. 'open_from_key')
-AddEventHandler(E .. 'open_from_key', function(pl)
+RegisterNetEvent(VHubVeh.E.OPEN_FROM_KEY)
+AddEventHandler(VHubVeh.E.OPEN_FROM_KEY, function(pl)
   if pl and pl ~= '' then
     plate = pl
     openPanel()
@@ -523,6 +552,53 @@ end)
 RegisterNUICallback('emergency', function(_, cb)
   toggleHazard()
   cb('ok')
+end)
+
+
+-- ============================================================
+-- FICHA (modo edição) — redistribuição de pontos via item/painel
+-- ============================================================
+
+-- NUI manda o alloc escolhido nos sliders; servidor valida, cobra e persiste
+RegisterNUICallback('recalibrate', function(d, cb)
+  if plate and type(d) == 'table' and type(d.alloc) == 'table' then
+    TriggerServerEvent(VHubVeh.E.RECALIBRATE, plate, d.alloc, 'toolbox')
+  end
+  cb('ok')
+end)
+
+
+-- ============================================================
+-- NITRO (na ficha) — intenção do jogador → servidor delega ao vhub_nitro (decisão #30)
+-- ============================================================
+
+-- liga/desliga o nitro do veículo da ficha
+RegisterNUICallback('nitroToggle', function(d, cb)
+  if plate and type(d) == 'table' then
+    TriggerServerEvent(VHubVeh.E.NITRO_TOGGLE, plate, d.on == true)
+  end
+  cb('ok')
+end)
+
+-- ajusta o nível 1..10 do nitro
+RegisterNUICallback('nitroLevel', function(d, cb)
+  if plate and type(d) == 'table' then
+    TriggerServerEvent(VHubVeh.E.NITRO_LEVEL, plate, tonumber(d.level))
+  end
+  cb('ok')
+end)
+
+-- abastece o nitro (consome 1 Garrafa de Nitro, server-side)
+RegisterNUICallback('nitroCharge', function(_, cb)
+  if plate then TriggerServerEvent(VHubVeh.E.NITRO_CHARGE, plate) end
+  cb('ok')
+end)
+
+-- resultado da operação de nitro → feedback nativo + atualiza a seção na NUI
+RegisterNetEvent(VHubVeh.E.NITRO_DONE)
+AddEventHandler(VHubVeh.E.NITRO_DONE, function(ok, msg, nitro)
+  if msg and msg ~= '' and Config.notify then Config.notify(msg) end
+  SendNUIMessage({ type = 'nitroDone', ok = ok == true, nitro = nitro or nil })
 end)
 
 

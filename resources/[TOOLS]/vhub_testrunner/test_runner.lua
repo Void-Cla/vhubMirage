@@ -189,6 +189,71 @@ function tests.test_vstate_roundtrip()
   return Citizen.Await(done)
 end
 
+-- Cobertura end-to-end do engine de skill (decisão #27): cria um veículo de teste
+-- com bloco p1 (nissan370z = tier A, budget 800) e valida que os exports read-only
+-- do vhub_vehcontrol derivam a ficha a partir do prontuário do conce. Espelha o
+-- harness puro tools/test_tier_rules.lua, mas exercita a cadeia REAL de exports
+-- (catálogo → prontuário → sheetOf). Limpa o veículo no fim (placa-sentinela TRSK01).
+function tests.test_vehicle_sheet_export()
+  if not (vHub.State and vHub.State._ready) then
+    safePrint("State._ready=false — pulando test_vehicle_sheet_export"); return nil
+  end
+  if not (exports and exports.vhub_vehcontrol and exports.vhub_conce) then
+    safePrint("exports vhub_vehcontrol/vhub_conce indisponíveis — pulando test_vehicle_sheet_export")
+    return nil
+  end
+
+  local done = promise.new()
+  Citizen.CreateThread(function()
+    local plate = 'TRSK01'
+    pcall(function() exports.vhub_conce:deleteVehicle(plate) end)   -- limpa resto de run anterior
+
+    local created = false
+    pcall(function()
+      created = exports.vhub_conce:createVehicle({
+        plate = plate, model = 'nissan370z', vtype = 'car', category = 'test',
+        char_id = nil, status = 'out',
+      }) == true
+    end)
+    if not created then
+      safePrint("conce indisponível p/ criar veículo — pulando test_vehicle_sheet_export")
+      done:resolve(nil); return
+    end
+
+    -- corpo sob pcall: garante que o cleanup e o resolve SEMPRE rodam, mesmo que
+    -- algum export lance erro Lua (senão a thread morre, deixa TRSK01 órfão e o
+    -- Citizen.Await abaixo nunca retorna).
+    local ok_run, result = pcall(function()
+      -- ficha derivada: carro com p1 'nissan370z' nasce tier_base A, budget 800
+      local sheet = exports.vhub_vehcontrol:getVehicleSheet(plate)
+      local okSheet = type(sheet) == 'table'
+        and sheet.tier_base == 'A' and sheet.budget == 800
+        and type(sheet.alloc) == 'table' and type(sheet.ranges) == 'table'
+
+      -- getters atômicos coerentes com a ficha
+      local tier  = exports.vhub_vehcontrol:getVehicleTier(plate)
+      local score = exports.vhub_vehcontrol:getVehicleScore(plate)
+      local okGetters = (type(sheet) == 'table') and tier == sheet.tier and type(score) == 'number'
+
+      -- prévia hipotética read-only: alloc tabela → ficha; não-tabela → nil (nunca persiste)
+      local prev = exports.vhub_vehcontrol:getVehicleSheetPreview(plate,
+        { potencia = 160, grip = 160, frenagem = 160, aero = 160, suspensao = 160 })
+      local okPrev    = type(prev) == 'table' and type(prev.score) == 'number'
+      local okPrevNil = exports.vhub_vehcontrol:getVehicleSheetPreview(plate, 'naoTabela') == nil
+
+      -- fail-closed: placa sem registro (sem p1) não tem skill → nil
+      local okNoP1 = exports.vhub_vehcontrol:getVehicleSheet('ZZNOPE99') == nil
+
+      return okSheet and okGetters and okPrev and okPrevNil and okNoP1
+    end)
+
+    pcall(function() exports.vhub_conce:deleteVehicle(plate) end)   -- cleanup SEMPRE (não deixa órfão)
+
+    done:resolve(ok_run and result == true)
+  end)
+  return Citizen.Await(done)
+end
+
 local function run_all()
   if not tests.check_vhub_loaded() then
     safePrint("vHub não carregado — garanta que vhub esteja iniciado antes de executar os testes")

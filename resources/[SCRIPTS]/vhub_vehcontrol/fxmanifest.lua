@@ -18,15 +18,21 @@ dependencies {
 
 shared_scripts {
   'shared/config.lua',
+  'shared/events.lua',      -- nomes de eventos do engine de skill (anti-fantasma)
+  'shared/tier_rules.lua',  -- regras PURAS de tier/score/alloc/afinidade (server + client)
 }
 
 server_scripts {
   'server/main.lua',
-  'server/item_handlers.lua',    -- integracao com vhub_inventory (veh_key use)
+  'server/item_handlers.lua',    -- integracao com vhub_inventory (veh_key + caixadeferramentas)
+  'server/exports.lua',          -- API read-only: getVehicleTier/Score/Affinity/Sheet (decisão #27)
+  'server/skill.lua',            -- handler único RECALIBRATE: toolbox + oficina (decisão #27)
+  'server/nitro_bridge.lua',     -- ficha → vhub_nitro: liga/nível/abastece (delega, decisão #30)
 }
 
 client_scripts {
   'client/main.lua',
+  'client/handling.lua',         -- F5: aplica fisica derivada (sheet.hnd) no carro dirigido (decisao #28)
 }
 
 -- Velocímetro REMOVIDO (VELO-3 2026-06): agora é o resource `vhub_velo` (1 velocímetro só).

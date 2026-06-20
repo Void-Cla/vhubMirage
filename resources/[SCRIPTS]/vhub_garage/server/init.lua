@@ -13,6 +13,47 @@ local E    = VHubGarage.E
 local U    = VHubGarage.U
 
 -- ----------------------------------------------------------------------------
+-- Zonas agregadas (decis o #25)
+--   concession ria vem do vhub_conce e leil o do vhub_ferinha via PULL no boot
+--   (exports getZones, que ja devolvem coord ACHATADA). As zonas PR PRIAS do
+--   garage (garagens/p tio) usam vec3 na config e s o achatadas aqui antes de
+--   cruzar a fronteira do SETUP — vec n o sobrevive ao msgpack do evento (L-19).
+-- ----------------------------------------------------------------------------
+VHubGarage.concessionarias = VHubGarage.concessionarias or {}   -- cache do PULL (conce)
+VHubGarage.leilao          = VHubGarage.leilao                  -- cache do PULL (ferinha)
+
+-- achata coord vec3 de uma zona p/ primitivo {x,y,z} (preserva os demais campos)
+local function flatZone(z)
+  if not z then return nil end
+  local f = {}
+  for k, v in pairs(z) do f[k] = v end
+  if z.coord then f.x, f.y, f.z = z.coord.x, z.coord.y, z.coord.z; f.coord = nil end
+  return f
+end
+
+local function flatZones(list)
+  local out = {}
+  for i, z in ipairs(list or {}) do out[i] = flatZone(z) end
+  return out
+end
+
+-- zonas pr prias do garage achatadas 1x no load (config est tica)
+VHubGarage.setupGaragens = flatZones(CFG.garagens)
+VHubGarage.setupPatio    = flatZone(CFG.patio_local)
+
+-- payload  nico de SETUP (zonas agregadas + cat logo) — usado pelos 2 emissores
+local function buildSetup()
+  return {
+    garagens        = VHubGarage.setupGaragens,
+    concessionarias = VHubGarage.concessionarias,
+    leilao          = VHubGarage.leilao,
+    patio           = VHubGarage.setupPatio,
+    catalog         = VHubGarage.catalog,
+    types           = VHubGarage.types,
+  }
+end
+
+-- ----------------------------------------------------------------------------
 -- Boot
 -- ----------------------------------------------------------------------------
 AddEventHandler('onResourceStart', function(res)
@@ -34,6 +75,13 @@ AddEventHandler('onResourceStart', function(res)
     -- Todos os read-sites de VHubGarage.catalog passam a ler este cache.
     VHubGarage.catalog = exports.vhub_conce:getCatalog() or VHubGarage.catalog
 
+    -- PULL das zonas dos donos de negocio (decisao #25): concessionaria do conce,
+    -- leilao do ferinha. Custo UNICO de boot; getZones devolve config estatica ja
+    -- ACHATADA (vec nao cruza fronteira). Ambos sao dependencia no manifest; pcall
+    -- defensivo p/ que falha de export nao aborte o boot (fallback = sem zona ate restart).
+    pcall(function() VHubGarage.concessionarias = exports.vhub_conce:getZones() or {} end)
+    pcall(function() VHubGarage.leilao          = exports.vhub_ferinha:getZones() end)
+
     -- ── Boot-scan do patio (IT.3 / Void-Zero) ───────────────────────────────
     -- Só roda em BOOT REAL do servidor (0 players). Em restart do resource com
     -- players online as entidades ainda existem — recolher seria roubo de carro.
@@ -53,15 +101,9 @@ AddEventHandler('onResourceStart', function(res)
 
     print('[vhub_garage] schema verificado')
     -- envia setup a quem est  online (resource restart em produ  o)
+    local setup = buildSetup()
     for _, src in ipairs(GetPlayers()) do
-      TriggerClientEvent(E.SETUP, tonumber(src), {
-        garagens        = CFG.garagens,
-        concessionarias = CFG.concessionarias,
-        leilao          = CFG.leilao_local,
-        patio           = CFG.patio_local,
-        catalog         = VHubGarage.catalog,
-        types           = VHubGarage.types,
-      })
+      TriggerClientEvent(E.SETUP, tonumber(src), setup)
     end
     print('[vhub_garage] pronto')
   end)
@@ -76,14 +118,7 @@ end)
 
 AddEventHandler('vHub:playerSpawn', function(user)
   Core:setSession(user.source, user)
-  TriggerClientEvent(E.SETUP, user.source, {
-    garagens        = CFG.garagens,
-    concessionarias = CFG.concessionarias,
-    leilao          = CFG.leilao_local,
-    patio           = CFG.patio_local,
-    catalog         = VHubGarage.catalog,
-    types           = VHubGarage.types,
-  })
+  TriggerClientEvent(E.SETUP, user.source, buildSetup())
 end)
 
 AddEventHandler('playerDropped', function()
@@ -130,11 +165,8 @@ end)
 
 RegisterNetEvent(E.REQ_CATALOG)
 AddEventHandler(E.REQ_CATALOG, function(conc_id)
-  local src = source
-  local conc
-  for _, c in ipairs(CFG.concessionarias) do
-    if c.id == conc_id then conc = c; break end
-  end
+  local src  = source
+  local conc = Core:resolveConc(conc_id)   -- decisao #25: config mora no vhub_conce
   if not conc then return end
   Citizen.CreateThread(function()
     -- monta cat logo aplicando estoque + custom_price
@@ -162,7 +194,9 @@ AddEventHandler(E.REQ_CATALOG, function(conc_id)
     TriggerClientEvent(E.OPEN_UI, src, {
       view = VHubGarage.UI.OPEN_DEALERSHIP,
       payload = {
-        conc = conc, catalog = out,
+        -- so id+label vao p/ a NUI (decisao #25 / L-19): nenhuma coord/vetor cru
+        -- pode cair no SendNUIMessage (json.encode de vec vira {}).
+        conc = { id = conc.id, label = conc.label }, catalog = out,
         cfg = {
           taxa_placa = CFG.taxa_placa_custom,
           fator_revenda = CFG.fator_revenda_loja,

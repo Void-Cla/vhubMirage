@@ -29,7 +29,17 @@ CreateThread(function()
     if not plate then return false, 'Chave sem placa vinculada' end
 
     -- Abre o painel do vehcontrol no client
-    TriggerClientEvent('vhub_vehcontrol:open_from_key', src, plate)
+    TriggerClientEvent(VHubVeh.E.OPEN_FROM_KEY, src, plate)
     return true, 'Painel do veículo aberto'
+  end)
+
+  -- Handler: caixadeferramentas — abre a Ficha já em modo edição perto do veículo.
+  -- Distância/seleção do veículo é a MESMA regra do painel normal (controlledVehicle no
+  -- client, Config.distance) — sem 2ª verificação de proximidade aqui (L-04). Autoridade
+  -- real (chave/dono) é provada no RECALIBRATE via canOperate quando o player confirma
+  -- (decisão #27); aqui só abre a UI, então não consome o item.
+  inv:registerItemUse('caixadeferramentas', function(src)
+    TriggerClientEvent(VHubVeh.E.OPEN_EDIT, src)
+    return false, nil   -- false = não consome (a recalibração consome, se confirmada)
   end)
 end)

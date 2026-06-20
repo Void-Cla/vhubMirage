@@ -107,7 +107,7 @@ function CP.inside(px, py, pz, cp, radius)
   local r = tonumber(radius) or tonumber(cp.radius) or 11.0
   local dx, dy = px - cp.x, py - cp.y
   local dz = pz - cp.z
-  if math.abs(dz) > 14.0 then return false end
+  if math.abs(dz) > 25.0 then return false end   -- margem Z ampliada (rampas/pontes)
   return (dx * dx + dy * dy) <= (r * r)
 end
 

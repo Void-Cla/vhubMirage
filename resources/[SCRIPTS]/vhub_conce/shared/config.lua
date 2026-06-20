@@ -11,7 +11,7 @@ VHubConce.cfg = {
   key_kinds = { owner = true, clone = true, shared = true, rental = true },
 
   -- ============================================================
-  -- CONCESSIONÁRIA (transação — FASE 2). Zonas/locais ficam no garage.
+  -- CONCESSIONÁRIA (transação — FASE 2). Zona/local pertence ao conce (decisão #25).
   -- ============================================================
   max_veiculos_player = 25,      -- defesa contra alocador maligno
   ipva_dias           = 7,      -- a cada 15 dias o IPVA vence
@@ -26,4 +26,53 @@ VHubConce.cfg = {
   -- ============================================================
   cron_interval_ms = 3600 * 1000,   -- varredura horária
   temp_hold_ttl_s  = 24 * 3600,     -- chave sem 'expires' explícito devolve em 24h
+
+  -- ============================================================
+  -- ZONAS DA CONCESSIONÁRIA (decisão #25 — dono da config de localização)
+  -- L-19: `coord` = vec3 (blip/zona); `test_spawn` = vec4 (x,y,z,w=heading).
+  -- O garage faz PULL no boot (exports.vhub_conce:getZones) e renderiza a engine
+  -- de presença única; vec NÃO cruza fronteira → getZones devolve flat {x,y,z[,h]}.
+  -- ============================================================
+  concessionarias = {
+    {
+      id    = 'pdm',
+      label = 'Premium Deluxe Motorsport',
+      coord = vec3(-56.84, -1097.41, 26.42), raio = 10.0,
+      tipos = { 'car', 'bike' },
+      blip  = { sprite = 326, color = 3, scale = 0.85 },
+      test_spawn = vec4(-23.0, -1100.0, 26.42, 70.0),
+    },
+    {
+      id    = 'sandy_dealer',
+      label = 'Auto Sandy',
+      coord = vec3(1226.92, 2729.18, 38.00), raio = 10.0,
+      tipos = { 'car', 'bike', 'truck' },
+      blip  = { sprite = 326, color = 3, scale = 0.85 },
+      test_spawn = vec4(1240.0, 2730.0, 38.00, 0.0),
+    },
+    {
+      id    = 'paleto_dealer',
+      label = 'Paleto Auto',
+      coord = vec3(119.50, 6620.96, 31.78), raio = 10.0,
+      tipos = { 'car', 'bike' },
+      blip  = { sprite = 326, color = 3, scale = 0.85 },
+      test_spawn = vec4(110.0, 6622.0, 31.78, 270.0),
+    },
+    {
+      id    = 'aero_dealer',
+      label = 'Aero Vendas',
+      coord = vec3(-944.45, -2974.05, 13.95), raio = 10.0,
+      tipos = { 'plane', 'heli' },
+      blip  = { sprite = 90, color = 3, scale = 0.85 },
+      test_spawn = vec4(-990.0, -2980.0, 13.95, 240.0),
+    },
+    {
+      id    = 'marina_dealer',
+      label = 'Marina Vendas',
+      coord = vec3(-802.24, -1496.79, 1.60), raio = 10.0,
+      tipos = { 'boat' },
+      blip  = { sprite = 410, color = 3, scale = 0.85 },
+      test_spawn = vec4(-799.0, -1518.0, 0.00, 110.0),
+    },
+  },
 }

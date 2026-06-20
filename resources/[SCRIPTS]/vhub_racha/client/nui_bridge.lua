@@ -137,10 +137,11 @@ CreateThread(function()
             laps = tonumber(active.laps) or tonumber(bag.laps) or 1,
             placement = tonumber(bag.placement) or 0,
             players_total = tonumber(bag.players_total) or tonumber(active.players_total) or 0,
-            -- HUD usa o valor VIVO (bancado + pendente): sobe ao driftar e cai ao
-            -- bater. O server recebe so o bancado (active.drift_score, via sync.lua).
-            drift_score = tonumber(active.drift_live) or tonumber(active.drift_score) or tonumber(bag.drift_score) or 0,
-            drift_combo = tonumber(active.drift_combo) or tonumber(bag.drift_combo) or 1,
+            -- drift_live = bancado + pendente (sobe ao driftar, cai ao bater)
+            -- drift_banked = só o bancado (seguro; recalculado a cada flush)
+            drift_score  = tonumber(active.drift_live)  or tonumber(active.drift_score) or tonumber(bag.drift_score) or 0,
+            drift_banked = tonumber(active.drift_score) or tonumber(bag.drift_score)    or 0,
+            drift_combo  = tonumber(active.drift_combo) or tonumber(bag.drift_combo)    or 1,
             distance_m = dist,
           })
         end

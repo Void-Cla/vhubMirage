@@ -41,10 +41,12 @@ local function finiteNum(v, lo, hi)
 end
 
 -- whitelist de chaves de customization (espelha o sanitize do garage — defesa em profundidade)
+-- handling = alloc de pontos do engine de skill (dono = vhub_vehcontrol; escrito via 'handling')
 local CUST_KEYS = {
   colours = true, extra_colours = true, plate_index = true, wheel_type = true,
   window_tint = true, livery = true, turbo = true, smoke = true, xenon = true,
-  mods = true, neons = true, neon_colour = true, model = true,
+  mods = true, neons = true, neon_colour = true, model = true, handling = true,
+  nitro = true,   -- {kit:bool, qty:0..100} — dono = vhub_nitro (source='nitro'); patch sempre completo
 }
 
 -- filtra customization (tabela) → JSON com cap de 8 KB, ou nil
@@ -57,6 +59,36 @@ local function sanitizeCustJson(c)
   local j = U.jenc(out)
   if not j or #j > 8192 then return nil end
   return j
+end
+
+-- mescla customization parcial (patch) sobre a persistida (base), em TABELA NOVA.
+-- Merge raso no topo: chave do patch sobrescreve; ausente preserva a base.
+-- EXCEÇÃO `mods`: mescla POR ÍNDICE (mod[i] do patch sobrescreve; ausente preserva),
+-- pois é o único campo esparso onde escritas distintas tocam slots disjuntos
+-- (bennys=cosmético, oficina=performance). Demais campos (colours/neons/...) são
+-- atômicos: trocar a chave inteira é o comportamento desejado.
+-- NUNCA muta `base` nem `base.mods` (base é referência VIVA do cache VRAM).
+local function mergeCust(base, patch)
+  if type(patch) ~= 'table' then return base end
+  if type(base) ~= 'table' then return patch end
+
+  local out = {}
+  for k, v in pairs(base) do out[k] = v end       -- cópia rasa da base
+  for k, v in pairs(patch) do
+    if k ~= 'mods' then out[k] = v end             -- chaves atômicas: patch vence
+  end
+
+  -- mods: merge por índice em tabela nova (preserva slots não tocados pelo patch)
+  if type(patch.mods) == 'table' then
+    local m = {}
+    if type(base.mods) == 'table' then
+      for i, lvl in pairs(base.mods) do m[i] = lvl end
+    end
+    for i, lvl in pairs(patch.mods) do m[i] = lvl end
+    out.mods = m
+  end
+
+  return out
 end
 
 -- array de índices inteiros 0..maxIdx, dedup, cap de tamanho — ou nil se vazio
@@ -230,9 +262,11 @@ end
 
 -- aplica patch parcial validado/clampado/sanitizado (UPSERT). Campos ausentes são
 -- preservados (linha existente) ou recebem default de fábrica (linha nova).
+-- customization é coluna composta: MERGE por chave sobre o persistido (mods por índice),
+-- nunca REPLACE — patch parcial preserva o resto (ver mergeCust).
 -- patch: { fuel, engine_health, body_health, odometer_add (DELTA km),
 --          customization (tabela), damage (tabela; {} = limpa) }
--- source: 'telemetry' | 'store' | 'pump' | 'seed' | 'repair' | 'system'
+-- source: 'telemetry' | 'store' | 'pump' | 'seed' | 'repair' | 'cosmetic' | 'tune' | 'handling' | 'system'
 function M:save(plate, patch, source)
   local p = U.normalizePlate(plate)
   if not p or type(patch) ~= 'table' then return false end
@@ -242,6 +276,13 @@ function M:save(plate, patch, source)
   local status = ss('SELECT status FROM vhub_vehicles WHERE plate = ? LIMIT 1', { p })
   if status == nil then return false end
   if source == 'telemetry' and status ~= 'out' then return false end
+
+  -- cosmetic/tune/handling/nitro: isolam o patch a customization apenas (impedem elevação de health/fuel)
+  -- handling = pontos do engine de skill (vhub_vehcontrol); nitro = {kit,qty} (vhub_nitro, monotonia do
+  -- qty garantida no PRÓPRIO vhub_nitro, que é o escritor único e calcula o drain do qty server-side)
+  if source == 'cosmetic' or source == 'tune' or source == 'handling' or source == 'nitro' then
+    patch = { customization = patch.customization }
+  end
 
   local cur = self:get(p)   -- estado persistido (cache-hit usual) p/ monotonia e damage_log
 
@@ -273,8 +314,13 @@ function M:save(plate, patch, source)
     setcol('odometer_km', odo, 'odometer_km = odometer_km + VALUES(odometer_km)')
   end
 
-  local custJson = sanitizeCustJson(patch.customization)
-  if custJson then setcol('customization', custJson) end
+  -- customization é coluna composta: merge por chave sobre o persistido (não REPLACE).
+  -- Patch parcial (bennys/oficina) preserva o resto; patch completo (garage store) == replace.
+  if patch.customization ~= nil then
+    local merged   = mergeCust(cur and cur.customization, patch.customization)
+    local custJson = sanitizeCustJson(merged)
+    if custJson then setcol('customization', custJson) end
+  end
 
   local dmgJson = sanitizeDamageJson(patch.damage)
   if dmgJson then setcol('damage', dmgJson) end

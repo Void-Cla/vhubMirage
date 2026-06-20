@@ -1,0 +1,15 @@
+# segredos (IA opcional de fase futura) — NUNCA commitar
+.env
+
+# backups gerados por `apply` — locais, nao versionados
+.backups/
+
+# artefato derivado: gerado por `apply`, mesclado manualmente na Fase 2.
+# Nao commitar (evita drift); para revisar, rode `node balance.js plan`.
+out/
+
+# relatorio de build gerado por `apply`
+build-report.json
+
+# deps (so se a IA opcional de fase futura for instalada)
+node_modules/

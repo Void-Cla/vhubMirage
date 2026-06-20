@@ -1,0 +1,22 @@
+{
+  "name": "vhub-handling-balancer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Pipeline offline de balanceamento de handling.meta (vHub Mirage). Reescreve apenas o NUCLEO-8 de performance por substituicao cirurgica; preserva todo o resto. Zero dependencia de runtime.",
+  "bin": {
+    "vhub-balance": "balance.js"
+  },
+  "scripts": {
+    "serve": "node balance.js serve",
+    "scan": "node balance.js scan",
+    "plan": "node balance.js plan",
+    "apply": "node balance.js apply",
+    "verify": "node balance.js verify --json",
+    "seal": "node balance.js seal",
+    "restore": "node balance.js restore"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

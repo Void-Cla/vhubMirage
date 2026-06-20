@@ -108,15 +108,92 @@
 }
 
 /* Posicoes na tela (coluna esquerda: timer → volta → cp) */
-.mod-hud .hud-pos   { top: 3vh;     right: 2.5vw; align-items: flex-end; text-align: right; }
-.mod-hud .hud-lap   { top: 9vh;     left: 2.5vw; }
-.mod-hud .hud-cp    { top: 15vh;    left: 2.5vw; }
-.mod-hud .hud-drift { bottom: 16vh; right: 2.5vw; align-items: flex-end; text-align: right; }
+.mod-hud .hud-pos { top: 3vh;  right: 2.5vw; align-items: flex-end; text-align: right; }
+.mod-hud .hud-lap { top: 9vh;  left: 2.5vw; }
+.mod-hud .hud-cp  { top: 15vh; left: 2.5vw; }
 
-.mod-hud .hud-drift .hud-stat-value {
-    font-size: 38px;
-    color: var(--vh-gold-soft);
+
+/* ============================================================
+   DRIFT HUD — centro baixo (só em modo drift)
+   ============================================================ */
+
+.mod-hud .hud-drift-center {
+    position: absolute;
+    bottom: 6vh;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
 }
+
+/* Linha principal: número grande + "PTS" */
+.mod-hud .hud-drift-pts {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.mod-hud .hud-drift-num {
+    font-family: var(--vh-font-num);
+    font-weight: 900;
+    font-size: clamp(38px, 4.2vw, 58px);
+    line-height: 1;
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0 20px rgba(243, 181, 58, 0.65),
+                 0 3px 8px rgba(0, 0, 0, 0.95);
+    letter-spacing: -1px;
+}
+
+.mod-hud .hud-drift-pts-label {
+    font-family: var(--vh-font-tech);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--vh-sand);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+    margin-bottom: 4px;
+}
+
+/* Linha secundária: % bancado · combo */
+.mod-hud .hud-drift-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mod-hud .hud-drift-pct {
+    font-family: var(--vh-font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vh-ok);
+    text-shadow: 0 0 8px rgba(120, 230, 140, 0.5), 0 1px 4px rgba(0, 0, 0, 0.9);
+    min-width: 38px;
+    text-align: right;
+}
+
+.mod-hud .hud-drift-sep {
+    color: var(--vh-sand);
+    opacity: 0.5;
+    font-size: 12px;
+}
+
+.mod-hud .hud-drift-combo {
+    font-family: var(--vh-font-tech);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--vh-gold);
+    text-shadow: 0 0 8px rgba(243, 181, 58, 0.5), 0 1px 4px rgba(0, 0, 0, 0.9);
+    text-transform: uppercase;
+}
+
+/* Combo elevado: cores progressivas */
+.mod-hud .hud-drift-combo.combo-2 { color: #4dd0e1; text-shadow: 0 0 8px rgba(77,208,225,0.5), 0 1px 4px rgba(0,0,0,.9); }
+.mod-hud .hud-drift-combo.combo-3 { color: #ff9800; text-shadow: 0 0 8px rgba(255,152,0,0.6),  0 1px 4px rgba(0,0,0,.9); }
+.mod-hud .hud-drift-combo.combo-4 { color: #ff6f7a; text-shadow: 0 0 12px rgba(255,111,122,0.7), 0 1px 4px rgba(0,0,0,.9); }
 
 
 /* ============================================================

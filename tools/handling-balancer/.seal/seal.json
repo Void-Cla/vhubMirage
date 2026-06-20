@@ -1,0 +1,43 @@
+{
+  "_doc": "Selo de integridade gerado por `apply`/`seal`. Chave = handlingName real do .meta. `verify` recomputa o sha256 de cada arquivo e falha (exit 1) se divergir. NAO editar a mao.",
+  "BMWE46GTR": {
+    "tier": "S+",
+    "sha256": "sha256:0fc0ba46e089e95b74108a8f7fccc5bb9b8ec77b3e7c8c11f9917414688d9461",
+    "file": "resources/[SCRIPTS]/carmod/BMWE46GTR/common/handling.meta"
+  },
+  "F8T": {
+    "tier": "S",
+    "sha256": "sha256:c65806cc6e8a382bd931fa29274e3265b0b078c02eb20c3594c4f53524fb30fa",
+    "file": "resources/[SCRIPTS]/carmod/f8t/common/handling.meta"
+  },
+  "FERRARIF8": {
+    "tier": "A",
+    "sha256": "sha256:87f65d0a5f6ab782c2fd000c40f6693f8374c79526ba3d2cb79bd77ab5965904",
+    "file": "resources/[SCRIPTS]/carmod/FERRARIF8/common/handling.meta"
+  },
+  "FUSCA68": {
+    "tier": "C",
+    "sha256": "sha256:5a6b9f714c25c43f2ed0b6d9cae6d0174356bc0e553cfdcb549eadd83cf7f61a",
+    "file": "resources/[SCRIPTS]/carmod/FUSCA68/common/handling.meta"
+  },
+  "M3E46": {
+    "tier": "A",
+    "sha256": "sha256:908b79344b7a6ce87c13eea970087d12ec25fa0b61b925fe8fee9335a7327d3e",
+    "file": "resources/[SCRIPTS]/carmod/m3e46/common/handling.meta"
+  },
+  "NISSAN370Z": {
+    "tier": "A",
+    "sha256": "sha256:af7371755f412bdb5daf12c6d30d86540b6c3638a235516b70295bc0e53cb200",
+    "file": "resources/[SCRIPTS]/carmod/NISSAN370Z/common/handling.meta"
+  },
+  "SKYLINE": {
+    "tier": "S",
+    "sha256": "sha256:e73e7974ab7b9c847fb76bb680ce07c835d0f9cde6cd289414b1b9d59620c3ef",
+    "file": "resources/[SCRIPTS]/carmod/skyline/common/handling.meta"
+  },
+  "TOYOTASUPRA": {
+    "tier": "S",
+    "sha256": "sha256:89099bc783cbe0d0c48417a7810a067aceea29d3b136b44198efa03116e666e4",
+    "file": "resources/[SCRIPTS]/carmod/supra/common/handling.meta"
+  }
+}

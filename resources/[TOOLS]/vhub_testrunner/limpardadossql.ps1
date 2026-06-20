@@ -1,26 +1,24 @@
+# limpardadossql.ps1 - VARREDURA TOTAL do banco: zera TODAS as base tables
+# (TRUNCATE) descobertas via information_schema. Pega tabelas herdadas de
+# updates (vrp_*, vh_*, vhub_*, qualquer coisa) sem lista fixa. Use p/ resetar
+# ambiente de TESTE e garantir que nao sobrou estado/bug herdado.
+#
+#   Uso comum:
+#     .\limpardadossql.ps1                      # zera TUDO (com confirmacao LIMPAR)
+#     .\limpardadossql.ps1 -DryRun              # so lista o que seria zerado
+#     .\limpardadossql.ps1 -Excluir vhub_admin_log,vh_users   # preserva tabelas
+#     .\limpardadossql.ps1 -Somente vhub_vehicles,vhub_vehicle_state  # so estas
+#     .\limpardadossql.ps1 -Force               # sem prompt (cuidado)
 param(
   [string]$ConfigPath = ".\server.cfg",
   [switch]$Force,
   [switch]$DryRun,
   [switch]$SkipServerCheck,
-  [string[]]$TabelasExtras = @()
+  [string[]]$Somente = @(),   # se preenchido, limpa SOMENTE estas tabelas
+  [string[]]$Excluir = @()    # tabelas a PRESERVAR (nao truncar)
 )
 
 $ErrorActionPreference = "Stop"
-
-$TabelasVrp = @(
-  "vrp_character_business",
-  "vrp_character_homes",
-  "vrp_character_identities",
-  "vrp_login_users",
-  "vrp_character_data",
-  "vrp_user_data",
-  "vrp_user_ids",
-  "vrp_characters",
-  "vrp_server_data",
-  "vrp_global_data",
-  "vrp_users"
-)
 
 function Resolver-Caminho {
   param([string]$Path)
@@ -188,14 +186,55 @@ function Invocar-Mysql {
 $conn = Ler-ConexaoMysql -Path $ConfigPath
 if (-not $conn.Database) { throw "Database vazio na mysql_connection_string." }
 
-$tabelasAlvo = @($TabelasVrp + $TabelasExtras | Select-Object -Unique)
-foreach ($tabela in $tabelasAlvo) { [void](Sql-Ident $tabela) }
+# valida os nomes passados manualmente (anti-injecao) antes de qualquer query
+foreach ($t in @($Somente + $Excluir)) { [void](Sql-Ident $t) }
 
+$mysql = Encontrar-MysqlCli
 Write-Host "[INFO] Banco alvo: $($conn.User)@$($conn.Host):$($conn.Port)/$($conn.Database)"
-Write-Host "[INFO] Tabelas alvo: $($tabelasAlvo -join ', ')"
+Write-Host "[INFO] mysql.exe: $mysql"
+
+# DESCOBERTA: varre TODAS as base tables do banco (information_schema) - sem lista
+# fixa, pega tabelas herdadas de qualquer update. Views/sequences ficam de fora.
+$descobertaSql = @"
+SELECT TABLE_NAME
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+ORDER BY TABLE_NAME
+"@
+$todas = @(Invocar-Mysql -MysqlExe $mysql -Conn $conn -Sql $descobertaSql `
+  | Where-Object { $_ -and $_.Trim() -ne "" } | ForEach-Object { $_.Trim() })
+
+if ($todas.Count -eq 0) {
+  Write-Host "[AVISO] Nenhuma tabela encontrada no banco '$($conn.Database)'. Nada a fazer."
+  exit 0
+}
+
+# alvo = TODAS, ou somente as de -Somente; menos as de -Excluir (case-insensitive)
+$alvo = $todas
+if ($Somente.Count -gt 0) {
+  $setSomente = @{}; foreach ($s in $Somente) { $setSomente[$s.ToLowerInvariant()] = $true }
+  $alvo = $alvo | Where-Object { $setSomente.ContainsKey($_.ToLowerInvariant()) }
+}
+if ($Excluir.Count -gt 0) {
+  $setExcluir = @{}; foreach ($e in $Excluir) { $setExcluir[$e.ToLowerInvariant()] = $true }
+  $alvo = $alvo | Where-Object { -not $setExcluir.ContainsKey($_.ToLowerInvariant()) }
+}
+$alvo = @($alvo)
+
+Write-Host "[INFO] Tabelas no banco: $($todas.Count) | a zerar: $($alvo.Count)"
+if ($Excluir.Count -gt 0) { Write-Host "[INFO] Preservadas (-Excluir): $($Excluir -join ', ')" }
+
+if ($alvo.Count -eq 0) {
+  Write-Host "[AVISO] Nenhuma tabela apos os filtros. Nada foi limpo."
+  exit 0
+}
+
+# VARREDURA: lista sempre o que sera zerado (e o ponto do -DryRun)
+Write-Host "[VARREDURA] Tabelas que serao ZERADAS (TRUNCATE):"
+$alvo | Sort-Object | ForEach-Object { Write-Host "  - $_" }
 
 if ($DryRun) {
-  Write-Host "[DRY-RUN] Nenhuma alteracao executada."
+  Write-Host "[DRY-RUN] Nenhuma alteracao executada. ($($alvo.Count) tabela(s) seriam truncadas.)"
   exit 0
 }
 
@@ -207,32 +246,20 @@ if (-not $SkipServerCheck) {
 }
 
 if (-not $Force) {
-  $confirmacao = Read-Host "Digite LIMPAR para truncar dados vRP do banco '$($conn.Database)'"
+  Write-Host "[ATENCAO] Isto vai ZERAR $($alvo.Count) tabela(s) do banco '$($conn.Database)' (TRUNCATE, IRREVERSIVEL)."
+  $confirmacao = Read-Host "Digite LIMPAR para confirmar"
   if ($confirmacao -ne "LIMPAR") {
     throw "Operacao cancelada."
   }
 }
 
-$mysql = Encontrar-MysqlCli
-Write-Host "[INFO] mysql.exe: $mysql"
+# revalida cada ident DESCOBERTO antes de injetar no SQL (defesa em profundidade)
+foreach ($t in $alvo) { [void](Sql-Ident $t) }
 
-$listaSql = ($tabelasAlvo | ForEach-Object { Sql-String $_ }) -join ","
-$existentesSql = @"
-SELECT TABLE_NAME
-FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME IN ($listaSql)
-ORDER BY FIELD(TABLE_NAME, $listaSql)
-"@
-
-$existentes = @(Invocar-Mysql -MysqlExe $mysql -Conn $conn -Sql $existentesSql | Where-Object { $_ -and $_.Trim() -ne "" } | ForEach-Object { $_.Trim() })
-if ($existentes.Count -eq 0) {
-  Write-Host "[AVISO] Nenhuma tabela vRP conhecida encontrada. Nada foi limpo."
-  exit 0
-}
-
-$truncate = "SET FOREIGN_KEY_CHECKS=0; " + (($existentes | ForEach-Object { "TRUNCATE TABLE " + (Sql-Ident $_) }) -join "; ") + "; SET FOREIGN_KEY_CHECKS=1;"
+$truncate = "SET FOREIGN_KEY_CHECKS=0; " + `
+  (($alvo | ForEach-Object { "TRUNCATE TABLE " + (Sql-Ident $_) }) -join "; ") + `
+  "; SET FOREIGN_KEY_CHECKS=1;"
 Invocar-Mysql -MysqlExe $mysql -Conn $conn -Sql $truncate | Out-Null
 
-Write-Host "[OK] Dados limpos: $($existentes -join ', ')"
-Write-Host "[OK] AUTO_INCREMENT resetado; proximo usuario novo deve receber user_id = 1."
+Write-Host "[OK] $($alvo.Count) tabela(s) zerada(s) no banco '$($conn.Database)'."
+Write-Host "[OK] AUTO_INCREMENT resetado (TRUNCATE) - proximo usuario novo deve receber user_id = 1."

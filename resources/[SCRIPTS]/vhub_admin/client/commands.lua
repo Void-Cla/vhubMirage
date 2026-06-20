@@ -7,22 +7,24 @@ local S = VHubAdmin.state
 local function isAdm() return S.is_admin end
 
 -- ----------------------------------------------------------------------------
--- /cds  unificado (heading + vector3/4)
+-- /cds  imprime a posicao atual em TODOS os formatos de uma vez (copia/cola)
 -- ----------------------------------------------------------------------------
-RegisterCommand('cds', function(_, args)
+RegisterCommand('cds', function()
   local ped = PlayerPedId()
   local c, h = GetEntityCoords(ped), GetEntityHeading(ped)
-  local tipo = tonumber(args[1]) or 1
-  local line
-  if tipo == 2 then
-    line = ('vector4(%.4f, %.4f, %.4f, %.4f)'):format(c.x, c.y, c.z, h)
-  elseif tipo == 3 then
-    line = ('{ x = %.4f, y = %.4f, z = %.4f, h = %.4f }'):format(c.x, c.y, c.z, h)
-  else
-    line = ('x=%.4f  y=%.4f  z=%.4f  h=%.4f'):format(c.x, c.y, c.z, h)
+
+  -- todos os formatos: plano | vector3 (sem heading) | vector4 (com heading) | tabela flat
+  local linhas = {
+    ('x=%.4f  y=%.4f  z=%.4f  h=%.4f'):format(c.x, c.y, c.z, h),
+    ('vector3(%.4f, %.4f, %.4f)'):format(c.x, c.y, c.z),
+    ('vector4(%.4f, %.4f, %.4f, %.4f)'):format(c.x, c.y, c.z, h),
+    ('{ x = %.4f, y = %.4f, z = %.4f, h = %.4f }'):format(c.x, c.y, c.z, h),
+  }
+
+  for _, line in ipairs(linhas) do
+    VHubAdmin.notify(line)
+    print('[cds] ' .. line)
   end
-  VHubAdmin.notify(line)
-  print('[cds] ' .. line)
 end, false)
 
 -- ----------------------------------------------------------------------------

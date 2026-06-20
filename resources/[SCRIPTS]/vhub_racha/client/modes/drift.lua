@@ -47,9 +47,19 @@ VHubRachaModes.drift = {
   end,
 
   on_start = function(_a) end,
-  on_checkpoint = function(_a, _i) end,
 
-  -- chegada limpa: banca o lote pendente (o player nao bateu, entao mantem).
+  -- último CP: banca o pendente para que o flush final em sync.lua leve o valor correto
+  on_checkpoint = function(active, cp_idx)
+    if not active then return end
+    if cp_idx and active.cp_total and cp_idx >= active.cp_total then
+      active.drift_score = (active.drift_score or 0) + math.floor(active._pending or 0)
+      active._pending    = 0
+      active._window_ms  = 0
+      active.drift_live  = active.drift_score
+    end
+  end,
+
+  -- chegada limpa: garante banco do lote (idempotente se on_checkpoint já bancou)
   on_finish = function(active, _p)
     if not active then return end
     active.drift_score = (active.drift_score or 0) + math.floor(active._pending or 0)

@@ -1,0 +1,4 @@
+{
+  "_doc": "Afinacao fina por carro (opcional). Chave = handlingName normalizado (UPPERCASE+trim), igual ao registry. Precedencia: tier (base) -> override (patch) -> clamp de sanidade. Override NUNCA ultrapassa os clamps absolutos do tier (impede 'tier S+ disfarcado de A'). Campos suportados de PERFORMANCE (NUCLEO-8): fInitialDriveForce, fInitialDragCoeff, fInitialDriveMaxFlatVel, fBrakeForce, fTractionCurveMax, fTractionCurveMin, fAntiRollBarForce, fDriveInertia. Campo de identidade: archetype, grip_modifier, base_alloc (soma DEVE == budget do tier_base).",
+  "vehicles": {}
+}

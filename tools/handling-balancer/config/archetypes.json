@@ -1,0 +1,15 @@
+{
+  "_doc": "Arquetipo derivado por regra de fDriveBiasFront (0=RWD, ~0.5=AWD, 1=FWD) + fMass (leve/pesado). Define o grip_modifier de identidade emitido no catalog-patch quando o override nao especifica. Sem IA: regra pura.",
+  "_regra": {
+    "driveBias": { "rwd_max": 0.2, "awd_max": 0.8 },
+    "massThreshold": 1500
+  },
+  "archetypes": {
+    "rwd_light": { "grip_modifier": 1.05, "note": "agil, sai de traseira facil" },
+    "rwd_heavy": { "grip_modifier": 0.92, "note": "instavel em curva rapida" },
+    "fwd_light": { "grip_modifier": 1.02, "note": "subesterçante no limite" },
+    "fwd_heavy": { "grip_modifier": 0.95, "note": "dificil de rotar traseiro" },
+    "awd_light": { "grip_modifier": 1.08, "note": "equilibrado, versatil" },
+    "awd_heavy": { "grip_modifier": 1.00, "note": "estavel, acelera bem" }
+  }
+}

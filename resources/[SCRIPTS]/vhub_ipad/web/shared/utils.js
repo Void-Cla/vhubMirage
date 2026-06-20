@@ -7,8 +7,12 @@
   // CDN preenchida pelo Lua no open (payload.cdn). Default seguro.
   vhub.cdn = 'https://cdn.jsdelivr.net/gh/Void-Cla/vhub-assets@main';
 
-  // monta a URL completa de um ícone a partir do nome do arquivo
-  vhub.icon = (filename) => `${vhub.cdn}/${filename}`;
+  // versão de cache-bust (payload.cdn_ver, fixa por boot do servidor). Faz o
+  // CEF revalidar o ícone ao subir o servidor: trocou no CDN → ?v muda → re-fetch.
+  vhub.cdnVer = '';
+
+  // monta a URL completa de um ícone a partir do nome do arquivo (+ ?v= por boot)
+  vhub.icon = (filename) => `${vhub.cdn}/${filename}${vhub.cdnVer ? '?v=' + vhub.cdnVer : ''}`;
 
   // hora atual HH:MM
   vhub.clock = () => {

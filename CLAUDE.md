@@ -42,6 +42,12 @@ metas/                             ← roadmap, decisões técnicas, referência
 | L-11 | `server/compat.lua` permanece funcional até vHub ter nome no mercado |
 | L-12 | Transações SQL são atômicas e exclusivamente server-side |
 
+## Leis estendidas (pós-freeze)
+
+| Lei | Regra |
+|-----|-------|
+| L-19 | **Coordenadas como tipos vetoriais nativos.** `vec3(x,y,z)` para todo ponto sem orientação (blip, zona, marker, raio). `vec4(x,y,z,w)` (w=heading) **somente** para posição de spawn de veículo/ped (`test_spawn`, spawn de garagem, offset de saída). Nunca `vec4` para blip/zona/marker. **Fronteira:** `vec3`/`vec4` são de uso LOCAL — NÃO cruzam `TriggerClientEvent`/`TriggerServerEvent`/`exports`/`SendNUIMessage` (msgpack entrega o vetor como tabela indexada `{1,2,3}`; `json.encode(vec)` vira `{}`). Todo payload que cruza fronteira carrega coord como primitivo `{x=,y=,z=[,h=]}`; o consumidor reconstrói o vetor no ponto de uso. Adoção incremental: aplica-se a código novo e a config tocada (zonas de veículo migradas na decisão #25). |
+
 ## Condições de parada obrigatória
 
 Parar e reduzir escopo imediatamente ao detectar:

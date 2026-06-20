@@ -31,10 +31,17 @@
         <span class="hud-stat-extra" data-el="cp-dist"></span>
     </div>
 
-    <!-- Drift score (so em modo drift) -->
-    <div class="hud-stat hud-drift hidden" data-el="drift-chip">
-        <span class="hud-stat-label">Drift</span>
-        <span class="hud-stat-value" data-el="drift">0</span>
+    <!-- Drift HUD (centro baixo — só em modo drift) -->
+    <div class="hud-drift-center hidden" data-el="drift-chip">
+        <div class="hud-drift-pts">
+            <span class="hud-drift-num" data-el="drift">0</span>
+            <span class="hud-drift-pts-label">PTS</span>
+        </div>
+        <div class="hud-drift-meta">
+            <span class="hud-drift-pct" data-el="drift-pct">100%</span>
+            <span class="hud-drift-sep">·</span>
+            <span class="hud-drift-combo" data-el="drift-combo">x1.0 COMBO</span>
+        </div>
     </div>
 
     <!-- Card de chegada (5s e some) -->

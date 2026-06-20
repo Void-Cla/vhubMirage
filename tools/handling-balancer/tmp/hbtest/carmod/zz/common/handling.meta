@@ -1,0 +1,7 @@
+<CHandlingDataMgr><HandlingData>
+<Item type="CHandlingData">
+  <handlingName>ZZTEST</handlingName>
+  <fMass value="1500.000000" />
+  <fInitialDriveForce value="0.300000" />
+</Item>
+</HandlingData></CHandlingDataMgr>

@@ -52,3 +52,22 @@ exports('finalizeExpired', function()
   if not _invoker_allowed() then return 0 end
   return VHubFerinha.finalizeExpired()
 end)
+
+
+-- ============================================================
+-- ZONA (config de localização da casa de leilões — dono desde a decisão #25)
+-- vec3 é de uso LOCAL; ao cruzar a fronteira do export, a coord vai ACHATADA
+-- p/ primitivo {x,y,z} (msgpack mangle o vetor nativo — L-19).
+-- ============================================================
+
+-- zona única do leilão p/ o garage agregar no SETUP (read-only, estática; nil se ausente)
+exports('getZones', function()
+  if not _invoker_allowed() then return nil end
+  local l = VHubFerinha.cfg.leilao_local
+  if not l then return nil end
+  return {
+    id = l.id, label = l.label,
+    x = l.coord.x, y = l.coord.y, z = l.coord.z, raio = l.raio,
+    blip = l.blip,
+  }
+end)

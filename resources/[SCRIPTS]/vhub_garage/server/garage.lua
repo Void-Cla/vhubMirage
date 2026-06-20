@@ -67,7 +67,7 @@ AddEventHandler(E.ACT_SPAWN, function(plate, garagem_id)
     -- Impede retirar o veiculo de qualquer ponto do mapa (IT.4 / Void-Zero).
     local pc   = GetEntityCoords(GetPlayerPed(src))
     local raio = (g.raio or CFG.raio_guardar or 5.0) + 3.0
-    if #(pc - vector3(g.x, g.y, g.z)) > raio then
+    if #(pc - g.coord) > raio then
       Core.notify(src, 'Aproxime-se da garagem para retirar o ve culo.')
       return
     end
@@ -92,7 +92,7 @@ AddEventHandler(E.ACT_SPAWN, function(plate, garagem_id)
     end
 
     local off = spawnOffset(v.vtype)
-    local pos = { x = g.x + off.x, y = g.y + off.y, z = g.z + off.z, h = g.h }
+    local pos = { x = g.coord.x + off.x, y = g.coord.y + off.y, z = g.coord.z + off.z, h = g.h }
 
     -- anti-dupe server-side: remove qualquer entidade no mundo com esta placa
     -- antes de criar a nova (cobre force-out de carro perdido e clone stale).
@@ -148,7 +148,7 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
     -- GetEntityCoords do ped do jogador e confiavel server-side.
     local pc   = GetEntityCoords(GetPlayerPed(src))
     local raio = (g.raio or CFG.raio_guardar or 5.0) + 3.0
-    if #(pc - vector3(g.x, g.y, g.z)) > raio then
+    if #(pc - g.coord) > raio then
       Core.notify(src, 'Aproxime-se da garagem para guardar o ve culo.')
       return
     end
@@ -160,7 +160,7 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
     for _, ent in ipairs(GetAllVehicles()) do
       if U.normalizePlate(GetVehicleNumberPlateText(ent) or '') == p then
         plate_seen = true
-        if #(GetEntityCoords(ent) - vector3(g.x, g.y, g.z)) <= raio then
+        if #(GetEntityCoords(ent) - g.coord) <= raio then
           vent = ent
           break
         end
