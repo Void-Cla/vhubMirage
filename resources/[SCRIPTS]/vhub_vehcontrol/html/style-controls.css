@@ -1,11 +1,71 @@
 /*
- * style-buttons.css — grade de botoes de controle
+ * style-controls.css — aside esquerda: combustivel + grade de botões
  * vhub_vehcontrol
  */
 
 
 /* ============================================================
-   AREA DE CONTROLES
+   COMBUSTIVEL — barra dedicada, full width (topo do aside)
+   ============================================================ */
+
+.vc-fuel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--vh-glass-line);
+  background: rgba(12,10,6,0.28);
+}
+
+.vc-fuel-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--vh-gold);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(243,181,58,0.35));
+}
+
+.vc-fuel-bar-bg {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--vh-r-pill);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(243,181,58,0.18);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+  overflow: hidden;
+  position: relative;
+}
+
+.vc-fuel-bar {
+  height: 100%;
+  width: 100%;
+  border-radius: var(--vh-r-pill);
+  background: linear-gradient(90deg, var(--vh-amber), var(--vh-gold) 45%, var(--vh-gold-soft));
+  box-shadow:
+    0 0 10px rgba(243,181,58,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+  transform-origin: left;
+  transform: scaleX(1);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vc-fuel-pct {
+  font-family: var(--vh-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--vh-sand);
+  line-height: 1;
+  flex-shrink: 0;
+  min-width: 30px;
+  text-align: right;
+}
+
+
+/* ============================================================
+   ÁREA DE CONTROLES
    ============================================================ */
 
 .vc-controls {
@@ -17,47 +77,19 @@
   gap: 8px;
 }
 
-.vc-section-label {
-  font-family: var(--vh-font-display);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.6px;
-  color: var(--vh-text-dim2);
-  padding: 0 2px 2px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: -2px;
-}
-
-.vc-section-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(243,181,58,0.18), rgba(243,181,58,0));
-}
-
 
 /* ============================================================
-   GRADE DE BOTOES
+   GRADE DE BOTÕES
    ============================================================ */
 
-.vc-btn-grid {
-  display: grid;
-  gap: 6px;
-}
-
-/* Portas — 3 colunas */
-.vc-doors      { grid-template-columns: repeat(3, 1fr); }
-/* Janelas — 4 colunas */
-.vc-windows    { grid-template-columns: repeat(4, 1fr); }
-/* Controles gerais — 3 colunas */
-.vc-ctrl       { grid-template-columns: repeat(3, 1fr); }
+.vc-btn-grid     { display: grid; gap: 6px; }
+.vc-doors        { grid-template-columns: repeat(3, 1fr); }
+.vc-windows      { grid-template-columns: repeat(4, 1fr); }
+.vc-ctrl         { grid-template-columns: repeat(3, 1fr); }
 
 
 /* ============================================================
-   BOTAO BASE
+   BOTÃO BASE
    ============================================================ */
 
 .vc-btn {
@@ -70,8 +102,7 @@
   padding: 8px 4px 7px;
   border-radius: var(--vh-r-btn);
   border: 1px solid rgba(243,181,58,0.14);
-  background:
-    linear-gradient(180deg, rgba(217,193,154,0.08), rgba(12,10,6,0.45));
+  background: linear-gradient(180deg, rgba(217,193,154,0.08), rgba(12,10,6,0.45));
   color: var(--vh-text-dim);
   font-size: 9.5px;
   font-weight: 600;
@@ -86,7 +117,6 @@
     transform var(--vh-t-fast);
 }
 
-/* Brilho sutil no topo (efeito vidro) */
 .vc-btn::before {
   content: "";
   position: absolute;
@@ -105,15 +135,10 @@
   filter: drop-shadow(0 0 2px rgba(243,181,58,0.25));
 }
 
-.vc-btn span {
-  text-align: center;
-  white-space: nowrap;
-}
+.vc-btn span { text-align: center; white-space: nowrap; }
 
-/* hover */
 .vc-btn:hover {
-  background:
-    linear-gradient(180deg, rgba(243,181,58,0.16), rgba(243,181,58,0.06));
+  background: linear-gradient(180deg, rgba(243,181,58,0.16), rgba(243,181,58,0.06));
   border-color: rgba(243,181,58,0.5);
   color: var(--vh-text);
   box-shadow:
@@ -121,14 +146,11 @@
     inset 0 0 0 1px rgba(255,213,115,0.08);
   transform: translateY(-1px);
 }
-
 .vc-btn:hover svg {
   color: var(--vh-gold-soft);
   transform: scale(1.08);
   filter: drop-shadow(0 0 6px rgba(255,213,115,0.55));
 }
-
-/* press */
 .vc-btn:active {
   transform: translateY(0) scale(0.95);
   background: rgba(243,181,58,0.20);
@@ -140,15 +162,13 @@
    ============================================================ */
 
 .vc-btn-toggle.is-on {
-  background:
-    linear-gradient(180deg, rgba(243,181,58,0.22), rgba(243,181,58,0.10));
+  background: linear-gradient(180deg, rgba(243,181,58,0.22), rgba(243,181,58,0.10));
   border-color: var(--vh-gold);
   color: var(--vh-gold-soft);
   box-shadow:
     0 0 14px rgba(243,181,58,0.30),
     inset 0 0 0 1px rgba(255,213,115,0.18);
 }
-
 .vc-btn-toggle.is-on svg {
   color: var(--vh-gold-soft);
   filter: drop-shadow(0 0 6px rgba(255,213,115,0.7));
@@ -156,23 +176,19 @@
 
 
 /* ============================================================
-   BOTAO DE EMERGENCIA (pisca-alerta)
+   PISCA-ALERTA
    ============================================================ */
 
-.vc-btn-emergency-cell svg {
-  color: var(--vh-amber);
-}
+.vc-btn-emergency-cell svg { color: var(--vh-amber); }
 
 .vc-btn-emergency-cell.is-on {
-  background:
-    linear-gradient(180deg, rgba(255,154,31,0.24), rgba(255,154,31,0.10));
+  background: linear-gradient(180deg, rgba(255,154,31,0.24), rgba(255,154,31,0.10));
   border-color: var(--vh-amber);
   color: var(--vh-amber);
   box-shadow:
     0 0 14px rgba(255,154,31,0.40),
     inset 0 0 0 1px rgba(255,154,31,0.20);
 }
-
 .vc-btn-emergency-cell.is-on svg {
   color: var(--vh-amber);
   animation: vc-blink 1s ease-in-out infinite;
@@ -182,4 +198,25 @@
 @keyframes vc-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.25; }
+}
+
+
+/* ============================================================
+   VARIANTE PRIMARY (usada também na ficha — nitro/save)
+   ============================================================ */
+
+.vc-btn-primary {
+  background: linear-gradient(180deg, rgba(243,181,58,0.32), rgba(243,181,58,0.10));
+  border-color: var(--vh-gold);
+  color: var(--vh-gold-soft);
+}
+.vc-btn-primary:hover {
+  background: linear-gradient(180deg, rgba(255,213,115,0.40), rgba(243,181,58,0.16));
+  color: #fff;
+}
+.vc-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }

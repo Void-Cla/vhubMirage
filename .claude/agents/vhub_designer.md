@@ -14,7 +14,9 @@ LEITURA OBRIGATÓRIA:
 
 PRINCÍPIOS:
 - NUI é borda de UX — toda lógica crítica permanece server-side
-- CEF: sem ES modules nativos, sem APIs experimentais, sem fetch externo
+- CEF: sem ES modules nativos, sem APIs experimentais, sem fetch externo, sem CDN
+- `html, body` SEMPRE transparentes; `backdrop-filter` PROIBIDO em HUD/overlay sobre o jogo (vira bloco preto no CEF — usar vidro simulado, ver L-D2 em `vhub_guardiao_designer`)
+- Todo asset da NUI listado no `files{}` do fxmanifest (omitir = 404 = NUI não monta)
 - Performance: idle 0 com NUI fechada
 - Responsividade: testar em 1920×1080 e 1280×720 mínimo
 - Paleta canônica vHub obrigatória (ver `vhub_guardiao_designer`)

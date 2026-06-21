@@ -14,11 +14,11 @@ NitroCfg = {
   -- O PREÇO do kit mora na oficina (vendedora): vhub_custom/server/oficina.lua NITRO_KIT_PRICE.
 
   -- efeito base (multiplicado pelo nível — ver LEVELS abaixo)
-  durationSec   = 10,    -- duração de uma carga cheia (100) NO NÍVEL 1 (o nível só muda a TAXA)
-  topSpeedBoost = 10.0,  -- ModifyVehicleTopSpeed BASE (×powerMult do nível)
-  torqueBoost   = 5.0,   -- SetVehicleCheatPowerIncrease BASE (×powerMult do nível)
+  durationSec   = 30,    -- duração de uma carga cheia (100) NO NÍVEL 1 (o nível só muda a TAXA)
+  topSpeedBoost = 1.0,  -- ModifyVehicleTopSpeed BASE (×powerMult do nível)
+  torqueBoost   = 2.0,   -- SetVehicleCheatPowerIncrease BASE (×powerMult do nível)
   exhaustFire   = true,  -- fogo no escapamento (mantido)
-  fireSize      = 5.0,   -- escala do fogo
+  fireSize      = 2.0,   -- escala do fogo
 
   -- ============================================================
   -- NÍVEIS (1..10) — trade-off durabilidade ↔ velocidade

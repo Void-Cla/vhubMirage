@@ -1,0 +1,204 @@
+/* style.css — toast vHub Mirage (Liquid Glass + Areia + Dourado) */
+
+
+/* ============================================================
+   TOKENS — paleta Mirage
+   ============================================================ */
+
+:root {
+    --vh-sand:        #d9c19a;
+    --vh-sand-dim:    #a89572;
+    --vh-gold:        #f3b53a;
+    --vh-gold-soft:   #ffd573;
+    --vh-amber:       #ff9a1f;
+    --vh-danger:      #e8513f;
+    --vh-ok:          #6bbf6b;
+
+    --vh-glass:        rgba(16, 14, 10, 0.82);
+    --vh-glass-border: rgba(243, 181, 58, 0.18);
+    --vh-text:         rgba(245, 238, 225, 0.94);
+    --vh-text-dim:     rgba(217, 193, 154, 0.62);
+}
+
+
+/* ============================================================
+   BASE
+   ============================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* CEF FiveM: fundo da pagina SEMPRE invisivel (transparente buga menos que solido) */
+html, body {
+    background: transparent !important;
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#notification-container {
+    position: fixed;
+    top: 35%;
+    right: 20px;
+    transform: translateY(-50%);
+    z-index: 9999;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   CARD LIQUID GLASS
+   ============================================================ */
+
+.notification {
+    /* "liquid glass" SIMULADO: camadas translucidas (sem backdrop-filter — bloco preto no CEF) */
+    background: linear-gradient(180deg, rgba(217, 193, 154, 0.12), rgba(12, 10, 6, 0.66)), var(--vh-glass);
+    border: 1px solid var(--vh-glass-border);
+    border-left: 3px solid var(--vh-sand);          /* faixa de tipo (trocada por tipo) */
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55),
+                0 0 0 1px rgba(255, 213, 115, 0.06) inset,
+                0 1px 0 rgba(255, 213, 115, 0.12) inset;
+    color: var(--vh-text);
+    min-width: 280px;
+    max-width: 340px;
+    padding: 13px 15px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    position: relative;
+    pointer-events: none;
+
+    opacity: 0;
+    transform: translateX(24px);
+    animation: vhIn 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.notification--success { border-left-color: var(--vh-ok); }
+.notification--warning { border-left-color: var(--vh-amber); }
+.notification--error   { border-left-color: var(--vh-danger); }
+
+.notification.is-hiding {
+    animation: vhOut 0.28s ease-in forwards;
+}
+
+@keyframes vhIn  { to { opacity: 1; transform: translateX(0); } }
+@keyframes vhOut { to { opacity: 0; transform: translateX(24px) scale(0.98); } }
+
+
+/* ============================================================
+   HEADER (ícone + tipo + título)
+   ============================================================ */
+
+.notification__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.notification__icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex: 0 0 auto;
+    background: rgba(243, 181, 58, 0.14);
+    color: var(--vh-sand);
+    border: 1px solid rgba(243, 181, 58, 0.30);
+}
+
+.notification--success .notification__icon { background: rgba(107, 191, 107, 0.14); color: var(--vh-ok);     border-color: rgba(107, 191, 107, 0.30); }
+.notification--warning .notification__icon { background: rgba(243, 181, 58, 0.16); color: var(--vh-gold);   border-color: rgba(243, 181, 58, 0.34); }
+.notification--error   .notification__icon { background: rgba(232, 81, 63, 0.14);  color: var(--vh-danger); border-color: rgba(232, 81, 63, 0.30); }
+
+.notification__type {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(243, 181, 58, 0.14);
+    color: var(--vh-sand);
+    border: 1px solid rgba(243, 181, 58, 0.22);
+}
+
+.notification--success .notification__type { background: rgba(107, 191, 107, 0.14); color: var(--vh-ok);     border-color: rgba(107, 191, 107, 0.26); }
+.notification--warning .notification__type { background: rgba(243, 181, 58, 0.16); color: var(--vh-gold);   border-color: rgba(243, 181, 58, 0.30); }
+.notification--error   .notification__type { background: rgba(232, 81, 63, 0.14);  color: var(--vh-danger); border-color: rgba(232, 81, 63, 0.26); }
+
+.notification__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--vh-text);
+    flex: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* ============================================================
+   CORPO + PROGRESSO
+   ============================================================ */
+
+.notification__message {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--vh-sand);
+    margin: 6px 0 11px;
+    word-break: break-word;
+}
+
+.progress-container {
+    height: 3px;
+    background: rgba(217, 193, 154, 0.12);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 100%;
+    transform-origin: left;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand-dim));
+    animation: progressDrain linear forwards;       /* duração definida pelo JS */
+}
+
+.notification--success .progress-bar { background: linear-gradient(90deg, var(--vh-ok), #3f7a3f); }
+.notification--warning .progress-bar { background: linear-gradient(90deg, var(--vh-gold), var(--vh-amber)); }
+.notification--error   .progress-bar { background: linear-gradient(90deg, var(--vh-danger), #9c2e22); }
+
+@keyframes progressDrain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+
+@media (max-width: 768px) {
+    #notification-container {
+        right: 5%;
+        top: 20%;
+        transform: none;
+    }
+
+    .notification {
+        min-width: 250px;
+        max-width: 280px;
+        padding: 11px 13px;
+    }
+}

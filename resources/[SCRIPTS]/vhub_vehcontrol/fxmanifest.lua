@@ -43,8 +43,12 @@ ui_page 'html/index.html'
 
 files {
   'html/index.html',
-  'html/app.js',
+  'html/core.js',           -- nucleo: showPanel/hidePanel + dispatch das mensagens do Lua
+  'html/controls.js',
+  'html/ficha.js',
+  'html/sound.js',
   'html/style-core.css',
-  'html/style-dashboard.css',
-  'html/style-buttons.css',
+  'html/style-controls.css',
+  'html/style-ficha.css',
+  'html/style-sound.css',
 }

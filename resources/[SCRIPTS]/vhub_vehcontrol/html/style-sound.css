@@ -1,0 +1,220 @@
+/*
+ * style-sound.css — aside topo-centro: player de Som (placeholder visual)
+ * vhub_vehcontrol — sem regra de negócio; futura integração com vhub_sound.
+ */
+
+
+/* ============================================================
+   HEADER ESTENDIDO — track meta + visualizador + fechar
+   ============================================================ */
+
+.vc-header-sound {
+  padding: 8px 10px;
+  gap: 10px;
+}
+
+.vc-sound-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-sound-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-family: var(--vh-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--vh-gold);
+  background: rgba(243,181,58,0.08);
+  border: 1px solid rgba(243,181,58,0.35);
+  border-radius: var(--vh-r-pill);
+  flex-shrink: 0;
+}
+.vc-sound-source svg { width: 11px; height: 11px; color: var(--vh-gold); }
+
+.vc-sound-track {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.vc-sound-track strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vh-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.vc-sound-track span {
+  font-size: 10.5px;
+  color: var(--vh-text-dim2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ============================================================
+   VISUALIZADOR — 10 barrinhas decorativas
+   ============================================================ */
+
+.vc-sound-viz {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.vc-sound-viz span {
+  display: block;
+  width: 2px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
+  opacity: 0.85;
+  box-shadow: 0 0 4px rgba(243,181,58,0.5);
+  animation: vc-sound-pulse 1s ease-in-out infinite;
+}
+.vc-sound-viz span:nth-child(1)  { animation-delay: -0.10s; height: 30%; }
+.vc-sound-viz span:nth-child(2)  { animation-delay: -0.25s; height: 60%; }
+.vc-sound-viz span:nth-child(3)  { animation-delay: -0.40s; height: 90%; }
+.vc-sound-viz span:nth-child(4)  { animation-delay: -0.05s; height: 50%; }
+.vc-sound-viz span:nth-child(5)  { animation-delay: -0.55s; height: 75%; }
+.vc-sound-viz span:nth-child(6)  { animation-delay: -0.20s; height: 40%; }
+.vc-sound-viz span:nth-child(7)  { animation-delay: -0.70s; height: 95%; }
+.vc-sound-viz span:nth-child(8)  { animation-delay: -0.35s; height: 55%; }
+.vc-sound-viz span:nth-child(9)  { animation-delay: -0.60s; height: 70%; }
+.vc-sound-viz span:nth-child(10) { animation-delay: -0.15s; height: 35%; }
+
+/* parado quando não está tocando */
+.vc-sound-viz.is-paused span {
+  animation-play-state: paused;
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+@keyframes vc-sound-pulse {
+  0%, 100% { transform: scaleY(0.4); }
+  50%      { transform: scaleY(1); }
+}
+
+
+/* ============================================================
+   CORPO — transport + fonte (tabs) + volume
+   ============================================================ */
+
+.vc-sound-body {
+  position: relative;
+  z-index: 1;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+/* Transport (prev / play / next) */
+.vc-sound-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.vc-sound-ibtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vh-text-dim);
+  background: var(--vh-glass-bg-2);
+  border: 1px solid var(--vh-glass-line);
+  transition: color var(--vh-t-fast), background var(--vh-t-fast), border-color var(--vh-t-fast), transform var(--vh-t-fast);
+}
+.vc-sound-ibtn svg { width: 14px; height: 14px; }
+.vc-sound-ibtn:hover {
+  color: var(--vh-gold-soft);
+  border-color: var(--vh-glass-border);
+  background: var(--vh-glass-bg);
+}
+.vc-sound-ibtn:active { transform: scale(0.92); }
+
+.vc-sound-play {
+  width: 42px;
+  height: 42px;
+  color: var(--vh-gold-soft);
+  background: linear-gradient(180deg, rgba(243,181,58,0.28), rgba(243,181,58,0.08));
+  border-color: var(--vh-gold);
+  box-shadow: 0 0 14px rgba(243,181,58,0.30);
+}
+.vc-sound-play svg { width: 16px; height: 16px; }
+.vc-sound-play:hover {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(255,213,115,0.40), rgba(243,181,58,0.14));
+  box-shadow: 0 0 20px rgba(255,213,115,0.45);
+}
+
+
+/* Tabs de fonte (segmented) */
+.vc-sound-tabs {
+  display: flex;
+  gap: 0;
+  padding: 3px;
+  background: rgba(12,10,6,0.45);
+  border: 1px solid var(--vh-glass-line);
+  border-radius: var(--vh-r-pill);
+}
+.vc-sound-tab {
+  flex: 1;
+  padding: 5px 0;
+  font-family: var(--vh-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--vh-text-dim2);
+  background: transparent;
+  border-radius: var(--vh-r-pill);
+  transition: color var(--vh-t-fast), background var(--vh-t-fast);
+}
+.vc-sound-tab:hover { color: var(--vh-text-dim); }
+.vc-sound-tab.is-active {
+  color: var(--vh-gold-soft);
+  background: linear-gradient(180deg, rgba(243,181,58,0.22), rgba(243,181,58,0.08));
+  box-shadow: inset 0 0 0 1px rgba(243,181,58,0.30);
+}
+
+
+/* Volume */
+.vc-sound-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vc-sound-volume svg {
+  width: 16px;
+  height: 16px;
+  color: var(--vh-gold);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(243,181,58,0.35));
+}
+.vc-sound-volume .vc-bar-slider { flex: 1; }
+.vc-sound-volume strong {
+  font-family: var(--vh-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vh-sand);
+  min-width: 38px;
+  text-align: right;
+}

@@ -257,7 +257,7 @@ JS **nunca** acumula `fetch('https://<resource>/<endpoint>')` em hot path — to
 
 ---
 
-## Leis de componentização (A-01 a A-08)
+## Leis de componentização (A-01 a A-10)
 
 Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem nenhuma lei imutável.
 
@@ -271,6 +271,8 @@ Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem 
 | **A-06** | Native bridge centralizado — JS não acumula `fetch` espalhado nem chama native fora de `vhub.native.*` |
 | **A-07** | Cleanup obrigatório no `onDestroy`: `cancelAnimationFrame`, `clearInterval`, `removeEventListener`, `observer.disconnect` |
 | **A-08** | `SendNUIMessage` em hot path usa batching/delta sync — nunca 60fps de payload bruto |
+| **A-09** | **CEF transparente.** `html, body { background: transparent }` SEMPRE. `backdrop-filter` é PROIBIDO em HUD/overlay direto sobre o jogo — no CEF do FiveM ele só desfoca o que está dentro da página e renderiza um **bloco preto sólido** sobre o mundo GTA. Vidro nesses casos é SIMULADO com fundo translúcido em camadas (opacidade do piso ≈0.78–0.86). `backdrop-filter` só é permitido quando há uma camada de fundo OPACA (`#vhub-bg` com `bg.png`) atrás do painel. |
+| **A-10** | **Assets declarados.** Todo arquivo que a NUI carrega (`<script>`, `<link>`, imagem, fonte) DEVE constar no `files{}` do `fxmanifest.lua` — omitir = 404 no CEF = a NUI não monta. Sem CDN externo (Google Fonts, FontAwesome, cdnjs): offline falha; usar fonte do sistema/embarcada + ícone SVG/unicode. |
 
 ### Condições adicionais de parada obrigatória (NUI)
 
@@ -278,6 +280,8 @@ Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem 
 - Dois módulos lendo/escrevendo o mesmo slice de store sem ownership declarado
 - `fetch` direto a endpoint de resource fora de `vhub.native.*` ou `services/`
 - Animação rodando com NUI fechada (idle > 0 em resmon)
+- `backdrop-filter` em HUD/overlay sobre o jogo, ou `html`/`body` com fundo opaco (A-09)
+- Asset carregado pela NUI ausente do `files{}` do fxmanifest, ou dependência de CDN externo (A-10)
 
 ---
 

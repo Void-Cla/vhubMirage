@@ -46,13 +46,36 @@ Hierarquia: 70% sand/black + 20% gold + 10% amber/danger
 - Meta/legenda: 11.5px, `color: var(--vh-sand-dim)`
 
 ### Tema Liquid Glass
+
+⚠️ **REGRA CEF DO `backdrop-filter` (L-D2 — invariante):** no CEF do FiveM o
+`backdrop-filter` só desfoca o que está **dentro da página**, NUNCA o mundo GTA.
+Aplicado a um elemento que flutua sobre fundo transparente (HUD/overlay/toast
+direto sobre o jogo) ele renderiza um **BLOCO PRETO SÓLIDO**. Por isso a escolha
+da receita depende do tipo de NUI:
+
+**A) NUI full-screen COM camada de fundo opaca (`#vhub-bg` com `bg.png`):**
+o `backdrop-filter` é permitido — há o que desfocar (a própria `#vhub-bg`).
 ```css
-/* superfície principal */
+/* superfície principal — só quando existe #vhub-bg opaco ATRÁS do painel */
 backdrop-filter: blur(14px) saturate(140%);
 background: linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
 border: 1px solid rgba(243,181,58,0.18);
 box-shadow: 0 18px 48px rgba(0,0,0,0.55),
             0 0 0 1px rgba(255,213,115,0.06) inset,
+            0 1px 0 rgba(255,213,115,0.12) inset;
+```
+
+**B) HUD / overlay / toast DIRETO sobre o jogo (`html,body` transparentes):**
+PROIBIDO `backdrop-filter` (vira preto). Simular o vidro com fundo translúcido
+em camadas, subindo a opacidade do piso (≈0.78–0.86) para compensar a falta do blur.
+```css
+html, body { background: transparent !important; }   /* fundo SEMPRE invisível */
+/* superfície "liquid glass" SIMULADA — sem backdrop-filter */
+background:
+  radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 60%),
+  linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.85));
+border: 1px solid rgba(243,181,58,0.18);
+box-shadow: 0 18px 48px rgba(0,0,0,0.55),
             0 1px 0 rgba(255,213,115,0.12) inset;
 ```
 
@@ -75,7 +98,11 @@ box-shadow: 0 18px 48px rgba(0,0,0,0.55),
 
 ## PRINCÍPIOS CEF
 
+- `html, body` SEMPRE com `background: transparent` — fundo opaco buga o compositor do CEF
+- `backdrop-filter` NUNCA em HUD/overlay sobre o jogo (vira bloco preto) — só com `#vhub-bg` opaco atrás (ver L-D2)
 - Sem ES modules nativos, sem APIs experimentais, sem fetch externo (sem whitelist explícita)
+- Sem CDN (Google Fonts, FontAwesome, cdnjs) — offline = falha; usar fonte do sistema/embarcada + ícone SVG/unicode
+- Todo asset que a NUI carrega (`<script>`/`<link>`/imagem) DEVE estar no `files{}` do fxmanifest — senão 404 e a NUI não monta
 - Idle com NUI fechada: **0.00ms** — sem animação contínua quando invisível
 - DOM total por painel: < 1500 nodes
 - PT-BR com acentos em UTF-8 — `<meta charset="utf-8">` obrigatório
@@ -85,8 +112,10 @@ box-shadow: 0 18px 48px rgba(0,0,0,0.55),
 
 □ Paleta respeita tokens canônicos — sem hex hardcoded?
 □ Tipografia usa Barlow Condensed + Inter?
-□ Liquid Glass aplicado em superfícies principais?
+□ Liquid Glass aplicado em superfícies principais (receita certa A vs B)?
+□ `html, body` transparentes? `backdrop-filter` ausente em HUD/overlay sobre o jogo (L-D2)?
 □ Background com 50% de opacidade (L-D1)?
+□ Sem CDN externo? Todos os assets da NUI listados no `files{}` do fxmanifest?
 □ CEF: sem ES modules, sem fetch externo, sem eval?
 □ PT-BR com acentos em UTF-8?
 □ Idle 0.00ms com NUI fechada?

@@ -1,6 +1,10 @@
 /*
- * style-core.css — tokens vHub + reset base
- * vhub_vehcontrol — identidade Liquid Glass + Areia + Dourado
+ * style-core.css — tokens vHub + reset + chrome compartilhado dos asides
+ * vhub_vehcontrol — Liquid Glass + Areia + Dourado
+ *
+ * Layout novo: 3 asides ancorados (Esquerda · Topo-Centro · Direita) dentro
+ * do wrapper #vc-panel. Cada aside é independente, draggable, e usa o mesmo
+ * vidro liquido. O carro fica visivel no meio da tela.
  */
 
 /* ============================================================
@@ -37,7 +41,7 @@
   --vh-shadow-glow: 0 0 18px rgba(255,213,115,0.45);
 
   /* Raios */
-  --vh-r-pan:  18px;
+  --vh-r-pan:  16px;
   --vh-r-card: 12px;
   --vh-r-btn:  10px;
   --vh-r-pill: 999px;
@@ -100,6 +104,223 @@ svg { display: block; flex-shrink: 0; }
    UTILITÁRIO
    ============================================================ */
 
-.hidden {
-  display: none !important;
+.hidden { display: none !important; }
+
+
+/* ============================================================
+   WRAPPER GLOBAL (#vc-panel) — palco transparente full screen
+   Toggla .hidden via Lua para mostrar/esconder toda a interface.
+   pointer-events: none aqui; cada aside reativa para si.
+   ============================================================ */
+
+.vc-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  color: var(--vh-text);
+  font-family: var(--vh-font-body);
+}
+
+
+/* ============================================================
+   ASIDE BASE — vidro liquido compartilhado
+   Cada aside é independente, posicionado e arrastavel.
+   ============================================================ */
+
+.vc-aside {
+  position: absolute;
+  pointer-events: auto;
+  border-radius: var(--vh-r-pan);
+  /* "liquid glass" SIMULADO p/ HUD sobre o jogo: SEM backdrop-filter
+     (no CEF do FiveM ele vira bloco preto porque nao ha camada opaca atras;
+     so blur o que estiver dentro da pagina, nunca o mundo GTA). */
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 60%),
+    linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.85));
+  border: 1px solid var(--vh-glass-border);
+  box-shadow:
+    var(--vh-shadow-3),
+    inset 0 1px 0 rgba(255,213,115,0.12),
+    inset 0 0 0 1px rgba(0,0,0,0.35);
+  overflow: hidden;
+  isolation: isolate;
+  transition: box-shadow var(--vh-t-norm);
+}
+
+.vc-aside.is-dragging {
+  box-shadow:
+    0 32px 80px rgba(0,0,0,0.75),
+    0 0 40px rgba(243,181,58,0.22),
+    inset 0 1px 0 rgba(255,213,115,0.18);
+  cursor: grabbing;
+}
+
+/* Posicionamento padrão (JS de arraste sobrescreve em runtime) */
+.vc-aside-controls {
+  top: 50%;
+  left: 18px;
+  transform: translateY(-50%);
+  width: 256px;
+}
+
+.vc-aside-ficha {
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  width: 296px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.vc-aside-sound {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+}
+
+/* Halo dourado decorativo (reusado) */
+.vc-aura {
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 120px;
+  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.18), rgba(243,181,58,0) 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+
+/* ============================================================
+   HEADER COMPARTILHADO — grip + marca (área de arraste)
+   ============================================================ */
+
+.vc-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--vh-glass-line);
+  background: linear-gradient(180deg, rgba(12,10,6,0.45), rgba(12,10,6,0.15));
+  cursor: grab;
+}
+
+.vc-header:active { cursor: grabbing; }
+
+.vc-grip {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  grid-auto-rows: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity var(--vh-t-fast);
+}
+.vc-grip span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--vh-sand-dim);
+}
+.vc-header:hover .vc-grip { opacity: 1; }
+.vc-header:hover .vc-grip span { background: var(--vh-gold); }
+
+.vc-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-brand-title {
+  font-family: var(--vh-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--vh-sand);
+}
+
+.vc-brand-sub {
+  font-family: var(--vh-font-display);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--vh-gold);
+  padding: 2px 6px;
+  border: 1px solid rgba(243,181,58,0.35);
+  border-radius: var(--vh-r-pill);
+  background: rgba(243,181,58,0.08);
+  line-height: 1;
+}
+
+.vc-close {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--vh-r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vh-text-dim);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: color var(--vh-t-fast), background var(--vh-t-fast), border-color var(--vh-t-fast);
+}
+.vc-close:hover {
+  color: #fff;
+  background: rgba(232,81,63,0.22);
+  border-color: rgba(232,81,63,0.45);
+}
+.vc-close:active { transform: scale(0.90); }
+
+
+/* ============================================================
+   SECTION LABEL — divisor compartilhado
+   ============================================================ */
+
+.vc-section-label {
+  font-family: var(--vh-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--vh-text-dim2);
+  padding: 0 2px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -2px;
+}
+.vc-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(243,181,58,0.18), rgba(243,181,58,0));
+}
+
+
+/* ============================================================
+   ABAS legadas (escondidas no novo layout — switchTab() continua
+   funcional como no-op porque os elementos com data-tab/tab-body
+   ainda existem na arvore).
+   ============================================================ */
+
+.vc-tabs[hidden] { display: none !important; }
+
+
+/* ============================================================
+   RESPONSIVO — 1280x720 (mínimo suportado da NUI)
+   ============================================================ */
+
+@media (max-width: 1366px) {
+  .vc-aside-controls { width: 232px; }
+  .vc-aside-ficha    { width: 272px; }
+  .vc-aside-sound    { width: 340px; }
 }
