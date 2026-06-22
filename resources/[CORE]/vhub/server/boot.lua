@@ -168,26 +168,20 @@ function vHub:init(cfg, db_driver)
   -- vHub:savePos removido — vhub_player_state é o dono da persistência de posição
   -- via evento vhub_player_state:update (resource externo).
 
-  -- ── Veículos ──────────────────────────────────────────────────────────
-  vHub.Kernel:net("vHub:vSpawned", function(src, plate, netid)
-    vHub.Vehicle:onSpawned(plate, netid)
-  end, { rate = { 15, 5000, 15000 } })
-
-  vHub.Kernel:net("vHub:vDespawned", function(src, plate)
-    vHub.Vehicle:onDespawned(plate)
-  end, { rate = { 15, 5000, 15000 } })
-
-  vHub.Kernel:net("vHub:vEnter", function(src, plate, netid, seat)
-    vHub.Vehicle:onEnter(src, plate, netid, seat)
-  end, { rate = { 10, 3000, 10000 } })
-
-  vHub.Kernel:net("vHub:vLeave", function(src, plate, seat)
-    vHub.Vehicle:onLeave(src, plate, seat)
-  end, { rate = { 10, 3000, 10000 } })
-
-  vHub.Kernel:net("vHub:vState", function(src, plate, upd)
-    vHub.Vehicle:onStateUpdate(src, plate, upd)
-  end, { rate = { 8, 1000, 5000 }, async = false })
+  -- ── Veículos — HANDLERS DESARMADOS (N0-3, 2026-06-21, gate arquiteto+segurança) ──
+  -- Cadeia física do CORE DORMENTE por design desde a decisão #24 (verdade no
+  -- prontuário vhub_vehicle_state do conce; emitters deletados do vhub_vehcontrol).
+  -- Sem emissor legítimo, estes handlers eram superfície 100% hostil: um executor
+  -- forjava vEnter/vSpawned com o netid da VÍTIMA → onEnter concedia
+  -- NetworkSetEntityOwner(entidade_alheia, atacante) = sequestro de posição (grief).
+  -- Mantidos REGISTRADOS (rate-limit + contrato de evento) com corpo NO-OP. NUNCA
+  -- reanimar onEnter/onLeave/onStateUpdate/onSpawned sem novo gate (regra da #24).
+  local function _vhDisarmed() end
+  vHub.Kernel:net("vHub:vSpawned",   _vhDisarmed, { rate = { 15, 5000, 15000 } })
+  vHub.Kernel:net("vHub:vDespawned", _vhDisarmed, { rate = { 15, 5000, 15000 } })
+  vHub.Kernel:net("vHub:vEnter",     _vhDisarmed, { rate = { 10, 3000, 10000 } })
+  vHub.Kernel:net("vHub:vLeave",     _vhDisarmed, { rate = { 10, 3000, 10000 } })
+  vHub.Kernel:net("vHub:vState",     _vhDisarmed, { rate = { 8, 1000, 5000 }, async = false })
 
   -- ── Autosave periódico (chunked: cede o tick a cada 50 sessões) ────────
   local function doSave()

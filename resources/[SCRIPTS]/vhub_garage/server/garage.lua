@@ -8,6 +8,34 @@ local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
 
 -- ----------------------------------------------------------------------------
+-- Lock de transferência (padrão cooperativo do ferinha #19, L-09)
+--   Serializa a saga de ACT_TRANSFER por placa: dois transfers concorrentes na
+--   mesma placa cederiam o tick em Await (getSession/SQL/pay) e ambos passariam
+--   a validação "v.char_id == cid" antes de qualquer escrita = dupe. process-local
+--   (só serializa NESTE processo, igual ao ferinha #19). Liberado em todo caminho
+--   de saída + em playerDropped (lock órfão do vendedor que caiu).
+-- ----------------------------------------------------------------------------
+local TxLock = {}   -- [plate] = src detentor
+
+local function txAcquire(plate, src)
+  if TxLock[plate] then return false end
+  TxLock[plate] = src
+  return true
+end
+
+local function txRelease(plate) TxLock[plate] = nil end
+
+-- libera locks órfãos do src que caiu. NUNCA reverte dinheiro/chave aqui: reversão
+-- disparada por desconexão é explorável (cair no meio para desfazer após o ponto de
+-- não-retorno); a compensação vive SÓ no thread síncrono da saga (gate de segurança).
+AddEventHandler('playerDropped', function()
+  local s = source
+  for plate, holder in pairs(TxLock) do
+    if holder == s then TxLock[plate] = nil end
+  end
+end)
+
+-- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
 local function getGaragem(id)
@@ -209,47 +237,79 @@ end)
 -- ----------------------------------------------------------------------------
 RegisterNetEvent(E.ACT_TRANSFER)
 AddEventHandler(E.ACT_TRANSFER, function(plate, target_src, valor)
-  local src    = source
-  local cid    = Core:getCharId(src); if not cid then return end
-  local target = tonumber(target_src); if not target then return end
+  local src     = source
+  local cid     = Core:getCharId(src);    if not cid    then return end
+  local target  = tonumber(target_src);   if not target then return end
   local valor_n = tonumber(valor) or 0
-  local p      = U.normalizePlate(plate); if not p then return end
+  local p       = U.normalizePlate(plate); if not p     then return end
+
+  -- lock pessimista por placa ANTES de qualquer yield de validação (anti-dupe).
+  if not txAcquire(p, src) then
+    Core.notify(src, 'Veículo em transação. Tente novamente em instantes.')
+    return
+  end
 
   Citizen.CreateThread(function()
-    local tuser = Core:getSession(target); if not tuser then return end
-    local v = SQL:getVehicle(p)
-    if not v or v.char_id ~= cid then
-      Core.notify(src, 'Voc  n o   o dono.'); return
-    end
-    if v.status ~= 'garage' then
-      Core.notify(src, 'Ve culo precisa estar na garagem para transferir.'); return
-    end
-    -- comprador paga (carteira+banco), vendedor recebe na carteira
-    if valor_n > 0 then
-      if not Core.pay(target, valor_n) then
-        Core.notify(target, 'Saldo insuficiente para a transfer ncia.')
-        Core.notify(src,    'Comprador sem saldo.')
+    -- saga protegida: o lock é SEMPRE liberado ao fim (sucesso, falha ou erro).
+    local ok = pcall(function()
+      local tuser = Core:getSession(target)
+      if not tuser then return end
+      local v = SQL:getVehicle(p)
+      if not v or v.char_id ~= cid then
+        Core.notify(src, 'Você não é o dono.'); return
+      end
+      if v.status ~= 'garage' then
+        Core.notify(src, 'Veículo precisa estar na garagem para transferir.'); return
+      end
+
+      -- Ordem money -> transferOwner -> giveKey (contrato conce/core.lua:105). Cada
+      -- passo captura sucesso; ao falhar, compensa os anteriores na ordem inversa --
+      -- tudo DENTRO deste thread síncrono (nunca em playerDropped).
+
+      -- 1) dinheiro: comprador paga (carteira+banco), vendedor recebe na carteira
+      if valor_n > 0 then
+        if not Core.pay(target, valor_n) then
+          Core.notify(target, 'Saldo insuficiente para a transferência.')
+          Core.notify(src,    'Comprador sem saldo.')
+          return
+        end
+        Core.refund(src, valor_n)
+      end
+
+      -- 2) dono real (transação atômica no conce). Falhou -> estorna o dinheiro e
+      -- aborta; a chave-item ainda NÃO migrou.
+      if not exports.vhub_conce:transferOwner(p, tuser.char_id) then
+        if valor_n > 0 then Core.refund(target, valor_n); Core.refund(src, -valor_n) end
+        Core.notify(src, 'Falha ao transferir a posse. Operação revertida.')
         return
       end
-      Core.refund(src, valor_n)
-    end
-    -- transfere chave-item de forma at mica (toma   d  )
-    Core.takeKeyItem(src, p)
-    if not Core.giveKeyItem(target, p) then
-      -- estorna
-      Core.giveKeyItem(src, p)
-      if valor_n > 0 then Core.refund(src, -valor_n); Core.refund(target, valor_n) end
-      Core.notify(src, 'Falha ao entregar chave. Inventario do comprador cheio?')
-      return
-    end
-    -- troca de dono atomica via conce: char_id + revoga owner antigo + concede owner novo
-    -- (caminho unico de troca de dono — sem competir com o updateOwner manual)
-    exports.vhub_conce:transferOwner(p, tuser.char_id)
-    -- físico viaja com a placa no prontuário — nada a persistir na transferência
-    Core:log(p, 'transfer', cid, { to = tuser.char_id, valor = valor_n })
 
-    Core.notify(src,    ('Ve culo %s transferido.'):format(p))
-    Core.notify(target, ('Voc  recebeu o ve culo %s.'):format(p))
+      -- 3) chave-item: tira do vendedor, entrega ao comprador. Entrega falhou ->
+      -- compensa TUDO na ordem inversa: devolve a chave, desfaz a posse
+      -- (transferOwner de volta, idempotente) e estorna o dinheiro.
+      Core.takeKeyItem(src, p)
+      if not Core.giveKeyItem(target, p) then
+        Core.giveKeyItem(src, p)
+        exports.vhub_conce:transferOwner(p, cid)
+        if valor_n > 0 then Core.refund(target, valor_n); Core.refund(src, -valor_n) end
+        Core.notify(src, 'Falha ao entregar chave. Inventário do comprador cheio?')
+        return
+      end
+
+      -- físico viaja com a placa no prontuário -- nada a persistir na transferência
+      Core:log(p, 'transfer', cid, { to = tuser.char_id, valor = valor_n })
+      Core.notify(src,    ('Veículo %s transferido.'):format(p))
+      Core.notify(target, ('Você recebeu o veículo %s.'):format(p))
+    end)
+
+    txRelease(p)
+
+    -- erro inesperado no meio da saga: lock liberado; sem compensação cega (fase
+    -- desconhecida). Registra para auditoria via Core:log.
+    if not ok then
+      Core:log(p, 'transfer_error', cid, { to = target })
+      Core.notify(src, 'Erro na transferência. Verifique seus itens e saldo.')
+    end
   end)
 end)
 

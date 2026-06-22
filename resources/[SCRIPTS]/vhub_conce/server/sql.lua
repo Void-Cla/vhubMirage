@@ -36,6 +36,16 @@ M.scalar  = pscalar
 M.execute = pexec
 M.query   = pquery
 
+-- executa várias queries numa ÚNICA transação atômica (tudo aplica ou nada).
+-- Resolve com booleano (true = commit, false = rollback). Roda em thread (Await).
+local function ptransaction(queries)
+  local p = promise.new()
+  ox():transaction(queries, function(ok) p:resolve(ok and true or false) end)
+  return Citizen.Await(p)
+end
+
+M.transaction = ptransaction
+
 
 -- ============================================================
 -- ESPELHO vh_vehicles (CORE) — dono único do espelho
@@ -114,6 +124,35 @@ end
 function M:updateOwner(plate, char_id)
   return pexec('UPDATE vhub_vehicles SET char_id = ?, updated_at = ? WHERE plate = ?',
     { char_id, os.time(), plate })
+end
+
+-- troca de dono ATÔMICA (L-12): char_id + revoga chave 'owner' antiga + concede a
+-- nova numa só transação SQL — fecha o estado parcial (dono trocado sem chave-owner)
+-- em crash no meio. Idempotente: re-rodar com o mesmo new_cid converge ao mesmo estado.
+-- Statements idênticos aos de updateOwner+revokeKey+grantKey ('owner'), só atômicos.
+function M:transferOwnerTx(plate, new_cid, old_cid)
+  local now = os.time()
+  local q = {
+    { query  = 'UPDATE vhub_vehicles SET char_id = ?, updated_at = ? WHERE plate = ?',
+      values = { new_cid, now, plate } },
+  }
+  if old_cid and old_cid ~= new_cid then
+    q[#q + 1] = {
+      query  = 'DELETE FROM vhub_vehicle_keys WHERE plate = ? AND char_id = ? AND kind = ?',
+      values = { plate, old_cid, 'owner' },
+    }
+  end
+  q[#q + 1] = {
+    query = [[
+      INSERT INTO vhub_vehicle_keys (plate, char_id, kind, granted_by, expires_at, created_at)
+      VALUES (?, ?, 'owner', ?, NULL, ?)
+      ON DUPLICATE KEY UPDATE granted_by = VALUES(granted_by),
+                              expires_at = VALUES(expires_at),
+                              created_at = VALUES(created_at)
+    ]],
+    values = { plate, new_cid, new_cid, now },
+  }
+  return ptransaction(q)
 end
 
 function M:updatePosition(plate, posJson)

@@ -1,9 +1,17 @@
 -- server/exports.lua — safe cross-resource exports
+local _warned_empty_trust = false
 local function _invoker_allowed()
   local trust = vHub.cfg and vHub.cfg.trusted_resources
-  if not trust or next(trust) == nil then return true end
+  if not trust or next(trust) == nil then
+    if not _warned_empty_trust and vHub.Logger then
+      _warned_empty_trust = true
+      vHub.Logger:warn("exports",
+        "trusted_resources VAZIO — exports sensíveis NEGADOS (default-deny). Popule vHub.cfg.trusted_resources.")
+    end
+    return false                      -- N0-2: era return true (default-permissivo)
+  end
   local caller = GetInvokingResource()
-  if not caller then return true end
+  if not caller then return false end -- N0-2: era return true
   return trust[caller] == true
 end
 

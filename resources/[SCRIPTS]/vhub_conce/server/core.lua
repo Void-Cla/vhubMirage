@@ -107,11 +107,11 @@ function M:transferOwner(plate, new_cid)
   local p = U.normalizePlate(plate); if not p then return false end
   new_cid = tonumber(new_cid); if not new_cid then return false end
   local v = SQL:getVehicle(p); if not v then return false end
-  local old = v.char_id
-  SQL:updateOwner(p, new_cid)
-  if old and old ~= new_cid then SQL:revokeKey(p, old, 'owner') end
-  SQL:grantKey(p, new_cid, 'owner', new_cid, nil)
-  return true
+  -- char_id + chave-row 'owner' numa ÚNICA transação SQL atômica (L-12): elimina o
+  -- estado parcial (dono trocado sem chave-owner) se houver crash no meio da troca.
+  -- Passa a devolver o resultado REAL do commit (era sempre true) — o garage usa
+  -- esse booleano para compensar a saga de transferência (N0-1).
+  return SQL:transferOwnerTx(p, new_cid, v.char_id)
 end
 
 
