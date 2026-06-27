@@ -1,7 +1,8 @@
 /* ============================================================
-   vhub_custom — Oficina NUI
+   vhub_custom — tokens compartilhados + NUI Oficina
    Identidade vHub Mirage: Areia + Dourado · Liquid Glass
-   Escopado em .mod-oficina
+   Tokens em :root são compartilhados por bennys.css/mec.css.
+   Regras abaixo dos tokens são escopadas em .mod-oficina.
    IDs e classes manipulados por oficina.js permanecem intactos.
    ============================================================ */
 
@@ -48,9 +49,9 @@
   --t-S:  #ff7a6a;
   --t-Sp: #f3b53a;
 
-  --font-display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
-  --font-sans:    'Inter', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+  --font-display: 'Arial Narrow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'Consolas', 'Courier New', monospace;
 
   --radius:    14px;
   --radius-sm: 8px;

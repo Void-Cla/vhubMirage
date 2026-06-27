@@ -94,8 +94,8 @@ L.strings = {
   ['editor.max_grid']        = 'Maximo de slots atingido',
 
   -- ── Notify (toast) ─────────────────────────────────────────────────────
-  ['notify.training_mode']   = 'Modo treino: sem ranking nem premio',
-  ['notify.ranked_mode']     = 'Corrida rankeada — boa sorte!',
+  ['Modo de treino']   = 'Modo treino: sem ranking nem premio',
+  ['Mode de ranqued']     = 'Corrida rankeada — boa sorte!',
 }
 
 -- Tradutor com interpolacao: t('lobby.starting_in_sec', { 5 }) → 'Largada em 5 s'

@@ -39,26 +39,64 @@ local function notify(src, msg, kind)
 end
 
 
+-- Payload CANONICO do state bag da corrida — FONTE UNICA (usado em begin/checkpoint/tick).
+-- Superset coerente: todo set carrega os MESMOS campos, entao o HUD nunca perde
+-- placement/starts_at entre um tick e outro (o :set substitui o valor inteiro).
+local function race_bag(inst, p)
+    return {
+        inst_id       = inst.id,
+        track_id      = inst.track_id,
+        kind          = inst.kind,
+        mode          = inst.mode,
+        state         = inst.state,
+        cp_done       = p.cp_done or 0,
+        cp_total      = inst.cp_total or 0,
+        lap           = p.lap or 0,
+        laps          = inst.laps or 1,
+        placement     = p.placement or 0,
+        players_total = ST.count_players(inst),
+        drift_score   = p.drift_score or 0,
+        starts_at     = inst.starts_at or 0,
+        started_ms    = p.started_ms or 0,
+    }
+end
+
+
+-- Aplica telemetria (top_speed/drift) ao player com cap anti-spike e monotonia.
+-- Chamado pelo on_tick (1Hz) E pelo on_checkpoint — garante que o CP que ENCERRA
+-- a corrida ja carregue o pico de velocidade e o drift bancado, antes do finalize
+-- rodar e descartar a instancia (causa-raiz do top_speed/drift = 0 no catalogo).
+local function apply_telemetry(player, payload)
+    if type(payload) ~= 'table' then return end
+
+    if payload.top_speed then
+        local s = math.max(0, math.floor(tonumber(payload.top_speed) or 0))
+        if s > (player.top_speed or 0) then
+            player.top_speed = math.min(s, (Cfg.MAX_SPEED_KMH or 400))
+        end
+    end
+
+    if payload.drift_score then
+        local now_ms      = ms()
+        local last_ms     = player.last_tick_ms or now_ms
+        local dt_sec      = math.max(0.001, (now_ms - last_ms) / 1000.0)
+        local cap_per_sec = (Cfg.DRIFT and Cfg.DRIFT.CAP_PER_SEC) or 150
+        local max_gain    = math.floor(cap_per_sec * dt_sec + 0.5)
+        local reported    = math.max(0, math.floor(tonumber(payload.drift_score) or 0))
+        if reported > (player.drift_score or 0) then
+            local gain = math.min(reported - (player.drift_score or 0), max_gain)
+            player.drift_score = (player.drift_score or 0) + gain
+        end
+        player.last_tick_ms = now_ms
+    end
+end
+
+
 -- Snapshot do estado da instancia para os state bags dos players
 -- (HUD/NUI le e renderiza tempo, posicao, lap, drift em tempo real)
 local function sync_state_bag(inst)
     for src, p in pairs(inst.players or {}) do
-        Player(src).state:set('vhub_racha', {
-            inst_id       = inst.id,
-            track_id      = inst.track_id,
-            kind          = inst.kind,
-            mode          = inst.mode,
-            state         = inst.state,
-            cp_done       = p.cp_done or 0,
-            cp_total      = inst.cp_total or 0,
-            lap           = p.lap or 0,
-            laps          = inst.laps or 1,
-            placement     = p.placement or 0,
-            players_total = ST.count_players(inst),
-            drift_score   = p.drift_score or 0,
-            starts_at     = inst.starts_at or 0,
-            started_ms    = p.started_ms or 0,
-        }, true)
+        Player(src).state:set('vhub_racha', race_bag(inst, p), true)
     end
 end
 
@@ -82,16 +120,35 @@ function RT.begin_racing(inst)
 
     sync_state_bag(inst)
 
-    -- Hard timeout — se ninguem terminar dentro do limite da track
-    local track = ST.track(inst.track_id)
-    local limit = (track and track.limit_seconds or 300) * 1000
-    if limit > 0 then
-        SetTimeout(limit, function()
-            local i = ST.instance(inst.id)
-            if not i or i.state ~= 'racing' then return end
-            RT.finish(inst.id, 'timeout')
-        end)
-    end
+    -- Rede de seguranca (NAO guilhotina): so encerra instancia abandonada/travada.
+    -- Piso generoso — o `limit_seconds` curto da pista NUNCA reduz isto, entao a
+    -- corrida normal acaba por chegada / DNF / grace, nunca por timeout no meio.
+    local safety = (Cfg.RACE_SAFETY_TIMEOUT_S or 1800) * 1000
+    SetTimeout(safety, function()
+        local i = ST.instance(inst.id)
+        if not i or i.state ~= 'racing' then return end
+        RT.finish(inst.id, 'timeout')
+    end)
+
+    -- ============================================================
+    -- VRCS (soft-dep): abre o replay cinematografico se vhub_vrcs existir.
+    -- Empurra so estado JA validado (sem 2a fonte). pcall = o inicio da corrida
+    -- NUNCA quebra se o resource de replay estiver off/ausente.
+    -- ============================================================
+    pcall(function()
+        local players = {}
+        for psrc, pp in pairs(inst.players) do
+            players[#players + 1] = { src = psrc, char_id = pp.char_id }
+        end
+        exports['vhub_vrcs']:onRaceStart({
+            inst_id  = inst.id,
+            track_id = inst.track_id,
+            kind     = inst.kind,
+            mode     = inst.mode,
+            category = inst.category,
+            players  = players,
+        })
+    end)
 end
 
 
@@ -120,21 +177,12 @@ function RT.on_checkpoint(src, payload)
     local cps_per_lap = math.max(1, math.floor(cp_total / math.max(1, inst.laps)))
     player.lap        = math.floor((player.cp_done - 1) / cps_per_lap) + 1
 
-    -- Sincroniza state bag (HUD reflete imediato)
-    Player(src).state:set('vhub_racha', {
-        inst_id       = inst.id,
-        track_id      = inst.track_id,
-        kind          = inst.kind,
-        mode          = inst.mode,
-        state         = 'racing',
-        cp_done       = player.cp_done,
-        cp_total      = cp_total,
-        lap           = player.lap,
-        laps          = inst.laps,
-        players_total = ST.count_players(inst),
-        drift_score   = player.drift_score,
-        started_ms    = player.started_ms,
-    }, true)
+    -- Telemetria carregada no proprio CP: o ultimo CP (que dispara o finish)
+    -- ja deixa top_speed/drift persistidos antes do finalize.
+    apply_telemetry(player, payload)
+
+    -- Sincroniza state bag (HUD reflete imediato) — fonte unica race_bag
+    Player(src).state:set('vhub_racha', race_bag(inst, player), true)
 
     if cp_total > 0 and player.cp_done >= cp_total then
         RT._player_finish(inst, src)
@@ -157,27 +205,8 @@ function RT.on_tick(src, payload)
     if not player then return end
     if type(payload) ~= 'table' then return end
 
-    -- Anti-cheat / smoothing — cap de drift por segundo
-    local now_ms      = ms()
-    local last_ms     = player.last_tick_ms or now_ms
-    local dt_sec      = math.max(0.001, (now_ms - last_ms) / 1000.0)
-    local cap_per_sec = (Cfg.DRIFT and Cfg.DRIFT.CAP_PER_SEC) or 150
-    local max_gain    = math.floor(cap_per_sec * dt_sec + 0.5)
-
-    if payload.drift_score then
-        local reported = math.max(0, math.floor(tonumber(payload.drift_score) or 0))
-        if reported > (player.drift_score or 0) then
-            local gain = math.min(reported - (player.drift_score or 0), max_gain)
-            player.drift_score = (player.drift_score or 0) + gain
-        end
-    end
-
-    if payload.top_speed then
-        local reported_s = math.max(0, math.floor(tonumber(payload.top_speed) or 0))
-        if reported_s > (player.top_speed or 0) then
-            player.top_speed = math.min(reported_s, (Cfg.MAX_SPEED_KMH or 400))
-        end
-    end
+    -- top_speed / drift com cap anti-spike (fonte unica: apply_telemetry)
+    apply_telemetry(player, payload)
 
     if payload.best_lap_ms and payload.best_lap_ms > 0 then
         if not player.best_lap_ms or payload.best_lap_ms < player.best_lap_ms then
@@ -185,22 +214,7 @@ function RT.on_tick(src, payload)
         end
     end
 
-    player.last_tick_ms = now_ms
-
-    Player(src).state:set('vhub_racha', {
-        inst_id       = inst.id,
-        track_id      = inst.track_id,
-        kind          = inst.kind,
-        mode          = inst.mode,
-        state         = inst.state,
-        cp_done       = player.cp_done or 0,
-        cp_total      = inst.cp_total or 0,
-        lap           = player.lap or 0,
-        laps          = inst.laps or 1,
-        players_total = ST.count_players(inst),
-        drift_score   = player.drift_score,
-        started_ms    = player.started_ms or 0,
-    }, true)
+    Player(src).state:set('vhub_racha', race_bag(inst, player), true)
 end
 
 
@@ -250,6 +264,11 @@ function RT.on_abort(src, reason)
 
     local player = inst.players[src]
     if not player then return end
+
+    -- Quem JA cruzou a chegada nao pode virar DNF (morte/saida do carro na janela
+    -- de graca eram comemoracao, nao desistencia). Antes isso gravava o vencedor
+    -- como derrota — causa do "vitoria e derrota ao mesmo tempo".
+    if player.finished then return end
 
     player.state       = 'dnf'
     player.finished    = false
@@ -309,11 +328,38 @@ function RT.finish(inst_id, reason)
                 winner_char = result.winner_char,
                 reason      = reason or 'finished',
                 mode        = inst.mode,
+                -- Ranqueado (nil em treino/privada ou corrida < 2 pilotos)
+                pdl_delta   = p.pdl_delta,
+                pdl_new     = p.pdl_new,
+                division    = p.division,
             })
             Player(p.src).state:set('vhub_racha', nil, true)
             ST.unbind_src(p.src)
         end
     end
+
+    -- ============================================================
+    -- VRCS (soft-dep): fecha o replay com o desfecho final. O nick viaja SO p/ o
+    -- embed de resultado — o recorder NUNCA grava nick/PII no .vhr (so char_id).
+    -- ============================================================
+    pcall(function()
+        local players = {}
+        for _, p in ipairs(result.players) do
+            players[#players + 1] = {
+                char_id   = p.char_id,
+                nick      = p.nick,
+                placement = p.placement,
+                time_ms   = p.total_time_ms,
+                drift     = p.drift_score,
+                top_speed = p.top_speed,
+                finished  = p.finished,
+            }
+        end
+        exports['vhub_vrcs']:onRaceClose(inst.id, {
+            winner_char = result.winner_char,
+            players     = players,
+        })
+    end)
 
     inst.state = 'closed'
     ST.remove_instance(inst.id)

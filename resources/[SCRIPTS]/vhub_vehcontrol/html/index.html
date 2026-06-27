@@ -188,9 +188,23 @@
 
         <!-- Fonte (segmented) -->
         <div class="vc-sound-tabs" role="tablist">
-          <button class="vc-sound-tab is-active" data-source="radio">Rádio</button>
-          <button class="vc-sound-tab" data-source="mp3">MP3</button>
-          <button class="vc-sound-tab" data-source="url">URL</button>
+          <button class="vc-sound-tab" data-source="radio">Rádio</button>
+          <button class="vc-sound-tab is-active" data-source="search">Buscar</button>
+          <button class="vc-sound-tab" data-source="url">Link</button>
+        </div>
+
+        <!-- Busca de música (só visível na fonte "Buscar") -->
+        <div class="vc-sound-search" id="sound-search-row">
+          <input class="vc-sound-url-input" id="sound-search-input" type="text"
+                 placeholder="Buscar música ou artista…" maxlength="80" autocomplete="off">
+          <ul class="vc-sound-results" id="sound-results"></ul>
+        </div>
+
+        <!-- Campo de URL (só visível na fonte "URL") -->
+        <div class="vc-sound-url hidden" id="sound-url-row">
+          <input class="vc-sound-url-input" id="sound-url-input" type="text"
+                 placeholder="YouTube, SoundCloud ou link .mp3 direto…"
+                 maxlength="512" autocomplete="off">
         </div>
 
         <!-- Volume -->

@@ -70,16 +70,21 @@ document.addEventListener('DOMContentLoaded', function () {
   el.nitroLevelVal  = document.getElementById('nitro-level-val');
   el.nitroCharge    = document.getElementById('nitro-charge');
 
-  // som (apenas DOM cache — sem callback Lua)
-  el.soundTitle     = document.getElementById('sound-title');
-  el.soundArtist    = document.getElementById('sound-artist');
-  el.soundSource    = document.getElementById('sound-source');
-  el.soundViz       = document.getElementById('sound-viz');
-  el.soundPlay      = document.getElementById('sound-play');
-  el.soundPrev      = document.getElementById('sound-prev');
-  el.soundNext      = document.getElementById('sound-next');
-  el.soundVolume    = document.getElementById('sound-volume');
-  el.soundVolumeVal = document.getElementById('sound-volume-val');
+  // som (Buscar=Jamendo / Rádio / URL — tudo via post() → vhub_wow)
+  el.soundTitle       = document.getElementById('sound-title');
+  el.soundArtist      = document.getElementById('sound-artist');
+  el.soundSource      = document.getElementById('sound-source');
+  el.soundViz         = document.getElementById('sound-viz');
+  el.soundPlay        = document.getElementById('sound-play');
+  el.soundPrev        = document.getElementById('sound-prev');
+  el.soundNext        = document.getElementById('sound-next');
+  el.soundVolume      = document.getElementById('sound-volume');
+  el.soundVolumeVal   = document.getElementById('sound-volume-val');
+  el.soundUrlRow      = document.getElementById('sound-url-row');
+  el.soundUrlInput    = document.getElementById('sound-url-input');
+  el.soundSearchRow   = document.getElementById('sound-search-row');
+  el.soundSearchInput = document.getElementById('sound-search-input');
+  el.soundResults     = document.getElementById('sound-results');
 
   // Roda inits dos módulos (controls.js, ficha.js, sound.js)
   vhub._inits.forEach(function (fn) {
@@ -129,6 +134,15 @@ window.addEventListener('message', function (event) {
       break;
     case 'nitroDone':
       if (typeof onNitroDone === 'function') onNitroDone(d.ok === true, d.nitro || null);
+      break;
+    case 'soundRejected':
+      if (typeof onSoundRejected === 'function') onSoundRejected();
+      break;
+    case 'soundResults':
+      if (typeof onSoundResults === 'function') onSoundResults(d.items || []);
+      break;
+    case 'soundNow':
+      if (typeof onSoundNow === 'function') onSoundNow(d.title || '', d.artist || '');
       break;
   }
 });

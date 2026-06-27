@@ -189,13 +189,13 @@ end
 -- ============================================================
 
 -- NUI → fecha sem aplicar (botão Cancelar ou ESC)
-RegisterNUICallback('fechar', function(_, cb)
+RegisterNUICallback('oficina:fechar', function(_, cb)
   VHubCustom.closeOficina(false)
   cb('ok')
 end)
 
 -- NUI → envia seleção de stages ao servidor para validação e cobrança
-RegisterNUICallback('aplicarTuning', function(data, cb)
+RegisterNUICallback('oficina:aplicarTuning', function(data, cb)
   local plate  = type(data.plate)  == 'string' and data.plate  or ''
   local mods   = type(data.mods)   == 'table'  and data.mods   or {}
   local veh    = VHubCustom.activeVeh
@@ -232,7 +232,7 @@ end)
 
 -- NUI → redistribui pontos livres (mesmo motor do vhub_vehcontrol, porta 'oficina' cobra
 -- dinheiro em vez de consumir item — decisão #27, único handler RECALIBRATE no servidor)
-RegisterNUICallback('recalibrar', function(data, cb)
+RegisterNUICallback('oficina:recalibrar', function(data, cb)
   local plate = type(data.plate) == 'string' and data.plate or ''
   local alloc = type(data.alloc) == 'table'  and data.alloc or nil
   if plate ~= '' and alloc then
@@ -242,7 +242,7 @@ RegisterNUICallback('recalibrar', function(data, cb)
 end)
 
 -- NUI → pede prévia de score/tier para o alloc em rascunho (não persiste nada)
-RegisterNUICallback('previewCalibrar', function(data, cb)
+RegisterNUICallback('oficina:previewCalibrar', function(data, cb)
   local plate = type(data.plate) == 'string' and data.plate or ''
   local alloc = type(data.alloc) == 'table'  and data.alloc or nil
   if plate ~= '' and alloc then
@@ -252,7 +252,7 @@ RegisterNUICallback('previewCalibrar', function(data, cb)
 end)
 
 -- NUI → instalar kit nitro (oficina cobra; vhub_nitro escreve o estado na placa — decisão #29)
-RegisterNUICallback('instalarKitNitro', function(data, cb)
+RegisterNUICallback('oficina:instalarKitNitro', function(data, cb)
   local plate = type(data.plate) == 'string' and data.plate or ''
   if plate ~= '' then TriggerServerEvent(E.OFICINA_NITRO_KIT, plate) end
   cb('ok')

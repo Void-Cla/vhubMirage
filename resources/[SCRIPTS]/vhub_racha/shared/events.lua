@@ -34,6 +34,10 @@ VHubRachaE = {
     NUI_HISTORY_DATA  = 'vhub_racha:nui:history_data',
     NUI_RESULTS       = 'vhub_racha:nui:results',
     NUI_RESULTS_DATA  = 'vhub_racha:nui:results_data',
+    NUI_RANKED        = 'vhub_racha:nui:ranked',         -- client → server: pede o ladder PDL
+    NUI_RANKED_DATA   = 'vhub_racha:nui:ranked_data',    -- server → client: ladder PDL
+    NUI_PROFILE       = 'vhub_racha:nui:profile',        -- client → server: pede perfil (proprio ou char_id)
+    NUI_PROFILE_DATA  = 'vhub_racha:nui:profile_data',   -- server → client: perfil composto
 
 
     -- ============================================================

@@ -9,7 +9,7 @@ version     '1.1.0'
 description 'Controle de veiculo (portas, motor, trava, luzes, banco, camera). Adaptado p/ vHub. Integracao: veh_key.'
 
 -- SOFT-deps (via export com pcall, NAO em dependencies p/ nao travar o boot):
---   xsound       -> radio (sem ele, o resto funciona)
+--   vhub_wow     -> radio (sem ele, o resto funciona) — decisao de integracao #34
 --   vhub_garage  -> caminho "dono do veiculo" da trava/motor (sem ele, vale so a chave fisica)
 dependencies {
   'vhub',
@@ -28,11 +28,13 @@ server_scripts {
   'server/exports.lua',          -- API read-only: getVehicleTier/Score/Affinity/Sheet (decisão #27)
   'server/skill.lua',            -- handler único RECALIBRATE: toolbox + oficina (decisão #27)
   'server/nitro_bridge.lua',     -- ficha → vhub_nitro: liga/nível/abastece (delega, decisão #30)
+  'server/sound.lua',            -- radio → vhub_wow: play/stop/volume (soft-dep, decisao #34)
 }
 
 client_scripts {
   'client/main.lua',
   'client/handling.lua',         -- F5: aplica fisica derivada (sheet.hnd) no carro dirigido (decisao #28)
+  'client/sound.lua',            -- radio → vhub_wow: callbacks NUI + ponte server (decisao #34)
 }
 
 -- Velocímetro REMOVIDO (VELO-3 2026-06): agora é o resource `vhub_velo` (1 velocímetro só).

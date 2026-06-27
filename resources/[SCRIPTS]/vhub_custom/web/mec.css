@@ -1,0 +1,137 @@
+/* ============================================================
+   vhub_custom — Mec NUI (reparo parcial + reboque)
+   Card HUD compacto: 3 botões de reparo + 1 ação de reboque.
+   Sem nav/detail/stats — over-engineering para esta interação.
+   Escopado em .mod-mec. Usa tokens de :root (style.css).
+   ============================================================ */
+
+.mod-mec.mec-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 80px;
+  background: transparent;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 220ms ease;
+}
+.mod-mec.mec-overlay.hidden { opacity: 0; pointer-events: none; }
+.mod-mec.mec-overlay:not(.hidden) { pointer-events: auto; }
+
+.mod-mec .mec-card {
+  position: relative;
+  width: 380px;
+  max-width: 92vw;
+  background: linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55)), rgba(12,10,6,0.82);
+  background-blend-mode: normal;
+  border: var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  overflow: hidden;
+}
+
+.mod-mec .mec-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.55), transparent);
+  pointer-events: none;
+}
+
+.mod-mec .mc-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  background: linear-gradient(180deg, rgba(26,22,16,0.85), rgba(12,10,6,0.55));
+  border-bottom: 1px solid rgba(243,181,58,0.14);
+}
+
+.mod-mec .mc-veh-sub {
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--vh-sand-dim);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(243,181,58,0.08);
+}
+
+.mod-mec .mc-options {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px;
+}
+
+.mod-mec .mc-opt {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(243,181,58,0.12);
+  background: linear-gradient(180deg, rgba(26,22,16,0.70), rgba(12,10,6,0.55));
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms;
+}
+.mod-mec .mc-opt:hover:not(.mc-opt-disabled) {
+  border-color: rgba(243,181,58,0.32);
+  background: linear-gradient(180deg, rgba(37,30,20,0.80), rgba(18,14,8,0.65));
+}
+.mod-mec .mc-opt-disabled {
+  opacity: 0.40;
+  cursor: not-allowed;
+}
+
+.mod-mec .mc-opt-icon { font-size: 18px; flex-shrink: 0; }
+
+.mod-mec .mc-opt-info { flex: 1; min-width: 0; }
+.mod-mec .mc-opt-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--vh-sand-soft);
+  text-transform: uppercase;
+}
+.mod-mec .mc-opt-desc {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--vh-sand-dim);
+}
+
+.mod-mec .mc-opt-price {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vh-gold);
+  flex-shrink: 0;
+}
+
+.mod-mec .mc-tow-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 4px 16px 16px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(243,181,58,0.30);
+  background: linear-gradient(180deg, rgba(243,181,58,0.18), rgba(243,181,58,0.06));
+  color: var(--vh-gold-soft);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 140ms;
+}
+.mod-mec .mc-tow-btn:hover {
+  background: linear-gradient(180deg, rgba(243,181,58,0.30), rgba(243,181,58,0.12));
+  box-shadow: 0 0 18px rgba(243,181,58,0.25);
+}
+.mod-mec .mc-tow-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

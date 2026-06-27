@@ -18,6 +18,7 @@ local TRUSTED = {
   ['vhub_testrunner'] = true,   -- testes server-side (somente ambiente de teste)
   ['vhub_custom']     = true,   -- oficina (bennys/mec/oficina) → saveVehicleState (cosmetic/tune/repair)
   ['vhub_nitro']      = true,   -- nitro → saveVehicleState (customization.nitro, source='nitro')
+  ['vhub_vrcs']       = true,   -- Race Cinema: getVehicleState (read-only) p/ preservar aparência no replay
 }
 
 local function _invoker_allowed()

@@ -31,8 +31,14 @@ function AC.validate_checkpoint(inst, src, payload)
   local cp_target = track.checkpoints[((idx - 1) % #track.checkpoints) + 1]
   if not cp_target then return false, 'cp_alvo_inexistente' end
 
-  local pos = payload.pos
-  if type(pos) == 'table' and pos.x and pos.y then
+  -- posicao SERVER-SIDE (zero confianca no cliente; mesmo padrao de grid.in_ready_zone).
+  -- Se o ped resolve, a checagem de distancia e OBRIGATORIA (fail-closed) — o atacante
+  -- nao consegue mais pular a validacao omitindo `pos` no payload. So cai pro best-effort
+  -- do payload quando a entidade nao resolve server-side (ped==0; residual aceito #22d-i).
+  local ped = GetPlayerPed(src)
+  local pos = (ped and ped ~= 0) and GetEntityCoords(ped) or payload.pos
+
+  if pos and pos.x and pos.y then
     local dx, dy = pos.x - cp_target.x, pos.y - cp_target.y
     local d2 = dx * dx + dy * dy
     local max_d = Cfg.CP_MAX_TELEPORT_DIST or 300

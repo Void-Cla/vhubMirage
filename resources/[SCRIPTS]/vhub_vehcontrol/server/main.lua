@@ -43,6 +43,10 @@ local function hasAccess(src, plate)
   return false
 end
 
+-- exposto p/ outros arquivos server do resource (ex: sound.lua) — mesma checagem, fonte única (L-04/L-09)
+VHubVeh = VHubVeh or {}
+VHubVeh.hasVehicleAccess = hasAccess
+
 
 -- ============================================================
 -- TRAVA / MOTOR — servidor mantem o estado e manda TODOS aplicarem

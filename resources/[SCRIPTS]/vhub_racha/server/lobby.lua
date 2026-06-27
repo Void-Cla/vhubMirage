@@ -74,6 +74,7 @@ local function broadcast_lobby_state(inst)
             track_id         = inst.track_id,
             kind             = inst.kind,
             mode             = inst.mode,
+            category         = inst.category,   -- NUNCA inclui `password` (so server)
             state            = inst.state,
             confirmed        = p.confirmed == true,
             grid_slot        = p.grid_slot,
@@ -97,11 +98,29 @@ local function count_confirmed(inst)
 end
 
 
--- Detecta modo a partir do payload e kind da track
--- treino e freerun colapsam para 'treino' (sem premio)
+-- Modo de SESSAO (como rodou): 'treino' (solo, sem fee/premio/PDL) ou 'rankeada'
+-- (competitiva: fee+premio+records). NAO confundir com CATEGORIA da pista — esta
+-- e fixa e FAIL-CLOSED (vem da track, nunca do cliente). O PDL/temporada exige
+-- category=='ranqueada' E mode=='rankeada' (gate em history.finalize), entao um
+-- cliente forjado NUNCA farma PDL pedindo 'rankeada' numa pista 'normal'.
 local function resolve_mode(payload, track)
     if track.kind == 'freerun' then return 'treino' end
     return (payload and payload.mode == 'treino') and 'treino' or 'rankeada'
+end
+
+
+-- Resolve senha do lobby (server-side). Personalizada SEMPRE exige senha;
+-- competitiva pode ter senha opcional (lobby privado); treino dispensa.
+-- Retorna (password|nil, err). password nunca cruza fronteira (so has_password).
+local function resolve_password(payload, category, mode)
+    if mode == 'treino' then return nil end
+    local raw = (type(payload) == 'table' and type(payload.password) == 'string')
+        and payload.password:gsub('^%s+', ''):gsub('%s+$', '') or ''
+    if category == 'personalizada' then
+        if raw == '' then return nil, 'senha_obrigatoria' end
+        return raw
+    end
+    return (raw ~= '') and raw or nil   -- lobby privado opcional
 end
 
 
@@ -128,9 +147,14 @@ function L.create(src, payload)
     if not track then return false, 'pista_inexistente' end
 
     local mode      = resolve_mode(payload, track)
+    local category  = VHubRachaSQL.valid_category(track.category)   -- FAIL-CLOSED: vem da pista
     local entry_fee = resolve_fee(payload, track, mode)
     local laps      = U.clamp_int((payload and payload.laps) or track.laps or 1, 1, 10)
     if track.kind == 'freerun' then laps = 0 end
+
+    -- Senha do lobby (personalizada exige; privada opcional). Server-side only.
+    local password, perr = resolve_password(payload, category, mode)
+    if perr then return false, perr end
 
     local cp_total    = #(track.checkpoints or {}) * math.max(1, laps)
     local min_players = U.clamp_int((payload and payload.min_players) or track.min_players or 1, 1, 12)
@@ -144,6 +168,8 @@ function L.create(src, payload)
         district      = track.district,
         kind          = track.kind,
         mode          = mode,
+        category      = category,   -- fixa da pista (temporada/PDL)
+        password      = password,   -- SERVER-SIDE only; nunca cruza fronteira
         illegal       = track.illegal == true,
         alerts_police = track.alerts_police == true,
         laps          = laps,
@@ -169,8 +195,8 @@ function L.create(src, payload)
     ST.put_instance(inst)
     ST.metrics.instances_created = ST.metrics.instances_created + 1
 
-    -- Auto-join do criador (treino, timeattack ou ranqueado — todos passam aqui)
-    local ok, data = L.join(src, inst.id)
+    -- Auto-join do criador (passa a propria senha — criador nao e barrado)
+    local ok, data = L.join(src, inst.id, password)
     if not ok then
         ST.remove_instance(inst.id)
         return false, data
@@ -186,7 +212,8 @@ end
 
 -- Adiciona jogador a instancia. Cobra fee, aloca grid slot, e transiciona
 -- 'lobby' → 'pending' na primeira entrada (inicia deadline de confirmacao).
-function L.join(src, inst_id)
+-- `password` validado ANTES de cobrar/alocar (lobby protegido = personalizada/privada).
+function L.join(src, inst_id, password)
     local user = user_of(src)
     if not user then return false, 'sem_sessao' end
 
@@ -197,6 +224,11 @@ function L.join(src, inst_id)
     if inst.players[src] then return false, 'ja_no_lobby' end
     if ST.instance_by_src(src) then return false, 'ja_em_outra_corrida' end
     if ST.count_players(inst) >= (inst.max_players or 8) then return false, 'lobby_cheio' end
+
+    -- Lobby protegido por senha (valida antes de cobrar fee / alocar grid)
+    if inst.password and inst.password ~= '' then
+        if tostring(password or '') ~= inst.password then return false, 'senha_incorreta' end
+    end
 
     -- Cobranca atomica (Rewards faz o trabalho com vhub_money)
     if (inst.entry_fee or 0) > 0 then

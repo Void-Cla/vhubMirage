@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>vHub Wow</title>
+  <style>
+    html, body { background: transparent; margin: 0; padding: 0; }
+    /* container oculto dos players de embed (YouTube/SoundCloud) */
+    #wow-players { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <!-- backends de embed (excecao A-10: scripts oficiais remotos; nao vao em files{}) -->
+  <div id="wow-players"></div>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="https://w.soundcloud.com/player/api.js"></script>
+
+  <script src="audio.js"></script>
+</body>
+</html>

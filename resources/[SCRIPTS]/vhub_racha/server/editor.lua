@@ -221,6 +221,7 @@ function ED.save(src, meta)
     limit_seconds = draft.limit_seconds,
     start         = draft.start,
     source        = 'custom',
+    category      = 'personalizada',   -- editor SEMPRE cria personalizada (#36)
   }
   SQL.upsert_track(track)
   SQL.set_checkpoints(id, draft.checkpoints)

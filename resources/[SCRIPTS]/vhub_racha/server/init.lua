@@ -14,12 +14,29 @@ local R   = VHubRachaRanking
 local Lang = VHubRachaLang
 local B   = VHubRachaBoot
 
+
+-- ============================================================
+-- ANTI-SPAM — rate-limit por jogador nos eventos NAO-gameplay (PRD: event/packet spam).
+-- Gameplay (RACE_CHECKPOINT/TICK) fica de fora: tem validacao/cap proprios em anti_cheat.
+-- ============================================================
+
+local _rl = {}   -- [src] = { [tag] = last_ms }
+
+-- true se o jogador disparou `tag` ha menos de window_ms (descarta o evento)
+local function rate_limited(src, tag, window_ms)
+  local t = _rl[src]; if not t then t = {}; _rl[src] = t end
+  local now = GetGameTimer()
+  if now - (t[tag] or -1e9) < window_ms then return true end
+  t[tag] = now
+  return false
+end
+
 -- ── Schema + catalogo (roda quando boot ficar ready) ───────────────────────
 
 B.on_ready(function()
   local ok, err = SQL.apply_schema()
   if not ok then
-    print('[vhub_racha][init] schema falhou: ' .. tostring(err))
+    VHubRachaLog.error('schema falhou: ' .. tostring(err))
     return
   end
 
@@ -44,6 +61,7 @@ B.on_ready(function()
       limit_seconds = t.limit_seconds or 300,
       start         = start,
       source        = 'config',
+      category      = t.category,   -- categoria fixa da pista (#36; default 'normal')
     })
     SQL.set_checkpoints(t.id, cps)
     SQL.set_grid(t.id, grid)
@@ -53,7 +71,10 @@ B.on_ready(function()
   ST.set_catalog(SQL.load_catalog())
 
   local n = 0; for _ in pairs(ST._catalog) do n = n + 1 end
-  print(('[vhub_racha][init] %d pistas carregadas.'):format(n))
+  VHubRachaLog.info('%d pistas carregadas.', n)
+
+  -- Ranqueado: liga o cron de decay (no-op se desligado no config)
+  VHubRachaRanked.start_decay_cron()
 end, 'schema_catalog')
 
 -- ── Cron GC ────────────────────────────────────────────────────────────────
@@ -71,6 +92,7 @@ end, 'cron_gc')
 
 AddEventHandler('playerDropped', function()
   local src = source
+  _rl[src] = nil
   if not B.READY then return end
   LB.on_player_dropped(src)
   RT.on_player_dropped(src)
@@ -93,6 +115,7 @@ local function build_panel_data()
       laps = t.laps, min_players = t.min_players, max_players = t.max_players,
       vehicle_class = t.vehicle_class, default_fee = t.default_fee,
       limit_seconds = t.limit_seconds, source = t.source,
+      category = t.category or 'normal',
       cps = #(t.checkpoints or {}), color = t.color,
     }
   end
@@ -111,25 +134,8 @@ local function build_panel_data()
   }
 end
 
-local function send_open(src)
-  if not src or src <= 0 then return end
-  if not B.READY then
-    TriggerClientEvent(E.NOTIFY, src, 'O sistema ainda esta carregando, aguarde...', 'info')
-    return
-  end
-  TriggerClientEvent(E.NUI_OPENED, src, build_panel_data())
-end
-
-RegisterNetEvent(E.NUI_OPEN, function() send_open(source) end)
-
--- export publico: outro resource abre o painel do racha (ponto de integracao, ex: vhub_ipad).
--- Acopla iPad<->racha SO por export (sem depender da string do evento NUI_OPEN).
--- Guarda: so abre para um jogador REALMENTE conectado (src arbitrario de terceiro = no-op).
-exports('openPanel', function(src)
-  if type(src) ~= 'number' or not GetPlayerName(src) then return false end
-  send_open(src)
-  return true
-end)
+-- NUI_OPEN / openPanel / send_open REMOVIDOS: o painel standalone nao existe
+-- mais. O iPad consome `build_panel_data` exclusivamente pelo relay abaixo.
 
 -- relay do APP EMBUTIDO do iPad (broker vhub_ipad). Reusa a lógica do painel
 -- (LB.* / R.* / ED.*) e responde pelo push do iPad (appPush). Contrato de 11 ações
@@ -158,7 +164,7 @@ exports('ipadRelay', function(src, action, data)
         end
 
       elseif action == 'join' then
-        local jok, jdata = LB.join(src, inst_id)
+        local jok, jdata = LB.join(src, inst_id, data.password)
         if jok then
           TriggerClientEvent(E.NOTIFY, src, 'Você entrou. Vá ao ponto de largada e confirme.', 'success')
           exports.vhub_ipad:closeIpad(src)
@@ -179,6 +185,20 @@ exports('ipadRelay', function(src, action, data)
         local results = R.results_of(tonumber(data.history_id) or 0)
         exports.vhub_ipad:appPush(src, 'racha', 'results', { results = results })
 
+      elseif action == 'ranked' then
+        exports.vhub_ipad:appPush(src, 'racha', 'ranked', { rows = R.ranked_ladder(50) })
+
+      elseif action == 'profile' then
+        -- char_id PROPRIO vem da sessao (server-side, nunca do cliente).
+        local req_cid = tonumber(data.char_id) or 0
+        local user    = VHubRachaSessions.get(src)
+        local own_cid = user and tonumber(user.char_id) or 0
+        local cid     = (req_cid > 0) and req_cid or own_cid
+        -- Anti-enumeracao: perfil de TERCEIRO so se ele ja correu ranqueada.
+        if cid > 0 and (cid == own_cid or VHubRachaRanked.has_played(cid)) then
+          exports.vhub_ipad:appPush(src, 'racha', 'profile', R.profile_of(cid))
+        end
+
       -- ── editor (in-game, keyboard): abre edição → fecha o iPad ─
       elseif action == 'editor_open' then
         ED.open(src)
@@ -195,66 +215,43 @@ exports('ipadRelay', function(src, action, data)
         exports.vhub_ipad:appPush(src, 'racha', 'data', build_panel_data())
       end
     end)
-    if not ok then print('[vhub_racha] ipadRelay ERRO: ' .. tostring(err)) end
+    if not ok then VHubRachaLog.error('ipadRelay: ' .. tostring(err)) end
   end)
 
   return true
 end)
 
--- Lobby
-RegisterNetEvent(E.LOBBY_CREATE, function(payload)
+-- Lobby IN-GAME (bridge `vhub_racha.action` da ready-zone em nui_bridge.lua):
+-- confirmar presenca / sair / pedir entrada. Criar e demais fluxos chegam pelo
+-- relay do iPad (ipadRelay) — o painel standalone que os disparava foi removido
+-- (#36). CANCEL/FORCE_START sairam (sem consumidor in-game).
+RegisterNetEvent(E.LOBBY_CONFIRM, function(inst_id)
   if not B.READY then return end
   local src = source
-  local ok, data = LB.create(src, payload or {})
-  TriggerClientEvent(E.NUI_RESULT, src, { ok = ok, kind = 'create', data = data })
+  if rate_limited(src, 'lobby_confirm', 500) then return end
+  local ok = LB.confirm_presence(src, inst_id, false)
+  if not ok then
+    TriggerClientEvent(E.NOTIFY, src, Lang.t('lobby.outside_ready_zone'), 'error')
+  end
 end)
 
 RegisterNetEvent(E.LOBBY_JOIN, function(inst_id)
   if not B.READY then return end
   local src = source
+  if rate_limited(src, 'lobby_join', 800) then return end
+  -- Lobby protegido por senha so entra pelo iPad (que coleta a senha); o bridge
+  -- in-game junta sem senha (fluxo de lobby aberto).
   local ok, data = LB.join(src, inst_id)
-  TriggerClientEvent(E.NUI_RESULT, src, { ok = ok, kind = 'join', data = data })
+  TriggerClientEvent(E.NOTIFY, src, ok and 'Voce entrou no lobby.' or
+    ('Falha ao entrar: %s'):format(tostring(data)), ok and 'success' or 'error')
 end)
 
 RegisterNetEvent(E.LOBBY_LEAVE, function(inst_id)
   if not B.READY then return end
   local src = source
+  if rate_limited(src, 'lobby_leave', 500) then return end
   LB.leave(src, inst_id)
-  TriggerClientEvent(E.NUI_RESULT, src, { ok = true, kind = 'leave' })
-end)
-
-RegisterNetEvent(E.LOBBY_CANCEL, function(inst_id)
-  if not B.READY then return end
-  local src = source
-  local inst = ST.instance(inst_id); if not inst then return end
-  local user = VHubRachaSessions.get(src)
-  if not user or user.char_id ~= inst.creator_char then return end
-  LB.cancel(inst_id, 'criador')
-end)
-
-RegisterNetEvent(E.LOBBY_CONFIRM, function(inst_id)
-  if not B.READY then return end
-  local src = source
-  local ok, err = LB.confirm_presence(src, inst_id, false)
-  if not ok then
-    TriggerClientEvent(E.NOTIFY, src,
-      Lang.t('lobby.outside_ready_zone'), 'error')
-  end
-end)
-
-RegisterNetEvent(E.LOBBY_FORCE_START, function(inst_id)
-  if not B.READY then return end
-  local src = source
-  local inst = ST.instance(inst_id); if not inst then return end
-  local user = VHubRachaSessions.get(src)
-  if not user or user.char_id ~= inst.creator_char then
-    TriggerClientEvent(E.NOTIFY, src, Lang.t('lobby.only_host_start'), 'error')
-    return
-  end
-  local ok, err = LB.start(inst_id, false)
-  if not ok then
-    TriggerClientEvent(E.NOTIFY, src, ('Falha: %s'):format(tostring(err)), 'error')
-  end
+  TriggerClientEvent(E.NOTIFY, src, 'Voce saiu do lobby.', 'info')
 end)
 
 -- Race
@@ -273,46 +270,23 @@ RegisterNetEvent(E.RACE_ABORT, function(reason)
   RT.on_abort(source, tostring(reason or 'manual'))
 end)
 
--- NUI queries
-RegisterNetEvent(E.NUI_RANKING, function(payload)
-  if not B.READY then return end
-  local src = source
-  local kind = (payload and payload.kind) or 'sprint'
-  local mode = (payload and payload.mode) or 'wins'
-  TriggerClientEvent(E.NUI_RANKING_DATA, src,
-    { kind = kind, mode = mode, data = R.top(kind, mode, 50) })
-end)
+-- NUI queries (ranking/history/results/ranked/profile) REMOVIDAS: todas chegam
+-- pelo relay do iPad (ipadRelay → R.*). A anti-enumeracao do perfil de terceiro
+-- (Ranked.has_played) vive agora no ramo 'profile' do ipadRelay.
 
-RegisterNetEvent(E.NUI_HISTORY, function(payload)
-  if not B.READY then return end
-  local src = source
-  TriggerClientEvent(E.NUI_HISTORY_DATA, src, R.recent(payload or {}, 30))
-end)
-
-RegisterNetEvent(E.NUI_RESULTS, function(history_id)
-  if not B.READY then return end
-  local src = source
-  TriggerClientEvent(E.NUI_RESULTS_DATA, src,
-    { history_id = history_id, results = R.results_of(tonumber(history_id) or 0) })
-end)
-
--- Editor
-RegisterNetEvent(E.EDITOR_OPEN,    function() if B.READY then ED.open(source) end end)
+-- Editor IN-GAME (keyboard). O start/save/discard vem pelo iPad (ipadRelay).
 RegisterNetEvent(E.EDITOR_PHASE,   function(p)
   if B.READY then ED.set_phase(source, (p and p.phase) or 'idle') end
 end)
 RegisterNetEvent(E.EDITOR_ADD_GRID,function() if B.READY then ED.add_grid(source) end end)
 RegisterNetEvent(E.EDITOR_ADD_CP,  function() if B.READY then ED.add_cp(source) end end)
 RegisterNetEvent(E.EDITOR_UNDO,    function() if B.READY then ED.undo(source) end end)
-RegisterNetEvent(E.EDITOR_SAVE,    function(meta) if B.READY then ED.save(source, meta or {}) end end)
-RegisterNetEvent(E.EDITOR_DISCARD, function() if B.READY then ED.discard(source) end end)
+-- EDITOR_SAVE / EDITOR_DISCARD chegam pelo iPad (ipadRelay editor_save/discard).
 
 -- ── Comandos ────────────────────────────────────────────────────────────────
 
-RegisterCommand(Cfg.CMD_OPEN, function(src)
-  if src <= 0 then return end
-  send_open(src)
-end, false)
+-- /racha (painel) REMOVIDO: o painel abre exclusivamente pelo iPad (ipadRelay).
+-- Mantidos abaixo apenas comandos de GAMEPLAY in-game (treino) e debug do editor.
 
 -- /racha_treino <track_id> → cria lobby treino e abre o totem.
 -- Treino e FIEL ao ranqueado: player vai ate o totem e aperta [E] para confirmar.
@@ -347,6 +321,6 @@ end, false)
 RegisterCommand('vhub_racha_status', function(src)
   if src ~= 0 then return end
   local s = ST.status_snapshot()
-  print(('[vhub_racha] ready=%s tracks=%d lobbies=%d pending=%d racing=%d drafts=%d'):format(
-    tostring(B.READY), s.catalog_size, s.lobbies, s.pending, s.racing, s.drafts))
+  VHubRachaLog.info('ready=%s tracks=%d lobbies=%d pending=%d racing=%d drafts=%d',
+    tostring(B.READY), s.catalog_size, s.lobbies, s.pending, s.racing, s.drafts)
 end, true)

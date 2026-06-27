@@ -42,15 +42,71 @@ end
 
 -- abre seleção de reparo para o veículo ativo na zona
 function VHubCustom.openMec()
-  -- TODO F5: abre módulo NUI mec
-  -- Por ora: smoke test via comando temporário (ver /mecrepair)
+  local veh = VHubCustom.activeVeh
+  if not DoesEntityExist(veh) or veh == 0 then return end
+  if VHubCustom.inMenu then return end
+
+  local plate = GetVehicleNumberPlateText(veh):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
+  local model = GetEntityModel(veh)
+  local dispName = string.lower(GetDisplayNameFromVehicleModel(model) or '')
+  local catEntry = (VHubCustom.catalog or {})[dispName] or {}
+
   VHubCustom.inMenu = true
+
+  SendNUIMessage({
+    action = 'openMec',
+    data   = {
+      plate = plate,
+      nome  = catEntry.nome or GetDisplayNameFromVehicleModel(model) or plate,
+    },
+  })
+
+  SetNuiFocus(true, true)
 end
 
 function VHubCustom.closeMec()
   VHubCustom.inMenu = false
   SetNuiFocus(false, false)
 end
+
+
+-- ============================================================
+-- NUI CALLBACKS
+-- ============================================================
+
+-- NUI → fecha sem ação (botão Cancelar/✕ ou timeout de 20s)
+RegisterNUICallback('mec:fechar', function(_, cb)
+  VHubCustom.closeMec()
+  cb('ok')
+end)
+
+-- NUI → solicita reparo parcial do componente selecionado
+RegisterNUICallback('mec:repair', function(data, cb)
+  local plate       = type(data.plate)       == 'string' and data.plate       or ''
+  local repair_type = type(data.repair_type) == 'string' and data.repair_type or ''
+
+  if plate == '' or repair_type == '' then
+    cb({ ok = false })
+    return
+  end
+
+  TriggerServerEvent(E.MEC_REPAIR, plate, repair_type)
+  cb({ ok = true })
+end)
+
+-- NUI → solicita reboque do veículo ativo (servidor resolve netId→entidade→placa)
+RegisterNUICallback('mec:tow', function(_, cb)
+  local veh = VHubCustom.activeVeh
+  if not DoesEntityExist(veh) or veh == 0 then
+    cb({ ok = false })
+    return
+  end
+
+  local plate = GetVehicleNumberPlateText(veh):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
+  local netId = NetworkGetNetworkIdFromEntity(veh)
+  TriggerServerEvent(E.MEC_TOW_REQ, plate, netId)
+  cb({ ok = true })
+end)
 
 
 -- ============================================================
@@ -77,6 +133,7 @@ AddEventHandler(E.MEC_CONFIRM, function(plate, ok, repair_type)
     end)
   end
   VHubCustom.closeMec()
+  SendNUIMessage({ action = 'fecharMec' })
 end)
 
 

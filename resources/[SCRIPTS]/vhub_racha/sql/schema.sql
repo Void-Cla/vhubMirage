@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS `vh_race_tracks` (
   `start_z`         DOUBLE           NOT NULL DEFAULT 0,
   `start_h`         DOUBLE           NOT NULL DEFAULT 0,
   `source`          ENUM('config','custom') NOT NULL DEFAULT 'config',
+  -- Categoria fixa da pista (temporadas): ranqueada conta PDL; normal=casual;
+  -- personalizada=editor, lobby SEMPRE com senha. Escritor: upsert_track (#36).
+  `category`        ENUM('ranqueada','normal','personalizada') NOT NULL DEFAULT 'normal',
   `enabled`         TINYINT UNSIGNED NOT NULL DEFAULT 1,
   `created_at`      TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -59,6 +62,9 @@ CREATE TABLE IF NOT EXISTS `vh_race_history` (
   `track_id`        VARCHAR(48)      NOT NULL,
   `kind`            VARCHAR(24)      NOT NULL DEFAULT 'sprint',
   `mode`            ENUM('rankeada','treino','privada') NOT NULL DEFAULT 'rankeada',
+  -- Categoria da pista no momento da corrida (dimensao ORTOGONAL a `mode`;
+  -- filtro de temporada = WHERE category='ranqueada' AND mode='rankeada'). #36
+  `category`        ENUM('ranqueada','normal','personalizada') NOT NULL DEFAULT 'normal',
   `creator_char`    INT UNSIGNED     NOT NULL DEFAULT 0,
   `players_total`   INT UNSIGNED     NOT NULL DEFAULT 0,
   `winner_char`     INT UNSIGNED     NOT NULL DEFAULT 0,
@@ -71,6 +77,7 @@ CREATE TABLE IF NOT EXISTS `vh_race_history` (
   KEY `idx_hist_winner` (`winner_char`),
   KEY `idx_hist_kind` (`kind`),
   KEY `idx_hist_mode` (`mode`),
+  KEY `idx_hist_category` (`category`),
   KEY `idx_hist_started` (`started_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -123,5 +130,23 @@ CREATE TABLE IF NOT EXISTS `vh_race_stats` (
   `updated_at`    TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`char_id`, `kind`),
   CONSTRAINT `fk_stats_char` FOREIGN KEY (`char_id`)
+    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Ranqueado: rating PDL GLOBAL (cross-kind, estilo CS2). 1 linha por personagem.
+-- Escritor UNICO = server/ranked.lua (Elo FFA, snapshot-read → UPSERT atomico).
+-- `pdl` é INT com sinal: o delta de Elo pode ser negativo; clamp >= MIN_PDL no
+-- escritor evita rating abaixo do piso (a coluna nunca recebe valor < 0 na pratica).
+CREATE TABLE IF NOT EXISTS `vh_race_ranked` (
+  `char_id`        INT UNSIGNED     NOT NULL,
+  `pdl`            INT              NOT NULL DEFAULT 1000,
+  `peak_pdl`       INT              NOT NULL DEFAULT 1000,
+  `matches`        INT UNSIGNED     NOT NULL DEFAULT 0,
+  `wins`           INT UNSIGNED     NOT NULL DEFAULT 0,
+  `last_match_at`  INT UNSIGNED     NOT NULL DEFAULT 0,
+  `updated_at`     TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`char_id`),
+  KEY `idx_ranked_pdl` (`pdl`),
+  CONSTRAINT `fk_ranked_char` FOREIGN KEY (`char_id`)
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

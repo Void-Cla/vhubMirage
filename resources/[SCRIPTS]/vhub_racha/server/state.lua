@@ -53,6 +53,8 @@ function ST.public_lobbies()
         label       = inst.label,
         kind        = inst.kind,
         mode        = inst.mode,
+        category    = inst.category,                       -- tipo de corrida (temporada)
+        has_password = (inst.password ~= nil and inst.password ~= ''), -- nunca expor a senha
         illegal     = inst.illegal,
         alerts_police = inst.alerts_police,
         creator     = inst.creator_char,

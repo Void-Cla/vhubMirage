@@ -1,0 +1,2 @@
+# Pasta de saida dos arquivos .vhr (gerada/escrita em runtime via SaveResourceFile).
+# Mantida no git so para garantir a existencia do diretorio.

@@ -14,8 +14,8 @@ VHubRachaCfg = {
   TRUSTED_RESOURCES = { ['vhub'] = true, ['vhub_admin'] = true },
 
   -- ── Comandos / atalho ──────────────────────────────────────────────────
-  CMD_OPEN          = 'racha',          -- /racha → abre painel principal
-  KEY_OPEN          = 'F7',
+  -- O PAINEL nao tem comando/atalho: abre exclusivamente pelo iPad (ipadRelay).
+  -- /racha + F7 removidos. Abaixo so comandos de GAMEPLAY/editor in-game.
   CMD_TRAINING      = 'racha_treino',   -- /racha_treino <track_id> → solo sem premio
   -- Editor (sempre via NUI; comandos sao backup p/ debug)
   CMD_EDITOR_DEBUG  = 'racha_editor',
@@ -28,6 +28,16 @@ VHubRachaCfg = {
   FINISH_GRACE_MS     = 60000,
   MIN_CHECKPOINT_MS   = 400,
   TICK_INTERVAL_MS    = 1000,
+  -- Rede de seguranca: piso do timeout duro da corrida. NUNCA guilhotina uma
+  -- corrida em andamento — so encerra instancia ABANDONADA/travada. O fim normal
+  -- vem por chegada / todos DNF / grace. `limit_seconds` da pista nunca reduz isto.
+  RACE_SAFETY_TIMEOUT_S = 1800,   -- 30 min
+
+  -- Categoria de pista (sistema de temporadas). Ver VHubRachaTracks[].category.
+  --   'ranqueada'     → so modo rankeada (conta PDL/temporada) + treino solo
+  --   'normal'        → corrida casual (fee/premio opcional, SEM PDL) + treino solo
+  --   'personalizada' → criada no editor; lobby SEMPRE com senha; SEM PDL
+  CATEGORY_DEFAULT    = 'normal',
 
   -- ── Ready Zone (confirmacao de presenca na largada) ────────────────────
   -- Visual: gas/fumaca de areia dourada bem fraco no chao — so para o piloto
@@ -60,6 +70,41 @@ VHubRachaCfg = {
   PAYOUT_2P            = { 0.80, 0.20 },
   PAYOUT_SOLO          = { 1.00 },
   TIMEATTACK_BONUS_PCT = 50,
+
+  -- ── Ranqueado / PDL (Elo FFA pairwise, estilo CS2) ─────────────────────
+  -- Rating GLOBAL (cross-kind). So corre ranqueada com >=2 personagens distintos.
+  -- A matematica pura vive em shared/math.lua (expected_score / division_of); o
+  -- dominio de escrita (single writer de vh_race_ranked) vive em server/ranked.lua.
+  RANKED = {
+    ENABLED             = true,
+    PDL_START           = 1000,   -- rating inicial de quem nunca correu ranqueada
+    MIN_PDL             = 100,    -- piso: rating nunca cai abaixo disso
+    C_FACTOR            = 4000,   -- escala da curva de expectativa (xadrez=400; aqui milhares)
+    K_FACTOR            = 500,    -- swing maximo por corrida (jogador calibrado)
+    K_CALIBRATION       = 1500,   -- swing nas primeiras partidas (convergencia rapida)
+    CALIBRATION_MATCHES = 10,     -- partidas ate sair da calibracao
+
+    -- Decaimento por inatividade: limpa o topo de quem sumiu (auto-regulacao).
+    DECAY = {
+      ENABLED       = true,
+      ABOVE_PDL     = 2200,    -- so decai quem esta acima disso (elite)
+      PER_DAY       = 25,      -- pontos perdidos por sweep
+      INACTIVE_DAYS = 14,      -- dias sem correr ranqueada para comecar a decair
+      INTERVAL_MS   = 3600000, -- de quanto em quanto verifica (1h); roda o sweep 1x/dia
+    },
+
+    -- Divisoes (ordem CRESCENTE por `min`). `division_of` resolve key+tier (I..III).
+    -- NUI mapeia key → cor/icone; o servidor manda apenas a key (A-01: regra no server).
+    DIVISIONS = {
+      { key = 'bronze',   label = 'Bronze',   min = 0    },
+      { key = 'prata',    label = 'Prata',    min = 1200 },
+      { key = 'ouro',     label = 'Ouro',     min = 1600 },
+      { key = 'platina',  label = 'Platina',  min = 2200 },
+      { key = 'diamante', label = 'Diamante', min = 3000 },
+      { key = 'mestre',   label = 'Mestre',   min = 4000 },
+      { key = 'lendario', label = 'Lendario', min = 5500 },
+    },
+  },
 
   -- ── Drift scoring ───────────────────────────────────────────────────────
   -- A FABRICACAO da pontuacao bruta (angulo x velocidade x combo) vive no
@@ -116,9 +161,9 @@ VHubRachaCfg = {
     -- Espessura da linha (FINA — uma unica camada solida)
     COLUMN_W         = 0.55,
     -- Offset do chao: desce a base do CP ate o solo (ajuste se afundar/flutuar)
-    GROUND_OFFSET    = 0.5,
+    GROUND_OFFSET    = 1.5,
     -- Raio da nuvem de areia na base (sombra suave, nao o diametro do CP)
-    BASE_RADIUS      = 5.0,
+    BASE_RADIUS      = 8.0,
     -- Cores (RGB)
     COLOR_DEFAULT    = { r = 248, g = 200, b = 105 },  -- AREIA DE OURO NEON (padrao)
     COLOR_FINISH     = { r = 120, g = 230, b = 140 },  -- verde no CP final
@@ -165,6 +210,7 @@ VHubRachaTracks = {
   {
     id = 'corrida_atk', label = 'atk 1', district = 'atk',
     kind = 'sprint', illegal = true, alerts_police = false,
+    category = 'ranqueada',   -- conta PDL/temporada
     laps = 1, min_players = 1, max_players = 2, vehicle_class = 'car',
     default_fee = 1000, limit_seconds = 900,
     color = { r = 243, g = 181, b = 58 },

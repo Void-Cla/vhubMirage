@@ -1,5 +1,9 @@
 'use strict';
 
+// IIFE: isola todo o estado/funções deste domínio do escopo global window,
+// compartilhado com bennys.js/mec.js no mesmo documento (1 ui_page por resource).
+(function () {
+
 // ============================================================
 // CONFIG DE COMPONENTES (visual + estimativas de boost)
 // Os boost são estimativas para preview — não afetam a lógica server-side.
@@ -420,7 +424,7 @@ function requestPreview() {
   _previewPending = true;
   _previewTimer = setTimeout(() => {
     if (!_calibrating || !_draftAlloc || !_data) return;
-    fetch('https://vhub_custom/previewCalibrar', {
+    fetch('https://vhub_custom/oficina:previewCalibrar', {
       method: 'POST',
       body:   JSON.stringify({ plate: _data.plate, alloc: _draftAlloc }),
     });
@@ -572,7 +576,7 @@ function closeNUI() {
 
 function cancelarOficina() {
   closeNUI();
-  fetch('https://vhub_custom/fechar', { method: 'POST', body: '{}' });
+  fetch('https://vhub_custom/oficina:fechar', { method: 'POST', body: '{}' });
 }
 
 // ============================================================
@@ -602,7 +606,7 @@ function cancelarCalibragem() {
 function salvarCalibragem() {
   if (!_draftAlloc || !_data) return;
   document.getElementById('btn-calib-save').disabled = true;
-  fetch('https://vhub_custom/recalibrar', {
+  fetch('https://vhub_custom/oficina:recalibrar', {
     method: 'POST',
     body:   JSON.stringify({ plate: _data.plate, alloc: _draftAlloc }),
   });
@@ -634,7 +638,7 @@ function aplicarTuning() {
   document.getElementById('btn-apply').disabled  = true;
   document.getElementById('btn-cancel').disabled = true;
 
-  fetch('https://vhub_custom/aplicarTuning', {
+  fetch('https://vhub_custom/oficina:aplicarTuning', {
     method: 'POST',
     body:   JSON.stringify({ plate: _data.plate, mods }),
   });
@@ -664,7 +668,7 @@ var _btnNitro = document.getElementById('btn-nitro-kit');
 if (_btnNitro) _btnNitro.addEventListener('click', function () {
   if (!_data || !_data.plate) return;
   _btnNitro.disabled = true;
-  fetch('https://vhub_custom/instalarKitNitro', {
+  fetch('https://vhub_custom/oficina:instalarKitNitro', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ plate: _data.plate }),
@@ -676,3 +680,5 @@ document.getElementById('btn-calibrar').addEventListener('click', function () {
 });
 document.getElementById('btn-calib-cancel').addEventListener('click', cancelarCalibragem);
 document.getElementById('btn-calib-save').addEventListener('click',   salvarCalibragem);
+
+})();

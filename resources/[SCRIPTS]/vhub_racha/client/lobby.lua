@@ -23,20 +23,9 @@ RegisterNetEvent(E.LOBBY_PENDING, function(data)
     track_label      = data.track_label,
   })
 
-  -- Notifica via feed nativo
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(Lang.t('lobby.confirm_presence'))
-  EndTextCommandThefeedPostTicker(false, true)
-
-  -- Tempo restante (feed imediato)
-  if data.pending_deadline and tonumber(data.pending_deadline) and data.pending_deadline > 0 then
-    local remaining = math.max(0, (data.pending_deadline or 0) - GetGameTimer())
-    local label = ('Tempo p/ confirmar: %s'):format(
-      (U and U.time_short_ms) and U.time_short_ms(remaining) or (math.ceil(remaining/1000) .. 's'))
-    BeginTextCommandThefeedPost('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandThefeedPostTicker(false, true)
-  end
+  -- Notifica via toast global (vhub_notify). A barra de tempo/rota persistente
+  -- (countdown on-screen + projecao da ready-zone + blip de rota) fica abaixo.
+  L.notify(Lang.t('lobby: Presensa confirmada.'), 'info')
 
   -- Blip no mapa
   if data.ready_zone then
@@ -68,10 +57,7 @@ RegisterNetEvent(E.LOBBY_CONFIRMED, function(_data)
     VHubRachaLocal._pending_blip = nil
   end
   VHubRachaLocal.confirmed = true
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(
-    Lang.t('lobby.confirmed_notify') or 'Presença confirmada — aguarde o início.')
-  EndTextCommandThefeedPostTicker(false, true)
+  L.notify(Lang.t('lobby.confirmed_notify') or 'Presença confirmada — aguarde o início.', 'success')
   if USE_NUI then
     SendNUIMessage({ type = 'vhub_racha.lobby.confirmed', data = _data or {} })
   end

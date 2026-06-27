@@ -69,11 +69,14 @@ function H.finalize(inst)
   local winner_char    = (winner and winner.finished and winner.char_id) or 0
   local winner_time_ms = (winner and winner.finished and winner.total_time_ms) or 0
 
+  local category = inst.category or 'normal'
+
   local now = os.time()
   local history_id = SQL.insert_history({
     track_id       = inst.track_id,
     kind           = kind,
     mode           = mode,
+    category       = category,
     creator_char   = tonumber(inst.creator_char) or 0,
     players_total  = #players,
     winner_char    = winner_char,
@@ -87,8 +90,27 @@ function H.finalize(inst)
     SQL.insert_results(history_id, players)
   end
 
-  -- Records + stats so para modo rankeado
+  -- Records + stats para toda corrida COMPETITIVA (mode=='rankeada'; treino nao
+  -- conta). PDL/temporada SO quando a pista e da categoria 'ranqueada' (#36):
+  -- normal/personalizada dao fee/premio + historico, mas zero PDL.
   if mode == 'rankeada' then
+    local season_ranked = (category == 'ranqueada')
+
+    -- PDL: Elo FFA sobre TODOS os participantes com char_id (snapshot atomico).
+    -- Gate de temporada AQUI (history e o dono do gate); apply_race fica agnostico.
+    -- VHubRachaRanked e resolvido em runtime (ranked.lua carrega depois deste
+    -- arquivo no fxmanifest — referencia global, nao captura local no load).
+    local pdl_out = {}
+    if season_ranked then
+      local pdl_parts = {}
+      for _, p in ipairs(players) do
+        if p.char_id > 0 then
+          pdl_parts[#pdl_parts + 1] = { char_id = p.char_id, placement = p.placement }
+        end
+      end
+      pdl_out = (VHubRachaRanked and VHubRachaRanked.apply_race(pdl_parts)) or {}
+    end
+
     for i, p in ipairs(players) do
       if p.char_id > 0 then
         local was_win    = (i == 1 and p.finished)
@@ -100,6 +122,14 @@ function H.finalize(inst)
         SQL.update_stats(p.char_id, kind, was_win, was_podium, dnf,
           p.payout, p.drift_score, p.top_speed,
           p.finished and p.total_time_ms or 0)
+
+        -- Anexa o resultado de PDL ao player (propagado ao RACE_FINISH)
+        local o = pdl_out[p.char_id]
+        if o then
+          p.pdl_delta = o.delta
+          p.pdl_new   = o.new_pdl
+          p.division  = o.division   -- { key, label, tier }
+        end
       end
     end
   end

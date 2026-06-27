@@ -395,12 +395,14 @@
     max-width: 420px;
 }
 
-.mod-racha .panel-search i {
+.mod-racha .panel-search > span {
     position: absolute;
     left: 12px; top: 50%;
     transform: translateY(-50%);
     color: var(--vh-text-dim2);
-    font-size: 13px;
+    font-size: 15px;
+    pointer-events: none;
+    z-index: 1;
 }
 
 .mod-racha .panel-search .vh-input {
@@ -442,7 +444,7 @@
     gap: var(--vh-gap-sm);
 }
 
-.mod-racha .panel-track-head > i {
+.mod-racha .panel-track-head > .vh-icon {
     color: var(--vh-gold);
     font-size: 16px;
 }
@@ -471,7 +473,7 @@
 }
 
 .mod-racha .panel-track-meta b { color: var(--vh-text); }
-.mod-racha .panel-track-meta i { color: var(--vh-text-dim2); }
+.mod-racha .panel-track-meta .vh-icon { color: var(--vh-text-dim2); }
 
 .mod-racha .panel-track-foot {
     display: flex;
@@ -510,7 +512,7 @@
     border: 1px solid var(--vh-glass-line);
 }
 
-.mod-racha .panel-lobby > i {
+.mod-racha .panel-lobby > .vh-icon {
     font-size: 18px;
     color: var(--vh-gold);
 }
@@ -733,10 +735,10 @@
     font-size: 14px;
 }
 
-.mod-racha .panel-empty i {
+.mod-racha .panel-empty .vh-icon {
     display: block;
+    margin: 0 auto var(--vh-gap-sm);
     font-size: 32px;
-    margin-bottom: var(--vh-gap-sm);
     color: var(--vh-sand-deep);
 }
 
@@ -760,3 +762,178 @@
     opacity: 0;
     transform: translateX(20px);
 }
+
+
+/* ============================================================
+   SCROLLBAR — fino, dourado discreto (dentro da tela do iPad)
+   ============================================================ */
+
+.mod-racha .panel-view::-webkit-scrollbar,
+.mod-racha .panel-list::-webkit-scrollbar,
+.mod-racha .panel-tablewrap::-webkit-scrollbar { width: 8px; height: 8px; }
+
+.mod-racha .panel-view::-webkit-scrollbar-track,
+.mod-racha .panel-list::-webkit-scrollbar-track { background: transparent; }
+
+.mod-racha .panel-view::-webkit-scrollbar-thumb,
+.mod-racha .panel-list::-webkit-scrollbar-thumb,
+.mod-racha .panel-tablewrap::-webkit-scrollbar-thumb {
+    background: rgba(243,181,58,0.30);
+    border-radius: var(--vh-r-pill);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+.mod-racha .panel-view::-webkit-scrollbar-thumb:hover,
+.mod-racha .panel-list::-webkit-scrollbar-thumb:hover { background: rgba(243,181,58,0.55); background-clip: padding-box; }
+
+
+/* ============================================================
+   CATEGORIA — badge da pista (ranqueada/normal/personalizada)
+   ============================================================ */
+
+.mod-racha .panel-cat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border: 1px solid currentColor;
+    border-radius: var(--vh-r-pill);
+    background: rgba(12,10,6,0.40);
+    font-family: var(--vh-font-tech);
+    font-size: 11px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+.mod-racha .panel-cat-badge b { color: inherit; font-weight: 700; }
+
+.mod-racha .panel-lobby-lock {
+    display: inline-flex;
+    align-items: center;
+    color: var(--vh-gold-soft);
+    margin-left: 2px;
+}
+
+
+/* ============================================================
+   DIVISAO — badge (Bronze..Lendario)
+   ============================================================ */
+
+.mod-racha .panel-div-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid currentColor;
+    border-radius: var(--vh-r-pill);
+    background: rgba(12,10,6,0.45);
+    font-family: var(--vh-font-tech);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.mod-racha .panel-div-badge.big { padding: 6px 14px; font-size: 15px; box-shadow: 0 0 14px rgba(243,181,58,0.10); }
+.mod-racha .panel-div-badge b { color: inherit; font-weight: 700; }
+
+
+/* ============================================================
+   RANQUEADO — ladder
+   ============================================================ */
+
+.mod-racha .panel-ranked-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--vh-gap-sm);
+    flex: 1;
+    color: var(--vh-text-dim);
+    font-family: var(--vh-font-tech);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+.mod-racha .panel-pdl-cell { font-family: var(--vh-font-num); color: var(--vh-gold-soft); font-weight: 700; }
+
+
+/* ============================================================
+   PERFIL — cartao do corredor
+   ============================================================ */
+
+.mod-racha .panel-profile { display: flex; flex-direction: column; gap: var(--vh-gap-lg); }
+
+.mod-racha .panel-profile-head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vh-gap-lg);
+    padding: var(--vh-gap-xl);
+}
+.mod-racha .panel-profile-id { display: flex; align-items: center; gap: var(--vh-gap-lg); }
+.mod-racha .panel-profile-avatar {
+    display: grid; place-items: center;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 1px solid var(--vh-glass-border);
+    background: var(--vh-glass-bg-2);
+    color: var(--vh-gold);
+    font-size: 26px;
+}
+.mod-racha .panel-profile-nick {
+    font-family: var(--vh-font-display);
+    font-size: 26px; font-weight: 700;
+    color: var(--vh-text); line-height: 1.1; margin-bottom: 6px;
+}
+.mod-racha .panel-profile-prov {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--vh-r-pill);
+    border: 1px dashed var(--vh-sand-dim);
+    color: var(--vh-sand-dim);
+    font-family: var(--vh-font-tech);
+    font-size: 12px;
+}
+.mod-racha .panel-profile-stats {
+    display: flex; flex-wrap: wrap; gap: var(--vh-gap-xl);
+    padding-top: var(--vh-gap-md);
+    border-top: 1px solid var(--vh-glass-line);
+}
+.mod-racha .panel-profile-stat { display: flex; flex-direction: column; gap: 2px; }
+.mod-racha .panel-profile-stat-val {
+    font-family: var(--vh-font-num); font-size: 24px; font-weight: 700;
+    color: var(--vh-gold-soft); line-height: 1;
+}
+.mod-racha .panel-profile-stat-lbl {
+    font-family: var(--vh-font-tech); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; color: var(--vh-text-dim2);
+}
+.mod-racha .panel-profile-progress { display: flex; flex-direction: column; gap: 6px; }
+.mod-racha .panel-profile-progress-bar {
+    height: 8px; border-radius: var(--vh-r-pill);
+    background: rgba(12,10,6,0.50); overflow: hidden;
+}
+.mod-racha .panel-profile-progress-fill {
+    height: 100%; border-radius: var(--vh-r-pill);
+    background: linear-gradient(90deg, var(--vh-amber), var(--vh-gold-soft));
+    transition: width var(--vh-t-norm);
+}
+.mod-racha .panel-profile-progress-lbl { font-family: var(--vh-font-tech); font-size: 12px; color: var(--vh-text-dim); }
+.mod-racha .panel-profile-section { padding: var(--vh-gap-lg); }
+.mod-racha .panel-profile-h3 {
+    display: flex; align-items: center; gap: var(--vh-gap-sm);
+    margin: 0 0 var(--vh-gap-md);
+    font-family: var(--vh-font-display); font-size: 17px; color: var(--vh-text);
+}
+.mod-racha .panel-profile-section .panel-table { font-size: 13px; }
+
+
+/* ============================================================
+   EDITOR — nota de categoria
+   ============================================================ */
+
+.mod-racha .panel-editor-note {
+    display: flex; align-items: center; gap: var(--vh-gap-sm);
+    margin-bottom: var(--vh-gap-lg);
+    padding: 10px 14px;
+    border-radius: var(--vh-r-card);
+    border: 1px solid var(--vh-glass-line);
+    background: var(--vh-glass-bg-2);
+    color: var(--vh-text-dim);
+    font-size: 13px;
+}
+.mod-racha .panel-editor-note b { color: var(--vh-gold-soft); }

@@ -31,10 +31,35 @@ local CFG = {
   selector_timeout = 60,         -- s sem escolha → spawn automático na pos salva/padrão
 }
 
+-- ── Routing buckets (dimensão de sessão) ──────────────────────────────────────
+-- Escritor ÚNICO de Routing Bucket (L-16): 999 = entrada isolada (seleção de
+-- spawn, sem população), 1 = mundo, 2 = atividade isolada (test-drive/arena/
+-- replay, via export). Bucket isola ENTIDADES DE REDE — NÃO a geometria do mapa
+-- (essa sempre carrega no cliente; "tela limpa" é a cobertura do hold).
+local ENTRY_BUCKET, WORLD_BUCKET = 999, 1
+
+-- só troca quando difere (evita re-stream desnecessário)
+local function setBucket(src, b)
+  if not src or src <= 0 then return end
+  if GetPlayerRoutingBucket(src) ~= b then SetPlayerRoutingBucket(src, b) end
+end
+
+-- invocador confiável do export de atividade (default-deny; vazio = só interno).
+-- NÃO popular sem o arquiteto registrar ownership de cada membro (L-07).
+local BUCKET_TRUSTED = {}
+local function invokerOK()
+  local who = GetInvokingResource()
+  if not who or who == GetCurrentResourceName() then return true end
+  return BUCKET_TRUSTED[who] == true
+end
+
 -- ── Inicialização ─────────────────────────────────────────────────────────────
 
 AddEventHandler("onResourceStart", function(res)
   if res ~= GetCurrentResourceName() then return end
+  -- 999 = entrada: sem população e lockdown estrito (dimensão vazia de entidades)
+  SetRoutingBucketPopulationEnabled(ENTRY_BUCKET, false)
+  SetRoutingBucketEntityLockdownMode(ENTRY_BUCKET, "strict")
   Citizen.CreateThread(function()
     local tentativas = 0
     while tentativas < 50 do
@@ -89,6 +114,7 @@ local _pending    = {}  -- [src] = token do hold aguardando spawnAt (anti-double
 
 local function liberar(src, pos, first_spawn)
   _pending[src] = nil
+  setBucket(src, WORLD_BUCKET)   -- todo release confirmado sai do 999 → mundo (antes do release)
   TriggerClientEvent("vhub_player_state:release", src, pos, first_spawn == true)
 end
 
@@ -119,6 +145,16 @@ AddEventHandler("vHub:playerSpawn", function(user, first_spawn)
   local selecionar = CFG.usar_selector
     and GetResourceState("vhub_spawselector") == "started"
     and (CFG.selector_modo == "always" or spawns <= 1)
+
+  -- Isolamento de entrada: SÓ no 1º spawn REAL com seleção (replay vem first=false,
+  -- então nunca joga um player já no mundo de volta ao 999). Sem seleção: garante
+  -- o mundo ANTES de soltar o ped (fecha qualquer janela em 999).
+  local isolar = selecionar and (first_spawn == true)
+  if isolar then
+    setBucket(src, ENTRY_BUCKET)        -- seleção de spawn acontece no 999 vazio
+  elseif not selecionar then
+    setBucket(src, WORLD_BUCKET)
+  end
 
   TriggerClientEvent("vhub_player_state:apply", src, {
     pos             = pos,
@@ -235,6 +271,18 @@ end)
 
 -- Há hold pendente para este src? (provedores checam antes de abrir UI)
 exports("isPendingSpawn", function(src) return _pending[tonumber(src)] ~= nil end)
+
+-- Move o player para a dimensão de atividade isolada (test-drive/arena/replay) e
+-- de volta. default-deny (invokerOK) + range {1,2} (NUNCA 999) + alvo online.
+exports("setActivityBucket", function(src, n)
+  if not invokerOK() then return false end
+  src = tonumber(src); n = tonumber(n)
+  if not src or src <= 0 then return false end
+  if n ~= WORLD_BUCKET and n ~= 2 then return false end
+  if not (_pronto and _vHub.Auth:getUser(src)) then return false end
+  setBucket(src, n)
+  return true
+end)
 
 -- Dá armas (chamado por vhub_groups no onjoin da polícia, etc.)
 exports("giveWeapons", function(src, weapons, clear_before)

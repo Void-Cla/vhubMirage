@@ -196,6 +196,95 @@
 }
 
 
+/* Campo de URL (fonte "URL") */
+.vc-sound-url-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-family: var(--vh-font-body);
+  font-size: 11.5px;
+  color: var(--vh-text);
+  background: rgba(12,10,6,0.45);
+  border: 1px solid var(--vh-glass-line);
+  border-radius: var(--vh-r-btn);
+  outline: none;
+  transition: border-color var(--vh-t-fast), box-shadow var(--vh-t-fast);
+}
+.vc-sound-url-input::placeholder { color: var(--vh-text-dim2); }
+.vc-sound-url-input:focus {
+  border-color: var(--vh-gold);
+  box-shadow: 0 0 0 1px rgba(243,181,58,0.30);
+}
+
+
+/* Busca de música (fonte "Buscar") — input reaproveita .vc-sound-url-input */
+.vc-sound-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vc-sound-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 168px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vc-sound-results::-webkit-scrollbar { width: 6px; }
+.vc-sound-results::-webkit-scrollbar-thumb {
+  background: rgba(243,181,58,0.35);
+  border-radius: var(--vh-r-pill);
+}
+.vc-sound-results::-webkit-scrollbar-track { background: transparent; }
+
+.vc-sound-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 9px;
+  cursor: pointer;
+  background: rgba(12,10,6,0.40);
+  border: 1px solid var(--vh-glass-line);
+  border-radius: var(--vh-r-btn);
+  transition: border-color var(--vh-t-fast), background var(--vh-t-fast);
+}
+.vc-sound-result:hover {
+  border-color: var(--vh-gold);
+  background: linear-gradient(180deg, rgba(243,181,58,0.14), rgba(243,181,58,0.05));
+}
+.vc-sound-result.is-playing {
+  border-color: var(--vh-gold);
+  box-shadow: inset 0 0 0 1px rgba(243,181,58,0.30);
+}
+.vc-sound-result strong {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--vh-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-sound-result span {
+  font-size: 10px;
+  color: var(--vh-text-dim2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* estado vazio / carregando / sem credencial */
+.vc-sound-results-empty {
+  padding: 8px 9px;
+  font-size: 10.5px;
+  color: var(--vh-text-dim2);
+  text-align: center;
+}
+
+
 /* Volume */
 .vc-sound-volume {
   display: flex;

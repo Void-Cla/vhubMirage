@@ -31,6 +31,20 @@ AddStateBagChangeHandler('vhub_racha',
     TriggerEvent('vhub_racha:local:bag_update', L.bag)
   end)
 
+-- Toast global do core (vhub_notify) — FONTE UNICA de notificacao do racha.
+-- Substitui os feeds nativos (BeginTextCommandThefeedPost). A barra de rota/tempo
+-- da ready-zone (lobby.lua) NAO passa por aqui — e UI in-game persistente, nao toast.
+function VHubRachaLocal.notify(msg, kind)
+  local ok = pcall(function()
+    exports.vhub_notify:notify({ type = kind or 'info', msg = tostring(msg or '') })
+  end)
+  if not ok then   -- fallback se o vhub_notify nao estiver de pe
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(tostring(msg or ''))
+    EndTextCommandThefeedPostTicker(false, true)
+  end
+end
+
 function VHubRachaLocal.active_race()  return L.active end
 function VHubRachaLocal.set_active(a)  L.active = a end
 function VHubRachaLocal.clear_active() L.active = nil end

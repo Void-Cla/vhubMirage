@@ -1,6 +1,6 @@
 <#
 Wrapper para executar o script real em resources\[TOOLS]\vhub_testrunner\limpardadossql.ps1
-Encaminha todos os argumentos recebidos para o script alvo.
+Encaminha todos os argumentos recebidos para o script alvo. Use '.\tools\limpardadossql.ps1 Responde 'LIMPAR''
 #>
 $ErrorActionPreference = 'Stop'
 

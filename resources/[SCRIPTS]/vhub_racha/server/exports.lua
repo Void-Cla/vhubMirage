@@ -6,11 +6,12 @@ local L   = VHubRachaLobby
 local R   = VHubRachaRanking
 local SQL = VHubRachaSQL
 
+-- N0-2 default-DENY (#32): sem caller identificavel ou sem whitelist => NAO passa.
 local function _invoker_allowed()
   local caller = GetInvokingResource()
-  if not caller then return true end
+  if not caller then return false end
   local trusted = Cfg.TRUSTED_RESOURCES
-  if type(trusted) ~= 'table' or next(trusted) == nil then return true end
+  if type(trusted) ~= 'table' or next(trusted) == nil then return false end
   return trusted[caller] == true
 end
 
@@ -44,6 +45,10 @@ exports('historyRecent',  function(filters, limit)    return R.recent(filters or
 exports('resultsOf',      function(history_id)        return R.results_of(history_id) end)
 exports('statsOfChar',    function(char_id)           return R.stats_of_char(tonumber(char_id) or 0) end)
 exports('recordsOfChar',  function(char_id, limit)    return R.records_of_char(tonumber(char_id) or 0, limit or 30) end)
+-- Perfil COMPLETO export-ready (versionado, JSON-friendly) — consumivel pelo
+-- futuro site da cidade (feed/perfil social). Dado publico, sem gate.
+exports('rankedLadder',   function(limit)             return R.ranked_ladder(limit or 50) end)
+exports('profile',        function(char_id)           return R.profile_of(tonumber(char_id) or 0) end)
 
 -- ── Mutacoes (TRUSTED) ──────────────────────────────────────────────────────
 

@@ -1,8 +1,8 @@
 <!-- modules/racha/racha.html — painel COMPLETO do racha embutido no iPad.
-     Porte fiel de vhub_racha/web/modules/panel/panel.html.
-     Adaptacoes: sem #vhub-bg full-screen, sem botao de fechar (navbar do iPad),
-     shell preenche o container (#vhub-app). Markup sem CSS/JS inline.
-     Escopado em .mod-racha. -->
+     FONTE UNICA da UI do racha (o painel standalone do vhub_racha foi removido).
+     Sem CSS/JS inline. Icones via SVG embutido (vhub_ipad nao usa FontAwesome).
+     Escopado em .mod-racha. Markup estatico usa <span data-icon="X"> (hidratado
+     no onMount); o JS dinamico usa icon('X'). -->
 
 <section class="panel-shell" data-el="shell">
 
@@ -12,7 +12,7 @@
     <header class="panel-header">
         <div class="panel-brand">
             <img class="panel-logo" src="https://cfx-nui-vhub_racha/web/assets/logo.png" alt="vHub"
-                 onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-flag-checkered panel-logo-fallback'}))">
+                 onerror="this.style.display='none'">
             <div class="panel-brand-txt">
                 <span class="panel-brand-name">Mirage <strong>Racha</strong></span>
                 <span class="panel-brand-tag" data-el="brand-tag">Liga clandestina</span>
@@ -21,20 +21,26 @@
 
         <nav class="panel-tabs">
             <button class="panel-tab active" data-tab="tracks">
-                <i class="fa-solid fa-road"></i> Pistas
+                <span data-icon="road"></span> Pistas
             </button>
             <button class="panel-tab" data-tab="lobbies">
-                <i class="fa-solid fa-flag"></i> Lobbies
+                <span data-icon="flag"></span> Lobbies
                 <span class="panel-tab-badge hidden" data-el="lobby-count">0</span>
             </button>
+            <button class="panel-tab" data-tab="ranqueado">
+                <span data-icon="shield-halved"></span> Ranqueado
+            </button>
+            <button class="panel-tab" data-tab="perfil">
+                <span data-icon="user"></span> Perfil
+            </button>
             <button class="panel-tab" data-tab="ranking">
-                <i class="fa-solid fa-ranking-star"></i> Ranking
+                <span data-icon="ranking-star"></span> Ranking
             </button>
             <button class="panel-tab" data-tab="history">
-                <i class="fa-solid fa-clock-rotate-left"></i> Historico
+                <span data-icon="clock-rotate-left"></span> Historico
             </button>
             <button class="panel-tab" data-tab="editor">
-                <i class="fa-solid fa-pen-ruler"></i> Editor
+                <span data-icon="pen-ruler"></span> Editor
             </button>
         </nav>
     </header>
@@ -49,10 +55,16 @@
         <section class="panel-view active" data-view="tracks">
             <div class="panel-toolbar">
                 <div class="panel-search">
-                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span data-icon="magnifying-glass"></span>
                     <input class="vh-input" data-el="tracks-search" type="text"
                            placeholder="Buscar pista, distrito ou tipo...">
                 </div>
+                <select class="vh-input" data-el="tracks-filter-cat">
+                    <option value="">Todas categorias</option>
+                    <option value="ranqueada">Ranqueada</option>
+                    <option value="normal">Normal</option>
+                    <option value="personalizada">Personalizada</option>
+                </select>
                 <select class="vh-input" data-el="tracks-filter-kind">
                     <option value="">Todos os tipos</option>
                     <option value="sprint">Sprint</option>
@@ -73,10 +85,43 @@
             <div class="panel-toolbar">
                 <span class="panel-count"><b data-el="lobby-count-2">0</b> lobbies abertos</span>
                 <button class="vh-btn ghost" data-action="refresh">
-                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar
+                    <span data-icon="arrows-rotate"></span> Atualizar
                 </button>
             </div>
             <div class="panel-list" data-el="lobbies-list"></div>
+        </section>
+
+        <!-- VIEW: Ranqueado (ladder PDL cross-kind) -->
+        <section class="panel-view" data-view="ranqueado">
+            <div class="panel-toolbar">
+                <div class="panel-ranked-legend">
+                    <span data-icon="shield-halved"></span>
+                    Liga Ranqueada — PDL global (todas as modalidades)
+                </div>
+                <button class="vh-btn ghost" data-action="refresh-ranqueado">
+                    <span data-icon="arrows-rotate"></span> Atualizar
+                </button>
+            </div>
+            <div class="panel-tablewrap">
+                <table class="panel-table panel-ranked-table">
+                    <thead>
+                        <tr>
+                            <th>#</th><th>Piloto</th><th>Divisao</th>
+                            <th>PDL</th><th>Pico</th><th>Vitorias</th><th>Partidas</th>
+                        </tr>
+                    </thead>
+                    <tbody data-el="ranqueado-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VIEW: Perfil (cartao do corredor) -->
+        <section class="panel-view" data-view="perfil">
+            <div class="panel-profile" data-el="profile-root">
+                <div class="panel-empty">
+                    <span data-icon="user"></span> Carregando seu perfil...
+                </div>
+            </div>
         </section>
 
         <!-- VIEW: Ranking -->
@@ -95,7 +140,7 @@
                     <option value="drift">Drift</option>
                 </select>
                 <button class="vh-btn ghost" data-action="refresh-ranking">
-                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar
+                    <span data-icon="arrows-rotate"></span> Atualizar
                 </button>
             </div>
             <div class="panel-tablewrap">
@@ -121,14 +166,14 @@
                     <option value="drift">Drift</option>
                 </select>
                 <button class="vh-btn ghost" data-action="refresh-history">
-                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar
+                    <span data-icon="arrows-rotate"></span> Atualizar
                 </button>
             </div>
             <div class="panel-tablewrap">
                 <table class="panel-table">
                     <thead>
                         <tr>
-                            <th>Quando</th><th>Tipo</th><th>Modo</th><th>Pista</th>
+                            <th>Quando</th><th>Tipo</th><th>Categoria</th><th>Pista</th>
                             <th>Pilotos</th><th>Vencedor</th><th>Tempo</th><th>Pote</th><th></th>
                         </tr>
                     </thead>
@@ -142,17 +187,22 @@
             <div class="panel-editor">
                 <div class="panel-editor-phases">
                     <button class="vh-btn" data-action="editor-start">
-                        <i class="fa-solid fa-plus"></i> Novo rascunho
+                        <span data-icon="plus"></span> Novo rascunho
                     </button>
                     <button class="vh-btn" data-action="editor-phase-grid">
-                        <i class="fa-solid fa-car"></i> Fase 1: Grade
+                        <span data-icon="car"></span> Fase 1: Grade
                     </button>
                     <button class="vh-btn" data-action="editor-phase-cps">
-                        <i class="fa-solid fa-flag"></i> Fase 2: Checkpoints
+                        <span data-icon="flag"></span> Fase 2: Checkpoints
                     </button>
                     <button class="vh-btn" data-action="editor-phase-meta">
-                        <i class="fa-solid fa-list"></i> Fase 3: Metadados
+                        <span data-icon="list"></span> Fase 3: Metadados
                     </button>
+                </div>
+
+                <div class="panel-editor-note">
+                    <span data-icon="circle-info"></span>
+                    Pistas criadas no editor sao <b>Personalizadas</b> — lobby sempre com senha.
                 </div>
 
                 <div class="panel-editor-form vh-card">
@@ -198,10 +248,10 @@
                     </div>
                     <div class="panel-form-actions">
                         <button class="vh-btn danger" data-action="editor-discard">
-                            <i class="fa-solid fa-trash"></i> Descartar
+                            <span data-icon="trash"></span> Descartar
                         </button>
                         <button class="vh-btn primary" data-action="editor-save">
-                            <i class="fa-solid fa-floppy-disk"></i> Salvar pista
+                            <span data-icon="floppy-disk"></span> Salvar pista
                         </button>
                     </div>
                 </div>
@@ -212,7 +262,7 @@
 
 
     <!-- ============================================================
-         MODAL — criar lobby (overlay dentro do shell)
+         MODAL — criar lobby
          ============================================================ -->
     <div class="panel-modal hidden" data-el="modal">
         <div class="panel-modal-backdrop" data-action="modal-close"></div>
@@ -220,19 +270,20 @@
             <header class="panel-modal-head">
                 <h2 class="panel-modal-title">Criar lobby</h2>
                 <button class="vh-btn ghost" data-action="modal-close">
-                    <i class="fa-solid fa-xmark"></i>
+                    <span data-icon="xmark"></span>
                 </button>
             </header>
             <div class="panel-modal-body">
                 <div class="panel-modal-track">
                     <span data-el="modal-track">Pista</span>
                     <span class="vh-chip" data-el="modal-kind">Sprint</span>
+                    <span class="panel-cat-badge" data-el="modal-cat">Normal</span>
                 </div>
                 <div class="panel-form-row">
                     <label>Modo</label>
                     <select class="vh-input" data-el="modal-mode">
-                        <option value="rankeada">Rankeada (com premio)</option>
-                        <option value="treino">Treino (sem premio)</option>
+                        <option value="rankeada" data-el="modal-mode-comp">Competitiva</option>
+                        <option value="treino">Treino (solo, sem premio)</option>
                     </select>
                 </div>
                 <div class="panel-form-row">
@@ -243,11 +294,49 @@
                     <label>Taxa de entrada</label>
                     <input class="vh-input" data-el="modal-fee" type="number" min="0" value="1000">
                 </div>
+                <div class="panel-form-row hidden" data-el="modal-pass-row">
+                    <label>Senha do lobby</label>
+                    <input class="vh-input" data-el="modal-password" type="text" maxlength="32"
+                           placeholder="Obrigatoria em pista personalizada">
+                </div>
             </div>
             <footer class="panel-modal-foot">
                 <button class="vh-btn ghost" data-action="modal-close">Cancelar</button>
                 <button class="vh-btn primary" data-action="modal-create">
-                    <i class="fa-solid fa-flag-checkered"></i> Criar e ir a largada
+                    <span data-icon="flag-checkered"></span> Criar e ir a largada
+                </button>
+            </footer>
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         MODAL — entrar com senha (lobby protegido)
+         ============================================================ -->
+    <div class="panel-modal hidden" data-el="join-modal">
+        <div class="panel-modal-backdrop" data-action="join-close"></div>
+        <div class="panel-modal-box vh-panel">
+            <header class="panel-modal-head">
+                <h2 class="panel-modal-title">Lobby protegido</h2>
+                <button class="vh-btn ghost" data-action="join-close">
+                    <span data-icon="xmark"></span>
+                </button>
+            </header>
+            <div class="panel-modal-body">
+                <div class="panel-modal-track">
+                    <span data-icon="lock"></span>
+                    <span data-el="join-label">Informe a senha para entrar.</span>
+                </div>
+                <div class="panel-form-row">
+                    <label>Senha</label>
+                    <input class="vh-input" data-el="join-password" type="text" maxlength="32"
+                           placeholder="Senha do lobby">
+                </div>
+            </div>
+            <footer class="panel-modal-foot">
+                <button class="vh-btn ghost" data-action="join-close">Cancelar</button>
+                <button class="vh-btn primary" data-action="join-confirm">
+                    <span data-icon="right-to-bracket"></span> Entrar
                 </button>
             </footer>
         </div>

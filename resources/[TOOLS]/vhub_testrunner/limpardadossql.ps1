@@ -4,13 +4,13 @@
 # ambiente de TESTE e garantir que nao sobrou estado/bug herdado.
 #
 #   Uso comum:
-#     .\limpardadossql.ps1                      # zera TUDO (com confirmacao LIMPAR)
-#     .\limpardadossql.ps1 -DryRun              # so lista o que seria zerado
-#     .\limpardadossql.ps1 -Excluir vhub_admin_log,vh_users   # preserva tabelas
-#     .\limpardadossql.ps1 -Somente vhub_vehicles,vhub_vehicle_state  # so estas
-#     .\limpardadossql.ps1 -Force               # sem prompt (cuidado)
+#     .\tools\limpardadossql.ps1                     # zera TUDO (confirma com LIMPAR)
+#     .\tools\limpardadossql.ps1 -DryRun             # so lista o que seria zerado
+#     .\tools\limpardadossql.ps1 -Force              # sem prompt (cuidado)
+#     .\tools\limpardadossql.ps1 -Excluir tabela_a   # preserva tabelas
+#     .\tools\limpardadossql.ps1 -Somente tabela_a   # limpa somente estas
 param(
-  [string]$ConfigPath = ".\server.cfg",
+  [string]$ConfigPath = "",
   [switch]$Force,
   [switch]$DryRun,
   [switch]$SkipServerCheck,
@@ -20,36 +20,163 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Resolver-Caminho {
-  param([string]$Path)
-  if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }
-  return (Join-Path (Get-Location) $Path)
+function Obter-RaizProjeto {
+  $dir = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+
+  while ($dir) {
+    $databaseCfg = Join-Path -Path $dir -ChildPath "config\database.cfg"
+    $gitDir = Join-Path -Path $dir -ChildPath ".git"
+
+    if ((Test-Path -LiteralPath $databaseCfg) -or (Test-Path -LiteralPath $gitDir)) {
+      return $dir
+    }
+
+    $parent = Split-Path -Parent $dir
+    if (-not $parent -or $parent -eq $dir) { break }
+    $dir = $parent
+  }
+
+  return (Get-Location).ProviderPath
 }
 
-function Ler-ConexaoMysql {
+$script:RaizProjeto = Obter-RaizProjeto
+
+function Resolver-Caminho {
   param([string]$Path)
+
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    throw "Caminho vazio."
+  }
+
+  if ([System.IO.Path]::IsPathRooted($Path)) {
+    return [System.IO.Path]::GetFullPath($Path)
+  }
+
+  $candidatos = @(
+    (Join-Path -Path (Get-Location).ProviderPath -ChildPath $Path),
+    (Join-Path -Path $script:RaizProjeto -ChildPath $Path)
+  )
+
+  foreach ($candidato in $candidatos) {
+    if (Test-Path -LiteralPath $candidato) {
+      return (Resolve-Path -LiteralPath $candidato).Path
+    }
+  }
+
+  return [System.IO.Path]::GetFullPath(
+    (Join-Path -Path (Get-Location).ProviderPath -ChildPath $Path)
+  )
+}
+
+function Remover-AspasConfig {
+  param([string]$Value)
+
+  $valor = $Value.Trim()
+  if (($valor.StartsWith('"') -and $valor.EndsWith('"')) -or
+      ($valor.StartsWith("'") -and $valor.EndsWith("'"))) {
+    return $valor.Substring(1, $valor.Length - 2)
+  }
+
+  return $valor
+}
+
+function Resolver-ConfigPadrao {
+  param([string]$Path)
+
+  if (-not [string]::IsNullOrWhiteSpace($Path)) {
+    return Resolver-Caminho $Path
+  }
+
+  $bases = @((Get-Location).ProviderPath, $script:RaizProjeto) | Select-Object -Unique
+  $relativos = @("config\database.cfg", "config\server.cfg", "server.cfg")
+
+  foreach ($base in $bases) {
+    foreach ($relativo in $relativos) {
+      $candidato = Join-Path -Path $base -ChildPath $relativo
+      if (Test-Path -LiteralPath $candidato) {
+        return (Resolve-Path -LiteralPath $candidato).Path
+      }
+    }
+  }
+
+  throw "Config MySQL nao encontrado. Use -ConfigPath config\database.cfg."
+}
+
+function Resolver-ExecConfig {
+  param(
+    [string]$ExecPath,
+    [string]$BasePath
+  )
+
+  $path = Remover-AspasConfig $ExecPath
+  if ([System.IO.Path]::IsPathRooted($path)) {
+    if (Test-Path -LiteralPath $path) { return (Resolve-Path -LiteralPath $path).Path }
+    return $null
+  }
+
+  $bases = @(
+    $script:RaizProjeto,
+    (Get-Location).ProviderPath,
+    (Split-Path -Parent $BasePath)
+  ) | Where-Object { $_ } | Select-Object -Unique
+
+  foreach ($base in $bases) {
+    $candidato = Join-Path -Path $base -ChildPath $path
+    if (Test-Path -LiteralPath $candidato) {
+      return (Resolve-Path -LiteralPath $candidato).Path
+    }
+  }
+
+  return $null
+}
+
+function Ler-ValorConexaoMysql {
+  param(
+    [string]$Path,
+    [hashtable]$Visitados
+  )
 
   $fullPath = Resolver-Caminho $Path
   if (-not (Test-Path -LiteralPath $fullPath)) {
     throw "Config nao encontrado: $fullPath"
   }
 
+  $chave = $fullPath.ToLowerInvariant()
+  if ($Visitados.ContainsKey($chave)) { return $null }
+  $Visitados[$chave] = $true
+
   $valor = $null
   foreach ($linha in Get-Content -LiteralPath $fullPath) {
     $t = $linha.Trim()
     if ($t -eq "" -or $t.StartsWith("#")) { continue }
+
     if ($t -match '^set\s+mysql_connection_string\s+(.+)$') {
-      $valor = $Matches[1].Trim()
-      break
+      $valor = Remover-AspasConfig $Matches[1]
+      continue
+    }
+
+    if ($t -match '^exec\s+(.+)$') {
+      $include = Resolver-ExecConfig -ExecPath $Matches[1] -BasePath $fullPath
+      if (-not $include) {
+        throw "Config referenciado por exec nao encontrado: $($Matches[1]) (em $fullPath)"
+      }
+
+      $valorInclude = Ler-ValorConexaoMysql -Path $include -Visitados $Visitados
+      if ($valorInclude) { $valor = $valorInclude }
     }
   }
 
+  return $valor
+}
+
+function Ler-ConexaoMysql {
+  param([string]$Path)
+
+  $fullPath = Resolver-ConfigPadrao $Path
+  $valor = Ler-ValorConexaoMysql -Path $fullPath -Visitados @{}
+
   if (-not $valor) {
     throw "mysql_connection_string nao encontrado em $fullPath"
-  }
-
-  if (($valor.StartsWith('"') -and $valor.EndsWith('"')) -or ($valor.StartsWith("'") -and $valor.EndsWith("'"))) {
-    $valor = $valor.Substring(1, $valor.Length - 2)
   }
 
   if ($valor -match '^mysql://') {
@@ -68,6 +195,7 @@ function Ler-ConexaoMysql {
       User = $(if ($user) { $user } else { "root" })
       Password = $pass
       Database = [Uri]::UnescapeDataString($uri.AbsolutePath.TrimStart("/"))
+      ConfigPath = $fullPath
       Raw = $valor
     }
   }
@@ -100,6 +228,7 @@ function Ler-ConexaoMysql {
     User = $userName
     Password = $(if ($map.ContainsKey("password")) { $map["password"] } elseif ($map.ContainsKey("pwd")) { $map["pwd"] } else { "" })
     Database = $database
+    ConfigPath = $fullPath
     Raw = $valor
   }
 }
@@ -190,6 +319,7 @@ if (-not $conn.Database) { throw "Database vazio na mysql_connection_string." }
 foreach ($t in @($Somente + $Excluir)) { [void](Sql-Ident $t) }
 
 $mysql = Encontrar-MysqlCli
+Write-Host "[INFO] Config MySQL: $($conn.ConfigPath)"
 Write-Host "[INFO] Banco alvo: $($conn.User)@$($conn.Host):$($conn.Port)/$($conn.Database)"
 Write-Host "[INFO] mysql.exe: $mysql"
 

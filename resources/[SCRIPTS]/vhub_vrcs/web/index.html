@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="hidden">
+
+    <!-- ============================================================
+         LISTA DE REPLAYS
+         ============================================================ -->
+    <section id="list" class="panel hidden">
+      <header class="panel-head">
+        <h1>Replays</h1>
+        <button class="icon-btn" data-act="close" title="Fechar">✕</button>
+      </header>
+      <ul id="list-items" class="replay-list"></ul>
+      <p id="list-empty" class="empty hidden">Nenhum replay no cache ainda.<br>Termine uma corrida ranqueada.</p>
+    </section>
+
+    <!-- ============================================================
+         BARRA DE CONTROLE DO PLAYER
+         ============================================================ -->
+    <section id="player" class="bar hidden">
+      <button class="icon-btn" data-act="back" title="Voltar à lista">‹</button>
+      <button class="icon-btn play" id="btn-play" data-act="toggle" title="Play / Pause">▶</button>
+      <span class="time" id="t-cur">00:00</span>
+      <input id="seek" class="seek" type="range" min="0" max="1000" value="0" step="1">
+      <span class="time" id="t-dur">00:00</span>
+      <button class="chip" id="btn-speed" title="Velocidade">1x</button>
+      <button class="chip cam" id="btn-cam" data-act="cam" title="Câmera">📷 chase</button>
+      <div class="focus">
+        <button class="icon-btn" data-act="focus" data-delta="-1" title="Piloto anterior">‹</button>
+        <span id="focus-label" class="focus-label">—</span>
+        <button class="icon-btn" data-act="focus" data-delta="1" title="Próximo piloto">›</button>
+      </div>
+      <button class="icon-btn close" data-act="close" title="Sair">✕</button>
+    </section>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

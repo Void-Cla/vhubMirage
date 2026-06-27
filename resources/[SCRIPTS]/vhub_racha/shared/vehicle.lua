@@ -8,7 +8,7 @@ local _MISSING = {}
 local function _warn(name)
   if _MISSING[name] then return end
   _MISSING[name] = true
-  print(('[vhub_racha] native indisponivel: %s — default seguro aplicado.'):format(name))
+  VHubRachaLog.warn('native indisponivel: %s — default seguro aplicado.', name)
 end
 
 local function _call(name, fn, default, ...)

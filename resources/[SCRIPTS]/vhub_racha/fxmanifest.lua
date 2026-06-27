@@ -17,6 +17,7 @@ dependencies {
 }
 
 shared_scripts {
+  'shared/logger.lua',        -- PRIMEIRO: VHubRachaLog (unico print() autorizado, L-08)
   'shared/config.lua',
   'shared/events.lua',        -- registro unico de nomes de eventos (VHubRachaE)
   'shared/enums.lua',         -- enums de estado (InstState, Mode, Kind, EditorPhase, VClass)
@@ -35,6 +36,7 @@ server_scripts {
   'server/grid.lua',          -- geometria de largada (ready-zone + slots) — antes do lobby
   'server/anti_cheat.lua',
   'server/history.lua',
+  'server/ranked.lua',        -- escritor unico de vh_race_ranked (PDL); ANTES de ranking.lua
   'server/ranking.lua',
   'server/rewards.lua',       -- interface com vhub_money (charge/refund/pay)
   'server/lobby.lua',         -- maquina de estados (depende de sessions + grid + rewards)
@@ -91,16 +93,15 @@ files {
   'web/shared/reset.css',
   'web/shared/components.css',
   'web/shared/utils.js',
+  'web/shared/icons.js',    -- registro unico de icones SVG inline (ex-Font Awesome remoto)
 
   -- Modulo: HUD (L4 — overlay in-race)
   'web/modules/hud/hud.html',
   'web/modules/hud/hud.css',
   'web/modules/hud/hud.js',
 
-  -- Modulo: PANEL (L4 — menu /racha: shell + 5 views + modal)
-  'web/modules/panel/panel.html',
-  'web/modules/panel/panel.css',
-  'web/modules/panel/panel.js',
+  -- (Painel removido: a UI completa de pistas/perfil/ranqueado/ranking/editor
+  --  vive no iPad — vhub_ipad/web/modules/racha. Aqui so overlays in-game.)
 
   -- Modulo: RACE (L4 — overlay da ready-zone; totem e 100% nativo em totem.lua)
   'web/modules/race/race.html',

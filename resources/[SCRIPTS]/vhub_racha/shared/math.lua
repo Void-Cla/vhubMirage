@@ -67,3 +67,51 @@ end
 function M.cp_distance_m(from_x, from_y, cp)
   return M.dist_xy(from_x, from_y, cp.x, cp.y)
 end
+
+
+-- ============================================================
+-- ELO / PDL — funcoes PURAS (sem estado, sem natives, sem SQL)
+-- O dominio de escrita (snapshot + persistencia) vive em server/ranked.lua.
+-- ============================================================
+
+-- Probabilidade esperada de A vencer B dado o fator de escala C (curva logistica).
+--   E_A = 1 / (1 + 10^((R_B - R_A) / C))
+-- C grande achata a curva para a escala de milhares (CS2-like).
+function M.expected_score(rating_a, rating_b, c)
+  local C = (tonumber(c) or 400)
+  if C <= 0 then C = 400 end
+  return 1.0 / (1.0 + 10.0 ^ ((rating_b - rating_a) / C))
+end
+
+-- Resolve a divisao (Bronze..Lendario) + tier (I..III) de um PDL.
+-- `divisions` = lista CRESCENTE por `min` ({ key, label, min }). Retorna:
+--   { key, label, tier (1..3), index, floor, next_min }
+-- tier 1 = base da faixa, 3 = topo (proximo da promocao). next_min = nil no teto.
+function M.division_of(pdl, divisions)
+  if type(divisions) ~= 'table' or #divisions == 0 then
+    return { key = 'none', label = '—', tier = 1, index = 0, floor = 0 }
+  end
+
+  local p   = tonumber(pdl) or 0
+  local idx = 1
+  for i = 1, #divisions do
+    if p >= (tonumber(divisions[i].min) or 0) then idx = i else break end
+  end
+
+  local cur      = divisions[idx]
+  local floor    = tonumber(cur.min) or 0
+  local nxt      = divisions[idx + 1]
+  local next_min = nxt and (tonumber(nxt.min) or 0) or nil
+
+  -- tier 1..3 pela posicao dentro da faixa (band = floor..next_min)
+  local tier = 3
+  if next_min and next_min > floor then
+    local frac = (p - floor) / (next_min - floor)
+    tier = M.clamp(math.floor(frac * 3) + 1, 1, 3)
+  end
+
+  return {
+    key = cur.key, label = cur.label, tier = tier,
+    index = idx, floor = floor, next_min = next_min,
+  }
+end

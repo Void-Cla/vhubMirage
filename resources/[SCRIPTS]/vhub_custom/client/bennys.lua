@@ -120,16 +120,43 @@ end
 -- ABRIR / FECHAR
 -- ============================================================
 
+-- converte tabela de preços indexada por número em dict string-keyed (msgpack-safe)
+local function priceDict(tbl)
+  local out = {}
+  if type(tbl) == 'table' then
+    for k, v in pairs(tbl) do out[tostring(k)] = v end
+  end
+  return out
+end
+
 -- abre o menu bennys para o veículo ativo na zona
 function VHubCustom.openBennys()
   local veh = VHubCustom.activeVeh
   if not DoesEntityExist(veh) or veh == 0 then return end
+  if VHubCustom.inMenu then return end
+
   -- snapshot ANTES de qualquer preview
   _snapshot = snapshotVeh(veh)
   startCam(veh)
   VHubCustom.inMenu = true
-  -- TODO F5: SendNUIMessage para abrir módulo bennys com dados do veículo
-  -- Por ora: abre via comando/notify temporário para smoke test
+
+  local plate = GetVehicleNumberPlateText(veh):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
+  local model = GetEntityModel(veh)
+
+  local dispName = string.lower(GetDisplayNameFromVehicleModel(model) or '')
+  local catEntry = (VHubCustom.catalog or {})[dispName] or {}
+
+  SendNUIMessage({
+    action = 'openBennys',
+    data   = {
+      plate     = plate,
+      nome      = catEntry.nome or GetDisplayNameFromVehicleModel(model) or plate,
+      categoria = catEntry.categoria or '—',
+      prices    = priceDict(CFG.prices),
+    },
+  })
+
+  SetNuiFocus(true, true)
 end
 
 -- fecha o menu (rollback visual se não confirmado)
@@ -153,7 +180,11 @@ end
 RegisterNetEvent(E.BENNYS_CONFIRM)
 AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch)
   local veh = VHubCustom.activeVeh
-  if not veh or not DoesEntityExist(veh) then return end
+  if not veh or not DoesEntityExist(veh) then
+    VHubCustom.closeBennys(false)
+    SendNUIMessage({ action = 'fecharBennys' })
+    return
+  end
 
   if ok and type(custPatch) == 'table' then
     -- aplica estado definitivo confirmado pelo servidor
@@ -163,4 +194,42 @@ AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch)
     if _snapshot then applySnapshot(veh, _snapshot) end
   end
   VHubCustom.closeBennys(ok)
+  SendNUIMessage({ action = 'fecharBennys' })
+end)
+
+
+-- ============================================================
+-- NUI CALLBACKS
+-- ============================================================
+
+-- NUI → fecha sem aplicar (botão Cancelar/✕ ou timeout de 20s)
+RegisterNUICallback('bennys:fechar', function(_, cb)
+  VHubCustom.closeBennys(false)
+  cb('ok')
+end)
+
+-- NUI → aplica preview efêmero local (sem custo, sem persistência) a cada seleção
+RegisterNUICallback('bennys:preview', function(patch, cb)
+  local veh = VHubCustom.activeVeh
+  if DoesEntityExist(veh) and veh ~= 0 and type(patch) == 'table' then
+    VHubCustom.previewCosmetic(veh, patch)
+  end
+  cb('ok')
+end)
+
+-- NUI → envia patch final ao servidor para validação, cobrança e persistência
+RegisterNUICallback('bennys:aplicar', function(data, cb)
+  local plate   = type(data.plate)   == 'string' and data.plate   or ''
+  local payload = type(data.payload) == 'table'  and data.payload or {}
+  local veh     = VHubCustom.activeVeh
+
+  if not plate or plate == '' or not DoesEntityExist(veh) or veh == 0 then
+    VHubCustom.closeBennys(false)
+    SendNUIMessage({ action = 'fecharBennys' })
+    cb({ ok = false })
+    return
+  end
+
+  TriggerServerEvent(E.BENNYS_APPLY, plate, payload)
+  cb({ ok = true })
 end)

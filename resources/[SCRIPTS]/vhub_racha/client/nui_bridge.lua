@@ -110,8 +110,14 @@ AddEventHandler('vhub_racha:local:bag_update', function(bag)
   send_bag_if_changed(bag or {})
 end)
 
+-- SPRINT-RACHA-4: thread de telemetria com saida explicita (L-06; ex-`while true`)
+local _running = true
+AddEventHandler('onResourceStop', function(res)
+  if res == GetCurrentResourceName() then _running = false end
+end)
+
 CreateThread(function()
-  while true do
+  while _running do
     Wait(TELEMETRY_INTERVAL)
     if enabled() then
       local active = L and L.active_race and L.active_race() or nil

@@ -163,11 +163,9 @@ RegisterNetEvent(E.RACE_START, function(payload)
   local m = active.mode_ref
   if m and type(m.on_start) == 'function' then pcall(m.on_start, active) end
 
-  -- Notify de modo
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(
-    active.mode == 'treino' and Lang.t('notify.training_mode') or Lang.t('notify.ranked_mode'))
-  EndTextCommandThefeedPostTicker(false, true)
+  -- Notify de modo (toast global)
+  L.notify(active.mode == 'treino' and Lang.t('Modo Treino')
+    or Lang.t('Modo Ranqued'), 'info')
 end)
 
 -- ── Loop de deteccao de checkpoint (substitui marker vanilla) ──────────────
@@ -190,17 +188,23 @@ CreateThread(function()
           local speed = (veh ~= 0) and V.speed_kmh(veh) or 0
           if speed > (active.top_speed or 0) then active.top_speed = math.floor(speed) end
 
-          TriggerServerEvent(E.RACE_CHECKPOINT, {
-            cp_index = active.cp_index,
-            pos      = { x = pos.x, y = pos.y, z = pos.z },
-            speed    = math.floor(speed),
-            t_ms     = GetGameTimer(),
-          })
-
+          -- Banca/atualiza o score do modo ANTES de enviar: no ULTIMO checkpoint
+          -- (que dispara o finalize no server) o drift bancado e o top_speed ja
+          -- entram no proprio payload — sem depender do flush final do sync.lua,
+          -- que chegaria DEPOIS do finalize (causa do top_speed/drift = 0).
           local m = active.mode_ref
           if m and type(m.on_checkpoint) == 'function' then
             pcall(m.on_checkpoint, active, active.cp_index)
           end
+
+          TriggerServerEvent(E.RACE_CHECKPOINT, {
+            cp_index    = active.cp_index,
+            pos         = { x = pos.x, y = pos.y, z = pos.z },
+            speed       = math.floor(speed),
+            top_speed   = active.top_speed or 0,
+            drift_score = active.drift_score or 0,
+            t_ms        = GetGameTimer(),
+          })
 
           active.cp_index = active.cp_index + 1
           if active.cp_index > active.cp_total then
@@ -231,17 +235,13 @@ RegisterNetEvent(E.RACE_FINISH, function(payload)
   -- Envia ao NUI o resumo se estiver aberta
   SendNUIMessage({ action = 'race_finish', data = payload or {} })
 
-  -- Toast
+  -- Toast (global vhub_notify). O detalhe rico (PDL, premio) vem do app do iPad.
   local mode = (payload and payload.mode) or (active and active.mode) or 'rankeada'
   if mode == 'treino' then
-    BeginTextCommandThefeedPost('STRING')
-    AddTextComponentSubstringPlayerName(Lang.t('race.training_no_reward'))
-    EndTextCommandThefeedPostTicker(false, true)
+    L.notify(Lang.t('Modo treino : Sem recompensas.'), 'info')
   else
-    BeginTextCommandThefeedPost('STRING')
-    AddTextComponentSubstringPlayerName(
-      Lang.t('race.finished_pos', { tonumber(payload and payload.placement) or 0 }))
-    EndTextCommandThefeedPostTicker(false, true)
+    local placement = tonumber(payload and payload.placement) or 0
+    L.notify(Lang.t('Fim da corrida', { placement }), placement == 1 and 'success' or 'info')
   end
 
   VHubRachaLocal.clear_active()
@@ -262,9 +262,7 @@ CreateThread(function()
           active.aborted = true
           TOT.clear()
           TriggerServerEvent(E.RACE_ABORT, 'fora_do_veiculo')
-          BeginTextCommandThefeedPost('STRING')
-          AddTextComponentSubstringPlayerName(Lang.t('race.left_vehicle'))
-          EndTextCommandThefeedPostTicker(false, true)
+          L.notify(Lang.t('Voce esta fora do veiculo'), 'error')
         end
       end
     end
@@ -285,10 +283,7 @@ RegisterNetEvent(E.RACE_POLICE, function(data)
   AddTextComponentSubstringPlayerName(Lang.t('police.blip_label', { data.label or '?' }))
   EndTextCommandSetBlipName(h)
 
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(
-    Lang.t('police.alert_body', { data.label or '?', data.kind or '?' }))
-  EndTextCommandThefeedPostTicker(false, true)
+  L.notify(Lang.t('ALERTA de Policia', { data.label or '?', data.kind or '?' }), 'aviso')
 
   SetTimeout(tonumber(data.ttl_ms) or 90000, function()
     if DoesBlipExist(h) then RemoveBlip(h) end

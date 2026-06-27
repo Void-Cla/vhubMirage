@@ -12,7 +12,11 @@ ui_page 'web/index.html'
 files {
   'web/index.html',
   'web/style.css',
+  'web/bennys.css',
+  'web/mec.css',
   'web/oficina.js',
+  'web/bennys.js',
+  'web/mec.js',
 }
 
 -- ordem: shared → server → client
