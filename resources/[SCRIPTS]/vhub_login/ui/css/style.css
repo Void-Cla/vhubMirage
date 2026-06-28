@@ -1,0 +1,156 @@
+/* ui/css/style.css — Gate de entrada Mirage (Liquid Glass + Areia + Dourado).
+   A-09: html/body transparentes; #bg é a camada OPACA que cobre o jogo, e o
+   backdrop-filter do .panel só desfoca esse #bg (nunca o mundo direto). */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: transparent;            /* A-09 */
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Trebuchet MS', system-ui, sans-serif;
+  user-select: none;
+}
+
+.hidden { display: none !important; }
+
+#app { position: fixed; inset: 0; }
+
+
+/* ============================================================
+   FUNDO OPACO (cobre o mundo do bucket 999)
+   ============================================================ */
+
+#bg {
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 50% 16%, #2a2316 0%, #171209 58%, #0c0a05 100%);
+}
+#bg::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(58% 46% at 50% 28%, rgba(201, 162, 75, 0.13), transparent 70%);
+}
+
+
+/* ============================================================
+   PAINEL DE VIDRO
+   ============================================================ */
+
+.view { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+
+.panel {
+  position: relative; width: 380px; padding: 34px 30px 26px;
+  background: linear-gradient(180deg, rgba(40, 34, 22, 0.86), rgba(24, 20, 13, 0.92));
+  border: 1px solid rgba(201, 162, 75, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(227, 195, 115, 0.15);
+  backdrop-filter: blur(14px);        /* OK: #bg opaco atrás (A-09) */
+  color: #e8ddc5;
+  animation: rise 0.32s ease;
+}
+.panel-wide { width: 440px; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+
+/* ============================================================
+   MARCA
+   ============================================================ */
+
+.brand { text-align: center; margin-bottom: 22px; }
+.brand-mark {
+  display: block; font-size: 30px; font-weight: 800; letter-spacing: 1px;
+  background: linear-gradient(90deg, #e3c373, #c9a24b);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.brand-sub {
+  display: block; font-size: 11px; letter-spacing: 4px; text-transform: uppercase;
+  color: rgba(216, 196, 154, 0.55); margin-top: 5px;
+}
+
+
+/* ============================================================
+   TABS
+   ============================================================ */
+
+.tabs {
+  display: flex; gap: 8px; margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.25); padding: 4px; border-radius: 12px;
+}
+.tab {
+  flex: 1; padding: 9px; border: none; border-radius: 9px; background: transparent;
+  color: rgba(216, 196, 154, 0.65); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: 0.18s;
+}
+.tab.active {
+  background: linear-gradient(180deg, rgba(201, 162, 75, 0.92), rgba(168, 131, 52, 0.92));
+  color: #1a160f; box-shadow: 0 4px 14px rgba(201, 162, 75, 0.3);
+}
+
+
+/* ============================================================
+   CAMPOS / BOTÕES
+   ============================================================ */
+
+.field { display: block; margin-bottom: 14px; }
+.field span {
+  display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: rgba(216, 196, 154, 0.55); margin-bottom: 6px;
+}
+.field input {
+  width: 100%; padding: 12px 14px; border-radius: 11px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(201, 162, 75, 0.18);
+  color: #f1e8d2; font-size: 14px; outline: none; transition: 0.18s;
+  -webkit-user-select: text; user-select: text;   /* body tem none; input precisa editar */
+  pointer-events: auto;
+}
+.field input:focus {
+  border-color: rgba(227, 195, 115, 0.7);
+  box-shadow: 0 0 0 3px rgba(201, 162, 75, 0.15);
+}
+
+.btn-primary {
+  width: 100%; margin-top: 6px; padding: 13px; border: none; border-radius: 11px;
+  background: linear-gradient(180deg, #e3c373, #c9a24b); color: #1a160f;
+  font-size: 14px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: 0.18s;
+}
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.5; cursor: default; transform: none; filter: none; }
+
+.btn-ghost {
+  width: 100%; margin-top: 14px; padding: 12px; border-radius: 11px;
+  background: transparent; border: 1px dashed rgba(201, 162, 75, 0.4);
+  color: rgba(227, 195, 115, 0.85); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: 0.18s;
+}
+.btn-ghost:hover { background: rgba(201, 162, 75, 0.08); border-color: rgba(227, 195, 115, 0.7); }
+
+
+/* ============================================================
+   MENSAGENS
+   ============================================================ */
+
+.msg { min-height: 18px; margin-top: 14px; text-align: center; font-size: 12.5px; color: #e98c7a; }
+.msg.ok { color: #9fd08a; }
+
+
+/* ============================================================
+   LISTA DE PERSONAGENS
+   ============================================================ */
+
+.char-list { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; }
+.char-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-radius: 12px; cursor: pointer;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(201, 162, 75, 0.18); transition: 0.16s;
+}
+.char-card:hover {
+  border-color: rgba(227, 195, 115, 0.6); background: rgba(201, 162, 75, 0.08);
+  transform: translateX(2px);
+}
+.char-card .c-name { font-size: 15px; font-weight: 700; color: #f1e8d2; }
+.char-card .c-id { font-size: 11px; color: rgba(216, 196, 154, 0.5); margin-top: 2px; }
+.char-card .c-go { color: #e3c373; font-size: 20px; }
+.char-empty { text-align: center; padding: 22px; color: rgba(216, 196, 154, 0.5); font-size: 13px; }
+
+.char-list::-webkit-scrollbar { width: 6px; }
+.char-list::-webkit-scrollbar-thumb { background: rgba(201, 162, 75, 0.4); border-radius: 3px; }

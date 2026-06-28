@@ -111,9 +111,7 @@ function openMec(data) {
   document.getElementById('mc-btn-tow').classList.remove('hidden');
 
   document.getElementById('mec-overlay').classList.remove('hidden');
-
-  clearTimeout(_closeTimeout);
-  _closeTimeout = setTimeout(() => { if (_data) fecharMec(); }, 20000);
+  // SEM timeout de inatividade (removido): fecha só por ação explícita ou resposta do servidor.
 }
 
 function closeNUI() {

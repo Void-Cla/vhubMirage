@@ -1,0 +1,71 @@
+{
+  "model": "opusplan",
+  "effortLevel": "high",
+  "showThinkingSummaries": true,
+  "autoMemory": true,
+
+  "env": {
+    "ANTHROPIC_DEFAULT_OPUS_MODEL":   "claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL":  "claude-haiku-4-5-20251001",
+    "CLAUDE_CODE_SUBAGENT_MODEL":     "inherit"
+  },
+
+  "permissions": {
+    "defaultMode": "default",
+
+    "allow": [
+      "Bash(git log*)", "Bash(git diff*)", "Bash(git status*)", "Bash(git show*)",
+      "Bash(git stash*)", "Bash(git branch*)", "Bash(git checkout*)", "Bash(git fetch*)",
+      "Bash(git add*)", "Bash(git commit*)", "Bash(git pull --rebase*)", "Bash(git merge --ff-only*)",
+      "Bash(cat *)", "Bash(ls *)", "Bash(find * -name*)", "Bash(grep *)",
+      "Bash(wc *)", "Bash(head *)", "Bash(tail *)", "Bash(echo *)",
+      "Bash(node --version)", "Bash(lua -v)",
+      "Bash(powershell tools\\limpardadossql.ps1*)",
+      "Bash(powershell tools\\fix_vhub_db.ps1*)",
+      "Bash(powershell tools\\run_tests.ps1*)",
+      "Read(resources/**)",
+      "Read(.claude/**)",
+      "Read(metas/**)",
+      "Read(sql/**)"
+    ],
+
+    "deny": [
+      "Write(resources/[CORE]/vhub/**)",
+      "Edit(resources/[CORE]/vhub/**)",
+      "MultiEdit(resources/[CORE]/vhub/**)",
+      "Write(.claude/contexto.md)",
+      "Edit(.claude/contexto.md)",
+      "MultiEdit(.claude/contexto.md)",
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard HEAD~*)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*TRUNCATE TABLE*)",
+      "Bash(*DELETE FROM vh_users*)",
+      "Bash(*DELETE FROM vh_characters*)",
+      "Bash(*DELETE FROM vh_vehicle*)",
+      "Bash(*DELETE FROM vhub_vehicles*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/guard_sql_danger.sh" }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/post_lua_check.sh" }
+        ]
+      }
+    ]
+  }
+}

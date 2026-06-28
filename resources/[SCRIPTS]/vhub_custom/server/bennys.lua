@@ -18,12 +18,15 @@ local function calcCost(payload)
   local total  = 0
 
   if payload.colours     then total = total + prices.cor_primaria + prices.cor_secundaria end
+  if payload.custom_primary   then total = total + prices.cor_custom end
+  if payload.custom_secondary then total = total + prices.cor_custom end
   if payload.extra_colours then
     total = total + prices.cor_perolado + prices.cor_roda
   end
   if payload.neons       then total = total + prices.neon end
-  if payload.neon_colour then total = total + prices.neon end
+  if payload.neon_colour then total = total + prices.neon_cor end
   if payload.smoke       then total = total + prices.fumaca end
+  if payload.tyre_smoke_color then total = total + prices.fumaca_cor end
   if payload.xenon       then total = total + prices.xenon end
   if payload.window_tint then total = total + prices.tint end
   if payload.livery      then total = total + prices.livery end
@@ -56,11 +59,27 @@ local function buildCosmeticPatch(payload)
       tonumber(payload.extra_colours[2]) or 0,
     }
   end
-  -- neon flags (array 4 bools)
+  -- pintura RGB exata (custom paint) — clampa 0..255 cada canal
+  local function rgb255(t)
+    return {
+      U.clamp(tonumber(t[1]), 0, 255) or 255,
+      U.clamp(tonumber(t[2]), 0, 255) or 255,
+      U.clamp(tonumber(t[3]), 0, 255) or 255,
+    }
+  end
+  if type(payload.custom_primary)   == 'table' then patch.custom_primary   = rgb255(payload.custom_primary)   end
+  if type(payload.custom_secondary) == 'table' then patch.custom_secondary = rgb255(payload.custom_secondary) end
+  if type(payload.tyre_smoke_color) == 'table' then patch.tyre_smoke_color = rgb255(payload.tyre_smoke_color) end
+  if payload.xenon_color ~= nil then
+    patch.xenon_color = U.clamp(tonumber(payload.xenon_color), 0, 12) or 0
+  end
+  -- neon flags — payload chega 1-indexado [esq,dir,frente,trás]; persistimos 0-indexado
+  -- ([0..3]) para casar com o round-trip do garage (collect/applyCustomization usa 0-index),
+  -- senão o neon some ao guardar/spawnar pela garagem (des-sync).
   if type(payload.neons) == 'table' then
     patch.neons = {
-      payload.neons[1] == true, payload.neons[2] == true,
-      payload.neons[3] == true, payload.neons[4] == true,
+      [0] = payload.neons[1] == true, [1] = payload.neons[2] == true,
+      [2] = payload.neons[3] == true, [3] = payload.neons[4] == true,
     }
   end
   -- neon colour {r,g,b}
@@ -89,8 +108,9 @@ local function buildCosmeticPatch(payload)
   end
 
   -- mods: filtra pela whitelist cosmética e rejeita performance
+  -- maxLvl=60: kits cosméticos do GTA têm muitas opções (não cabe no cap 5 de performance)
   if type(payload.mods) == 'table' then
-    local clean = U.sanitizeMods(payload.mods, cos)
+    local clean = U.sanitizeMods(payload.mods, cos, 60)
     if clean then
       -- defesa dupla: rejeita qualquer índice performance que escapou do sanitize
       for idx in pairs(perf) do clean[idx] = nil end

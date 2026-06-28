@@ -554,11 +554,8 @@ function openOficina(data) {
   document.getElementById('btn-cancel').disabled = false;
   document.getElementById('btn-apply').disabled  = (calcTotalCost() === 0);
 
-  // failsafe: se o servidor não responder em 20s, fecha e notifica Lua (libera NuiFocus)
-  clearTimeout(_closeTimeout);
-  _closeTimeout = setTimeout(() => {
-    if (_data) cancelarOficina();
-  }, 20000);
+  // SEM timeout de inatividade (removido): a NUI fecha só por ação explícita do jogador
+  // (Cancelar/ESC) ou pela confirmação server-authoritative — nunca por temporizador.
 }
 
 function closeNUI() {

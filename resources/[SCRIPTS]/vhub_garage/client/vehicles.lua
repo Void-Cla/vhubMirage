@@ -42,6 +42,9 @@ local function applyCustomization(veh, c)
   SetVehicleModKit(veh, 0)
   if c.colours        then SetVehicleColours(veh, table.unpack(c.colours)) end
   if c.extra_colours  then SetVehicleExtraColours(veh, table.unpack(c.extra_colours)) end
+  -- pintura RGB exata (custom paint) — sobrepoe o indice acima (ordem importa). vhub_custom
+  if type(c.custom_primary) == 'table'   then SetVehicleCustomPrimaryColour(veh, table.unpack(c.custom_primary)) end
+  if type(c.custom_secondary) == 'table' then SetVehicleCustomSecondaryColour(veh, table.unpack(c.custom_secondary)) end
   if c.plate_index    then SetVehicleNumberPlateTextIndex(veh, c.plate_index) end
   if c.wheel_type     then SetVehicleWheelType(veh, c.wheel_type) end
   if c.window_tint    then SetVehicleWindowTint(veh, c.window_tint) end
@@ -51,7 +54,9 @@ local function applyCustomization(veh, c)
   end
   if c.turbo  ~= nil then ToggleVehicleMod(veh, 18, c.turbo) end
   if c.smoke  ~= nil then ToggleVehicleMod(veh, 20, c.smoke) end
+  if type(c.tyre_smoke_color) == 'table' then SetVehicleTyreSmokeColor(veh, table.unpack(c.tyre_smoke_color)) end
   if c.xenon  ~= nil then ToggleVehicleMod(veh, 22, c.xenon) end
+  if c.xenon_color ~= nil then pcall(SetVehicleXenonLightsColor, veh, c.xenon_color) end
   if type(c.neons) == 'table' then
     -- chaves numericas viram string apos round-trip JSON ("0".."3") — tolerar ambas
     for i = 0, 3 do
@@ -73,12 +78,16 @@ local function collectCustomization(veh)
     livery        = GetVehicleLivery(veh),
     turbo         = IsToggleModOn(veh, 18),
     smoke         = IsToggleModOn(veh, 20),
+    tyre_smoke_color = { GetVehicleTyreSmokeColor(veh) },
     xenon         = IsToggleModOn(veh, 22),
     mods          = {},
     neons         = {},
     neon_colour   = { GetVehicleNeonLightsColour(veh) },
     model         = GetEntityModel(veh),
   }
+  -- pintura RGB exata: so persiste quando o flag custom esta ligado (senao o indice basta)
+  if GetIsVehiclePrimaryColourCustom(veh)   then c.custom_primary   = { GetVehicleCustomPrimaryColour(veh) } end
+  if GetIsVehicleSecondaryColourCustom(veh) then c.custom_secondary = { GetVehicleCustomSecondaryColour(veh) } end
   for i = 0, 49 do c.mods[i] = GetVehicleMod(veh, i) end
   for i = 0, 3  do c.neons[i] = IsVehicleNeonLightEnabled(veh, i) end
   return c

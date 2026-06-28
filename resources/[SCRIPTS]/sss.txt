@@ -1,0 +1,391 @@
+A sua premissa é excelente do ponto de vista de design de jogo e nivelamento de habilidade (skill gap). Em um ecossistema de alta performance focado em corridas, punir o erro é fundamental para recompensar a precisão e o planejamento de rota. Carros extremamente leves no motor RAGE (GTA V) agem como "bolas de pinball": batem, quicam, perdem pouca inércia e, por terem uma relação peso/potência absurda, recuperam a velocidade de cruzeiro em dois ou três segundos. Isso tira o peso da consequência.
+
+No entanto, para implementar essa lógica no nível de core de um framework sem criar "gaps" na jogabilidade (onde o carro fica inútil ou injogável), é preciso entender como o peso (`fMass`) interage com outras variáveis no `handling.meta`. O peso sozinho não resolve o problema; ele precisa estar matematicamente ancorado na inércia do motor e na tração.
+
+Abaixo, detalho o "Sweet Spot" (ponto de equilíbrio) exato para configurar essa categoria de carros.
+
+### O Ponto de Equilíbrio: A Categoria "Heavy-Sport / GT"
+
+Para evitar o carro "folha de papel" (que não tem punição) e o "tanque de guerra" (que não arranca e derrapa por metros), o limite ideal de peso físico na engine do GTA V fica na faixa de **1.450 kg a 1.750 kg**.
+
+Para contexto no mundo real e no jogo, estamos falando do equivalente a um Nissan GT-R (Elegy Retro Custom) ou um muscle car moderno.
+
+Veja a divisão de limites e consequências práticas:
+
+* **Muito Leve (< 1.150 kg):** *Exemplo: Supercarros de fibra de carbono.* Aceleração brutal. Se bater de frente, o motorista perde o controle por um segundo, mas a retomada é imediata. Favorece pilotos imprudentes.
+* **O Sweet Spot (1.450 kg a 1.750 kg):** *Exemplo: Grand Tourers pesados, Muscle Modernos.* A física de transferência de peso é sentida nas curvas. Se o piloto errar o tangenciamento e bater de frente, a massa absorve a energia cinética, levando a velocidade a zero. Para retomar, o motor precisa lutar contra esses 1.600 kg. O piloto pensa duas vezes antes de tentar uma ultrapassagem suicida.
+* **Muito Pesado (> 1.950 kg):** *Exemplo: SUVs de luxo, sedãs blindados.* O carro sofre de subesterço crônico (sai de frente). A distância de frenagem torna-se inviável para circuitos urbanos apertados, resultando em derrapagens retas de 30 a 50 metros. A arrancada é tão punitiva que a corrida se torna monótona.
+
+---
+
+### A Arquitetura Lógica do Handling (Como implementar sem falhas)
+
+Para que o peso de **~1.600 kg** funcione exatamente com essa mecânica de "punição de batida e retomada cadenciada", você não pode apenas alterar o `fMass`. Isso quebraria o fluxo lógico do veículo. Você precisa ajustar três pilares de responsabilidade no arquivo de handling:
+
+#### 1. Relação de Retomada (Torque vs. Inércia)
+
+Se você apenas colocar peso, o carro não arranca. Para garantir que ele tenha uma arrancada decente na largada, mas demore a recuperar após uma batida, ajuste a inércia do motor:
+
+* **`fInitialDriveForce` (Potência Pura):** Mantenha um valor competitivo (ex: `0.300000` a `0.350000`). Ele precisa ter força para empurrar o peso.
+* **`fDriveInertia` (Inércia do Motor):** **Aqui está o segredo.** Diminua esse valor levemente (ex: `1.000000` para `0.850000`). Isso faz com que as marchas (RPM) demorem um pouco mais para encher. Quando o carro está a 200 km/h, ele voa. Mas se ele bater e cair para 0 km/h, a marcha 1 e 2 vão sofrer para embalar a massa pesada, punindo o piloto pelo erro.
+
+#### 2. Frenagem Proporcional à Massa
+
+Um carro de 1.700 kg precisa de freios fortes para não derrapar por metros nas esquinas.
+
+* **`fBrakeForce`:** Precisa ser elevado (entre `0.850000` e `1.100000`).
+* **`fBrakeBiasFront`:** Jogue a força do freio um pouco mais para a frente (ex: `0.550000`). Quando o piloto frear bruscamente, o peso de 1.700 kg será jogado para o eixo dianteiro, permitindo que o carro ancore no chão e faça a curva de forma agressiva, mas controlada.
+
+#### 3. Tração e Força G
+
+* **`fTractionCurveMax` / `Min`:** Mantenha a aderência alta. O carro pesado precisa grudar no chão. A punição dele não deve ser "escorregar feito sabão", mas sim a perda de tempo na retomada caso cometa um erro físico (bater).
+
+### Resumo para Especificação Técnica
+
+Se for documentar essa lógica para a construção de um ecossistema de corridas balanceado, a regra de engenharia seria:
+
+> **Classe de Veículos de Alta Punição:**
+> **Peso Alvo (`fMass`):** 1.450.000 a 1.750.000
+> **Comportamento Esperado:** Alta estabilidade direcional e aderência. Punição severa na curva de aceleração (0-100 km/h) após perda total de energia cinética (colisões), exigindo cálculo preciso de frenagem e traçados limpos para manutenção do *momentum*.
+
+Dessa forma, você cria um cenário altamente competitivo, onde a mecânica recompensa o raciocínio rápido e a habilidade pura, evitando a aleatoriedade de carros leves demais que não respeitam a física do motor do jogo.
+
+Esse é o clássico problema de design conhecido como **"Jack of all trades, master of none"** (Pau para toda obra, mestre em nada). Para que uma corrida mista (onde um Esportivo, um Drift e um Muscle competem juntos) seja viável, o carro **Equilibrado** precisa ser projetado na *engine* usando um truque mecânico específico.
+
+Se você tentar fazer um carro de tração traseira (RWD) fazer tudo isso, ele vai falhar ou ficar desbalanceado. O segredo para criar a categoria Equilibrada no `handling.meta` do GTA V atende por um conceito: **Tração Integral Assimétrica (AWD com viés traseiro)**.
+
+Aqui está a especificação técnica de como arquitetar essa categoria para que ela faça os três papéis sem dominar nenhum.
+
+---
+
+## O Perfil da Categoria "Equilibrada" (All-Rounder)
+
+O alvo aqui são carros no estilo *Sports Sedans* ou *Hot Hatches* modernos (ex: Sultan RS, Kuruma, Omnis). Eles usam a tração e a distribuição de peso para compensar a falta de atributos extremos.
+
+### 1. A Tração (O Coração da Classe)
+
+Para fazer drift, você precisa de tração traseira. Para curvas de circuito, você precisa de estabilidade (grip). Para retas, você precisa de largada eficiente.
+
+* **`fDriveBiasFront` (Distribuição de Tração):** Configure entre **`0.300000` e `0.400000**`.
+* *Como funciona:* Isso envia 30% a 40% da força do motor para as rodas dianteiras e o restante para as traseiras.
+* *O Resultado prático:* O carro consegue arrancar bem (enfrentando o Muscle). Nas curvas, se o piloto entrar limpo, ele faz o traçado (enfrentando o Esportivo). Se o piloto puxar o freio de mão e acelerar, a força traseira quebra a tração e permite o drift (enfrentando o carro de Drift).
+
+
+
+### 2. O Peso Matemático (`fMass`)
+
+Lembra da nossa regra de peso para punição? Aqui precisamos ajustar para não inutilizar a agilidade.
+
+* **Valor Alvo:** Entre **`1.300 kg` e `1.450 kg**`.
+* *Por que:* Ele é pesado o suficiente para não capotar fácil em toques e para ter inércia decente nas retas, mas é mais leve que os Muscles, permitindo uma frenagem e mudança de direção que eles não têm.
+
+
+
+### 3. A Curva de Tração (O Ponto de Falha Calculada)
+
+Você precisa garantir que ele perca do Esportivo no circuito e perca do Drift na agilidade pura. Fazemos isso manipulando o limite de perda de aderência.
+
+* **`fTractionCurveMax` (Grip Máximo):** Mantenha moderado (ex: `2.200000`). Menor que o do carro Esportivo (que seria `2.5+`).
+* **`fTractionCurveMin` (Grip Escorregando):** Mantenha relativamente alto (ex: `1.800000`).
+* *A Mágica:* Como a diferença entre o Max e o Min é pequena, o carro é muito previsível. Ele faz drift, mas não consegue ângulos extremos nem mudanças bruscas de direção como o carro focado em Drift puro. Ele faz curva, mas precisa frear mais cedo que o Esportivo puro para não sair de frente (subesterço).
+
+
+
+### 4. Força de Motor e Arrasto
+
+O carro não pode vencer o Muscle em uma reta longa (aeroporto, rodovia).
+
+* **`nInitialDriveMaxFlatVel` (Velocidade Final Plana):** Pode ser alta.
+* **`fDragMult` (Multiplicador de Arrasto Aerodinâmico):** Configure um pouco **mais alto** que o normal. (ex: `8.500000` ou `9.000000`).
+* *O que isso causa:* O carro tem uma aceleração excelente de 0 a 140 km/h (devido ao AWD). Ele acompanha o Muscle na largada. Mas, após os 140 km/h, o "vento" (arrasto) segura o carro. O Muscle, que tem motor puro, vai engolir ele na reta longa.
+
+
+
+---
+
+## Como Fica a Dinâmica da Corrida Mista?
+
+Quando você coloca as 4 categorias na mesma pista, a matemática do `handling` gera o seguinte cenário sem precisar de scripts pesados, tudo resolvido na física do jogo:
+
+1. **Contra o Esportivo no Circuito:** O Equilibrado larga melhor (graças ao AWD), mas nas curvas de alta, ele tem menos `fTractionCurveMax` e começa a escorregar levemente para fora da pista. Ele perde milissegundos preciosos em cada tangenciamento.
+2. **Contra o Drift nas Serras:** O Equilibrado consegue derrapar jogando a traseira, mas o eixo dianteiro puxando o carro para frente (`fDriveBiasFront`) encurta o drift. O carro de Drift puro faz curvas longas de lado; o Equilibrado só consegue fazer transições rápidas.
+3. **Contra o Muscle na Reta:** O Equilibrado pula na frente nos primeiros 50 metros porque traciona as 4 rodas, enquanto o Muscle derrapa queimando pneu. Porém, assim que o Muscle "grudar" no chão, a relação peso/potência e o menor arrasto aerodinâmico farão ele ultrapassar o Equilibrado antes do final da reta.
+
+Isso garante que o jogador do carro Equilibrado vença a corrida mista apenas se ele for um piloto exepcionalmente mais inteligente, aproveitando as fraquezas dos adversários em cada setor da pista (ultrapassando o Muscle na curva, o Esportivo na arrancada e o Drift na reta).
+
+Para um framework de core que exige tolerância a falhas e arquitetura de nível AA+, um simples *loop* de verificação não é suficiente. Precisamos evitar gaps de fluxo e garantir a **separação de responsabilidades**: as regras de negócio não podem estar misturadas com a consulta ao banco de dados, e o sistema deve saber exatamente o que fazer com dados corrompidos ou fora do padrão (nulos, categorias inexistentes).
+
+Abaixo, apresento a arquitetura de um serviço de validação estruturado para rodar no *boot* do servidor, projetado para operar com `oxmysql` (padrão atual de alta performance) e isolado em três camadas.
+
+### 1. Camada de Domínio (Configuração de Regras)
+
+Aqui definimos a "fonte da verdade". Essa tabela isola os parâmetros matemáticos, permitindo que a equipe de balanceamento ajuste os valores sem tocar na lógica do código.
+
+```lua
+-- handling_rules.lua
+VehicleIntegrity = {}
+
+VehicleIntegrity.Rules = {
+    ['balanced'] = {
+        fMass           = { min = 1300.0, max = 1450.0 },
+        fDriveBiasFront = { min = 0.3,    max = 0.4 },
+        fTractionMax    = { min = 1.8,    max = 2.2 }
+    },
+    ['muscle'] = {
+        fMass           = { min = 1450.0, max = 1750.0 },
+        fDriveBiasFront = { min = 0.0,    max = 0.1 }, -- Predominantemente tração traseira
+        fTractionMax    = { min = 2.0,    max = 2.4 }
+    },
+    ['sport'] = {
+        fMass           = { min = 1100.0, max = 1350.0 },
+        fDriveBiasFront = { min = 0.0,    max = 0.3 },
+        fTractionMax    = { min = 2.5,    max = 2.9 }
+    },
+    ['drift'] = {
+        fMass           = { min = 1200.0, max = 1400.0 },
+        fDriveBiasFront = { min = 0.0,    max = 0.0 }, -- Tração traseira pura
+        fTractionMax    = { min = 1.4,    max = 1.8 }  -- Baixo grip máximo para quebrar tração
+    }
+}
+
+```
+
+### 2. Camada de Validação (Lógica Pura)
+
+Esta função é isolada. Ela não sabe o que é banco de dados; ela apenas recebe um objeto de veículo e retorna se ele é válido ou quais são as anomalias. Isso elimina fluxos cegos e permite testes unitários futuros.
+
+```lua
+-- validator_service.lua
+function VehicleIntegrity.ValidateHandling(vehicleData)
+    local category = vehicleData.category
+    local rules = VehicleIntegrity.Rules[category]
+    local anomalies = {}
+
+    -- Falha Crítica 1: Categoria inexistente ou veículo sem categoria
+    if not rules then
+        table.insert(anomalies, string.format("Categoria desconhecida ou nula: '%s'", tostring(category)))
+        return false, anomalies
+    end
+
+    -- Função auxiliar para validar limites de forma segura contra nil
+    local function checkBounds(field, value, min, max)
+        if type(value) ~= 'number' then
+            table.insert(anomalies, string.format("Campo %s ausente ou tipo incorreto.", field))
+        elseif value < min or value > max then
+            table.insert(anomalies, string.format("Campo %s fora do limite. Atual: %.2f | Permitido: [%.2f - %.2f]", field, value, min, max))
+        end
+    end
+
+    -- Processa a validação
+    checkBounds('fMass', vehicleData.fMass, rules.fMass.min, rules.fMass.max)
+    checkBounds('fDriveBiasFront', vehicleData.fDriveBiasFront, rules.fDriveBiasFront.min, rules.fDriveBiasFront.max)
+    checkBounds('fTractionMax', vehicleData.fTractionMax, rules.fTractionMax.min, rules.fTractionMax.max)
+
+    local isValid = (#anomalies == 0)
+    return isValid, anomalies
+end
+
+```
+
+### 3. Camada de Integração e Boot (Fluxo Principal)
+
+Aqui o sistema intercepta a inicialização do servidor, busca os dados, aplica o motor de validação e toma decisões operacionais.
+
+```lua
+-- boot_service.lua
+local function RunHandlingSanityCheck()
+    print("^3[INTEGRIDADE] Iniciando Sanity Check da física dos veículos...^0")
+
+    -- Busca apenas os campos necessários na tabela de veículos
+    MySQL.Async.fetchAll('SELECT spawn_name, category, fMass, fDriveBiasFront, fTractionMax FROM vehicles', {}, function(vehicles)
+        if not vehicles or #vehicles == 0 then
+            print("^1[INTEGRIDADE] Falha: Nenhum veículo encontrado no banco de dados.^0")
+            return
+        end
+
+        local failedVehicles = 0
+        local totalVehicles = #vehicles
+
+        for i = 1, totalVehicles do
+            local veh = vehicles[i]
+            local isValid, anomalies = VehicleIntegrity.ValidateHandling(veh)
+
+            if not isValid then
+                failedVehicles = failedVehicles + 1
+                
+                -- Estrutura de log tático para fácil visualização no console do servidor
+                print(string.format("^1[VIOLAÇÃO] Veículo: %s | Categoria: %s^0", veh.spawn_name, tostring(veh.category)))
+                for _, anomaly in ipairs(anomalies) do
+                    print(string.format("  -> ^1%s^0", anomaly))
+                end
+
+                -- Ação de contenção (Opcional): 
+                -- Aqui você poderia disparar uma query UPDATE setando a categoria para 'quarentena' 
+                -- ou carregar um handling default temporário na memória para não quebrar a cidade.
+            end
+        end
+
+        if failedVehicles == 0 then
+            print(string.format("^2[INTEGRIDADE] Sucesso. Todos os %d veículos estão dentro dos padrões arquitetados.^0", totalVehicles))
+        else
+            print(string.format("^1[INTEGRIDADE] Alerta de Segurança: %d de %d veículos falharam na validação.^0", failedVehicles, totalVehicles))
+        end
+    end)
+end
+
+-- Aciona automaticamente quando o recurso do core inicia
+AddEventHandler('onResourceStart', function(resourceName)
+    if GetCurrentResourceName() == resourceName then
+        -- Pequeno delay para garantir que a conexão com o BD estabilizou
+        SetTimeout(1500, RunHandlingSanityCheck) 
+    end
+end)
+
+```
+
+### Por que essa estrutura evita "gaps de fluxo"?
+
+1. **Tratamento de Nulos:** O `checkBounds` valida primeiro se a variável no banco não retornou `nil` ou string. Se um administrador deletar o peso no banco sem querer, o script não gera um *Runtime Error* que derrubaria a thread. Ele capta a anomalia graciosamente.
+2. **Designação de Responsabilidade:** O script do banco não sabe *quais* são as regras, ele apenas obedece ao `Validator`. Isso permite que você expanda a validação no futuro (ex: checar RPM, marchas) alterando um único arquivo, sem risco de corromper a rotina de boot.
+3. **Ação Investigativa:** O *print* em formato de cascata (`->`) entrega a métrica exata de onde o carro fugiu do parâmetro, poupando o tempo do engenheiro de dados ao procurar o erro na tabela MySQL.
+
+
+Para transformar o seu script de validação num sistema **autossuficiente e resiliente (Self-Healing)**, precisamos de evoluir a lógica de apenas alertar para **corrigir ativamente** os dados na base de dados.
+
+A abordagem ideal utiliza uma técnica matemática chamada **Clamping** (limitação por teto e piso) associada à construção dinâmica de queries SQL. Desta forma, o script atualiza apenas as colunas exatas que falharam, minimizando o impacto de I/O na base de dados durante o arranque (*boot*) do servidor.
+
+Abaixo apresenta-se a arquitetura refatorada para suportar a contingência automática:
+
+### 1. Camada de Validação e Clamping Dinâmico
+
+Modificámos a função para que ela não retorne apenas um booleano, mas também um dicionário de `corrections`. Se o valor for menor que o mínimo, ele assume o mínimo; se for maior que o máximo, assume o máximo.
+
+```lua
+-- validator_service.lua
+
+function VehicleIntegrity.ValidateAndCorrectHandling(vehicleData)
+    local category = vehicleData.category
+    local rules = VehicleIntegrity.Rules[category]
+    local anomalies = {}
+    local corrections = {}
+    local hasViolations = false
+
+    -- Falha Crítica: Categoria inexistente na configuração
+    if not rules then
+        table.insert(anomalies, string.format("Categoria inválida ou nula: '%s'", tostring(category)))
+        return false, anomalies, corrections
+    end
+
+    -- Função interna com lógica de Clamping e Sanitização de Tipos
+    local function evaluateAndClamp(field, value, min, max)
+        -- Tratamento contra Gaps de Fluxo: Se o dado for nulo ou corrompido (ex: string em campo float)
+        if type(value) ~= 'number' then
+            table.insert(anomalies, string.format("Campo '%s' corrompido ou nulo. Forçando valor mínimo seguro.", field))
+            corrections[field] = min
+            hasViolations = true
+            return
+        end
+
+        -- Clamping Matemático
+        if value < min then
+            table.insert(anomalies, string.format("Campo '%s' abaixo do limite (%.2f). Corrigido para o mínimo (%.2f).", field, value, min))
+            corrections[field] = min
+            hasViolations = true
+        elseif value > max then
+            table.insert(anomalies, string.format("Campo '%s' acima do limite (%.2f). Corrigido para o máximo (%.2f).", field, value, max))
+            corrections[field] = max
+            hasViolations = true
+        end
+    end
+
+    -- Executa a verificação parametrizada
+    evaluateAndClamp('fMass', vehicleData.fMass, rules.fMass.min, rules.fMass.max)
+    evaluateAndClamp('fDriveBiasFront', vehicleData.fDriveBiasFront, rules.fDriveBiasFront.min, rules.fDriveBiasFront.max)
+    evaluateAndClamp('fTractionMax', vehicleData.fTractionMax, rules.fTractionMax.min, rules.fTractionMax.max)
+
+    -- O veículo é válido apenas se nenhuma violação foi encontrada
+    local isValid = not hasViolations
+    return isValid, anomalies, corrections
+end
+
+```
+
+### 2. Camada de Integração com Geração Dinâmica de SQL
+
+No *boot*, o script avalia o veículo. Se houver correções a fazer, ele monta a query `UPDATE` em tempo de execução, injetando os parâmetros via `oxmysql` de forma segura contra SQL Injection.
+
+```lua
+-- boot_service.lua
+
+local function RunHandlingSanityCheckWithAutofix()
+    print("^3[INTEGRIDADE] A iniciar verificação física com Autocorreção Ativa...^0")
+
+    MySQL.Async.fetchAll('SELECT spawn_name, category, fMass, fDriveBiasFront, fTractionMax FROM vehicles', {}, function(vehicles)
+        if not vehicles or #vehicles == 0 then
+            print("^1[INTEGRIDADE] Erro: A tabela de veículos está vazia ou inacessível.^0")
+            return
+        end
+
+        local totalVehicles = #vehicles
+        local fixedVehicles = 0
+
+        for i = 1, totalVehicles do
+            local veh = vehicles[i]
+            local isValid, anomalies, corrections = VehicleIntegrity.ValidateAndCorrectHandling(veh)
+
+            -- Se o veículo falhou e existem correções numéricas prontas
+            if not isValid and next(corrections) then
+                fixedVehicles = fixedVehicles + 1
+
+                print(string.format("^1[CONTINGÊNCIA] Desvio detetado no modelo: '%s' (%s)^0", veh.spawn_name, veh.category))
+                for _, anomaly in ipairs(anomalies) do
+                    print(string.format("  -> ^3%s^0", anomaly))
+                end
+
+                -- CONSTRUTOR DINÂMICO DE QUERY SQL
+                local sqlSetParts = {}
+                local queryParams = { ['@spawn_name'] = veh.spawn_name }
+
+                -- Mapeia apenas os campos adulterados para a query
+                for field, correctedValue in pairs(corrections) do
+                    table.insert(sqlSetParts, string.format("%s = @%s", field, field))
+                    queryParams['@' .. field] = correctedValue
+                end
+
+                -- Junta as partes (Ex: "UPDATE vehicles SET fMass = @fMass, fTractionMax = @fTractionMax WHERE...")
+                local sqlQuery = string.format("UPDATE vehicles SET %s WHERE spawn_name = @spawn_name", table.concat(sqlSetParts, ", "))
+
+                -- Execução Assíncrona não-bloqueante (Usa o Connection Pool do oxmysql)
+                MySQL.Async.execute(sqlQuery, queryParams, function(rowsChanged)
+                    if rowsChanged > 0 then
+                        print(string.format("^2[SISTEMA] Base de dados sincronizada para o veículo: %s.^0", veh.spawn_name))
+                    else
+                        print(string.format("^1[ERRO CRÍTICO] Falha ao persistir correção do veículo %s no banco.^0", veh.spawn_name))
+                    end
+                end)
+            end
+        end
+
+        -- Relatório Final no Console do Servidor
+        if fixedVehicles == 0 then
+            print(string.format("^2[INTEGRIDADE] Sucesso absoluto. Todos os %d veículos cumprem as regras de handling.^0", totalVehicles))
+        else
+            print(string.format("^3[INTEGRIDADE] Diagnóstico Concluído. %d de %d veículos foram retificados automaticamente.^0", fixedVehicles, totalVehicles))
+        end
+    end)
+end
+
+AddEventHandler('onResourceStart', function(resourceName)
+    if GetCurrentResourceName() == resourceName then
+        -- Delay estratégico de 1.5s para garantir a estabilização completa do driver de BD
+        SetTimeout(1500, RunHandlingSanityCheckWithAutofix)
+    end
+end)
+
+```
+
+### Vantagens Arquiteturais desta Implementação
+
+1. **Eficiência de Rede e Disco (I/O Otimizado):** Se um veículo tiver apenas o `fMass` incorreto, a query dinâmica gerada será `UPDATE vehicles SET fMass = @fMass WHERE ...`. O script não reescreve as colunas que já estavam corretas, poupando processamento do MySQL.
+2. **Proteção de Tipo Defensiva:** Se um administrador inserir acidentalmente um caractere inválido na base de dados (como deixar o campo em branco ou escrever texto), o interpretador Lua falharia com erro de comparação aritmética (`attempt to compare number with nil`). A validação do `type(value) ~= 'number'` interseta esse cenário antes da quebra da *thread*, injetando o valor mínimo configurado como âncora de segurança.
+3. **Persistência Definitiva:** Ao corrigir diretamente na base de dados através do *boot*, garante-se que os scripts que lêem essa tabela posteriormente para aplicar o handling em tempo de jogo (ex: scripts que injetam o handling nas entidades do GTA quando o jogador entra no carro) já recebam os dados perfeitamente limpos e balanceados.

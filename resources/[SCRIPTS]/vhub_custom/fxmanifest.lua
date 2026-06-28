@@ -37,6 +37,7 @@ server_scripts {
 
 client_scripts {
   'client/init.lua',
+  'client/camera.lua',   -- L2 HAL: câmera orbital livre (dependência de bennys/oficina)
   'client/zones.lua',
   'client/bennys.lua',
   'client/mec.lua',

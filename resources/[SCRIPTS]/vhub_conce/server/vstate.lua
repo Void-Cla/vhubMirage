@@ -47,6 +47,8 @@ local CUST_KEYS = {
   window_tint = true, livery = true, turbo = true, smoke = true, xenon = true,
   mods = true, neons = true, neon_colour = true, model = true, handling = true,
   nitro = true,   -- {kit:bool, qty:0..100} — dono = vhub_nitro (source='nitro'); patch sempre completo
+  -- pintura RGB exata + cores de fumaça/xenon (dono cosmético = vhub_custom, source='cosmetic')
+  custom_primary = true, custom_secondary = true, tyre_smoke_color = true, xenon_color = true,
 }
 
 -- filtra customization (tabela) → JSON com cap de 8 KB, ou nil

@@ -57,7 +57,7 @@ RegisterNetEvent(E.LOBBY_CONFIRMED, function(_data)
     VHubRachaLocal._pending_blip = nil
   end
   VHubRachaLocal.confirmed = true
-  L.notify(Lang.t('lobby.confirmed_notify') or 'Presença confirmada — aguarde o início.', 'success')
+  L.notify(Lang.t('Voce esta comfirmado na corrida.') or 'Presença confirmada — aguarde o início.', 'success')
   if USE_NUI then
     SendNUIMessage({ type = 'vhub_racha.lobby.confirmed', data = _data or {} })
   end

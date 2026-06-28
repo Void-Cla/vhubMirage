@@ -34,7 +34,17 @@ end
 
 -- ── Abertura: somente quando o Spawn Owner delega ─────────────────────────────
 
+-- Cede a abertura ao gate de login quando ele está ATIVO (Opção A do #vhub_login):
+--   o login orquestra e reabre o selector via RequestOpen após login+char-select.
+--   Evita colisão de contrato (dois resources abrindo no mesmo evento). Gate
+--   inativo/ausente → fluxo direto (rollback-safe).
+local function loginGateAtivo()
+  local ok, active = pcall(function() return exports.vhub_login:isGateActive() end)
+  return ok and active == true
+end
+
 AddEventHandler("vhub_player_state:chooseSpawn", function(src)
+  if loginGateAtivo() then return end
   Citizen.CreateThread(function()
     local user = exports.vhub:getUser(src)
     if not user or not user.char_id then

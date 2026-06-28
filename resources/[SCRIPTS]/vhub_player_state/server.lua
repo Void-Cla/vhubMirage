@@ -28,7 +28,10 @@ local CFG = {
   --   o fluxo direto antigo em 1 boolean, sem tocar mais nada.
   usar_selector    = true,
   selector_modo    = "session",  -- "session" = só no 1º spawn da sessão | "always"
-  selector_timeout = 60,         -- s sem escolha → spawn automático na pos salva/padrão
+  selector_timeout = 300,        -- s sem escolha → spawn automático na pos salva/padrão.
+                                 -- ALTO de propósito: o gate vhub_login tem prazo MENOR
+                                 -- (auth_deadline) e faz DropPlayer antes — este fallback
+                                 -- nunca pode spawnar um não-autenticado (#vhub_login).
 }
 
 -- ── Routing buckets (dimensão de sessão) ──────────────────────────────────────

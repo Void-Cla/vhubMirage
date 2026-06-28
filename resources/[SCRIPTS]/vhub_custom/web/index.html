@@ -149,54 +149,64 @@
 </div><!-- /overlay -->
 
 <!-- ══════════════════════════════════════════════════════════
-     BENNYS — estética (painel lateral estreito; carro visível)
+     BENNYS — estética: DUAS asides laterais, carro no centro
+     (palco central transparente p/ o carro aparecer e orbitar)
      ══════════════════════════════════════════════════════════ -->
 <div id="bennys-overlay" class="bennys-overlay hidden mod-bennys">
 
-  <aside class="bennys-panel">
-
-    <span class="corner c-tl"></span>
-    <span class="corner c-tr"></span>
-    <span class="corner c-bl"></span>
-    <span class="corner c-br"></span>
-
-    <header class="bn-hdr">
-      <div class="hdr-brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="20" height="20"><path fill="currentColor" d="M6 5h6l4 10 4-10h6l-8 22h-4z"/></svg>
-        </div>
-        <div class="brand-text">
-          <span class="brand-name">vHub</span>
-          <span class="brand-sub">BENNY'S</span>
-        </div>
-      </div>
-      <button id="bn-btn-close" class="btn-close" title="Fechar">✕</button>
-    </header>
-
-    <div class="bn-veh-info">
-      <div id="bn-veh-nome" class="veh-nome">—</div>
-      <div id="bn-veh-sub" class="veh-sub">—</div>
+  <!-- PALCO CENTRAL — arraste para girar a câmera, scroll p/ zoom (carro visível) -->
+  <div id="bn-stage" class="bn-stage" aria-hidden="true">
+    <div class="bn-orbit-hint">
+      <span class="boh-ico">⟲</span> Arraste para girar &nbsp;·&nbsp; <span class="boh-ico">⊕</span> Scroll para zoom
     </div>
+  </div>
 
-    <nav id="bn-tabs" class="bn-tabs"></nav>
-
-    <div id="bn-detail" class="bn-detail"></div>
-
-    <footer class="bn-ftr">
-      <div class="total-wrap">
-        <span class="total-lbl">TOTAL</span>
-        <span id="bn-total-cost" class="total-val">R$ 0</span>
+  <!-- TOPO — identidade do veículo -->
+  <header class="bn-top">
+    <div class="hdr-brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="20" height="20"><path fill="currentColor" d="M6 5h6l4 10 4-10h6l-8 22h-4z"/></svg>
       </div>
-      <div class="bn-ftr-btns">
-        <button id="bn-btn-cancel" class="btn-cancel">CANCELAR</button>
-        <button id="bn-btn-apply" class="btn-apply" disabled>
-          <span class="ba-label">APLICAR</span>
-          <span class="ba-chev" aria-hidden="true">›</span>
-        </button>
+      <div class="brand-text">
+        <span class="brand-name">vHub</span>
+        <span class="brand-sub">BENNY'S · ESTÉTICA</span>
       </div>
-    </footer>
+    </div>
+    <div class="bn-veh">
+      <div id="bn-veh-nome" class="bn-veh-nome">—</div>
+      <div id="bn-veh-sub"  class="bn-veh-sub">—</div>
+    </div>
+  </header>
 
+  <!-- ASIDE ESQUERDO — categorias -->
+  <aside class="bn-aside bn-aside-left">
+    <span class="corner c-tl"></span><span class="corner c-tr"></span>
+    <span class="corner c-bl"></span><span class="corner c-br"></span>
+    <div class="bn-aside-title"><span class="ct-bar"></span>CUSTOMIZAR</div>
+    <nav id="bn-cats" class="bn-cats"></nav>
   </aside>
+
+  <!-- ASIDE DIREITO — controles da categoria selecionada -->
+  <aside class="bn-aside bn-aside-right">
+    <span class="corner c-tl"></span><span class="corner c-tr"></span>
+    <span class="corner c-bl"></span><span class="corner c-br"></span>
+    <div id="bn-cat-title" class="bn-aside-title"><span class="ct-bar"></span>PINTURA</div>
+    <div id="bn-controls" class="bn-controls"></div>
+  </aside>
+
+  <!-- RODAPÉ — total + ações (sem botão de timeout; fecha só por ação explícita) -->
+  <footer class="bn-bottom">
+    <button id="bn-btn-cancel" class="btn-cancel">CANCELAR</button>
+    <div class="bn-total">
+      <span class="total-lbl">ORÇAMENTO</span>
+      <span id="bn-total-cost" class="total-val">R$ 0</span>
+    </div>
+    <button id="bn-btn-apply" class="btn-apply" disabled>
+      <span class="ba-label">APLICAR &amp; PAGAR</span>
+      <span class="ba-chev" aria-hidden="true">›</span>
+    </button>
+  </footer>
+
 </div><!-- /bennys-overlay -->
 
 <!-- ══════════════════════════════════════════════════════════
