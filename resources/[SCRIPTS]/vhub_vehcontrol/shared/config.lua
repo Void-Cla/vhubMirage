@@ -13,7 +13,7 @@ Config.keys = {
   windowDown  = 'DOWN',   -- seta baixo: abaixa a janela do seu assento
 }
 Config.command      = 'vehcontrol'  -- comando de chat p/ abrir o painel ('' = desliga)
-Config.skillDebug   = true          -- DEBUG engine de skill: diagnostica resolução de ficha no chat (DESLIGAR após validar)
+Config.skillDebug   = false         -- DEBUG engine de skill no chat (F-051: true poluía produção)
 Config.holdToOpenMs = 1000          -- tempo segurando a tecla de trava p/ abrir o painel
 Config.distance     = 2.0           -- distancia p/ controlar veiculo proximo a pe (metros)
 
@@ -50,7 +50,7 @@ Config.windowIndex = { lfdoor = 0, rfdoor = 1, lrdoor = 2, rrdoor = 3 }
 -- do jogo = editar SO as faixas abaixo (min->max por eixo). Seguro ligar/desligar.
 
 Config.skillApplyHandling = true   -- liga a fisica derivada (false = so numeros, .meta intacto)
-Config.skillBruteTest     = true  -- TESTE: libera alloc 0..100% por eixo (builds extremas). Producao = false
+Config.skillBruteTest     = false -- F-052: true desligava o anti-P2W (alloc 0..100% por eixo) em produção
 Config.skillGripMinRatio  = 0.85   -- fTractionCurveMin = grip * isto (mantem Min < Max)
 
 -- eixo -> { field do CHandlingData, valor no alloc MINIMO do eixo, valor no MAXIMO }.

@@ -13,6 +13,15 @@ function vHub:init(cfg, db_driver)
   vHub.cfg = cfg
   vHub.State:setDriver(db_driver)
 
+  -- ADR #41 (F-022): trust vazio = todo export sensível NEGA (default-deny N0-2).
+  -- Avisa no boot com ação concreta em vez de falhar silenciosamente em runtime.
+  if not cfg.trusted_resources or next(cfg.trusted_resources) == nil then
+    vHub.Logger:warn("boot",
+      "trusted_resources VAZIO — exports sensíveis serão NEGADOS. " ..
+      'Configure: setr vhub_trusted_resources "vhub_conce,vhub_garage,vhub_custom,' ..
+      'vhub_vehcontrol,vhub_nitro,vhub_racha,vhub_admin,vhub_ferinha"')
+  end
+
   -- ── onResourceStop — flush de emergência (chunked: yield a cada 50) ──
   AddEventHandler("onResourceStop", function(res)
     if res ~= _RES then return end
@@ -77,7 +86,7 @@ function vHub:init(cfg, db_driver)
 
   -- ── vHub:ready — ÚNICO ponto de autenticação e spawn ──────────────────
   vHub.Kernel:net("vHub:ready", function(src)
-    print(('vHub.boot: ready received src=%s'):format(tostring(src)))
+    vHub.Logger:debug("boot", ("ready recebido src=%s"):format(tostring(src)))
 
     -- Se já tem sessão: é um respawn (morte, reconexão rápida)
     local existing = vHub.Auth:getUser(src)
@@ -168,20 +177,70 @@ function vHub:init(cfg, db_driver)
   -- vHub:savePos removido — vhub_player_state é o dono da persistência de posição
   -- via evento vhub_player_state:update (resource externo).
 
-  -- ── Veículos — HANDLERS DESARMADOS (N0-3, 2026-06-21, gate arquiteto+segurança) ──
-  -- Cadeia física do CORE DORMENTE por design desde a decisão #24 (verdade no
-  -- prontuário vhub_vehicle_state do conce; emitters deletados do vhub_vehcontrol).
-  -- Sem emissor legítimo, estes handlers eram superfície 100% hostil: um executor
-  -- forjava vEnter/vSpawned com o netid da VÍTIMA → onEnter concedia
-  -- NetworkSetEntityOwner(entidade_alheia, atacante) = sequestro de posição (grief).
-  -- Mantidos REGISTRADOS (rate-limit + contrato de evento) com corpo NO-OP. NUNCA
-  -- reanimar onEnter/onLeave/onStateUpdate/onSpawned sem novo gate (regra da #24).
+  -- ── Veículos — REANIMAÇÃO GATED (ADR #37, 2026-07-02 — descongelamento FASE 1) ──
+  -- Vetor original (ADR #24): forjar vEnter com netid da VÍTIMA → onEnter concedia
+  -- NetworkSetEntityOwner à entidade alheia. O gate abaixo fecha o vetor validando a
+  -- alegação contra a RÉPLICA server-side: o servidor só aceita se o ped do src está
+  -- fisicamente sentado no assento alegado do veículo cuja placa real bate com a
+  -- alegada. Atacante não senta no carro da vítima → rejeitado antes de qualquer efeito.
+  -- vSpawned/vDespawned PERMANECEM desarmados na superfície de rede: spawn/despawn é
+  -- verdade server-side dos donos (garage/conce) via exports gated (server/exports.lua).
+
+  -- valida a alegação (plate, netid) contra a réplica; retorna entidade + placa normalizada
+  -- Colapsa espaços internos ANTES de normalizar — mesma regra do plateKey do client
+  -- e da normalizePlate local do server/vehicle.lua (placa nativa vem com padding).
+  local function veiculoAlegado(plate, netid)
+    if type(plate) ~= "string" or type(netid) ~= "number" then return nil end
+    local ent = NetworkGetEntityFromNetworkId(netid)
+    if not ent or ent == 0 or not DoesEntityExist(ent) then return nil end
+    local bruta   = (GetVehicleNumberPlateText(ent) or ""):gsub("%s+", " ")
+    local real    = vHub.Utils.normalizePlate(bruta)
+    local alegada = vHub.Utils.normalizePlate(plate:gsub("%s+", " "))
+    if not real or not alegada or real ~= alegada then return nil end
+    return ent, alegada
+  end
+
+  -- true se o ped do src está fisicamente no assento alegado do veículo
+  local function pedNoAssento(src, ent, seat)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return false end
+    return GetPedInVehicleSeat(ent, seat) == ped
+  end
+
+  vHub.Kernel:net("vHub:vEnter", function(src, plate, netid, seat)
+    seat = tonumber(seat)
+    if not seat or seat < -1 or seat > 16 then return end
+    local ent, placa = veiculoAlegado(plate, netid)
+    if not ent then return end
+    if not pedNoAssento(src, ent, seat) then
+      vHub.Logger:warn("vehicle",
+        ("vEnter rejeitado src=%d placa=%s seat=%d — ped fora do assento alegado"):format(
+          src, tostring(placa), seat))
+      return
+    end
+    vHub.Vehicle:onEnter(src, placa, netid, seat)
+  end, { rate = { 10, 3000, 10000 } })
+
+  vHub.Kernel:net("vHub:vLeave", function(src, plate, seat)
+    local placa = vHub.Utils.normalizePlate(plate)
+    if not placa then return end
+    local vd = vHub.Vehicle._veh[placa]
+    if not vd or vd.occupants[src] == nil then return end  -- só sai quem entrou validado
+    vHub.Vehicle:onLeave(src, placa, tonumber(seat) or vd.occupants[src])
+  end, { rate = { 10, 3000, 10000 } })
+
+  vHub.Kernel:net("vHub:vState", function(src, plate, patch)
+    vHub.Vehicle:onStateUpdate(src, plate, patch)  -- exige vd.driver == src internamente
+  end, { rate = { 8, 1000, 5000 }, async = false })
+
+  -- Superfície de rede de spawn segue INERTE (registrada p/ rate-limit + contrato)
   local function _vhDisarmed() end
   vHub.Kernel:net("vHub:vSpawned",   _vhDisarmed, { rate = { 15, 5000, 15000 } })
   vHub.Kernel:net("vHub:vDespawned", _vhDisarmed, { rate = { 15, 5000, 15000 } })
-  vHub.Kernel:net("vHub:vEnter",     _vhDisarmed, { rate = { 10, 3000, 10000 } })
-  vHub.Kernel:net("vHub:vLeave",     _vhDisarmed, { rate = { 10, 3000, 10000 } })
-  vHub.Kernel:net("vHub:vState",     _vhDisarmed, { rate = { 8, 1000, 5000 }, async = false })
+
+  -- Kill-switch replicado (ADR #37): cliente só emite eventos de veículo quando true.
+  -- Desarmar de novo = setar false aqui — o tráfego cliente morre sem restart (F-019).
+  GlobalState.vh_core_active = true
 
   -- ── Autosave periódico (chunked: cede o tick a cada 50 sessões) ────────
   local function doSave()

@@ -55,8 +55,15 @@ local function booleano(nome, padrao)
   return GetConvarInt(nome, padrao and 1 or 0) == 1
 end
 
+-- Converte CSV do convar em whitelist set ("a, b" → {a=true, b=true})
+local function csv_para_set(csv)
+  local set = {}
+  for item in tostring(csv or ""):gmatch("[^,%s]+") do set[item] = true end
+  return set
+end
+
 local function criar_config()
-  return {
+  local cfg = {
     db = {
       driver = "oxmysql",
       resource = "oxmysql"
@@ -66,6 +73,9 @@ local function criar_config()
     save_interval = inteiro("vhub_save_interval", 60, 15, 3600),
     fuel_rate = decimal("vhub_fuel_rate", 0.005, 0.0, 1.0),
     whitelist_enabled = booleano("vhub_whitelist", false),
+    core_fuel_enabled = booleano("vhub_core_fuel", false),      -- ADR #38
+    veh_state_apply = booleano("vhub_veh_state_apply", false),  -- ADR #38
+    trusted_resources = csv_para_set(GetConvar("vhub_trusted_resources", "")),
     modules = {},
     lang = {
       not_whitelisted = "Sem whitelist. ID: "
@@ -77,6 +87,13 @@ local function criar_config()
       security = GetConvar("vhub_webhook_security", "")
     }
   }
+  -- ADR #41 (F-003): _defaults de shared/config.lua entram por baixo dos convars —
+  -- campos como max_ping, veh_state_hz, max_speed_kmh e lang.* deixam de ser nil.
+  local shared = rawget(_G, "vHub")
+  if shared and type(shared.mergeConfig) == "function" then
+    cfg = shared.mergeConfig(cfg)
+  end
+  return cfg
 end
 
 local function blob_para_string(blob)
@@ -409,6 +426,16 @@ end)
 
 local function iniciar()
   local config = criar_config()
+
+  -- ADR #41 (F-017): config inválida aborta o boot — fail-fast sem estado é seguro
+  local shared = rawget(_G, "vHub")
+  if shared and type(shared.validateConfig) == "function" then
+    local ok_cfg, erros = shared.validateConfig(config)
+    if not ok_cfg then
+      falhar("config_invalida", "config do vHub invalida", {erros = erros})
+    end
+  end
+
   local driver = criar_driver()
   validar_driver(driver)
 

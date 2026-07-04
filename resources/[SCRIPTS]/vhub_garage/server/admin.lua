@@ -243,7 +243,7 @@ exports('adminDelete', function(plate, actor_src)
     end
     -- prontu rio morre junto no deleteVehicle  nada a persistir antes
     SQL:deleteVehicle(pp)
-    TriggerClientEvent(E.DO_DESPAWN, -1, pp)
+    Core.despawnByPlate(pp)   -- server-side, sem broadcast (ADR #48, F-043)
     Core:log(pp, 'admin_delete', actorOf(actor_src), { char_id = v.char_id })
   end)
   return true
@@ -387,7 +387,7 @@ end)
 exports('adminDespawn', function(plate, actor_src)
   if not invoker_ok() then return false end
   local pp = U.normalizePlate(plate); if not pp then return false end
-  TriggerClientEvent(E.DO_DESPAWN, -1, pp)
+  Core.despawnByPlate(pp)   -- server-side, sem broadcast (ADR #48, F-043)
   inThread(function()
     SQL:updateStatus(pp, 'garage')
     Core:log(pp, 'admin_despawn', actorOf(actor_src), {})

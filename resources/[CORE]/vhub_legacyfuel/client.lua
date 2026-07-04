@@ -118,86 +118,9 @@ AddEventHandler("syncfuel",function(index,fuel)
 	end
 end)
 
-RegisterNetEvent("100fuel")
-AddEventHandler("100fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 100.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("90fuel")
-AddEventHandler("90fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 90.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("80fuel")
-AddEventHandler("80fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 80.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("70fuel")
-AddEventHandler("70fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 70.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("60fuel")
-AddEventHandler("60fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 60.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("50fuel")
-AddEventHandler("50fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 50.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("40fuel")
-AddEventHandler("40fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 40.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("20fuel")
-AddEventHandler("20fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 20.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
-
-RegisterNetEvent("0fuel")
-AddEventHandler("0fuel",function(index,vehicle,fuel)
-	local vehicle = GetPlayersLastVehicle()
-	if vehicle then
-		currentFuel = 0.0
-		SetVehicleFuelLevel(vehicle,currentFuel)
-	end
-end)
+-- F-040 (FASE 5.4, 2026-07-02): 9 handlers vestigiais "100fuel".."0fuel" removidos —
+-- zero emitters no projeto (grep) e usavam GetPlayersLastVehicle (não netid).
+-- Se algum dia emitidos, dariam combustível grátis. Deletar é entrega (L-15).
 
 RegisterNetEvent('vrp_legacyfuel:galao')
 AddEventHandler('vrp_legacyfuel:galao',function()

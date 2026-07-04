@@ -4,6 +4,7 @@
 local S = {}; S.__index = S; vHub.State = S
 
 S._mem        = {}    -- VRAM { [etype][eid][key] = value }
+S._touch      = {}    -- { [etype][eid] = epoch do último acesso } (eviction, ADR #40)
 S._snap       = {}    -- snapshots de TX para rollback
 S._batch      = {}    -- ops SQL pendentes
 S._batchN     = 0
@@ -21,6 +22,48 @@ local BATCH_INT = 3000  -- flush automático a cada 3s
 -- Auto-flush periódico em thread dedicada
 Citizen.CreateThread(function()
   while true do Citizen.Wait(BATCH_INT); S:_flush() end
+end)
+
+-- ── Eviction de VRAM (ADR #40, F-013) ─────────────────────────────────
+-- Entidade ociosa (sem get/set) por mais de VRAM_TTL_S sai inteira da VRAM.
+-- Miss posterior = re-read do DB (caminho que já existe). Jogadores online
+-- nunca evictam: o autosave (60s) toca o bucket `ud` de cada sessão.
+-- Budget declarado: 1 passada/60s, O(entidades), yield a cada 200.
+
+local VRAM_TTL_S   = 3600   -- 1h sem acesso → evict
+local EVICT_INT_MS = 60000  -- intervalo da passada
+
+local function _touch(et, eid)
+  local t = S._touch[et]
+  if not t then t = {}; S._touch[et] = t end
+  t[eid] = os.time()
+end
+
+Citizen.CreateThread(function()
+  while true do
+    Citizen.Wait(EVICT_INT_MS)
+    local agora, removidos, vistos = os.time(), 0, 0
+    for et, entidades in pairs(S._mem) do
+      local toques = S._touch[et] or {}
+      for eid in pairs(entidades) do
+        vistos = vistos + 1
+        -- bucket sem toque registrado ganha carência agora (grace period)
+        local ultimo = toques[eid]
+        if not ultimo then
+          toques[eid] = agora; S._touch[et] = toques
+        elseif (agora - ultimo) > VRAM_TTL_S then
+          entidades[eid] = nil
+          toques[eid]    = nil
+          removidos      = removidos + 1
+        end
+        if vistos % 200 == 0 then Citizen.Wait(0) end
+      end
+    end
+    if removidos > 0 and vHub.Logger then
+      vHub.Logger:info("state",
+        ("VRAM eviction — %d entidade(s) ociosa(s) removida(s) de %d"):format(removidos, vistos))
+    end
+  end
 end)
 
 -- ── Driver ────────────────────────────────────────────────────────────
@@ -108,6 +151,7 @@ function S:exec(n, p)   return self:query(n, p, "execute") end
 function S:get(et, eid, key)
   local t = self._mem[et]; if not t then return nil end
   local e = t[eid];        if not e then return nil end
+  _touch(et, eid)
   if key ~= nil then return e[key] end
   return e
 end
@@ -115,6 +159,7 @@ end
 function S:set(et, eid, key, val, tx)
   if not self._mem[et]      then self._mem[et] = {} end
   if not self._mem[et][eid] then self._mem[et][eid] = {} end
+  _touch(et, eid)
   if tx then
     if not self._snap[tx] then self._snap[tx] = {} end
     local sk = et.."\0"..tostring(eid).."\0"..key
@@ -184,6 +229,27 @@ function S:_queue(op)
   if self._batchN >= BATCH_MAX then self:_flush() end
 end
 
+-- ADR #47: cap de retry por op — op envenenada (ex.: FK violada) era re-enfileirada
+-- PARA SEMPRE, inundando log e DB. Após MAX_OP_RETRIES ela é descartada com ERROR.
+local MAX_OP_RETRIES = 5
+
+-- re-enfileira ops preservando ordem; descarta as que estouraram o cap de retry
+local function _requeueCapped(falhas, pend, pendN)
+  local fila, filaN = {}, 0
+  for i = 1, #falhas do
+    local op = falhas[i]
+    op._retries = (op._retries or 0) + 1
+    if op._retries > MAX_OP_RETRIES then
+      vHub.Logger:error("state",
+        ("op DESCARTADA após %d tentativas: %s"):format(MAX_OP_RETRIES, tostring(op[1])))
+    else
+      filaN = filaN + 1; fila[filaN] = op
+    end
+  end
+  for i = 1, pendN do filaN = filaN + 1; fila[filaN] = pend[i] end
+  return fila, filaN
+end
+
 function S:_flush()
   if self._batchN == 0 or not self._ready or self._flushing then return end
   self._flushing = true
@@ -196,28 +262,22 @@ function S:_flush()
     -- pcall captura exceções inesperadas (crash no driver, etc.)
     local pcall_ok, batch_ok, batch_falhas = pcall(self._driver.batch, self._driver, ops, n)
     if not pcall_ok then
-      -- Exceção no driver: re-enfileira tudo (seguro de última instância)
-      local pend, pendN = self._batch, self._batchN
+      -- Exceção no driver: re-enfileira tudo (com cap de retry — ADR #47)
       local fila = {}
-      for i = 1, n     do fila[i]   = ops[i]  end
-      for i = 1, pendN do fila[n+i] = pend[i] end
-      self._batch, self._batchN = fila, n + pendN
+      for i = 1, n do fila[i] = ops[i] end
+      self._batch, self._batchN = _requeueCapped(fila, self._batch, self._batchN)
       self._flushing = false
       vHub.Logger:warn("state", ("batch reenfileirado total=%d (excecao driver)"):format(n))
       return
     end
     if not batch_ok and type(batch_falhas) == "table" then
-      -- Falha parcial: re-enfileira APENAS as ops que o driver reportou como falhas.
+      -- Falha parcial: re-enfileira APENAS as ops que falharam, com cap de retry.
       -- Ops de outros jogadores que tiveram sucesso NÃO são re-enfileiradas.
-      local nf = #batch_falhas
-      local pend, pendN = self._batch, self._batchN
-      local fila = {}
-      for i = 1, nf    do fila[i]    = batch_falhas[i] end
-      for i = 1, pendN do fila[nf+i] = pend[i] end
-      self._batch, self._batchN = fila, nf + pendN
+      self._batch, self._batchN = _requeueCapped(batch_falhas, self._batch, self._batchN)
       self._flushing = false
       vHub.Logger:warn("state",
-        ("batch parcial: %d/%d op(s) reenfileirada(s)"):format(nf, n))
+        ("batch parcial: %d/%d op(s) falharam (reenfileiradas até %dx)"):format(
+          #batch_falhas, n, MAX_OP_RETRIES))
       return
     end
     self._flushing = false
@@ -384,6 +444,25 @@ local function _set(et, eid, key, val, sql, idf, tx)
   if key ~= "ban.active" and key ~= "whitelist" and key ~= "permissions" then
     S:invalidate(et, eid, key)
   end
+end
+
+-- ── Audit unificado (ADR #42, F-073) ──────────────────────────────────
+-- Registra mutação privilegiada em vh_audit via batch (zero custo síncrono).
+-- Toda escrita audita: actor (resource/uid), action, target, source, before/after.
+function vHub.audit(actor, action, target, source, before, after)
+  local function jenc(v)
+    if v == nil then return nil end
+    local ok, j = pcall(json.encode, v)
+    return ok and j or tostring(v)
+  end
+  S:_queue({ "vh/audit_insert", {
+    actor  = tostring(actor or "?"),
+    action = tostring(action or "?"),
+    target = tostring(target or "?"),
+    source = source ~= nil and tostring(source) or nil,
+    before_json = jenc(before),
+    after_json  = jenc(after),
+  } })
 end
 
 -- API pública — todas exigem Citizen.CreateThread no chamador

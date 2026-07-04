@@ -4,6 +4,9 @@
   "showThinkingSummaries": true,
   "autoMemory": true,
 
+  "_mcp": "Servidores declarados em ../.mcp.json (raiz do repo). 'filesystem' é auto-habilitado; adicione outros nomes ao array abaixo.",
+  "enabledMcpjsonServers": ["filesystem"],
+
   "env": {
     "ANTHROPIC_DEFAULT_OPUS_MODEL":   "claude-opus-4-8",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
@@ -30,10 +33,13 @@
       "Read(sql/**)"
     ],
 
-    "deny": [
+    "ask": [
       "Write(resources/[CORE]/vhub/**)",
       "Edit(resources/[CORE]/vhub/**)",
-      "MultiEdit(resources/[CORE]/vhub/**)",
+      "MultiEdit(resources/[CORE]/vhub/**)"
+    ],
+
+    "deny": [
       "Write(.claude/contexto.md)",
       "Edit(.claude/contexto.md)",
       "MultiEdit(.claude/contexto.md)",

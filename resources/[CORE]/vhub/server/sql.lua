@@ -106,3 +106,10 @@ S:prepare("vh/set_vd",
   "REPLACE INTO vh_vehicle_data(plate, dkey, dvalue) VALUES(@plate, @key, @value)")
 S:prepare("vh/get_vd",
   "SELECT dvalue FROM vh_vehicle_data WHERE plate = @plate AND dkey = @key")
+
+-- ── Audit unificado (ADR #42) ─────────────────────────────────────────
+
+-- Append-only: nunca há UPDATE/DELETE preparado para vh_audit por construção
+S:prepare("vh/audit_insert",
+  "INSERT INTO vh_audit(actor, action, target, source, before_json, after_json) " ..
+  "VALUES(@actor, @action, @target, @source, @before_json, @after_json)")

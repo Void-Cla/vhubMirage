@@ -1,8 +1,8 @@
 -- ╔════════════════════════════════════════════════════════════════╗
--- ║ vHub Mirage — CORE FROZEN v1.0                                 ║
--- ║ Data de congelamento: 2026-05-22                               ║
--- ║ Próxima janela de revisão: +12 meses                           ║
--- ║ Qualquer alteração exige aprovação dos guardiões.              ║
+-- ║ vHub Mirage — CORE v2.0 (DESCONGELAMENTO — FASE 1 aplicada)    ║
+-- ║ Freeze v1.0: 2026-05-22 → descongelado sob gate em 2026-07-02 ║
+-- ║ Toda alteração segue GATED: arquiteto + revisão + ADR + bump.  ║
+-- ║ ADRs desta fase: #37..#43 (plano_core_v2/WORKLOG_CORE_V2.md)   ║
 -- ╚════════════════════════════════════════════════════════════════╝
 -- fxmanifest.lua — vHub Mirage
 -- Ordem de carga garantida pelo runtime FiveM:
@@ -13,8 +13,8 @@ lua54     'yes'
 
 name        'vhub'
 author      'vHub Mirage'
-version     '1.0.0'
-description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (FROZEN v1.0).'
+version     '2.0.0-alpha.1'
+description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (v2 FASE 1: pipeline veicular gated).'
 
 dependency 'oxmysql'
 

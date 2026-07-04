@@ -159,7 +159,9 @@ function M:returnExpiredHoldings()
     local v = SQL:getVehicle(k.plate)
     if v and v.status ~= 'garage' then
       SQL:updateStatus(k.plate, 'garage')
-      TriggerClientEvent('vhub_garage:doDespawn', -1, k.plate)
+      -- F-031/F-043 (ADR #48): export gated do garage em vez de evento hardcoded
+      -- broadcast -1 — soft-dep (pcall): garage parado não derruba a devolução.
+      pcall(function() exports.vhub_garage:despawnVehicleByPlate(k.plate) end)
     end
     Citizen.Wait(0)   -- lote: não trava a thread em varreduras grandes (L-06)
   end

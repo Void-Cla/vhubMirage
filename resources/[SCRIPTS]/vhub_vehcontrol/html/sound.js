@@ -1,6 +1,7 @@
 // sound.js — aside TOPO-CENTRO (Som)
-// Fontes: "Buscar" (Jamendo via vhub_wow), "Rádio" (top-semana aleatório) e "URL"
-// (arquivo direto). Tudo passa pelo Lua → servidor valida e dispara via vhub_wow (#34).
+// Fontes: "Buscar" (YouTube via vhub_wow), "Rádio" (playlist da cidade) e "Link"
+// (URL YouTube/SoundCloud/.mp3 direto). Tudo passa pelo Lua → servidor valida e
+// dispara via vhub_wow (#34). "Vídeo no carro" mostra o clipe do YouTube numa telinha.
 
 
 vhub.ready(function (el) {
@@ -18,6 +19,7 @@ var _sound = {
   playing: false,
   source:  'search',
   volume:  55,
+  video:   false,   // telinha "DVD no carro" ligada?
 };
 
 var _searchTimer = null;   // debounce da digitação na busca
@@ -78,11 +80,31 @@ function attachSoundUI() {
     el.soundVolumeVal.textContent = _sound.volume + '%';
     if (_sound.playing) post('soundVolume', { volume: _sound.volume / 100 });
   });
+
+  // Vídeo no carro (DVD): liga/desliga a telinha do clipe do YouTube
+  if (el.soundVideo) {
+    el.soundVideo.addEventListener('click', function () {
+      _sound.video = !_sound.video;
+      el.soundVideo.setAttribute('aria-pressed', _sound.video ? 'true' : 'false');
+      el.soundVideo.classList.toggle('is-on', _sound.video);
+      post('soundVideo', { show: _sound.video });
+    });
+  }
+}
+
+// desliga o estado visual do vídeo (chamado quando o som para)
+function resetVideoToggle() {
+  var el = vhub.el;
+  _sound.video = false;
+  if (el.soundVideo) {
+    el.soundVideo.setAttribute('aria-pressed', 'false');
+    el.soundVideo.classList.remove('is-on');
+  }
 }
 
 
 // ============================================================
-// BUSCA (Jamendo) — pesquisa, render da lista, play do resultado
+// BUSCA (YouTube via vhub_wow) — pesquisa, render da lista, play do resultado
 // ============================================================
 
 function doSearch() {
@@ -214,6 +236,9 @@ function setTrackMeta(title, artist) {
 function setPlaying(on) {
   var el = vhub.el;
   _sound.playing = on;
+
+  // som parou → desliga a telinha de vídeo (o server já fez o detach no Destroy)
+  if (!on && _sound.video) resetVideoToggle();
 
   // alterna ícone do botão play (svg interno)
   el.soundPlay.innerHTML = on

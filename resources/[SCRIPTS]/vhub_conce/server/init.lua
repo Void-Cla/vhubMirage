@@ -24,6 +24,9 @@ AddEventHandler('onResourceStart', function(res)
     -- idempotente; em DB nova as tabelas do garage podem ainda não existir (pcall).
     pcall(function() SQL:backfillMirror() end)       -- FASE 1: âncora física
     pcall(function() SQL:backfillOwnerKeys() end)    -- FASE 3a: todo dono tem linha 'owner'
+    -- F-029 (ADR #48): órfãos reconciliam no boot do PRÓPRIO conce — antes dependia
+    -- do garage disparar pós-DDL; se o garage não subisse, órfãos acumulavam.
+    pcall(function() VHubConce.VState:reconcileOrphans() end)
   end)
 end)
 

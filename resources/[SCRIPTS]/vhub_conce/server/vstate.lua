@@ -357,6 +357,17 @@ function M:save(plate, patch, source)
 
   local ok = se(sql, vals)
   _cache[p] = nil   -- invalidação no write (read-through repõe)
+
+  -- ADR #44 (FASE 2.1-lite): espelha FUEL no CORE via contrato de commit — camada B
+  -- (assíncrono, soft-dep pcall). Aquece o vd.state do CORE com dado REAL antes do
+  -- cutover da FASE 2. Só fuel: health/odômetro o CORE já recebe da telemetria
+  -- validada (vState); espelhar esses seria segundo escritor do mesmo dado (L-04).
+  if ok ~= nil and fuel and GetResourceState('vhub') == 'started' then
+    Citizen.CreateThread(function()
+      pcall(function() return exports.vhub:commitVehicleState(p, { fuel = fuel }, 'pump') end)
+    end)
+  end
+
   return ok ~= nil
 end
 

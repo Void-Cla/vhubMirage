@@ -51,6 +51,23 @@ RegisterNetEvent('vhub_vehcontrol:soundVolume', function(volume)
   end)
 end)
 
+-- liga/desliga a telinha de video "DVD no carro" (so YouTube). O attach so exibe se o
+-- vhub_wow confirmar (client) que o player esta a bordo daquele netId — server so propoe.
+RegisterNetEvent('vhub_vehcontrol:soundVideo', function(netId, plate, show)
+  local src = source
+  if not wowAvailable() then return end
+  if type(netId) ~= 'number' or type(plate) ~= 'string' then return end
+  if not VHubVeh.hasVehicleAccess(src, plate) then return end
+
+  pcall(function()
+    if show == true then
+      exports.vhub_wow:AttachInCarVideo(src, soundNameOf(src), netId)
+    else
+      exports.vhub_wow:DetachInCarVideo(src, soundNameOf(src))
+    end
+  end)
+end)
+
 
 -- ============================================================
 -- BUSCA / RADIO — delega ao provider de musica do vhub_wow
@@ -87,8 +104,11 @@ RegisterNetEvent('vhub_vehcontrol:soundRadio', function(netId, plate, volume)
   local ok, track = pcall(function() return exports.vhub_wow:GetRadioTrack() end)
   if not ok or type(track) ~= 'table' or not track.url then rejectSound(src); return end
 
-  local okp = exports.vhub_wow:PlayAtEntity({ src }, soundNameOf(src), track.url, vol, netId, 10.0, true)
-  if okp == true then
+  -- fronteira externa em pcall (R7): vhub_wow pode reiniciar entre wowAvailable() e aqui
+  local okp, accepted = pcall(function()
+    return exports.vhub_wow:PlayAtEntity({ src }, soundNameOf(src), track.url, vol, netId, 10.0, true)
+  end)
+  if okp and accepted == true then
     TriggerClientEvent('vhub_vehcontrol:soundNow', src, track.title, track.artist)
   else
     rejectSound(src)

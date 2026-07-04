@@ -156,6 +156,13 @@ local function revertDrift(veh)
     boostActive = false   -- cancela boost sem resetar cooldown (lastBoostEnd preservado)
 end
 
+-- F-058 (ADR #48): restart do resource restaura o handling do carro em drift —
+-- sem isto o veículo ficava com os deltas de drift "viciados" para sempre.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    revertDrift(lastVehicle)
+end)
+
 local function activateDrift(veh)
     driftActive = true
     setHandling(veh, true)

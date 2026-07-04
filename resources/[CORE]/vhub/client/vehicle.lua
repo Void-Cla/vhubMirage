@@ -1,7 +1,15 @@
--- client/vehicle.lua — leitura de State Bags e report de intenção do veículo (PT-BR)
--- Responsabilidade: reportar estado do veículo (fuel, rpm, health) ao servidor (adaptive 0.5–4Hz)
+-- client/vehicle.lua — emissor de intenção de veículo (enter/leave/state) + State Bags
+-- Responsabilidade: reportar ao servidor a relação FÍSICA do ped com o veículo
+-- (assento e telemetria). O servidor valida tudo contra a réplica (ADR #37).
+-- Gate global: só emite quando GlobalState.vh_core_active == true (kill-switch, F-019).
 
-local REPORT_MS = 250 -- valor inicial; o loop adapta por velocidade/rpm
+local REPORT_MS   = 250    -- valor inicial; o loop adapta por velocidade/rpm
+local REAFFIRM_MS = 30000  -- reafirma vEnter (idempotente) para curar desync de réplica
+
+
+-- ============================================================
+-- HELPERS
+-- ============================================================
 
 -- Cadência adaptativa: parado=2000ms (0.5Hz), idle=1000ms (1Hz), dirigindo=250ms (4Hz)
 local function adaptiveDelay(speed_kmh, rpm)
@@ -17,6 +25,26 @@ local function plateKey(p)
   local s = tostring(p or ""):upper():gsub("%s+", " ")
   return s:match("^%s*(.-)%s*$") or ""
 end
+
+-- Descobre o assento real do ped no veículo (-1 = motorista; nil = não está)
+local function assentoAtual(veh, ped)
+  if GetPedInVehicleSeat(veh, -1) == ped then return -1 end
+  local max = GetVehicleMaxNumberOfPassengers(veh)
+  for i = 0, max - 1 do
+    if GetPedInVehicleSeat(veh, i) == ped then return i end
+  end
+  return nil
+end
+
+-- true quando o CORE está com o pipeline de veículo armado (server escreve o gate)
+local function coreAtivo()
+  return GlobalState.vh_core_active == true
+end
+
+
+-- ============================================================
+-- HANDLERS (servidor → cliente)
+-- ============================================================
 
 RegisterNetEvent("vHub:vehicleStateLoad")
 AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
@@ -35,49 +63,94 @@ AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
   end
 end)
 
+-- F-007 (ADR #37): modo passageiro agora tem handler — reencaminha como evento local
+-- para consumidores (HUD/UX) sem acoplar o CORE a nenhuma UI.
+RegisterNetEvent("vHub:passengerMode")
+AddEventHandler("vHub:passengerMode", function(plate, isPassenger)
+  TriggerEvent("vHub:localPassengerMode", plate, isPassenger == true)
+end)
+
+
+-- ============================================================
+-- LOOP ÚNICO — transição de assento + telemetria (budget: 0.5–4Hz)
+-- ============================================================
+
 Citizen.CreateThread(function()
   local period_ms = REPORT_MS
+  -- relação corrente validada localmente; espelho do que foi anunciado ao servidor
+  local atual = { veh = 0, placa = nil, netid = nil, assento = nil, anunciado_ms = 0 }
+  -- candidato de assento aguardando estabilidade (2 passadas ≈ réplica propagada)
+  local candidato = { veh = 0, assento = nil }
+
+  local function anunciarSaida()
+    if atual.veh ~= 0 and atual.placa then
+      TriggerServerEvent("vHub:vLeave", atual.placa, atual.assento)
+    end
+    atual.veh, atual.placa, atual.netid, atual.assento = 0, nil, nil, nil
+    atual.anunciado_ms = 0
+  end
+
   while true do
     Citizen.Wait(period_ms)
     local ped = PlayerPedId()
     if not ped then goto continue end
+
+    -- Kill-switch do CORE: sem pipeline armado, nada é emitido (F-019)
+    if not coreAtivo() then
+      atual.veh, atual.placa, atual.netid, atual.assento = 0, nil, nil, nil
+      candidato.veh, candidato.assento = 0, nil
+      period_ms = 2000
+      goto continue
+    end
+
     local veh = GetVehiclePedIsIn(ped, false)
-    if veh and veh ~= 0 then
-      local driver = GetPedInVehicleSeat(veh, -1)
-      local seat = -2
-      if driver == ped then seat = -1 else
-        -- descobrir índice do assento aproximado (não crítico para reporte)
-        seat = -2
+    if veh and veh ~= 0 and DoesEntityExist(veh) then
+      local assento = assentoAtual(veh, ped)
+      local agora   = GetGameTimer()
+
+      -- ── Transição de assento/veículo (estável por 2 passadas antes de anunciar —
+      --    dá tempo da réplica server-side refletir o ped no assento) ──
+      if veh ~= atual.veh or assento ~= atual.assento then
+        if candidato.veh == veh and candidato.assento == assento and assento ~= nil then
+          if NetworkGetEntityIsNetworked(veh) then
+            if atual.veh ~= 0 then anunciarSaida() end
+            atual.veh     = veh
+            atual.placa   = plateKey(GetVehicleNumberPlateText(veh) or "")
+            atual.netid   = NetworkGetNetworkIdFromEntity(veh)
+            atual.assento = assento
+            atual.anunciado_ms = agora
+            TriggerServerEvent("vHub:vEnter", atual.placa, atual.netid, atual.assento)
+          end
+          candidato.veh, candidato.assento = 0, nil
+        else
+          candidato.veh, candidato.assento = veh, assento
+        end
+      elseif atual.veh ~= 0 and (agora - atual.anunciado_ms) >= REAFFIRM_MS then
+        -- Reafirmação idempotente (R14): cura vEnter perdido por lag de réplica
+        atual.anunciado_ms = agora
+        TriggerServerEvent("vHub:vEnter", atual.placa, atual.netid, atual.assento)
       end
 
-      local plate = GetVehicleNumberPlateText(veh) or ""
-      local rpm = (GetVehicleCurrentRpm and GetVehicleCurrentRpm(veh)) or 0
-      local engine_health = (GetVehicleEngineHealth and GetVehicleEngineHealth(veh)) or 0
-      local body_health = (GetVehicleBodyHealth and GetVehicleBodyHealth(veh)) or 0
-      local engine_on = (GetIsVehicleEngineRunning and GetIsVehicleEngineRunning(veh)) or false
-
-      -- Calcular delta de odômetro (km) baseado na velocidade e período atual
-      local speed_ms = (GetEntitySpeed and GetEntitySpeed(veh)) or 0
+      -- ── Telemetria — somente o motorista tem autoridade de report ──
+      local rpm       = (GetVehicleCurrentRpm and GetVehicleCurrentRpm(veh)) or 0
+      local speed_ms  = (GetEntitySpeed and GetEntitySpeed(veh)) or 0
       local speed_kmh = speed_ms * 3.6
-      local delta_km = speed_kmh * (period_ms / 1000) / 3600
 
-      local payload = {
-        rpm = rpm,
-        engine_health = engine_health,
-        body_health = body_health,
-        engine_on = engine_on,
-        odometer_delta = delta_km,
-      }
-
-      -- Enviar apenas se for driver: somente o motorista tem autoridade para reportar intent
-      if seat == -1 then
-        TriggerServerEvent("vHub:vState", plate, payload)
+      if atual.veh == veh and atual.assento == -1 then
+        TriggerServerEvent("vHub:vState", atual.placa, {
+          rpm            = rpm,
+          engine_health  = (GetVehicleEngineHealth and GetVehicleEngineHealth(veh)) or 0,
+          body_health    = (GetVehicleBodyHealth and GetVehicleBodyHealth(veh)) or 0,
+          engine_on      = (GetIsVehicleEngineRunning and GetIsVehicleEngineRunning(veh)) or false,
+          odometer_delta = speed_kmh * (period_ms / 1000) / 3600,
+        })
       end
 
-      -- Cadência adaptativa: parado=2s, idle=1s, dirigindo=250ms
       period_ms = adaptiveDelay(speed_kmh, rpm)
     else
-      -- Fora de veículo: cadência mínima 1s (não há nada para reportar)
+      -- Fora de veículo: anuncia saída pendente e reduz cadência
+      if atual.veh ~= 0 then anunciarSaida() end
+      candidato.veh, candidato.assento = 0, nil
       period_ms = 1000
     end
     ::continue::

@@ -15,11 +15,14 @@ local TRUSTED = {
   ['vhub_player_state'] = true,
   ['vhub_admin']     = true,
   ['vhub_lspdtool']  = true,   -- apreensão policial via forceImpound (porta declarada)
+  ['vhub_conce']     = true,   -- devolução de posse temporária despawna via export (F-031)
 }
 
 local function _invoker_allowed()
   local caller = GetInvokingResource()
-  if not caller then return true end
+  -- ADR #48: caller nil era return true — backdoor (mesmo furo que o N0-2 fechou
+  -- no CORE). Default-deny: sem invoker identificável, sem escrita.
+  if not caller then return false end
   return TRUSTED[caller] == true
 end
 
@@ -63,4 +66,10 @@ end)
 exports('forceImpound', function(plate, reason, fee_extra)
   if not _invoker_allowed() then return false end
   return exports[GetCurrentResourceName()]:impoundVehicle(plate, reason, fee_extra)
+end)
+
+-- despawna a entidade da placa server-side (ADR #48); porta p/ conce e admin
+exports('despawnVehicleByPlate', function(plate)
+  if not _invoker_allowed() then return false end
+  return Core.despawnByPlate(plate)
 end)

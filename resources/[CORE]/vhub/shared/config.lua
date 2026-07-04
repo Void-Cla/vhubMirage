@@ -16,9 +16,11 @@ local _defaults = {
   max_ping            = 800,
   ping_check_interval = 30,
   ping_check_enabled  = false,
-  fuel_rate           = 0.01,
-  max_speed_kmh       = 400,
+  fuel_rate           = 0.005,    -- alinhado ao valor efetivo em produção (ADR #41)
+  max_speed_kmh       = 350,      -- alinhado ao fallback efetivo (ADR #41)
   veh_state_hz        = 4,
+  core_fuel_enabled   = false,    -- ADR #38: fuel do CORE em shadow-mode até FASE 2
+  veh_state_apply     = false,    -- ADR #38: vehicleStateLoad gated (vehcontrol é o aplicador hoje)
   db                  = {},
   webhooks = { join="", leave="", ban="", security="" },
   lang = {
@@ -47,6 +49,12 @@ function vHub.mergeConfig(user_cfg)
         merged[k] = cp
       else
         merged[k] = v
+      end
+    elseif type(v) == "table" and type(merged[k]) == "table" then
+      -- Merge de 1 nível: tabela parcial do usuário ganha as chaves default
+      -- que faltam (ex: cfg.lang só com not_whitelisted recebe banned etc.)
+      for ik, iv in pairs(v) do
+        if merged[k][ik] == nil then merged[k][ik] = iv end
       end
     end
   end

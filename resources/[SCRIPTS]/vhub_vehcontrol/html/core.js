@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', function () {
   el.nitroLevelVal  = document.getElementById('nitro-level-val');
   el.nitroCharge    = document.getElementById('nitro-charge');
 
-  // som (Buscar=Jamendo / Rádio / URL — tudo via post() → vhub_wow)
+  // som (Buscar=YouTube / Rádio / Link — tudo via post() → vhub_wow)
   el.soundTitle       = document.getElementById('sound-title');
   el.soundArtist      = document.getElementById('sound-artist');
   el.soundSource      = document.getElementById('sound-source');
@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', function () {
   el.soundSearchRow   = document.getElementById('sound-search-row');
   el.soundSearchInput = document.getElementById('sound-search-input');
   el.soundResults     = document.getElementById('sound-results');
+  el.soundVideo       = document.getElementById('sound-video');
 
   // Roda inits dos módulos (controls.js, ficha.js, sound.js)
   vhub._inits.forEach(function (fn) {

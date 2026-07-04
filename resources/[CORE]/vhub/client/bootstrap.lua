@@ -77,20 +77,20 @@ Citizen.CreateThread(function()
     if NetworkIsPlayerActive(PlayerId()) then
       Citizen.Wait(FALLBACK_DELAY_MS)
       if _ultimo_ready > 0 then return end
-      print("[vHub][CLIENT] spawnmanager ausente — usando NetworkResurrectLocalPlayer")
+      vHub.Logger:info("client", "spawnmanager ausente — usando NetworkResurrectLocalPlayer")
       spawnNativo()
       enviarReady()
       return
     end
   end
-  print("[vHub][CLIENT] spawn fallback expirou — player nunca ficou ativo")
+  vHub.Logger:warn("client", "spawn fallback expirou — player nunca ficou ativo")
 end)
 
 -- ── Retry: se em 15s não recebemos initDone, reenvia ─────────────────────────
 Citizen.CreateThread(function()
   Citizen.Wait(15000)
   if not _init_done then
-    print("[vHub][CLIENT] sem initDone em 15s — reenviando ready")
+    vHub.Logger:warn("client", "sem initDone em 15s — reenviando ready")
     _ultimo_ready = -DEBOUNCE_MS
     enviarReady()
   end

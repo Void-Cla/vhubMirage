@@ -24,6 +24,25 @@ function M:getUid(src)
 end
 
 -- ----------------------------------------------------------------------------
+-- Despawn server-side por placa (ADR #48 — substitui broadcast -1 do F-043)
+-- ----------------------------------------------------------------------------
+
+-- deleta a entidade do veículo direto no servidor (OneSync) — nenhum client
+-- precisa receber evento; O(veículos do mundo) por chamada, evento raro (L-05)
+function M.despawnByPlate(plate)
+  local alvo = VHubGarage.U.normalizePlate(plate)
+  if not alvo then return false end
+  for _, veh in ipairs(GetAllVehicles()) do
+    local raw = VHubGarage.U.normalizePlate(GetVehicleNumberPlateText(veh) or '')
+    if raw == alvo and DoesEntityExist(veh) then
+      DeleteEntity(veh)
+      return true
+    end
+  end
+  return false
+end
+
+-- ----------------------------------------------------------------------------
 -- Cache de runtime de ve culos test-drive (placa virtual N O entra no DB)
 -- ----------------------------------------------------------------------------
 M.testDrive = {}   -- [src] = { plate, expires_at, model, conc_id }

@@ -73,8 +73,8 @@ AddEventHandler(E.ACT_IMPOUND_PUT, function(plate, reason, fee_extra)
     SQL:updateStatus(p, 'impound')
     SQL:impoundPut(p, reason or 'apreendido', fee, Core:getCharId(src))
     Core:log(p, 'impound_put', Core:getCharId(src), { reason = reason, fee = fee })
-    -- despawna se est  out
-    TriggerClientEvent(E.DO_DESPAWN, -1, p)
+    -- despawna se está out — server-side, sem broadcast (ADR #48, F-043)
+    Core.despawnByPlate(p)
     Core.notify(src, ('%s enviado ao p tio (R$ %d).'):format(p, fee))
   end)
 end)
@@ -111,8 +111,19 @@ end)
 
 -- ----------------------------------------------------------------------------
 -- Export: outros resources (police, eventos) podem apreender via export
+-- F-045 (ADR #48): gated — antes QUALQUER resource podia apreender qualquer carro.
+-- vhub_garage consta porque forceImpound (exports.lua) delega para cá via exports.
 -- ----------------------------------------------------------------------------
+local IMPOUND_TRUSTED = {
+  ['vhub_garage'] = true, ['vhub_admin'] = true, ['vhub_lspdtool'] = true, ['vhub'] = true,
+}
+
 exports('impoundVehicle', function(plate, reason, fee_extra)
+  local caller = GetInvokingResource()
+  if not caller or not IMPOUND_TRUSTED[caller] then
+    Core:log(tostring(plate), 'impound_denied', nil, { caller = tostring(caller) })
+    return false
+  end
   local p = U.normalizePlate(plate); if not p then return false end
   Citizen.CreateThread(function()
     local v = SQL:getVehicle(p); if not v then return end
@@ -125,7 +136,7 @@ exports('impoundVehicle', function(plate, reason, fee_extra)
     SQL:updateStatus(p, 'impound')
     SQL:impoundPut(p, reason or 'apreendido', fee, nil)
     Core:log(p, 'impound_put_api', nil, { reason = reason, fee = fee })
-    TriggerClientEvent(E.DO_DESPAWN, -1, p)
+    Core.despawnByPlate(p)   -- server-side, sem broadcast (ADR #48)
   end)
   return true
 end)

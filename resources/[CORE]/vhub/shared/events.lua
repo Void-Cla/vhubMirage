@@ -21,11 +21,14 @@ local _E = {
   EVT_PLAYER_SPAWN  = "vHub:playerSpawn",
   EVT_PLAYER_DEATH  = "vHub:playerDeath",
   EVT_CHAR_LOAD     = "vHub:characterLoad",
+  EVT_VEH_COMMITTED = "vHub:vehicleCommitted",  -- ADR #39: mutação de estado veicular commitada
 
   -- Eventos cliente-bound (servidor → cliente)
-  CLI_INIT_DONE    = "vHub:initDone",
-  CLI_CHAR_SEL     = "vHub:charSelected",
-  CLI_CHAR_FAIL    = "vHub:charSelectFailed",
+  CLI_INIT_DONE      = "vHub:initDone",
+  CLI_CHAR_SEL       = "vHub:charSelected",
+  CLI_CHAR_FAIL      = "vHub:charSelectFailed",
+  CLI_VEH_STATE_LOAD = "vHub:vehicleStateLoad",  -- gated por cfg.veh_state_apply (ADR #38)
+  CLI_PASSENGER_MODE = "vHub:passengerMode",
   -- CLI_DO_SPAWN removido em Frozen v1.0 — vhub_player_state aplica spawn
 }
 

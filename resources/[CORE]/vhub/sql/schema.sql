@@ -188,3 +188,34 @@ CREATE TABLE IF NOT EXISTS vh_vehicle_data (
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='vHub — KV físico de veículo (msgpack)';
+
+
+-- ════════════════════════════════════════════════════════════════════
+-- vh_audit — Trilha de auditoria unificada do CORE (ADR #42, F-073).
+--   APPEND-ONLY por construção: o CORE não prepara UPDATE/DELETE para
+--   esta tabela. Toda mutação privilegiada (commitVehicleState, ban,
+--   grantPerm, transferKey) registra actor/action/target/before/after.
+--   Trigger SQL de imutabilidade: FASE 4.6 (exige privilégio TRIGGER).
+-- ════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS vh_audit (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ts          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+              COMMENT 'Momento do registro (server-side)',
+  actor       VARCHAR(64)  NOT NULL
+              COMMENT 'Quem mutou: resource invocador ou uid do ator',
+  action      VARCHAR(64)  NOT NULL
+              COMMENT 'Ação (ex: commitVehicleState, banPlayer)',
+  target      VARCHAR(128) NOT NULL
+              COMMENT 'Alvo (ex: placa, uid)',
+  source      VARCHAR(32)  DEFAULT NULL
+              COMMENT 'Origem de negócio (pump/repair/tune/garage/system)',
+  before_json TEXT
+              COMMENT 'Estado anterior dos campos mutados (JSON)',
+  after_json  TEXT
+              COMMENT 'Patch aplicado (JSON)',
+  PRIMARY KEY (id),
+  KEY idx_vh_audit_ts     (ts),
+  KEY idx_vh_audit_target (target),
+  KEY idx_vh_audit_actor  (actor)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='vHub — auditoria unificada append-only (ADR #42)';

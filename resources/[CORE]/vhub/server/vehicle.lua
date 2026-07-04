@@ -54,7 +54,11 @@ function VD:_syncBags()
   local ent = NetworkGetEntityFromNetworkId(self.netid)
   if not ent or ent == 0 then return end
   local bag = Entity(ent).state; local s = self.state
-  bagSet(bag, "vh_fuel", s.fuel,          self, "_last_fuel_bag", 0.5)
+  -- ADR #38: vh_fuel só quando o CORE for o dono do fuel (FASE 2). Hoje o dono é
+  -- legacyfuel/prontuário — escrever aqui divergiria do tanque real no HUD (vhub_velo).
+  if vHub.cfg and vHub.cfg.core_fuel_enabled then
+    bagSet(bag, "vh_fuel", s.fuel,        self, "_last_fuel_bag", 0.5)
+  end
   bagSet(bag, "vh_eng",  s.engine_health, self, "_last_eng_bag",  5.0)
   bagSet(bag, "vh_body", s.body_health,   self, "_last_body_bag", 5.0)
   bagSet(bag, "vh_odo",  s.odometer,      self, "_last_odo_bag",  0.05)
@@ -81,11 +85,18 @@ function Veh:register(plate, key_uid)
   end
   if self._veh[plate] then return self._veh[plate] end
   local vd = VD.new(plate, key_uid)
-  local saved = vHub.getVData(plate, "state")
-  if type(saved) == "table" then vd.state = saved end
-  if not key_uid then
-    local r = Citizen.Await(vHub.State:query("vh/veh_key", {plate=plate}))
-    if r and #r > 0 then vd.key_uid = r[1].key_uid end
+
+  -- ADR #47: âncora física obrigatória p/ persistir (FK vh_vehicle_data→vh_vehicles).
+  -- Placa sem âncora (ex.: /spawncar de admin) = EFÊMERA: vive só na VRAM, zero SQL.
+  -- Âncora é criada pelo dono da identidade (vhub_conce) — CORE não é 2º escritor (L-04).
+  local r = Citizen.Await(vHub.State:query("vh/veh_key", {plate=plate}))
+  vd.anchored = (r and #r > 0) and true or false
+  if vd.anchored then
+    if not key_uid then vd.key_uid = r[1].key_uid end
+    local saved = vHub.getVData(plate, "state")
+    if type(saved) == "table" then vd.state = saved end
+  else
+    vHub.Logger:debug("vehicle", ("placa %s sem âncora — registro EFÊMERO (VRAM-only)"):format(plate))
   end
   self._veh[plate] = vd
   if vd.key_uid then self._byKey[vd.key_uid] = plate end
@@ -166,13 +177,16 @@ function Veh:onEnter(src, plate, netid, seat)
 
   vd.occupants[src] = seat
 
-  if seat == -1 then   -- DRIVER → becomes sole position authority
+  if seat == -1 then   -- DRIVER → autoridade única de input (gate do vState)
     vd.driver = src
-    local ent = vd.netid and NetworkGetEntityFromNetworkId(vd.netid)
-    if ent and ent ~= 0 then
-      NetworkSetEntityOwner(ent, src)   -- GTA native: only driver writes pos
+    -- ADR #47: NetworkSetEntityOwner NÃO existe no build server (crash em runtime).
+    -- O OneSync migra a ownership da entidade para o motorista automaticamente;
+    -- a autoridade do CORE é vd.driver (quem pode reportar vState), não a engine.
+    -- ADR #38: aplicação física do estado é do vhub_vehcontrol hoje (requestState).
+    -- Emitir os dois = escritor duplo no mesmo veículo (L-04). Liga na FASE 2.
+    if vHub.cfg and vHub.cfg.veh_state_apply then
+      vHub.Kernel:emit(src, "vHub:vehicleStateLoad", plate, vd.state)
     end
-    vHub.Kernel:emit(src, "vHub:vehicleStateLoad", plate, vd.state)
   else                 -- PASSENGER → passive, GTA delivers position
     vHub.Kernel:emit(src, "vHub:passengerMode", plate, true)
   end
@@ -186,12 +200,7 @@ function Veh:onLeave(src, plate, seat)
   vd.occupants[src] = nil
 
   if seat == -1 and vd.driver == src then
-    vd.driver = nil
-    local next_src = next(vd.occupants)
-    if next_src and vd.netid then
-      local ent = NetworkGetEntityFromNetworkId(vd.netid)
-      if ent and ent ~= 0 then NetworkSetEntityOwner(ent, next_src) end
-    end
+    vd.driver = nil   -- ADR #47: engine migra ownership sozinha; CORE só solta o gate
   else
     vHub.Kernel:emit(src, "vHub:passengerMode", plate, false)
   end
@@ -209,8 +218,10 @@ function Veh:onStateUpdate(src, plate, upd)
   local bag = (ent and ent ~= 0) and Entity(ent).state
 
   local rpm = tonumber(upd.rpm)
-  if rpm and rpm > 0.05 then
-    rpm = math.min(rpm, 1.0)
+  if rpm then rpm = math.min(math.max(rpm, 0), 1.0) end
+  -- ADR #38: drain de fuel do CORE desligado até a FASE 2 (dono atual: legacyfuel).
+  -- Ligar os dois = dupla contabilidade de combustível.
+  if vHub.cfg.core_fuel_enabled and rpm and rpm > 0.05 then
     s.fuel = math.max(0, s.fuel - rpm * (vHub.cfg.fuel_rate or 0.005))
     if bag then bagSet(bag, "vh_fuel", s.fuel, vd, "_last_fuel_bag", 0.5) end
     if s.fuel == 0 then TriggerEvent("vHub:vehicleFuelEmpty", vd, src) end
@@ -250,6 +261,8 @@ end
 function Veh:_save(vd)
   if not vd.dirty then return end
   self:_atualizarPosicao(vd)
+  -- ADR #47: efêmero (sem âncora FK) nunca vai ao SQL — evita op envenenada no batch
+  if not vd.anchored then vd.dirty = false; return end
   vHub.setVData(vd.plate, "state", vd.state); vd.dirty=false
 end
 

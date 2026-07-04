@@ -79,7 +79,7 @@ Citizen.CreateThread(function()
       for src, u in pairs(Core.sessions) do
         if u.char_id == r.char_id then Core.takeKeyItem(src, r.plate); break end
       end
-      TriggerClientEvent(E.DO_DESPAWN, -1, r.plate)
+      Core.despawnByPlate(r.plate)   -- server-side, sem broadcast (ADR #48, F-043)
       SQL:revokeKey(r.plate, r.char_id, 'rental')
       -- prontu rio morre junto no deleteVehicle  nada a persistir antes
       SQL:deleteVehicle(r.plate)

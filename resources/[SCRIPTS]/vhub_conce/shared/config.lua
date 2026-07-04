@@ -17,8 +17,8 @@ VHubConce.cfg = {
   ipva_dias           = 7,      -- a cada 15 dias o IPVA vence
   taxa_placa_custom   = 10000,    -- ao comprar com placa personalizada
   fator_revenda_loja  = 0.60,    -- valor de venda de volta à loja
-  fator_test_drive    = 0.00,    -- custo do test drive = 0% do preço
-  test_drive_segundos = 9999,     -- duração do test drive
+  fator_test_drive    = 0.10,    -- custo do test drive = 10% do preço (F-027: 0% era vetor de abuso)
+  test_drive_segundos = 300,     -- duração do test drive (F-027: 9999≈2h47 era config de dev)
   test_drive_raio     = 900.0,   -- raio máximo do test drive (m)
 
   -- ============================================================

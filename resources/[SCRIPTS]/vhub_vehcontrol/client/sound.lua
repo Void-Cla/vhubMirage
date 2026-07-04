@@ -55,11 +55,21 @@ RegisterNUICallback('soundVolume', function(d, cb)
   cb('ok')
 end)
 
--- busca de musica (Jamendo via vhub_wow). So repassa o texto; servidor valida/limita.
+-- busca de musica (YouTube via vhub_wow). So repassa o texto; servidor valida/limita.
 RegisterNUICallback('soundSearch', function(d, cb)
   local q = d and d.query
   if type(q) == 'string' and #q >= 1 then
     TriggerServerEvent('vhub_vehcontrol:soundSearch', q)
+  end
+  cb('ok')
+end)
+
+-- liga/desliga a telinha de video "DVD no carro" (checkbox da aba Som)
+RegisterNUICallback('soundVideo', function(d, cb)
+  local v = drivingVehicle()
+  local pl = plateOf(v)
+  if v ~= 0 and pl then
+    TriggerServerEvent('vhub_vehcontrol:soundVideo', VehToNet(v), pl, (d and d.show) == true)
   end
   cb('ok')
 end)

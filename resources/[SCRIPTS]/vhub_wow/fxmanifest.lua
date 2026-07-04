@@ -5,8 +5,8 @@ lua54      'yes'
 
 name        'vhub_wow'
 author      'vHub Mirage'
-version     '1.0.0'
-description 'Motor de audio standalone (porta minima do xsound). Sem NLP, sem gateway multi-API, sem adapters de framework.'
+version     '1.1.0'
+description 'Motor de audio/video (player YouTube nocookie + busca InnerTube/APIv3 + surface DVD no carro).'
 
 dependencies {
   'vhub',
@@ -17,7 +17,9 @@ shared_scripts {
 }
 
 server_scripts {
-  'server/music.lua',     -- provider Jamendo (busca/radio) + cache — antes dos exports
+  'server/providers/youtube_innertube.lua',  -- busca primaria (sem chave)
+  'server/providers/youtube_apiv3.lua',      -- busca fallback (convar wow_youtube_key)
+  'server/music_search.lua',                 -- registry+failover+cache+radio (antes dos exports)
   'server/exports.lua',
 }
 

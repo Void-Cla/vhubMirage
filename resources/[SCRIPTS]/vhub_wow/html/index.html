@@ -4,16 +4,130 @@
   <meta charset="UTF-8" />
   <title>vHub Wow</title>
   <style>
-    html, body { background: transparent; margin: 0; padding: 0; }
-    /* container oculto dos players de embed (YouTube/SoundCloud) */
-    #wow-players { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+    /* body/html invisiveis (A-09): o mundo GTA aparece atras */
+    html, body {
+      background: transparent;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', 'Trebuchet MS', Arial, sans-serif;  /* sistema, sem CDN (A-10) */
+      -webkit-user-select: none;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    /* container OCULTO dos players (audio + iframes de embed que nao estao visiveis) */
+    #wow-players {
+      position: absolute;
+      width: 0; height: 0;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ========================================================
+       DVD DO CARRO — telinha de video liquid glass (so quando attach)
+       ======================================================== */
+
+    #wow-video-stage {
+      position: fixed;
+      right: 2.2vw;
+      bottom: 3.2vh;
+      width: 22vw;
+      min-width: 260px;
+      max-width: 420px;
+      aspect-ratio: 16 / 9;
+      border-radius: 16px;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(14px) scale(0.98);
+      pointer-events: none;
+      transition: opacity .28s ease, transform .28s ease;
+
+      /* liquid glass: piso translucido em camadas (A-09 — sem backdrop-filter sobre o jogo) */
+      /* tons quentes Mirage: --vh-black #0c0a06 / --vh-black-2 #1a1610 (hex direto: sem tokens aqui) */
+      background:
+        linear-gradient(160deg, rgba(26, 22, 16, 0.86), rgba(12, 10, 6, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    #wow-video-stage.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    /* brilho dourado sutil (identidade Mirage areia+dourado) na borda superior */
+    #wow-video-stage::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      padding: 1px;
+      background: linear-gradient(120deg, rgba(226, 191, 122, 0.55), rgba(255,255,255,0.04) 40%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    #wow-video-stage iframe,
+    #wow-video-stage video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #000;
+    }
+
+    /* faixa-legenda superior (nome da faixa) — respiro e fonte maior/legivel */
+    #wow-video-label {
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: .2px;
+      color: #f4efe4;                              /* areia clara */
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* selo "AO VIVO" discreto no canto (dourado Mirage) */
+    #wow-video-badge {
+      position: absolute;
+      right: 10px; bottom: 9px;
+      z-index: 2;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #0e0f14;
+      background: linear-gradient(120deg, #e2bf7a, #cfa856);
+      padding: 3px 8px;
+      border-radius: 999px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <!-- backends de embed (excecao A-10: scripts oficiais remotos; nao vao em files{}) -->
   <div id="wow-players"></div>
-  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="https://www.youtube-nocookie.com/iframe_api"></script>
   <script src="https://w.soundcloud.com/player/api.js"></script>
+
+  <!-- palco visivel do "DVD no carro" (recebe o iframe do YT quando attach chega) -->
+  <div id="wow-video-stage">
+    <div id="wow-video-label"></div>
+    <div id="wow-video-badge">AO VIVO</div>
+  </div>
 
   <script src="audio.js"></script>
 </body>

@@ -5,12 +5,16 @@
 ## Leitura obrigatória (nesta ordem)
 
 ```
-CLAUDE.md                      ← leis L-01..L-12 + estendidas (L-19 vec3/vec4), Registro de Ownership, orçamentos
+CLAUDE.md                      ← leis L-01..L-19, Registro de Ownership, Orçamentos, FASE ATUAL (descongelamento)
 .claude/contexto.md            ← SOMENTE índice + seções citadas pela tarefa (cap 20 KB)
+.claude/skills/*.md            ← padrões já validados — aplicar, não reinventar
 arquivos reais tocados         ← código > qualquer documento
+plano_core_v2/frozen_core_2.md ← só quando a tarefa toca CORE/veículos (roteiro FASE 0→8, regras R1..R15)
 ```
 
-Hierarquia de verdade: **1) código/manifests atuais → 2) CLAUDE.md → 3) contexto.md → 4) metas/**. Divergência doc×código: prevalece o código; registrar risco ativo.
+Hierarquia de verdade: **1) código/manifests atuais → 2) CLAUDE.md → 3) contexto.md → 4) plano_core_v2/**. Divergência doc×código: prevalece o código; registrar risco ativo.
+
+> **Fase atual:** o CORE está sendo **descongelado (v1.0 → v2.0)**. Tocar `[CORE]/vhub/**` é **gated** (arquiteto + revisão + ADR + bump), não proibido. O time **guia a migração** para o kernel; não apenas protege o freeze. Ver `CLAUDE.md → FASE ATUAL`.
 
 ## Fluxo multi-agente
 
