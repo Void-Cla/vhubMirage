@@ -1,8 +1,9 @@
 /* ============================================================
-   vhub_custom — Mec NUI (reparo parcial + reboque)
+   vhub_custom — Mec NUI (reparo parcial + reboque)   (PRIME v2)
    Card HUD compacto: 3 botões de reparo + 1 ação de reboque.
    Sem nav/detail/stats — over-engineering para esta interação.
    Escopado em .mod-mec. Usa tokens de :root (style.css).
+   A-09: SEM backdrop-filter; piso ~0.88 simula vidro.
    ============================================================ */
 
 .mod-mec.mec-overlay {
@@ -16,30 +17,38 @@
   background: transparent;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 220ms ease;
+  transition: opacity 220ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
 }
 .mod-mec.mec-overlay.hidden { opacity: 0; pointer-events: none; }
+/* overlay oculta por opacity (não display:none) — pausa toda animação (health-pulse)
+   p/ idle 0ms com o card fechado exibindo barra low (A-07/L-18) */
+.mod-mec.mec-overlay.hidden * { animation-play-state: paused !important; }
 .mod-mec.mec-overlay:not(.hidden) { pointer-events: auto; }
 
 .mod-mec .mec-card {
   position: relative;
   width: 380px;
   max-width: 92vw;
-  background: linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55)), rgba(12,10,6,0.82);
-  background-blend-mode: normal;
+  /* liquid glass simulado em camadas — sem backdrop-filter (A-09) */
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 55%),
+    linear-gradient(180deg, rgba(217,193,154,0.12), rgba(12,10,6,0.88));
   border: var(--glass-border);
   border-radius: var(--radius);
   box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
   overflow: hidden;
+  animation: mec-card-in 300ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
+}
+@keyframes mec-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .mod-mec .mec-card::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.55), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.65), transparent);
   pointer-events: none;
 }
 
@@ -47,18 +56,27 @@
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px;
   padding: 14px 16px 12px;
-  background: linear-gradient(180deg, rgba(26,22,16,0.85), rgba(12,10,6,0.55));
-  border-bottom: 1px solid rgba(243,181,58,0.14);
+  background: linear-gradient(180deg, rgba(26,22,16,0.88), rgba(12,10,6,0.55));
+  border-bottom: 1px solid rgba(243,181,58,0.18);
+  position: relative;
+}
+.mod-mec .mc-hdr::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.24) 20%, rgba(243,181,58,0.24) 80%, transparent);
+  pointer-events: none;
 }
 
 .mod-mec .mc-veh-sub {
   padding: 10px 16px;
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   color: var(--vh-sand-dim);
   text-transform: uppercase;
-  border-bottom: 1px solid rgba(243,181,58,0.08);
+  border-bottom: 1px solid rgba(243,181,58,0.10);
+  font-variant-numeric: tabular-nums;
 }
 
 .mod-mec .mc-options {
@@ -67,71 +85,159 @@
 }
 
 .mod-mec .mc-opt {
+  position: relative;
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(243,181,58,0.12);
-  background: linear-gradient(180deg, rgba(26,22,16,0.70), rgba(12,10,6,0.55));
+  border: 1px solid rgba(243,181,58,0.14);
+  background: linear-gradient(180deg, rgba(26,22,16,0.72), rgba(12,10,6,0.55));
   cursor: pointer;
-  transition: border-color 140ms, background 140ms;
+  transition: border-color 160ms, background 160ms, transform 160ms, box-shadow 160ms;
+  overflow: hidden;
+}
+/* specular highlight discreto */
+.mod-mec .mc-opt::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.22), transparent);
+  pointer-events: none;
 }
 .mod-mec .mc-opt:hover:not(.mc-opt-disabled) {
-  border-color: rgba(243,181,58,0.32);
-  background: linear-gradient(180deg, rgba(37,30,20,0.80), rgba(18,14,8,0.65));
+  border-color: rgba(243,181,58,0.36);
+  background: linear-gradient(180deg, rgba(37,30,20,0.82), rgba(18,14,8,0.66));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+.mod-mec .mc-opt:active:not(.mc-opt-disabled) {
+  transform: scale(0.98);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
 }
 .mod-mec .mc-opt-disabled {
-  opacity: 0.40;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
-.mod-mec .mc-opt-icon { font-size: 18px; flex-shrink: 0; }
+.mod-mec .mc-opt-icon { font-size: 18px; flex-shrink: 0; filter: drop-shadow(0 0 4px rgba(243,181,58,0.25)); }
 
 .mod-mec .mc-opt-info { flex: 1; min-width: 0; }
 .mod-mec .mc-opt-name {
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--vh-sand-soft);
   text-transform: uppercase;
 }
 .mod-mec .mc-opt-desc {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 11px;
   color: var(--vh-sand-dim);
+  line-height: 1.4;
 }
 
 .mod-mec .mc-opt-price {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--vh-gold);
   flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(243,181,58,0.25);
+}
+
+
+/* ============================================================
+   BARRA DE SAÚDE — motor e lataria
+   ============================================================ */
+
+.mod-mec .mc-health-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mod-mec .mc-health-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.55);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.mod-mec .mc-health-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 400ms var(--ease-out, cubic-bezier(.22,.61,.36,1)), background 300ms;
+}
+
+.mod-mec .mc-health-fill.mc-health-ok  {
+  background: linear-gradient(90deg, #4caf6e, #6bcc85);
+  box-shadow: 0 0 6px rgba(76,175,110,0.55);
+}
+.mod-mec .mc-health-fill.mc-health-mid {
+  background: linear-gradient(90deg, #d68930, #e8a030);
+  box-shadow: 0 0 6px rgba(232,160,48,0.55);
+}
+.mod-mec .mc-health-fill.mc-health-low {
+  background: linear-gradient(90deg, #c94040, #e85050);
+  box-shadow: 0 0 8px rgba(232,80,80,0.65);
+  animation: mec-health-pulse 1.4s var(--ease-in-out, cubic-bezier(.4,0,.2,1)) infinite;
+}
+@keyframes mec-health-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.75; }
+}
+
+.mod-mec .mc-health-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--vh-sand-dim);
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 
 .mod-mec .mc-tow-btn {
+  position: relative;
   display: block;
   width: calc(100% - 32px);
   margin: 4px 16px 16px;
-  padding: 12px;
+  padding: 13px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(243,181,58,0.30);
-  background: linear-gradient(180deg, rgba(243,181,58,0.18), rgba(243,181,58,0.06));
+  border: 1px solid rgba(243,181,58,0.34);
+  background: linear-gradient(180deg, rgba(243,181,58,0.20), rgba(243,181,58,0.06));
   color: var(--vh-gold-soft);
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 140ms;
+  transition: all 160ms;
+  overflow: hidden;
 }
-.mod-mec .mc-tow-btn:hover {
-  background: linear-gradient(180deg, rgba(243,181,58,0.30), rgba(243,181,58,0.12));
-  box-shadow: 0 0 18px rgba(243,181,58,0.25);
+.mod-mec .mc-tow-btn::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  pointer-events: none;
+}
+.mod-mec .mc-tow-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(243,181,58,0.34), rgba(243,181,58,0.12));
+  box-shadow: 0 0 22px rgba(243,181,58,0.32);
+  color: #fff;
+}
+.mod-mec .mc-tow-btn:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
 }
 .mod-mec .mc-tow-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.38;
   cursor: not-allowed;
 }

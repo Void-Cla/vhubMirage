@@ -1,10 +1,10 @@
 /*
  * style-core.css — tokens vHub + reset + chrome compartilhado dos asides
- * vhub_vehcontrol — Liquid Glass + Areia + Dourado
+ * vhub_vehcontrol — Liquid Glass + Areia + Dourado   (PRIME v2)
  *
- * Layout novo: 3 asides ancorados (Esquerda · Topo-Centro · Direita) dentro
- * do wrapper #vc-panel. Cada aside é independente, draggable, e usa o mesmo
- * vidro liquido. O carro fica visivel no meio da tela.
+ * Layout: 3 asides ancorados (Esquerda · Topo-Centro · Direita) dentro do
+ * wrapper #vc-panel. Cada aside é independente, draggable, e usa o mesmo
+ * vidro líquido SIMULADO (A-09: sem backdrop-filter sobre o jogo).
  */
 
 /* ============================================================
@@ -14,6 +14,7 @@
 :root {
   /* Cores */
   --vh-sand:        #d9c19a;
+  --vh-sand-soft:   #ece1c8;
   --vh-sand-dim:    #a89572;
   --vh-sand-deep:   #5a4a30;
   --vh-gold:        #f3b53a;
@@ -28,17 +29,19 @@
   --vh-text-dim:    #c4ad84;
   --vh-text-dim2:   #8a7a5a;
 
-  /* Glass */
-  --vh-glass-bg:    linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.58));
+  /* Glass — camadas translúcidas (sem backdrop-filter) */
+  --vh-glass-bg:
+    radial-gradient(120% 60% at 50% 0%, rgba(243,181,58,0.10), rgba(243,181,58,0) 55%),
+    linear-gradient(180deg, rgba(217,193,154,0.12), rgba(12,10,6,0.60));
   --vh-glass-bg-2:  linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.42));
-  --vh-glass-border: rgba(243,181,58,0.22);
-  --vh-glass-line:  rgba(243,181,58,0.10);
+  --vh-glass-border: rgba(243,181,58,0.28);
+  --vh-glass-line:  rgba(243,181,58,0.12);
 
   /* Sombras */
   --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
-  --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
-  --vh-shadow-3:    0 24px 64px rgba(0,0,0,0.68), 0 0 32px rgba(243,181,58,0.14);
-  --vh-shadow-glow: 0 0 18px rgba(255,213,115,0.45);
+  --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.48), 0 0 22px rgba(243,181,58,0.10);
+  --vh-shadow-3:    0 24px 64px rgba(0,0,0,0.70), 0 0 36px rgba(243,181,58,0.16);
+  --vh-shadow-glow: 0 0 20px rgba(255,213,115,0.55);
 
   /* Raios */
   --vh-r-pan:  16px;
@@ -46,9 +49,11 @@
   --vh-r-btn:  10px;
   --vh-r-pill: 999px;
 
-  /* Tipografia */
-  --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
-  --vh-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  /* Tipografia — fontes de SISTEMA (sem CDN, A-10). Display = condensada nativa;
+     body = stack de UI. Se um dia embarcar Barlow/Inter em .woff2 local, some no início. */
+  --vh-font-display: 'Bahnschrift', 'DIN Condensed', 'Oswald', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
+  --vh-font-body:    'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --vh-font-mono:    'JetBrains Mono', 'Consolas', 'Courier New', monospace;
 
   /* Espaçamentos */
   --vh-gap-xs: 4px;
@@ -58,8 +63,9 @@
   --vh-gap-xl: 20px;
 
   /* Transições */
-  --vh-t-fast: 0.14s ease;
-  --vh-t-norm: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --vh-t-fast: 0.16s ease;
+  --vh-t-norm: 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+  --vh-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 
@@ -80,6 +86,7 @@ html {
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
 }
 
 body {
@@ -122,46 +129,67 @@ svg { display: block; flex-shrink: 0; }
   font-family: var(--vh-font-body);
 }
 
+/* painel oculto (.hidden = display:none) já suspende animações; guarda defensiva
+   caso um aside seja ocultado por opacity no futuro — garante idle 0ms (A-07/L-18) */
+.vc-panel.hidden * { animation-play-state: paused !important; }
+
 
 /* ============================================================
-   ASIDE BASE — vidro liquido compartilhado
-   Cada aside é independente, posicionado e arrastavel.
+   ASIDE BASE — vidro líquido compartilhado (A-09: sem backdrop-filter)
    ============================================================ */
 
 .vc-aside {
   position: absolute;
   pointer-events: auto;
   border-radius: var(--vh-r-pan);
-  /* "liquid glass" SIMULADO p/ HUD sobre o jogo: SEM backdrop-filter
-     (no CEF do FiveM ele vira bloco preto porque nao ha camada opaca atras;
-     so blur o que estiver dentro da pagina, nunca o mundo GTA). */
+  /* liquid glass SIMULADO p/ HUD sobre o jogo — piso translúcido em camadas */
   background:
-    radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 60%),
-    linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.85));
+    radial-gradient(120% 55% at 50% 0%, rgba(243,181,58,0.14), rgba(243,181,58,0) 60%),
+    linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.87));
   border: 1px solid var(--vh-glass-border);
   box-shadow:
     var(--vh-shadow-3),
-    inset 0 1px 0 rgba(255,213,115,0.12),
+    inset 0 1px 0 rgba(255,213,115,0.14),
     inset 0 0 0 1px rgba(0,0,0,0.35);
   overflow: hidden;
   isolation: isolate;
-  transition: box-shadow var(--vh-t-norm);
+  transition: box-shadow var(--vh-t-norm), transform var(--vh-t-norm);
+  animation: vc-aside-in 300ms var(--vh-ease-out);
+}
+@keyframes vc-aside-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* hairline dourada premium no topo — camada extra do vidro líquido */
+.vc-aside::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.68), transparent);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .vc-aside.is-dragging {
   box-shadow:
-    0 32px 80px rgba(0,0,0,0.75),
-    0 0 40px rgba(243,181,58,0.22),
-    inset 0 1px 0 rgba(255,213,115,0.18);
+    0 32px 84px rgba(0,0,0,0.75),
+    0 0 44px rgba(243,181,58,0.26),
+    inset 0 1px 0 rgba(255,213,115,0.20);
   cursor: grabbing;
 }
 
-/* Posicionamento padrão (JS de arraste sobrescreve em runtime) */
+/* Posicionamento padrão (JS de arraste sobrescreve em runtime) — animações mantêm o transform inicial */
 .vc-aside-controls {
   top: 50%;
   left: 18px;
   transform: translateY(-50%);
   width: 256px;
+  animation: vc-slide-l 320ms var(--vh-ease-out);
+}
+@keyframes vc-slide-l {
+  from { opacity: 0; transform: translate(-20px, -50%); }
+  to   { opacity: 1; transform: translateY(-50%); }
 }
 
 .vc-aside-ficha {
@@ -172,6 +200,11 @@ svg { display: block; flex-shrink: 0; }
   max-height: 92vh;
   display: flex;
   flex-direction: column;
+  animation: vc-slide-r 320ms var(--vh-ease-out);
+}
+@keyframes vc-slide-r {
+  from { opacity: 0; transform: translate(20px, -50%); }
+  to   { opacity: 1; transform: translateY(-50%); }
 }
 
 .vc-aside-sound {
@@ -179,6 +212,11 @@ svg { display: block; flex-shrink: 0; }
   left: 50%;
   transform: translateX(-50%);
   width: 380px;
+  animation: vc-slide-t 320ms var(--vh-ease-out);
+}
+@keyframes vc-slide-t {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to   { opacity: 1; transform: translateX(-50%); }
 }
 
 /* Halo dourado decorativo (reusado) */
@@ -186,7 +224,7 @@ svg { display: block; flex-shrink: 0; }
   position: absolute;
   inset: -40% -20% auto -20%;
   height: 120px;
-  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.18), rgba(243,181,58,0) 70%);
+  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.22), rgba(243,181,58,0) 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -204,8 +242,16 @@ svg { display: block; flex-shrink: 0; }
   gap: 8px;
   padding: 9px 10px;
   border-bottom: 1px solid var(--vh-glass-line);
-  background: linear-gradient(180deg, rgba(12,10,6,0.45), rgba(12,10,6,0.15));
+  background: linear-gradient(180deg, rgba(12,10,6,0.55), rgba(12,10,6,0.15));
   cursor: grab;
+}
+/* hairline gold sob o header (separator premium) */
+.vc-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.32) 20%, rgba(243,181,58,0.32) 80%, transparent);
+  pointer-events: none;
 }
 
 .vc-header:active { cursor: grabbing; }
@@ -224,9 +270,10 @@ svg { display: block; flex-shrink: 0; }
   height: 3px;
   border-radius: 50%;
   background: var(--vh-sand-dim);
+  transition: background var(--vh-t-fast), box-shadow var(--vh-t-fast);
 }
 .vc-header:hover .vc-grip { opacity: 1; }
-.vc-header:hover .vc-grip span { background: var(--vh-gold); }
+.vc-header:hover .vc-grip span { background: var(--vh-gold); box-shadow: 0 0 4px rgba(243,181,58,0.55); }
 
 .vc-brand {
   display: flex;
@@ -241,8 +288,9 @@ svg { display: block; flex-shrink: 0; }
   font-weight: 700;
   font-size: 16px;
   text-transform: uppercase;
-  letter-spacing: 1.4px;
+  letter-spacing: 1.6px;
   color: var(--vh-sand);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.4);
 }
 
 .vc-brand-sub {
@@ -250,12 +298,13 @@ svg { display: block; flex-shrink: 0; }
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1.6px;
+  letter-spacing: 1.8px;
   color: var(--vh-gold);
-  padding: 2px 6px;
-  border: 1px solid rgba(243,181,58,0.35);
+  padding: 2px 7px;
+  border: 1px solid rgba(243,181,58,0.40);
   border-radius: var(--vh-r-pill);
-  background: rgba(243,181,58,0.08);
+  background: rgba(243,181,58,0.10);
+  box-shadow: 0 0 8px rgba(243,181,58,0.14), inset 0 1px 0 rgba(255,213,115,0.12);
   line-height: 1;
 }
 
@@ -271,14 +320,15 @@ svg { display: block; flex-shrink: 0; }
   line-height: 1;
   flex-shrink: 0;
   border: 1px solid transparent;
-  transition: color var(--vh-t-fast), background var(--vh-t-fast), border-color var(--vh-t-fast);
+  transition: color var(--vh-t-fast), background var(--vh-t-fast), border-color var(--vh-t-fast), transform var(--vh-t-fast);
 }
 .vc-close:hover {
   color: #fff;
-  background: rgba(232,81,63,0.22);
-  border-color: rgba(232,81,63,0.45);
+  background: rgba(232,81,63,0.26);
+  border-color: rgba(232,81,63,0.55);
+  box-shadow: 0 0 10px rgba(232,81,63,0.30);
 }
-.vc-close:active { transform: scale(0.90); }
+.vc-close:active { transform: scale(0.88); }
 
 
 /* ============================================================
@@ -290,7 +340,7 @@ svg { display: block; flex-shrink: 0; }
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1.6px;
+  letter-spacing: 1.8px;
   color: var(--vh-text-dim2);
   padding: 0 2px 2px;
   display: flex;
@@ -302,7 +352,7 @@ svg { display: block; flex-shrink: 0; }
   content: "";
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, rgba(243,181,58,0.18), rgba(243,181,58,0));
+  background: linear-gradient(90deg, rgba(243,181,58,0.22), rgba(243,181,58,0));
 }
 
 
