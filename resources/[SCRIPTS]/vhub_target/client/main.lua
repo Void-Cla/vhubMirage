@@ -121,6 +121,48 @@ end
 
 
 -- ============================================================
+-- PROJEÇÃO PARA A NUI (só campos serializáveis)
+-- ============================================================
+-- A NUI lê apenas label/icon/iconColor/hide de cada opção. onSelect/canInteract são
+-- funções Lua (json.encode não serializa) e ficam SÓ no Lua, resolvidas no callback
+-- 'select' pela posição [type, id]. A ordem/posição é preservada (mesmo índice).
+
+-- copia uma opção para os campos que a NUI usa (mantém o índice p/ o select)
+local function projectOption(option)
+  return {
+    label = option.label,
+    icon = option.icon,
+    iconColor = option.iconColor,
+    hide = option.hide,
+  }
+end
+
+-- projeta o conjunto de opções do alvo preservando as chaves (__global, model, entity, ...)
+local function projectForNui(opts)
+  local out = {}
+  for key, list in pairs(opts) do
+    if type(list) == 'table' then
+      local arr = {}
+      for i = 1, #list do arr[i] = projectOption(list[i]) end
+      out[key] = arr
+    end
+  end
+  return out
+end
+
+-- projeta os arrays de opções de zona (array de arrays)
+local function projectZonesForNui(zoneSets)
+  local out = {}
+  for i = 1, #zoneSets do
+    local list, arr = zoneSets[i], {}
+    for j = 1, #list do arr[j] = projectOption(list[j]) end
+    out[i] = arr
+  end
+  return out
+end
+
+
+-- ============================================================
 -- LOOP DE TARGETING
 -- ============================================================
 
@@ -315,10 +357,12 @@ local function startTargeting()
           })
         end
 
+        -- projeta só os campos que a NUI usa (label/icon/iconColor/hide) — as funções
+        -- (onSelect/canInteract) vivem no Lua e NÃO são serializáveis por json.encode
         SendNuiMessage(json.encode({
           event = 'setTarget',
-          options = options,
-          zones = zoneOptionSets,
+          options = projectForNui(options),
+          zones = projectZonesForNui(zoneOptionSets),
         }, { sort_keys = true }))
       end
 
