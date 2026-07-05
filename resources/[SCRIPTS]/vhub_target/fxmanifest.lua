@@ -1,47 +1,43 @@
--- FX Information
+---@diagnostic disable: undefined-global, lowercase-global
 fx_version 'cerulean'
-use_experimental_fxv2_oal 'yes'
+game       'gta5'
+lua54      'yes'
 nui_callback_strict_mode 'true'
-lua54 'yes'
-game 'gta5'
 
--- Resource Information
-name 'ox_target'
-author 'Overextended'
-version '1.18.1'
-repository 'https://github.com/overextended/ox_target'
-description ''
+name        'vhub_target'
+author      'vHub Mirage'
+version     '1.0.0'
+description 'Interação por mira (targeting) — API de exports compatível com ox_target 1.18.x'
 
--- Manifest
+dependency 'vhub'
+
 ui_page 'web/index.html'
 
 shared_scripts {
-    '@ox_lib/init.lua',
+  'shared/config.lua',
+  'shared/events.lua',
 }
 
 client_scripts {
-    'client/main.lua',
+  'client/init.lua',      -- cache leve (ped/veículo) + keybind
+  'client/state.lua',     -- estado do targeting (ativo/focus/disabled/locked)
+  'client/zones.lua',     -- engine própria de zonas (box/sphere/poly)
+  'client/utils.lua',     -- raycast, filtros de grupo/item
+  'client/api.lua',       -- exports públicos (superfície ox_target-compatible)
+  'client/main.lua',      -- loop de targeting + NUI select
+  'client/defaults.lua',  -- opções built-in de portas de veículo
+  'client/debug.lua',     -- zonas/opções de teste (gated por cfg.debug)
 }
 
 server_scripts {
-    'server/main.lua'
+  'server/main.lua',      -- validação de netid/porta + rate-limit + GC de entidades
 }
 
 files {
-    'web/**',
-    'locales/*.json',
-    'client/api.lua',
-    'client/utils.lua',
-    'client/state.lua',
-    'client/debug.lua',
-    'client/defaults.lua',
-    'client/framework/nd.lua',
-    'client/framework/ox.lua',
-    'client/framework/esx.lua',
-    'client/framework/qbx.lua',
-    'client/compat/qtarget.lua',
+  'web/index.html',
+  'web/style.css',
+  'web/js/icons.js',
+  'web/js/fetchNui.js',
+  'web/js/createOptions.js',
+  'web/js/main.js',
 }
-
-provide 'qtarget'
-
-dependency 'ox_lib'

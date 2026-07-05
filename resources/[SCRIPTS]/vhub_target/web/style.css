@@ -1,8 +1,22 @@
-@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700&display=swap");
+/* ============================================================
+   vhub_target — NUI do targeting (olho + lista de opções)
+   Identidade vHub Mirage: Areia + Dourado · vidro simulado
+   A-09: body transparente; sem backdrop-filter sobre o jogo.
+   A-10: sem @import/CDN — fonte de sistema.
+   ============================================================ */
 
 :root {
-  --color-default: #cfd2da;
-  --color-hover: white;
+  --vh-sand:      #d9c19a;
+  --vh-sand-soft: #ece1c8;
+  --vh-sand-dim:  #a89572;
+  --vh-sand-deep: #5a4a30;
+  --vh-gold:      #f3b53a;
+  --vh-gold-soft: #ffd573;
+
+  --color-default: var(--vh-sand);
+  --color-hover:   var(--vh-gold-soft);
+
+  --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
 }
 
 body {
@@ -10,17 +24,11 @@ body {
   user-select: none;
   white-space: nowrap;
   margin: 0;
-  user-select: none;
   overflow: hidden;
+  background: transparent;
 }
 
-p {
-  margin: 0;
-}
-
-.material-symbols-outlined {
-  font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 40;
-}
+p { margin: 0; }
 
 #eye {
   position: absolute;
@@ -28,11 +36,12 @@ p {
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 22pt;
-  fill: black;
+  color: var(--vh-sand);   /* SVG usa fill:currentColor — herda daqui e do hover */
 }
 
 .eye-hover {
-  fill: var(--color-default);
+  color: var(--vh-gold);
+  filter: drop-shadow(0 0 6px rgba(243, 181, 58, 0.55));
 }
 
 #options-wrapper {
@@ -47,45 +56,53 @@ p {
   flex-direction: row;
   justify-content: flex-start;
   align-items: center;
-  font-family: "Nunito";
+  font-family: var(--font-ui);
+  /* vidro simulado: piso escuro translúcido com fade à direita (A-09) */
   background: linear-gradient(
     90deg,
-    rgba(20, 20, 20, 0.7) 0%,
-    rgba(20, 20, 20, 0.6) 66%,
-    rgba(47, 48, 53, 0) 100%
+    rgba(12, 10, 6, 0.82) 0%,
+    rgba(12, 10, 6, 0.70) 66%,
+    rgba(12, 10, 6, 0) 100%
   );
+  border-left: 2px solid rgba(243, 181, 58, 0.35);
   font-size: 11pt;
   line-height: 22pt;
   vertical-align: middle;
   margin: 2pt;
-  transition: 300ms;
+  transition: 200ms;
   transform-origin: left top;
-  scale: 1;
   height: 22pt;
-  width: 150pt;
-  top: 0;
+  width: 160pt;
+  cursor: pointer;
 }
 
 .option-container:hover {
   background: linear-gradient(
     90deg,
-    rgba(30, 30, 30, 0.7) 0%,
-    rgba(30, 30, 30, 0.6) 66%,
-    rgba(57, 58, 63, 0) 100%
+    rgba(37, 30, 20, 0.90) 0%,
+    rgba(26, 22, 16, 0.78) 66%,
+    rgba(26, 22, 16, 0) 100%
   );
-  transform-origin: left top;
+  border-left-color: var(--vh-gold);
   color: var(--color-hover);
   margin-left: 4pt;
 }
 
 .option-icon {
-  font-size: 12pt;
-  line-height: 22pt;
-  width: 14pt;
-  margin: 5pt;
-  color: var(--color-default);
+  width: 13pt;
+  height: 13pt;
+  margin: 0 5pt 0 6pt;
+  flex-shrink: 0;
+  color: var(--vh-gold);
+}
+
+.option-container:hover .option-icon {
+  color: var(--vh-gold-soft);
+  filter: drop-shadow(0 0 5px rgba(255, 213, 115, 0.55));
 }
 
 .option-label {
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

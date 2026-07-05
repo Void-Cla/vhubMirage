@@ -1,528 +1,499 @@
----@class OxTargetOption
----@field resource? string
+-- client/api.lua — exports públicos do vhub_target (superfície compatível com ox_target 1.18.x)
+-- Export-first: toda função registrada aqui vira export automaticamente (metatable).
+-- Registro de opções é EFÊMERO client-side por resource; onClientResourceStop limpa.
+-- Cfx Lua (LuaGLM): usa table.type/table.wipe/joaat/?. — não é Lua 5.4 puro.
+---@diagnostic disable: undefined-global, lowercase-global, undefined-field
 
-local utils = require 'client.utils'
+VHubTarget = VHubTarget or {}
+
+local zonesApi = VHubTarget.zones
+local Zones = VHubTarget.Zones
+local E = VHubTarget.E
 
 local api = setmetatable({}, {
-    __newindex = function(self, index, value)
-        rawset(self, index, value)
-        exports(index, value)
-    end
+  __newindex = function(self, index, value)
+    rawset(self, index, value)
+    exports(index, value)
+  end
 })
 
----Throws a formatted type error
----@param variable string
----@param expected string
----@param received string
+VHubTarget.api = api
+
+
+-- ============================================================
+-- VALIDAÇÃO DE OPÇÕES
+-- ============================================================
+
+-- lança erro de tipo formatado
 local function typeError(variable, expected, received)
-    error(("expected %s to have type '%s' (received %s)"):format(variable, expected, received))
+  error(("expected %s to have type '%s' (received %s)"):format(variable, expected, received))
 end
 
----Checks options and throws an error on type mismatch
----@param options OxTargetOption | OxTargetOption[]
----@return OxTargetOption[]
+-- normaliza options para array e valida o shape
 local function checkOptions(options)
-    local optionsType = type(options)
+  local optionsType = type(options)
 
-    if optionsType ~= 'table' then
-        typeError('options', 'table', optionsType)
-    end
+  if optionsType ~= 'table' then
+    typeError('options', 'table', optionsType)
+  end
 
-    local tableType = table.type(options)
+  local tableType = table.type(options)
 
-    if tableType == 'hash' and options.label then
-        options = { options }
-    elseif tableType ~= 'array' then
-        typeError('options', 'array', ('%s table'):format(tableType))
-    end
+  if tableType == 'hash' and options.label then
+    options = { options }
+  elseif tableType ~= 'array' then
+    typeError('options', 'array', ('%s table'):format(tableType))
+  end
 
-    return options
+  return options
 end
 
----@param data OxTargetPolyZone | table
----@return number
+
+-- ============================================================
+-- ZONAS (box / sphere / poly) — engine própria (client/zones.lua)
+-- ============================================================
+
+-- cria zona poligonal de interação; retorna o id
 function api.addPolyZone(data)
-    if data.debug then utils.warn('Creating new PolyZone with debug enabled.') end
-
-    data.resource = GetInvokingResource()
-    data.options = checkOptions(data.options)
-    return lib.zones.poly(data).id
+  data.resource = GetInvokingResource() or 'vhub_target'
+  data.options = checkOptions(data.options)
+  return zonesApi.addPoly(data).id
 end
 
----@param data OxTargetBoxZone | table
----@return number
+-- cria zona caixa de interação; retorna o id
 function api.addBoxZone(data)
-    if data.debug then utils.warn('Creating new BoxZone with debug enabled.') end
-
-    data.resource = GetInvokingResource()
-    data.options = checkOptions(data.options)
-    return lib.zones.box(data).id
+  data.resource = GetInvokingResource() or 'vhub_target'
+  data.options = checkOptions(data.options)
+  return zonesApi.addBox(data).id
 end
 
----@param data OxTargetSphereZone | table
----@return number
+-- cria zona esférica de interação; retorna o id
 function api.addSphereZone(data)
-    if data.debug then utils.warn('Creating new SphereZone with debug enabled.') end
-
-    data.resource = GetInvokingResource()
-    data.options = checkOptions(data.options)
-    return lib.zones.sphere(data).id
+  data.resource = GetInvokingResource() or 'vhub_target'
+  data.options = checkOptions(data.options)
+  return zonesApi.addSphere(data).id
 end
 
----@param id number | string The ID of the zone to check. It can be either a number or a string representing the zone's index or name, respectively.
----@return boolean returns true if the zone with the specified ID exists, otherwise false.
+-- retorna true se a zona (id numérico ou nome) existe
 function api.zoneExists(id)
-    if not Zones or (type(id) ~= 'number' and type(id) ~= 'string') then return false end
+  local idType = type(id)
+  if idType ~= 'number' and idType ~= 'string' then return false end
 
-    if type(id) == 'number' and Zones[id] then return true end
+  if idType == 'number' then return Zones[id] ~= nil end
 
-    for _, zone in pairs(lib.zones.getAllZones()) do
-        if type(id) == 'string' and zone.name == id then return true end
-    end
+  for _, zone in pairs(Zones) do
+    if zone.name == id then return true end
+  end
 
-    return false
+  return false
 end
 
----@param id number | string
----@param suppressWarning boolean?
-function api.removeZone(id, suppressWarning)
-    if Zones then
-        if type(id) == 'string' then
-            local foundZone
+-- remove zona por id numérico ou por nome (2º arg preservado por compat de assinatura)
+function api.removeZone(id, _suppressWarning)
+  if type(id) == 'string' then
+    local found = false
 
-            for _, v in pairs(lib.zones.getAllZones()) do
-                if v.name == id then
-                    foundZone = true
-                    v:remove()
-                end
-            end
+    for _, zone in pairs(Zones) do
+      if zone.name == id then
+        found = true
+        zone:remove()
+      end
+    end
 
-            if foundZone then return end
-        elseif Zones[id] then
-            return Zones[id]:remove()
+    if found then return end
+  elseif Zones[id] then
+    return Zones[id]:remove()
+  end
+end
+
+
+-- ============================================================
+-- REGISTRO DE OPÇÕES (globais, por modelo, por netid, por entidade local)
+-- ============================================================
+
+-- remove opções por nome dentro de um alvo (respeitando o resource dono)
+local function removeTarget(target, remove, resource)
+  if type(remove) ~= 'table' then remove = { remove } end
+
+  for i = #target, 1, -1 do
+    local option = target[i]
+
+    if option.resource == resource then
+      for j = #remove, 1, -1 do
+        if option.name == remove[j] then
+          table.remove(target, i)
         end
+      end
     end
-
-    if suppressWarning then return end
-
-    warn(('attempted to remove a zone that does not exist (id: %s)'):format(id))
+  end
 end
 
----@param target table
----@param remove string | string[]
----@param resource string
----@param showWarning? boolean
-local function removeTarget(target, remove, resource, showWarning)
-    if type(remove) ~= 'table' then remove = { remove } end
-
-    for i = #target, 1, -1 do
-        local option = target[i]
-
-        if option.resource == resource then
-            for j = #remove, 1, -1 do
-                if option.name == remove[j] then
-                    table.remove(target, i)
-
-                    if showWarning then
-                        utils.warn(("Replacing existing target option '%s'."):format(option.name))
-                    end
-                end
-            end
-        end
-    end
-end
-
----@param target table
----@param options OxTargetOption | OxTargetOption[]
----@param resource string
+-- adiciona opções a um alvo, substituindo homônimas do mesmo resource
 local function addTarget(target, options, resource)
-    options = checkOptions(options)
+  options = checkOptions(options)
 
-    local checkNames = {}
+  local checkNames = {}
 
-    resource = resource or 'ox_target'
+  resource = resource or 'vhub_target'
 
-    for i = 1, #options do
-        local option = options[i]
-        option.resource = resource
+  for i = 1, #options do
+    local option = options[i]
+    option.resource = resource
 
-        if option.name then
-            checkNames[#checkNames + 1] = option.name
-        end
+    if option.name then
+      checkNames[#checkNames + 1] = option.name
     end
+  end
 
-    if checkNames[1] then
-        removeTarget(target, checkNames, resource, true)
-    end
+  if checkNames[1] then
+    removeTarget(target, checkNames, resource)
+  end
 
-    local num = #target
+  local num = #target
 
-    for i = 1, #options do
-        local option = options[i]
-
-        if resource == 'ox_target' then
-            if option.canInteract then
-                option.canInteract = msgpack.unpack(msgpack.pack(option.canInteract))
-            end
-
-            if option.onSelect then
-                option.onSelect = msgpack.unpack(msgpack.pack(option.onSelect))
-            end
-        end
-
-        num += 1
-        target[num] = options[i]
-    end
+  -- funções (canInteract/onSelect) ficam por referência direta — são do resource chamador,
+  -- seguras no mesmo runtime. msgpack NÃO serializa closures (produziria função quebrada).
+  for i = 1, #options do
+    num = num + 1
+    target[num] = options[i]
+  end
 end
 
----@type table<number, OxTargetOption[]>
 local peds = {}
-
----@param options OxTargetOption | OxTargetOption[]
-function api.addGlobalPed(options)
-    addTarget(peds, options, GetInvokingResource())
-end
-
----@param options string | string[]
-function api.removeGlobalPed(options)
-    removeTarget(peds, options, GetInvokingResource())
-end
-
----@type table<number, OxTargetOption[]>
 local vehicles = {}
-
----@param options OxTargetOption | OxTargetOption[]
-function api.addGlobalVehicle(options)
-    addTarget(vehicles, options, GetInvokingResource())
-end
-
----@param options string | string[]
-function api.removeGlobalVehicle(options)
-    removeTarget(vehicles, options, GetInvokingResource())
-end
-
----@type table<number, OxTargetOption[]>
 local objects = {}
-
----@param options OxTargetOption | OxTargetOption[]
-function api.addGlobalObject(options)
-    addTarget(objects, options, GetInvokingResource())
-end
-
----@param options string | string[]
-function api.removeGlobalObject(options)
-    removeTarget(objects, options, GetInvokingResource())
-end
-
----@type table<number, OxTargetOption[]>
 local players = {}
 
----@param options OxTargetOption | OxTargetOption[]
-function api.addGlobalPlayer(options)
-    addTarget(players, options, GetInvokingResource())
-end
+-- adiciona opções para todo ped não-player
+function api.addGlobalPed(options) addTarget(peds, options, GetInvokingResource()) end
 
----@param options string | string[]
-function api.removeGlobalPlayer(options)
-    removeTarget(players, options, GetInvokingResource())
-end
+-- remove opções globais de ped por nome
+function api.removeGlobalPed(options) removeTarget(peds, options, GetInvokingResource()) end
 
----@type table<number, OxTargetOption[]>
+-- adiciona opções para todo veículo
+function api.addGlobalVehicle(options) addTarget(vehicles, options, GetInvokingResource()) end
+
+-- remove opções globais de veículo por nome
+function api.removeGlobalVehicle(options) removeTarget(vehicles, options, GetInvokingResource()) end
+
+-- adiciona opções para todo objeto
+function api.addGlobalObject(options) addTarget(objects, options, GetInvokingResource()) end
+
+-- remove opções globais de objeto por nome
+function api.removeGlobalObject(options) removeTarget(objects, options, GetInvokingResource()) end
+
+-- adiciona opções para todo player
+function api.addGlobalPlayer(options) addTarget(players, options, GetInvokingResource()) end
+
+-- remove opções globais de player por nome
+function api.removeGlobalPlayer(options) removeTarget(players, options, GetInvokingResource()) end
+
 local models = {}
 
----@param arr (number | string) | (number | string)[]
----@param options OxTargetOption | OxTargetOption[]
+-- adiciona opções por modelo (hash ou nome)
 function api.addModel(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local model = arr[i]
-        model = tonumber(model) or joaat(model)
+  for i = 1, #arr do
+    local model = arr[i]
+    model = tonumber(model) or joaat(model)
 
-        if not models[model] then
-            models[model] = {}
-        end
-
-        addTarget(models[model], options, resource)
+    if not models[model] then
+      models[model] = {}
     end
+
+    addTarget(models[model], options, resource)
+  end
 end
 
----@param arr (number | string) | (number | string)[]
----@param options? string | string[]
+-- remove opções por modelo (todas do modelo se options for nil)
 function api.removeModel(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local model = arr[i]
-        model = tonumber(model) or joaat(model)
+  for i = 1, #arr do
+    local model = arr[i]
+    model = tonumber(model) or joaat(model)
 
-        if models[model] then
-            if options then
-                removeTarget(models[model], options, resource)
-            end
+    if models[model] then
+      if options then
+        removeTarget(models[model], options, resource)
+      end
 
-            if not options or #models[model] == 0 then
-                models[model] = nil
-            end
-        end
+      if not options or #models[model] == 0 then
+        models[model] = nil
+      end
     end
+  end
 end
 
----@type table<number, OxTargetOption[]>
 local entities = {}
 
----@param arr number | number[]
----@param options OxTargetOption | OxTargetOption[]
+-- adiciona opções a entidades de rede (netid); avisa o servidor p/ flag global
 function api.addEntity(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local netId = arr[i]
+  for i = 1, #arr do
+    local netId = arr[i]
 
-        if NetworkDoesNetworkIdExist(netId) then
-            if not entities[netId] then
-                entities[netId] = {}
+    if NetworkDoesNetworkIdExist(netId) then
+      if not entities[netId] then
+        entities[netId] = {}
 
-                if not Entity(NetworkGetEntityFromNetworkId(netId)).state.hasTargetOptions then
-                    TriggerServerEvent('ox_target:setEntityHasOptions', netId)
-                end
-            end
-
-            addTarget(entities[netId], options, resource)
+        if not Entity(NetworkGetEntityFromNetworkId(netId)).state.hasTargetOptions then
+          TriggerServerEvent(E.SET_ENTITY_HAS_OPTIONS, netId)
         end
+      end
+
+      addTarget(entities[netId], options, resource)
     end
+  end
 end
 
----@param arr number | number[]
----@param options? string | string[]
+-- remove opções de entidades de rede (todas do netid se options for nil)
 function api.removeEntity(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local netId = arr[i]
+  for i = 1, #arr do
+    local netId = arr[i]
 
-        if entities[netId] then
-            if options then
-                removeTarget(entities[netId], options, resource)
-            end
+    if entities[netId] then
+      if options then
+        removeTarget(entities[netId], options, resource)
+      end
 
-            if not options or #entities[netId] == 0 then
-                entities[netId] = nil
-            end
-        end
+      if not options or #entities[netId] == 0 then
+        entities[netId] = nil
+      end
     end
+  end
 end
 
-RegisterNetEvent('ox_target:removeEntity', api.removeEntity)
+-- GC local: quando o bag hasTargetOptions da entidade cai (entidade morreu/despawnou),
+-- descarta TODAS as opções daquele netId — sem broadcast -1 do server (R5).
+AddStateBagChangeHandler('hasTargetOptions', nil, function(bagName, _, value)
+  if value then return end
 
----@type table<number, OxTargetOption[]>
+  local netId = tonumber(bagName:match('^entity:(%d+)$'))
+  if netId and entities[netId] then
+    entities[netId] = nil
+  end
+end)
+
 local localEntities = {}
 
----@param arr number | number[]
----@param options OxTargetOption | OxTargetOption[]
+-- adiciona opções a entidades locais (handle não-networked)
 function api.addLocalEntity(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local entityId = arr[i]
+  for i = 1, #arr do
+    local entityId = arr[i]
 
-        if DoesEntityExist(entityId) then
-            if not localEntities[entityId] then
-                localEntities[entityId] = {}
-            end
+    if DoesEntityExist(entityId) then
+      if not localEntities[entityId] then
+        localEntities[entityId] = {}
+      end
 
-            addTarget(localEntities[entityId], options, resource)
-        else
-             lib.print.warn(("No entity with id '%s' exists in %s."):format(entityId, resource))
-        end
+      addTarget(localEntities[entityId], options, resource)
     end
+  end
 end
 
----@param arr number | number[]
----@param options? table
+-- remove opções de entidades locais
 function api.removeLocalEntity(arr, options)
-    if type(arr) ~= 'table' then arr = { arr } end
-    local resource = GetInvokingResource()
+  if type(arr) ~= 'table' then arr = { arr } end
+  local resource = GetInvokingResource()
 
-    for i = 1, #arr do
-        local entity = arr[i]
+  for i = 1, #arr do
+    local entity = arr[i]
 
-        if localEntities[entity] then
-            if options then
-                removeTarget(localEntities[entity], options, resource)
-            end
+    if localEntities[entity] then
+      if options then
+        removeTarget(localEntities[entity], options, resource)
+      end
 
-            if not options or #localEntities[entity] == 0 then
-                localEntities[entity] = nil
-            end
-        end
+      if not options or #localEntities[entity] == 0 then
+        localEntities[entity] = nil
+      end
     end
+  end
 end
 
-CreateThread(function()
-    while true do
-        Wait(60000)
+-- GC de entidades locais mortas — budget (L-18): 1 varredura/min, O(n) sobre registros
+-- guard de saída p/ não vazar thread após restart do resource (R8)
+local _gcAlive = true
 
-        for entityId in pairs(localEntities) do
-            if not DoesEntityExist(entityId) then
-                localEntities[entityId] = nil
-            end
-        end
-    end
+AddEventHandler('onResourceStop', function(res)
+  if res == GetCurrentResourceName() then _gcAlive = false end
 end)
 
----@param resource string
----@param target table
+Citizen.CreateThread(function()
+  while _gcAlive do
+    Citizen.Wait(60000)
+
+    for entityId in pairs(localEntities) do
+      if not DoesEntityExist(entityId) then
+        localEntities[entityId] = nil
+      end
+    end
+  end
+end)
+
+
+-- ============================================================
+-- LIMPEZA POR RESOURCE (invalidação do registro efêmero)
+-- ============================================================
+
+-- remove opções globais registradas por um resource que parou
 local function removeResourceGlobals(resource, target)
-    for i = 1, #target do
-        local options = target[i]
+  for i = 1, #target do
+    local options = target[i]
 
-        for j = #options, 1, -1 do
-            if options[j].resource == resource then
-                table.remove(options, j)
-            end
-        end
+    for j = #options, 1, -1 do
+      if options[j].resource == resource then
+        table.remove(options, j)
+      end
     end
+  end
 end
 
----@param resource string
----@param target table
+-- remove opções por modelo/netid/entidade registradas por um resource que parou
 local function removeResourceTargets(resource, target)
-    for i = 1, #target do
-        local tbl = target[i]
+  for i = 1, #target do
+    local tbl = target[i]
 
-        for key, options in pairs(tbl) do
-            for j = #options, 1, -1 do
-                if options[j].resource == resource then
-                    table.remove(options, j)
-                end
-            end
-
-            if #options == 0 then
-                tbl[key] = nil
-            end
+    for key, options in pairs(tbl) do
+      for j = #options, 1, -1 do
+        if options[j].resource == resource then
+          table.remove(options, j)
         end
+      end
+
+      if #options == 0 then
+        tbl[key] = nil
+      end
     end
+  end
 end
 
----@param resource string
 AddEventHandler('onClientResourceStop', function(resource)
-    removeResourceGlobals(resource, { peds, vehicles, objects, players })
-    removeResourceTargets(resource, { models, entities, localEntities })
+  removeResourceGlobals(resource, { peds, vehicles, objects, players })
+  removeResourceTargets(resource, { models, entities, localEntities })
 
-    if Zones then
-        for _, v in pairs(Zones) do
-            if v.resource == resource then
-                v:remove()
-            end
-        end
+  for _, zone in pairs(Zones) do
+    if zone.resource == resource then
+      zone:remove()
     end
+  end
 end)
+
+
+-- ============================================================
+-- RESOLUÇÃO DE OPÇÕES DO ALVO ATUAL (consumida pelo main.lua)
+-- ============================================================
 
 local NetworkGetEntityIsNetworked = NetworkGetEntityIsNetworked
 local NetworkGetNetworkIdFromEntity = NetworkGetNetworkIdFromEntity
 
----@class OxTargetOptions
 local options_mt = {}
 options_mt.__index = options_mt
 options_mt.size = 1
 
+-- limpa o conjunto de opções do alvo atual
 function options_mt:wipe()
-    options_mt.size = 1
-    self.globalTarget = nil
-    self.model = nil
-    self.entity = nil
-    self.localEntity = nil
+  options_mt.size = 1
+  self.globalTarget = nil
+  self.model = nil
+  self.entity = nil
+  self.localEntity = nil
 
-    if self.__global[1]?.name == 'builtin:goback' then
-        table.remove(self.__global, 1)
-    end
+  local first = self.__global[1]
+  if first and first.name == 'builtin:goback' then
+    table.remove(self.__global, 1)
+  end
 end
 
----@param entity? number
----@param _type? number
----@param model? number
+-- resolve os conjuntos de opções aplicáveis à entidade mirada
 function options_mt:set(entity, _type, model)
-    if not entity then return end
+  if not entity then return end
 
-    if _type == 1 and IsPedAPlayer(entity) then
-        self:wipe()
-        self.globalTarget = players
-        options_mt.size += 1
+  if _type == 1 and IsPedAPlayer(entity) then
+    self:wipe()
+    self.globalTarget = players
+    options_mt.size = options_mt.size + 1
 
-        return
-    end
+    return
+  end
 
-    local netId = NetworkGetEntityIsNetworked(entity) and NetworkGetNetworkIdFromEntity(entity)
+  local netId = NetworkGetEntityIsNetworked(entity) and NetworkGetNetworkIdFromEntity(entity)
 
-    self.globalTarget = _type == 1 and peds or _type == 2 and vehicles or objects
-    self.model = models[model]
-    self.entity = netId and entities[netId] or nil
-    self.localEntity = localEntities[entity]
-    options_mt.size += 1
+  self.globalTarget = _type == 1 and peds or _type == 2 and vehicles or objects
+  self.model = models[model]
+  self.entity = netId and entities[netId] or nil
+  self.localEntity = localEntities[entity]
+  options_mt.size = options_mt.size + 1
 
-    if self.model then options_mt.size += 1 end
-    if self.entity then options_mt.size += 1 end
-    if self.localEntity then options_mt.size += 1 end
+  if self.model then options_mt.size = options_mt.size + 1 end
+  if self.entity then options_mt.size = options_mt.size + 1 end
+  if self.localEntity then options_mt.size = options_mt.size + 1 end
 end
 
----@type OxTargetOption[]
 local global = {}
 
----@param options OxTargetOption | OxTargetOption[]
-function api.addGlobalOption(options)
-    addTarget(global, options, GetInvokingResource())
-end
+-- adiciona opções globais (aparecem em qualquer alvo)
+function api.addGlobalOption(options) addTarget(global, options, GetInvokingResource()) end
 
----@param options string | string[]
-function api.removeGlobalOption(options)
-    removeTarget(global, options, GetInvokingResource())
-end
+-- remove opções globais por nome
+function api.removeGlobalOption(options) removeTarget(global, options, GetInvokingResource()) end
 
----@class OxTargetOptions
 local options = setmetatable({
-    __global = global
+  __global = global
 }, options_mt)
 
----@param entity? number
----@param _type? number
----@param model? number
+-- retorna o conjunto de opções (interno p/ main.lua; com entity, snapshot por alvo)
 function api.getTargetOptions(entity, _type, model)
-    if not entity then return options end
+  if not entity then return options end
 
-    if IsPedAPlayer(entity) then
-        return {
-            global = players,
-        }
-    end
+  if IsPedAPlayer(entity) then
+    return { global = players }
+  end
 
-    local netId = NetworkGetEntityIsNetworked(entity) and NetworkGetNetworkIdFromEntity(entity)
+  local netId = NetworkGetEntityIsNetworked(entity) and NetworkGetNetworkIdFromEntity(entity)
 
-    return {
-        global = _type == 1 and peds or _type == 2 and vehicles or objects,
-        model = models[model],
-        entity = netId and entities[netId] or nil,
-        localEntity = localEntities[entity],
-    }
+  return {
+    global = _type == 1 and peds or _type == 2 and vehicles or objects,
+    model = models[model],
+    entity = netId and entities[netId] or nil,
+    localEntity = localEntities[entity],
+  }
 end
 
-local state = require 'client.state'
 
+-- ============================================================
+-- CONTROLE EXTERNO (consumidores)
+-- ============================================================
+
+local state = VHubTarget.state
+
+-- desabilita/reabilita o targeting por completo
 function api.disableTargeting(value)
-    if value then
-        state.setActive(false)
-    end
+  if value then
+    state.setActive(false)
+  end
 
-    state.setDisabled(value)
+  state.setDisabled(value)
 end
 
+-- trava o targeting durante ação em progresso do consumidor (substituto do progressActive)
+function api.setLocked(value)
+  state.setLocked(value)
+end
+
+-- retorna se o targeting está ativo
 function api.isActive()
-    return state.isActive()
+  return state.isActive()
 end
-
-return api

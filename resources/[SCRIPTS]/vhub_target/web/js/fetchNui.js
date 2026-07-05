@@ -1,13 +1,16 @@
-const resource = GetParentResourceName();
+// fetchNui.js — POST tipado para o callback NUI do resource (script clássico, sem ES module)
+'use strict';
 
-export async function fetchNui(eventName, data) {
-  const resp = await fetch(`https://${resource}/${eventName}`, {
-    method: 'post',
-    headers: {
-      'Content-Type': 'application/json; charset=UTF-8',
-    },
-    body: JSON.stringify(data),
-  });
+(function () {
+  const resource = GetParentResourceName();
 
-  return await resp.json();
-}
+  window.fetchNui = async function (eventName, data) {
+    const resp = await fetch(`https://${resource}/${eventName}`, {
+      method: 'post',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify(data),
+    });
+
+    return await resp.json();
+  };
+})();
