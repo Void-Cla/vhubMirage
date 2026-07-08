@@ -86,11 +86,10 @@ VHubMoneyCfg = {
   },
 
   -- ─── Comandos ───────────────────────────────────────────────────────────
-  CMD_OPEN_PANEL    = 'banco',       -- /banco — abre Fleeca Camell (em banco/ATM)
+  -- /banco aposentado (decisão #57): abertura de banco/ATM agora é pelo olho (vhub_target)
   CMD_PAY           = 'pagar',       -- /pagar <id> <valor>
   CMD_GIVE          = 'dar',         -- /dar <id> <valor> — entrega carteira → carteira
   CMD_BALANCE       = 'saldo',       -- /saldo — toast com saldo atual
-  KEY_OPEN_BLOCK    = 'F8',          -- nao tem hotkey global (precisa estar no banco/ATM)
 
   -- ─── HUD ────────────────────────────────────────────────────────────────
   HUD_FORMAT = 'R$ %s',              -- prefixo na formatacao

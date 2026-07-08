@@ -1,19 +1,20 @@
 -- client/zones.lua — vhub_money (Fleeca Camell)
--- Detecta proximidade de banco fisico ou ATM (cold loop 800ms + hot loop on-demand).
--- Mostra hint + [E] e dispara abertura do NUI quando o jogador interage.
--- Padrao P0-5: thread fria identifica, thread quente so quando perto.
+-- Interação de banco/ATM via vhub_target (olho), não mais por proximidade [E].
+-- Threads de proximidade + hint + marker REMOVIDAS (decisão #57): o target dá o
+-- affordance (highlight ao mirar) e o SERVIDOR revalida o raio em `nui:open`
+-- (near_bank/near_atm, raio 3.0) — a mudança de gatilho é neutra em segurança.
+-- Mantém apenas os BLIPS (não são interação).
+---@diagnostic disable: undefined-global, lowercase-global
 
 local Cfg   = VHubMoneyCfg
 local Banks = VHubMoneyBanks
-local ATMs  = VHubMoneyATMs
 
--- ── Estado de proximidade ───────────────────────────────────────────────────
 
--- _zona = { kind = 'bank'|'atm', idx = n, x, y, z, label }
-local _zona = nil
+-- ============================================================
+-- BLIPS (criados 1x no boot, nunca em loop)
+-- ============================================================
 
--- ── Blips dos bancos fisicos ────────────────────────────────────────────────
-
+-- blips das agências físicas
 CreateThread(function()
   if not Cfg.BANK.BLIP_SHOW then return end
   for _, b in ipairs(Banks) do
@@ -28,10 +29,10 @@ CreateThread(function()
   end
 end)
 
--- Blips dos ATMs sao opcionais (default off — polui o mapa com 70+ pontos)
+-- blips dos ATMs são opcionais (default off — polui o mapa; interação vem das box zones)
 CreateThread(function()
   if not Cfg.ATM.BLIP_SHOW then return end
-  for _, a in ipairs(ATMs) do
+  for _, a in ipairs(VHubMoneyATMs) do
     local blip = AddBlipForCoord(a[1], a[2], a[3])
     SetBlipSprite(blip, Cfg.ATM.BLIP_SPRITE)
     SetBlipColour(blip, Cfg.ATM.BLIP_COLOR)
@@ -43,84 +44,57 @@ CreateThread(function()
   end
 end)
 
--- ── Detector de proximidade (thread fria, 800ms) ────────────────────────────
 
-local function detect_zone()
-  local px, py, pz = table.unpack(GetEntityCoords(PlayerPedId()))
+-- ============================================================
+-- INTERAÇÃO VIA TARGET (olho)
+-- ============================================================
 
-  -- Bancos fisicos primeiro (raio maior)
-  local bank_r2 = Cfg.BANK.INTERACT_RADIUS * Cfg.BANK.INTERACT_RADIUS
-  for i, b in ipairs(Banks) do
-    local dx, dy, dz = px - b.x, py - b.y, pz - b.z
-    if (dx * dx + dy * dy + dz * dz) <= bank_r2 then
-      return { kind = 'bank', idx = i, x = b.x, y = b.y, z = b.z,
-               label = Cfg.BRAND_NAME .. ' — ' .. b.label }
-    end
-  end
+-- pede ao servidor a abertura do painel; o servidor decide (revalida o raio)
+local function openStation(mode)
+  TriggerServerEvent('vhub_money:nui:open', { mode = mode })
+end
 
-  -- ATMs
-  local atm_r2 = Cfg.ATM.INTERACT_RADIUS * Cfg.ATM.INTERACT_RADIUS
-  for i, a in ipairs(ATMs) do
-    local dx, dy, dz = px - a[1], py - a[2], pz - a[3]
-    if (dx * dx + dy * dy + dz * dz) <= atm_r2 then
-      return { kind = 'atm', idx = i, x = a[1], y = a[2], z = a[3],
-               label = 'Caixa Eletronico ' .. Cfg.BRAND_NAME }
-    end
-  end
-
-  return nil
+-- não abre banco/ATM de dentro de um veículo (bloqueio client leve; não é verdade crítica)
+local function onFoot()
+  return not IsPedInAnyVehicle(PlayerPedId(), false)
 end
 
 CreateThread(function()
-  while true do
-    Wait(700)
-    _zona = detect_zone()
+  -- ATMs = box zone por coord de VHubMoneyATMs — a MESMA lista que o servidor usa
+  -- p/ revalidar em near_atm() (decisão #57-A): onde o olho aparece, o server aceita.
+  for i, a in ipairs(VHubMoneyATMs) do
+    exports.vhub_target:addBoxZone({
+      coords  = vec3(a[1], a[2], a[3]),
+      size    = vec3(1.2, 1.2, 2.0),
+      options = {
+        {
+          name     = ('vhub_money:atm_%d'):format(i),
+          label    = 'Caixa Eletrônico ' .. Cfg.BRAND_NAME,
+          icon     = 'card',
+          distance = 1.5,
+          canInteract = onFoot,
+          onSelect = function() openStation('atm') end,
+        },
+      },
+    })
+  end
+
+  -- Agências = 7 balcões físicos (box zone por coord)
+  for _, b in ipairs(Banks) do
+    exports.vhub_target:addBoxZone({
+      coords   = vec3(b.x, b.y, b.z),
+      size     = vec3(2.0, 2.0, 2.5),
+      rotation = 0.0,
+      options  = {
+        {
+          name     = 'vhub_money:bank',
+          label    = Cfg.BRAND_NAME .. ' — ' .. b.label,
+          icon     = 'bank',
+          distance = 2.0,
+          canInteract = onFoot,
+          onSelect = function() openStation('bank') end,
+        },
+      },
+    })
   end
 end)
-
--- ── Hint [E] (thread quente apenas quando perto) ────────────────────────────
-
-local function draw_hint(label)
-  SetTextScale(0.36, 0.36); SetTextFont(4); SetTextProportional(true)
-  SetTextColour(255, 255, 255, 220); SetTextOutline()
-  SetTextEntry('STRING')
-  AddTextComponentString('[E] ' .. label)
-  DrawText(0.5, 0.91)
-end
-
-CreateThread(function()
-  while true do
-    if not _zona then
-      Wait(500)
-    else
-      Wait(0)
-      draw_hint(_zona.label)
-      -- Marker pequeno para ATM (banco fisico ja tem balcao visual)
-      if _zona.kind == 'atm' then
-        DrawMarker(27,
-          _zona.x, _zona.y, _zona.z - 0.95,
-          0, 0, 0, 0, 0, 0,
-          0.5, 0.5, 0.3,
-          243, 181, 58, 140,
-          false, false, 2, false, nil, nil, false)
-      end
-      -- [E] = control 38
-      if IsControlJustReleased(0, 38) then
-        TriggerServerEvent('vhub_money:nui:open', { mode = _zona.kind })
-      end
-    end
-  end
-end)
-
--- ── /banco (atalho extra: so funciona se estiver perto de banco/ATM) ────────
-
-RegisterCommand(VHubMoneyCfg.CMD_OPEN_PANEL, function()
-  if not _zona then
-    BeginTextCommandThefeedPost('STRING')
-    AddTextComponentSubstringPlayerName('Aproxime-se de uma agencia ' ..
-      VHubMoneyCfg.BRAND_NAME .. ' ou de um ATM para abrir o painel.')
-    EndTextCommandThefeedPostTicker(false, true)
-    return
-  end
-  TriggerServerEvent('vhub_money:nui:open', { mode = _zona.kind })
-end, false)

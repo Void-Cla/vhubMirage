@@ -32,6 +32,9 @@
     close:  S('<path d="M6 6l12 12M18 6L6 18"/>'),
     star:   S('<path d="M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 16.9 6.4 20l1.3-6.2L3 9.5l6.3-.7L12 3z"/>'),
     dot:    S('<circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>'),
+    bank:   S('<path d="M4 10h16M5 10l7-5 7 5M6 10v7M10 10v7M14 10v7M18 10v7M3 20h18"/>'),
+    card:   S('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M6 15h4"/>'),
+    cash:   S('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v6M18 9v6"/>'),
   };
 
   // aliases fa-* → chave do mapa (compat com consumidores que passam classes FontAwesome)
@@ -49,6 +52,9 @@
     'hand-pointer': 'hand', 'hand-holding': 'hand',
     'xmark': 'close', 'ban': 'close',
     'earth-americas': 'globe',
+    'building-columns': 'bank', 'landmark': 'bank', 'university': 'bank', 'money-bill': 'bank',
+    'credit-card': 'card', 'money-check': 'card',
+    'money-bill-wave': 'cash', 'coins': 'cash', 'sack-dollar': 'cash',
   };
 
   // resolve um nome de ícone ('car', 'fa-solid fa-car-side', ...) para o SVG do mapa

@@ -11,6 +11,7 @@ description 'Fleeca Camell — carteira, banco, ATMs, transferencias P2P e audit
 dependencies {
   'oxmysql',
   'vhub',
+  'vhub_target',   -- interação de banco/ATM via olho (registra opções por export)
 }
 
 shared_scripts {
