@@ -1,0 +1,158 @@
+============================================================
+vHub Coinshop — Guia de Instalação (PT-BR)
+============================================================
+
+Recurso: vhub_coinshop v2.0.0
+Padrão: vHub Mirage (Lua 5.4, server-authoritative, exports.vhub:*)
+Compatibilidade: ESX/qbcore/qbox/fearx_bridge REMOVIDOS — apenas core vHub
+
+------------------------------------------------------------
+1. PRÉ-REQUISITOS
+------------------------------------------------------------
+
+Antes de instalar o vhub_coinshop, o servidor deve ter:
+
+✓ Core vHub Mirage rodando (resources/[CORE]/vhub/)
+  - exports.vhub:getUser / getCData / setCData / getGData / setGData / notify
+✓ vhub_groups (checagem de permissão ACE + grupos)
+✓ vhub_inventory (giveItem / giveWeapon)
+✓ vhub_player_state (teleport do test-drive — owner único do ped)
+✓ vhub_conce (registerVehicle — contrato de commit para veículos)
+✓ oxmysql (driver MySQL upstream)
+
+Sem estes, o coinshop NÃO funcionará — ele depende exclusivamente
+dos exports do core vHub.
+
+------------------------------------------------------------
+2. INSTALAÇÃO
+------------------------------------------------------------
+
+1) Copie a pasta `vhub_coinshop` para:
+   resources/[SCRIPTS]/vhub_coinshop/
+
+2) Aplique o schema SQL (idempotente — pode rodar com segurança):
+   mysql -u usuario -p seu_banco < INSTALL/SQL/install.sql
+
+   Ou importe o arquivo INSTALL/SQL/install.sql pelo phpMyAdmin / DBeaver.
+
+3) Adicione no server.cfg:
+   ensure vhub_coinshop
+
+4) Configure permissões admin no server.cfg:
+   add_ace vhub.coinshop.admin allow
+   add_principal identifier.license:sua_license_here vhub.coinshop.admin
+
+   Ou crie o grupo no vhub_groups e adicione os admins lá.
+
+5) (Opcional) Configure webhooks Discord e bot token em:
+   shared/config.lua → VHubCoin.cfg.webhooks e VHubCoin.cfg.discordBotToken
+
+------------------------------------------------------------
+3. USO
+------------------------------------------------------------
+
+COMANDOS:
+  /coinshop         — abre/fecha a loja (também mapeado em F5)
+  /givecoins <id> <qtd>   — admin dá moedas a um jogador online
+  /setcoins <id> <qtd>    — admin define saldo absoluto
+  /coinshop_addcode <order> <coins>  — cria código Tebex (console/agent)
+
+TEST-DRIVE:
+  Botão "Test Drive" no card do veículo → isola em routing bucket
+  próprio por 10 segundos (configurável em shared/config.lua).
+
+RESGATE TEBEX:
+  Após compra de pacote de moedas no site Tebex, o agente automático
+  executa `coinshop_addcode <order_id> <coins>` (ou você roda manualmente).
+  O jogador resgata pelo painel "Resgatar" da NUI.
+
+------------------------------------------------------------
+4. CONFIGURAÇÃO
+------------------------------------------------------------
+
+Edite shared/config.lua:
+
+  VHubCoin.cfg.debug            — liga logs de depuração (false em produção)
+  VHubCoin.cfg.command          — comando para abrir a loja (padrão: 'coinshop')
+  VHubCoin.cfg.key              — tecla de atalho (padrão: 'F5')
+  VHubCoin.cfg.testDriveDuration — segundos do test-drive (padrão: 10)
+  VHubCoin.cfg.rates            — rate-limit por ação (anti-spam, L-18)
+  VHubCoin.cfg.adminPermission  — permissão ACE exigida (padrão: 'coinshop.admin')
+  VHubCoin.cfg.discordBotToken  — bot token para avatar Discord (opcional)
+  VHubCoin.cfg.webhooks         — URLs de webhook Discord (purchases/redeems/admin)
+  VHubCoin.cfg.logo             — URL do logo exibido no cabeçalho
+
+------------------------------------------------------------
+5. ARQUITETURA (resumo)
+------------------------------------------------------------
+
+Estrutura por responsabilidade (manual vHub §1):
+
+  shared/   — config, events (registro único), utils (locale PT-BR + helpers)
+  server/   — núcleo autoritativo (sql, core, init, coins, items, purchases,
+              discord, webhooks, testdrive, commands, exports)
+  client/   — HAL (init, nui, testdrive, vehicle_spawn)
+  nui/      — interface Liquid Glass (index.html, css/style.css, js/app.js)
+  sql/      — schema.sql (idempotente)
+  INSTALL/  — este guia + SQL de instalação e drop
+
+Ownership (Registro):
+  - Moedas:        CData key 'coinshop_coins' (vhub_coinshop é escritor único)
+  - Settings UI:   GData key 'coinshop_ui_settings' (JSON blob)
+  - Itens/Categorias/Ofertas/Compras/Códigos/Resgates: tabelas vhub_coinshop_*
+
+Contratos de escrita usados:
+  - exports.vhub:setCData/getCData    (moedas e settings)
+  - exports.vhub_inventory:giveItem/giveWeapon  (entrega de itens)
+  - exports.vhub_conce:registerVehicle          (registro de veículo comprado)
+  - exports.vhub_player_state:teleport           (teleport do test-drive)
+  - exports.vhub_groups:hasPermission            (checagem admin)
+  - exports.vhub:notify                          (notificações ao jogador)
+
+------------------------------------------------------------
+6. PERFORMANCE
+------------------------------------------------------------
+
+Orçamentos honrados (CLAUDE.md L-18):
+
+  ✓ Server idle:        0.00 ms (sem loop, só event-driven)
+  ✓ Server ativo:       < 0.10 ms p95 (compra/resgate atômicos)
+  ✓ Client idle:        0.00 ms (sem thread quando NUI fechada)
+  ✓ NUI fechada:        0.00 ms (countdown e RAF mortos no onHide)
+  ✓ Rate-limit O(1)     por (src, ação) — anti-spam sem iterar players
+  ✓ Cache VRAM-first    (moedas em memória; CData batch-persiste)
+  ✓ Batch SQL           (apenas audit; leitura de catálogo em cache)
+  ✓ Sem broadcast -1    (eventos discretos a um src; State Bag não necessário)
+  ✓ Replay-safe L-17    (characterLoad/playerSpawn toleram re-disparo)
+
+------------------------------------------------------------
+7. SEGURANÇA
+------------------------------------------------------------
+
+  ✓ Server-authoritative: saldo, itens, permissão — tudo no servidor
+  ✓ Shape validation: todo payload de NUI validado antes do domínio
+  ✓ Rate-limit: todas as ações de cliente têm intervalo mínimo
+  ✓ Lock anti-double-spend: char_id em lock durante compra
+  ✓ Refund atômico: falha na entrega → crédito devolvido
+  ✓ Exports gated: _invoker_allowed + GetInvokingResource
+  ✓ Webhook audit: purchases, redeems, admin actions logadas
+  ✓ Idempotência: redeem code usa UPDATE condicional (status='pending')
+
+------------------------------------------------------------
+8. ROLLBACK (1 linha)
+------------------------------------------------------------
+
+Para reverter completamente:
+
+  stop vhub_coinshop
+  mysql -u usuario -p seu_banco < INSTALL/SQL/drop.sql
+  rm -rf resources/[SCRIPTS]/vhub_coinshop
+
+------------------------------------------------------------
+9. SUPORTE
+------------------------------------------------------------
+
+Consulte o manual vHub (manual_dev_vhub.md) e o CLAUDE.md para
+detalhes das leis L-01..L-19 e o protocolo de agentes.
+
+— vHub Mirage • 2026

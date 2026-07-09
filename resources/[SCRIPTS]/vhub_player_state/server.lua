@@ -49,11 +49,27 @@ end
 
 -- invocador confiável do export de atividade (default-deny; vazio = só interno).
 -- NÃO popular sem o arquiteto registrar ownership de cada membro (L-07).
-local BUCKET_TRUSTED = {}
+-- consumidores autorizados do setActivityBucket (decisão #35 — export-first gated)
+local BUCKET_TRUSTED = { ['vhub_coinshop'] = true }
 local function invokerOK()
   local who = GetInvokingResource()
   if not who or who == GetCurrentResourceName() then return true end
   return BUCKET_TRUSTED[who] == true
+end
+
+-- exports de MUTAÇÃO do ped (armas/vida/colete/custom/teleport) — default-deny ESTRITO.
+-- Diferente do invokerOK acima: aqui invoker nil/vazio (ex.: chamada client, que NÃO
+-- alcança export server no FiveM) é NEGADO — esses exports só valem server→server com
+-- src explícito. Sem isso, qualquer resource injeta arma/cura em ped alheio (L-07/segurança).
+local PED_TRUSTED = {
+  ['vhub_groups']       = true,   -- armas de polícia no onjoin
+  ['vhub_coinshop']     = true,   -- armas compradas + teleport do test-drive
+  ['vhub_admin']        = true,   -- ferramentas de staff
+  ['vhub_spawselector'] = true,   -- teleport de spawn
+}
+local function pedInvokerOK()
+  local who = GetInvokingResource()
+  return who ~= nil and who ~= '' and PED_TRUSTED[who] == true
 end
 
 -- ── Inicialização ─────────────────────────────────────────────────────────────
@@ -287,25 +303,49 @@ exports("setActivityBucket", function(src, n)
   return true
 end)
 
--- Dá armas (chamado por vhub_groups no onjoin da polícia, etc.)
+-- Dá armas (chamado por vhub_groups no onjoin da polícia, etc.) — gated + alvo online
 exports("giveWeapons", function(src, weapons, clear_before)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or type(weapons) ~= "table" or not (_pronto and _vHub.Auth:getUser(src)) then return false end
   TriggerClientEvent("vhub_player_state:give_weapons", src, weapons, clear_before == true)
+  return true
 end)
 
 exports("setArmour", function(src, amount)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
   TriggerClientEvent("vhub_player_state:set_armour", src, tonumber(amount) or 0)
+  return true
 end)
 
 exports("setHealth", function(src, amount)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
   TriggerClientEvent("vhub_player_state:set_health", src, tonumber(amount) or 200)
+  return true
 end)
 
 exports("setCustomization", function(src, custom)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
   TriggerClientEvent("vhub_player_state:set_customization", src, custom)
+  return true
 end)
 
+-- teleporta o ped (escritor único de posição de spawn — L-16) — gated + alvo online.
+-- coords chegam como primitivos {x,y,z,heading} (L-19); chamada SÓ server→server com src.
 exports("teleport", function(src, x, y, z, heading)
-  TriggerClientEvent("vhub_player_state:teleport", src, x, y, z, heading)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
+  x, y, z = tonumber(x), tonumber(y), tonumber(z)
+  if not (x and y and z) then return false end
+  TriggerClientEvent("vhub_player_state:teleport", src, x, y, z, tonumber(heading) or 0.0)
+  return true
 end)
 
 exports("getPosition", function(src)

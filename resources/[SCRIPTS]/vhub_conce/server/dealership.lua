@@ -81,6 +81,54 @@ end
 
 
 -- ============================================================
+-- CONCEDER SEM COBRAR (grantVehicle — decisão arquiteto/coinshop)
+-- ============================================================
+
+-- concede um veículo do catálogo SEM cobrança — o PAGAMENTO é responsabilidade do
+-- CHAMADOR (ex.: coinshop debita moedas e estorna se aqui falhar). Mesmo fluxo do
+-- buy sem pay/estoque/tipo-de-loja: placa → chave-item → registro → owner key.
+-- Retorno estruturado { ok, plate?, code?, msg? } p/ o chamador decidir o estorno.
+function VHubConce.grantVehicle(src, model)
+  local cid = Core:getCharId(src)
+  if not cid then return { ok = false, code = 'offline', msg = 'Jogador sem personagem.' } end
+
+  local entry = VHubConce.catalog[model]
+  if not entry then return { ok = false, code = 'model_invalid', msg = 'Modelo inválido.' } end
+
+  if SQL:ownedCount(cid) >= CFG.max_veiculos_player then
+    return { ok = false, code = 'limit',
+      msg = ('Limite de %d veículos atingido.'):format(CFG.max_veiculos_player) }
+  end
+
+  local plate = Core:newPlate(nil)
+  if not plate then return { ok = false, code = 'plate_fail', msg = 'Falha ao gerar placa.' } end
+
+  if not Core.giveKeyItem(src, plate) then
+    return { ok = false, code = 'inventory_full', msg = 'Inventário cheio.' }
+  end
+
+  local now = os.time()
+  local created = SQL:createVehicle({
+    plate = plate, model = model, vtype = entry.tipo, category = entry.categoria,
+    char_id = cid, status = 'garage',
+    customization = U.jenc({ model = model }), locked = false, position = nil,
+    ipva_paid_until = now + CFG.ipva_dias * 86400,
+    purchase_price = 0, purchase_at = now, last_seen_at = now,
+  })
+  if not created then
+    Core.takeKeyItem(src, plate)
+    return { ok = false, code = 'sql_fail', msg = 'Falha ao registrar veículo.' }
+  end
+
+  SQL:grantKey(plate, cid, 'owner', cid, nil)
+  Core:log(plate, 'grant', cid, { model = model, origin = GetInvokingResource() or 'conce' })
+
+  return { ok = true, plate = plate, model = model,
+    msg = ('%s concedido. Placa: %s. Chave no inventário!'):format(entry.nome, plate) }
+end
+
+
+-- ============================================================
 -- VENDER PARA A LOJA
 -- ============================================================
 

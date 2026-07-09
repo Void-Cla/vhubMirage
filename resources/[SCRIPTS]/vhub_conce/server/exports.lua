@@ -152,6 +152,23 @@ exports('buy',        function(src, model, placa, conc) if not _invoker_allowed(
 exports('sellToShop', function(src, plate)              if not _invoker_allowed() then return { ok = false } end return VHubConce.sellToShop(src, plate)        end)
 exports('testDrive',  function(src, model, conc)        if not _invoker_allowed() then return { ok = false } end return VHubConce.testDrive(src, model, conc)   end)
 
+-- concede veículo SEM cobrar (pagamento é do CHAMADOR — coinshop moedas/admin).
+-- assinatura: grantVehicle(src, model) — SEM placa custom (sem taxa → sem personalização).
+-- GRANT_TRUSTED é lista SEPARADA por design; NÃO herda da lista TRUSTED global
+-- (só quem vende por outra moeda entra aqui — não misturar com leitores read-only).
+local GRANT_TRUSTED = { ['vhub_coinshop'] = true, ['vhub_admin'] = true }
+exports('grantVehicle', function(src, model)
+  local caller = GetInvokingResource()
+  if caller and caller ~= GetCurrentResourceName() and not GRANT_TRUSTED[caller] then
+    return { ok = false, code = 'forbidden' }
+  end
+  src = tonumber(src)
+  if not src or type(model) ~= 'string' or model == '' then
+    return { ok = false, code = 'bad_args' }
+  end
+  return VHubConce.grantVehicle(src, model)
+end)
+
 
 -- ============================================================
 -- ZONAS (config de localização — dono desde a decisão #25)

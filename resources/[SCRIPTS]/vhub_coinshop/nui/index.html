@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vHub Coinshop</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- ============================================================
+         RAIZ — oculta por padrão; exibida quando server envia `open`
+         ============================================================ -->
+    <div id="app" class="app hidden">
+
+      <!-- superfície Liquid Glass (receita B: vidro simulado, sem backdrop-filter sobre o jogo) -->
+      <div class="surface">
+
+        <!-- ============================================================
+             CABEÇALHO — logo + navegação + resgate + admin + jogador + moedas
+             ============================================================ -->
+        <header class="header">
+          <div class="brand">
+            <img id="shop-logo" class="brand-logo" alt="vHub" src="" />
+          </div>
+
+          <nav id="nav-container" class="nav"></nav>
+
+          <div class="header-actions">
+            <button id="redeem-btn" class="btn btn-ghost" data-action="showOverlay" data-overlay="redeem">
+              <span class="btn-icon" data-svg="redeem"></span>
+              <span id="nav-redeem-text">Resgatar</span>
+            </button>
+
+            <button id="admin-btn" class="btn btn-ghost hidden" data-action="showOverlay" data-overlay="admin">
+              <span class="btn-icon" data-svg="admin"></span>
+              <span>Admin</span>
+            </button>
+
+            <div class="player-chip">
+              <img id="player-avatar" class="avatar" alt="" src="" onerror="this.style.display='none'" />
+              <span id="player-name" class="player-name">Jogador</span>
+            </div>
+
+            <div class="coins-chip">
+              <img class="coin-icon" alt="" src="" id="coin-icon-header" />
+              <span id="player-coins-nav">0</span>
+            </div>
+
+            <button id="close-btn" class="btn btn-icon-only" data-action="closeShop" title="Fechar">
+              <span class="btn-icon" data-svg="close"></span>
+            </button>
+          </div>
+        </header>
+
+        <!-- ============================================================
+             PÁGINAS — home / tutorial / categorias dinâmicas
+             ============================================================ -->
+        <main id="pages-container" class="pages">
+
+          <!-- HOME -->
+          <section id="home-page" class="page">
+            <div class="page-head">
+              <div>
+                <h2 class="page-title" data-i18n="ui_browse_items">Explorar Itens</h2>
+                <p class="page-sub" data-i18n="ui_explore_items">Explore todos os itens disponíveis.</p>
+              </div>
+              <div class="search-box">
+                <span class="btn-icon" data-svg="search"></span>
+                <input type="text" id="home-search" class="search-input" data-i18n-placeholder="ui_search_placeholder" placeholder="Pesquisar item aqui ..." oninput="window.__coinshop.filterItems('home')" />
+              </div>
+            </div>
+            <div id="home-grid" class="grid"></div>
+          </section>
+
+          <!-- TUTORIAL -->
+          <section id="tutorial-page" class="page hidden">
+            <div class="page-head">
+              <div>
+                <h2 class="page-title" data-i18n="ui_tutorial">Tutorial</h2>
+                <p class="page-sub" data-i18n="ui_tutorial_desc">Esta seção mostrará tudo que você precisa saber sobre como usar este sistema</p>
+              </div>
+            </div>
+            <div class="tutorial-steps">
+              <div class="tutorial-step">
+                <div class="step-badge">1</div>
+                <h3 data-i18n="ui_step_1">Passo 1</h3>
+                <p data-i18n="ui_tutorial_step_1">Primeiro obtenha o TBX ID aqui:</p>
+              </div>
+              <div class="tutorial-step">
+                <div class="step-badge">2</div>
+                <h3 data-i18n="ui_step_2">Passo 2</h3>
+                <p data-i18n="ui_tutorial_step_2">Quando tiver o TBX ID, vá para resgatar e cole o TBX ID na caixa de resgate</p>
+              </div>
+              <div class="tutorial-step">
+                <div class="step-badge">3</div>
+                <h3 data-i18n="ui_step_3_title">Passo 3 - Como Presentear</h3>
+                <p data-i18n="ui_tutorial_step_3">Opcionalmente, se quiser presentear alguém, clique em "Presentear Alguém". A pessoa deve estar online.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- categorias dinâmicas são inseridas aqui pelo JS -->
+        </main>
+
+        <!-- ============================================================
+             TRENDING BANNER — ofertas ativas em destaque
+             ============================================================ -->
+        <div id="trending-deal-banner" class="trending-banner hidden">
+          <div class="trending-left">
+            <span class="btn-icon deal-fire" data-svg="fire"></span>
+            <div>
+              <div class="trending-title" data-i18n="ui_active_deals">Ofertas Ativas</div>
+              <div id="trending-deal-name" class="trending-name"></div>
+            </div>
+          </div>
+          <div id="deal-timer" class="trending-timer">00H 00M 00S</div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           OVERLAYS — pagamento / resgate / admin / compra de oferta
+           ============================================================ -->
+
+      <!-- PAGAMENTO (compra de item) -->
+      <div id="payment-overlay" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_confirm_payment">Confirmar Pagamento</h3>
+          <p class="modal-sub" data-i18n="ui_confirm_question">Tem certeza que deseja confirmar?</p>
+          <div class="modal-row">
+            <div class="modal-item-preview">
+              <img id="payment-image" alt="" src="" />
+              <div>
+                <div id="payment-item-name" class="modal-item-name"></div>
+                <div id="payment-item-price" class="modal-item-price"></div>
+              </div>
+            </div>
+            <div class="modal-coins">
+              <span data-i18n="ui_coins">Moedas</span>
+              <strong id="payment-coins">0</strong>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="payment" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-purchase-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
+            <button id="test-drive-btn" class="btn btn-secondary hidden" data-i18n="ui_test_drive">Test Drive</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESGATE -->
+      <div id="redeem-overlay" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_redeem_settings">Configurações de Resgate</h3>
+          <p class="modal-sub" data-i18n="ui_redeem_desc">Insira seu número de pedido Tebex para resgatar moedas.</p>
+
+          <div class="redeem-modes">
+            <button id="redeem-self-btn" class="btn btn-toggle active" data-mode="self" data-i18n="ui_redeem_yourself">Resgatar Para Você</button>
+            <button id="redeem-gift-btn" class="btn btn-toggle" data-mode="gift" data-i18n="ui_gift_someone">Presentear Alguém</button>
+          </div>
+
+          <div id="player-id-field" class="form-field hidden">
+            <label data-i18n="ui_player_id">ID do Jogador</label>
+            <input type="number" id="redeem-player-id" data-i18n-placeholder="ui_enter_player_id" placeholder="Digite o ID do jogador ..." />
+          </div>
+
+          <div class="form-field">
+            <label data-i18n="ui_enter_redeem_key">Digite a Chave de Resgate</label>
+            <input type="text" id="redeem-key-input" data-i18n-placeholder="ui_redeem_placeholder" placeholder="tbx-xxxxxxxxxxxxx-xxxxxx" />
+          </div>
+
+          <div class="modal-coins">
+            <span data-i18n="ui_coins">Moedas</span>
+            <strong id="redeem-coins">0</strong>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="redeem" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-redeem-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN -->
+      <div id="admin-overlay" class="overlay hidden">
+        <div class="modal modal-wide">
+          <div class="modal-head">
+            <h3 class="modal-title" data-i18n="ui_admin_panel">Painel Admin</h3>
+            <button class="btn btn-icon-only" data-action="hideOverlay" data-overlay="admin" title="Fechar">
+              <span class="btn-icon" data-svg="close"></span>
+            </button>
+          </div>
+
+          <div class="admin-tabs">
+            <button class="admin-tab-btn active" data-tab="admin-center" data-i18n="ui_admin_center">Centro Admin</button>
+            <button class="admin-tab-btn" data-tab="creator-center" data-i18n="ui_creator_center">Centro do Criador</button>
+            <button class="admin-tab-btn" data-tab="player-management" data-i18n="ui_player_management">Gerenciamento de Jogadores</button>
+            <button class="admin-tab-btn" data-tab="customize-ui" data-i18n="ui_customize_ui">Personalizar Interface</button>
+          </div>
+
+          <!-- ABA: admin-center (stats + transações + top-selling) -->
+          <div id="admin-center-tab" class="admin-tab">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label" data-i18n="ui_total_packages">Total de Pacotes</div>
+                <div id="stat-total-packages" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label" data-i18n="ui_total_sales">Total de Vendas</div>
+                <div id="stat-total-sales" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label" data-i18n="ui_coins_spent_24h">Moedas Gastas (24h)</div>
+                <div id="stat-coins-24h" class="stat-value">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label" data-i18n="ui_active_players">Jogadores Ativos</div>
+                <div id="stat-active-players" class="stat-value">0</div>
+              </div>
+            </div>
+            <div class="admin-cols">
+              <div class="admin-col">
+                <h4 data-i18n="ui_recent_transactions">Transações Recentes</h4>
+                <div id="recent-transactions" class="data-list"></div>
+              </div>
+              <div class="admin-col">
+                <h4 data-i18n="ui_top_selling">Mais Vendidos</h4>
+                <div id="top-selling" class="data-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA: creator-center (CRUD itens/categorias/ofertas) -->
+          <div id="creator-center-tab" class="admin-tab hidden">
+            <div class="creator-actions">
+              <button class="btn btn-primary" data-action="showCreateItem" data-i18n="ui_create_package">+ Criar Pacote</button>
+              <button class="btn btn-primary" data-action="showCreateCategory" data-i18n="ui_create_category">+ Criar Categoria</button>
+              <button class="btn btn-primary" data-action="showCreateDeal" data-i18n="ui_create_deal">+ Criar Oferta Especial</button>
+            </div>
+
+            <h4 data-i18n="ui_custom_categories">Categorias Personalizadas</h4>
+            <div id="creator-categories" class="data-list"></div>
+
+            <h4 data-i18n="ui_active_deals">Ofertas Ativas</h4>
+            <div id="creator-deals" class="data-list"></div>
+
+            <h4 data-i18n="ui_existing_packages">Pacotes Existentes</h4>
+            <div id="creator-packages" class="data-list"></div>
+
+            <button class="btn btn-danger" data-action="showClearAll" data-i18n="ui_clear_all">Limpar Todos os Pacotes, Categorias e Ofertas</button>
+          </div>
+
+          <!-- ABA: player-management -->
+          <div id="player-management-tab" class="admin-tab hidden">
+            <div class="search-box">
+              <span class="btn-icon" data-svg="search"></span>
+              <input type="text" id="admin-player-search" data-i18n-placeholder="ui_search_player" placeholder="Pesquisar jogador por ID ou nome..." oninput="window.__coinshop.filterPlayers()" />
+            </div>
+            <button class="btn btn-secondary" data-action="refreshPlayers" data-i18n="ui_refresh">Atualizar</button>
+
+            <div class="admin-table">
+              <div class="admin-table-head">
+                <div data-i18n="ui_id">ID</div>
+                <div data-i18n="ui_name">Nome</div>
+                <div data-i18n="ui_coins">Moedas</div>
+                <div data-i18n="ui_actions">Ações</div>
+              </div>
+              <div id="admin-players-list"></div>
+            </div>
+
+            <h4 data-i18n="ui_activity_logs">Logs de Atividade</h4>
+            <div id="activity-logs" class="data-list"></div>
+          </div>
+
+          <!-- ABA: customize-ui -->
+          <div id="customize-ui-tab" class="admin-tab hidden">
+            <h4 data-i18n="ui_colors">Cores</h4>
+            <div class="theme-grid">
+              <label data-i18n="ui_accent_color">Cor de Destaque</label>
+              <input type="text" id="theme-accentColor" />
+              <label data-i18n="ui_bg_color">Cor de Fundo</label>
+              <input type="text" id="theme-bgColor" />
+              <label data-i18n="ui_text_color">Cor do Texto</label>
+              <input type="text" id="theme-textColor" />
+              <label data-i18n="ui_error_color">Cor de Erro</label>
+              <input type="text" id="theme-errorColor" />
+              <label data-i18n="ui_card_border_color">Cor da Borda do Cartão</label>
+              <input type="text" id="theme-cardBorderColor" />
+
+              <h4 data-i18n="ui_background">Fundo</h4>
+              <label data-i18n="ui_image_url">URL da Imagem</label>
+              <input type="text" id="theme-bgImage" />
+              <label data-i18n="ui_opacity">Opacidade</label>
+              <input type="text" id="theme-bgOpacity" />
+              <label data-i18n="ui_blur">Desfoque</label>
+              <input type="text" id="theme-bgBlur" />
+
+              <h4 data-i18n="ui_cards">Cartões</h4>
+              <label data-i18n="ui_bg_opacity">Opacidade do Fundo</label>
+              <input type="text" id="theme-cardBgOpacity" />
+              <label data-i18n="ui_border_radius">Raio da Borda</label>
+              <input type="text" id="theme-cardBorderRadius" />
+
+              <h4 data-i18n="ui_coin_icon">Ícone da Moeda</h4>
+              <label data-i18n="ui_icon_url">URL do Ícone</label>
+              <input type="text" id="theme-coinIcon" />
+            </div>
+            <div class="modal-actions">
+              <button class="btn btn-ghost" data-action="resetSettings" data-i18n="ui_reset_defaults">Restaurar Padrões</button>
+              <button class="btn btn-primary" data-action="saveSettings" data-i18n="ui_save_settings">Salvar Configurações</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPRA DE OFERTA -->
+      <div id="deal-purchase-overlay" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_confirm_deal">Confirmar Compra da Oferta</h3>
+          <div id="deal-purchase-name" class="modal-item-name"></div>
+          <div id="deal-purchase-price" class="modal-item-price"></div>
+          <p class="modal-sub" data-i18n="ui_items_included">Itens incluídos:</p>
+          <div id="deal-purchase-items" class="deal-items"></div>
+          <div class="modal-coins">
+            <span data-i18n="ui_coins">Moedas</span>
+            <strong id="deal-purchase-coins">0</strong>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="deal-purchase" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-deal-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           MODAIS INTERNOS — criar/editar/deletar/oferta
+           ============================================================ -->
+
+      <!-- CRIAR/EDITAR ITEM -->
+      <div id="create-modal" class="overlay hidden">
+        <div class="modal modal-wide">
+          <div class="modal-head">
+            <h3 id="create-modal-title" class="modal-title" data-i18n="ui_create_package_title">Criar Pacote</h3>
+            <button class="btn btn-icon-only" data-action="hideCreateModal" title="Fechar">
+              <span class="btn-icon" data-svg="close"></span>
+            </button>
+          </div>
+          <div class="theme-grid">
+            <input type="hidden" id="create-id" />
+            <label data-i18n="ui_enter_name">Nome</label>
+            <input type="text" id="create-name" data-i18n-placeholder="ui_enter_name" />
+            <label data-i18n="ui_description">Descrição</label>
+            <textarea id="create-description" rows="2" data-i18n-placeholder="ui_enter_description"></textarea>
+            <label data-i18n="ui_price_coins">Preço (Moedas)</label>
+            <input type="number" id="create-price" min="0" data-i18n-placeholder="ui_enter_price" />
+            <label data-i18n="ui_type">Tipo</label>
+            <select id="create-category">
+              <option value="item" data-i18n="ui_item">Item</option>
+              <option value="vehicle" data-i18n="ui_vehicle">Veículo</option>
+              <option value="weapon" data-i18n="ui_weapon">Arma</option>
+              <option value="tool" data-i18n="ui_tool">Ferramenta</option>
+            </select>
+            <label data-i18n="ui_category">Categoria <span data-i18n="ui_category_optional">(opcional)</span></label>
+            <input type="hidden" id="create-custom-category" value="none" />
+            <div id="create-custom-category-select" class="custom-select">
+              <div class="custom-select-trigger" onclick="window.__coinshop.toggleCustomSelect('create-custom-category-select')">
+                <span class="cs-label" data-i18n="ui_none_default">Nenhum (Padrão)</span>
+                <span class="cs-chevron">▾</span>
+              </div>
+              <div class="custom-select-options"></div>
+            </div>
+
+            <!-- Campos condicionais por tipo -->
+            <div id="create-vehicle-fields" class="create-fields hidden">
+              <label data-i18n="ui_spawn_name">Nome de Spawn <span data-i18n="ui_spawn_hint">(nome do modelo GTA, ex: adder)</span></label>
+              <input type="text" id="create-spawnName" />
+            </div>
+            <div id="create-item-fields" class="create-fields hidden">
+              <label data-i18n="ui_item_name">Nome do Item <span data-i18n="ui_item_hint">(item do inventário)</span></label>
+              <input type="text" id="create-itemName" />
+              <label data-i18n="ui_count">Quantidade</label>
+              <input type="number" id="create-itemCount" min="1" value="1" />
+            </div>
+            <div id="create-weapon-fields" class="create-fields hidden">
+              <label data-i18n="ui_weapon_name">Nome da Arma <span data-i18n="ui_weapon_hint">(hash de arma GTA)</span></label>
+              <input type="text" id="create-weaponName" />
+            </div>
+
+            <label data-i18n="ui_tags">Tags (separadas por vírgula)</label>
+            <input type="text" id="create-tags" />
+            <label data-i18n="ui_icon">Imagem (URL)</label>
+            <input type="text" id="create-images" data-i18n-placeholder="ui_enter_image_url" />
+
+            <label class="checkbox-line">
+              <input type="checkbox" id="create-trending" />
+              <span data-i18n="ui_mark_trending">Marcar como Tendência</span>
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideCreateModal" data-i18n="ui_cancel">Cancelar</button>
+            <button id="save-item-btn" class="btn btn-primary" data-i18n="ui_save">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRIAR CATEGORIA -->
+      <div id="category-modal" class="overlay hidden">
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-title" data-i18n="ui_create_category">+ Criar Categoria</h3>
+            <button class="btn btn-icon-only" data-action="hideCategoryModal" title="Fechar">
+              <span class="btn-icon" data-svg="close"></span>
+            </button>
+          </div>
+          <div class="theme-grid">
+            <input type="hidden" id="category-id" />
+            <label data-i18n="ui_enter_name">Nome</label>
+            <input type="text" id="category-name" />
+            <label data-i18n="ui_icon">Ícone <span data-i18n="ui_icon_hint">(URL SVG ou imagem)</span></label>
+            <input type="text" id="category-icon" />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideCategoryModal" data-i18n="ui_cancel">Cancelar</button>
+            <button id="save-category-btn" class="btn btn-primary" data-i18n="ui_save">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRIAR OFERTA -->
+      <div id="deal-modal" class="overlay hidden">
+        <div class="modal modal-wide">
+          <div class="modal-head">
+            <h3 class="modal-title" data-i18n="ui_create_deal_title">Criar Oferta Especial</h3>
+            <button class="btn btn-icon-only" data-action="hideDealModal" title="Fechar">
+              <span class="btn-icon" data-svg="close"></span>
+            </button>
+          </div>
+          <div class="theme-grid">
+            <label data-i18n="ui_enter_deal_name">Nome</label>
+            <input type="text" id="deal-name" />
+            <label data-i18n="ui_description">Descrição</label>
+            <textarea id="deal-description" rows="2"></textarea>
+            <label data-i18n="ui_price_coins">Preço (Moedas)</label>
+            <input type="number" id="deal-price" min="0" />
+            <label data-i18n="ui_expires_in">Expira Em (segundos)</label>
+            <input type="number" id="deal-expires" min="60" />
+            <label data-i18n="ui_icon">Imagem (URL)</label>
+            <input type="text" id="deal-image" />
+            <label data-i18n="ui_select_items">Selecionar Itens (Máx 10)</label>
+            <div id="deal-items-picker" class="deal-items-picker"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideDealModal" data-i18n="ui_cancel">Cancelar</button>
+            <button id="save-deal-btn" class="btn btn-primary" data-i18n="ui_create">Criar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GIVE COINS -->
+      <div id="give-coins-modal" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_give_coins">Dar Moedas</h3>
+          <div class="theme-grid">
+            <label data-i18n="ui_id">ID</label>
+            <input type="number" id="give-target-id" readonly />
+            <label data-i18n="ui_amount">Quantidade</label>
+            <input type="number" id="give-amount" min="1" data-i18n-placeholder="ui_enter_amount" placeholder="Digite a quantidade..." />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideGiveCoinsModal" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-give-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SET COINS -->
+      <div id="set-coins-modal" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_set_coins">Definir Moedas</h3>
+          <div class="theme-grid">
+            <label data-i18n="ui_id">ID</label>
+            <input type="number" id="set-target-id" readonly />
+            <label data-i18n="ui_amount">Quantidade</label>
+            <input type="number" id="set-amount" min="0" data-i18n-placeholder="ui_enter_amount" placeholder="Digite a quantidade..." />
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideSetCoinsModal" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-set-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DELETE CONFIRM -->
+      <div id="delete-confirm-modal" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_confirm_delete">Confirmar Exclusão</h3>
+          <p id="delete-message" class="modal-sub"></p>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideDeleteConfirm" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-delete-btn" class="btn btn-danger" data-i18n="ui_delete">Excluir</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLEAR ALL CONFIRM -->
+      <div id="clear-all-modal" class="overlay hidden">
+        <div class="modal">
+          <h3 class="modal-title" data-i18n="ui_clear_all_title">Limpar Todos os Dados</h3>
+          <p class="modal-sub" data-i18n="ui_clear_all_msg">Isso excluirá permanentemente todos os pacotes, categorias e ofertas da loja. Esta ação não pode ser desfeita.</p>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" data-action="hideClearAll" data-i18n="ui_cancel">Cancelar</button>
+            <button id="confirm-clear-btn" class="btn btn-danger" data-i18n="ui_clear_everything">Limpar Tudo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOAST -->
+      <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>
