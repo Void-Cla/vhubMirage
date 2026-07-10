@@ -1,112 +1,917 @@
 /* ============================================================
-   vhub_coinshop — nui/js/app.js
+   vhub_coinshop — nui/js/app.js (PAINEL ADMIN /coinshop, decisão #59)
    Lifecycle A-02: onInit / onShow / onHide / onDestroy
-   A-07: cleanup obrigatório (RAF/interval/listener/observer)
-   A-08: idle 0ms com NUI fechada — countdown só roda quando visível
-   A-10: sem CDN, sem fetch externo, todos os ícones SVG inline
+   A-07: cleanup obrigatório (listener/timeout; ZERO interval/RAF)
+   A-08: idle 0ms com NUI fechada — sem timers; countdown de oferta é
+         texto ESTÁTICO calculado no render
+   A-10: sem CDN, sem fetch externo, ícones SVG inline
+   Anti-XSS: DOM construído com el()/textContent — NUNCA innerHTML
+   com dado vindo do servidor (a versão antiga usava e quebrava com
+   aspas em nomes; classe de bug eliminada).
    ============================================================ */
 
 (function () {
     'use strict';
 
     // ============================================================
-    // SLICE DE ESTADO (A-04 — dono único: este módulo)
+    // STATE — slice único do painel (A-04)
     // ============================================================
 
-    const state = {
-        shopItems: [],
-        customCategories: [],
+    var state = {
+        items: [],
+        categories: [],
         deals: [],
-        playerCoins: 0,
-        playerName: 'Jogador',
-        playerAvatar: '',
-        isAdmin: false,
-        currentPage: 'home',
-        redeemMode: 'self',
-        selectedItem: null,
-        selectedDeal: null,
-        dealResetHour: 0,
+        players: [],
+        history: [],
+        codes: [],
         settings: {},
-        locale: {},
-        logo: '',
-        // admin state
-        adminPlayers: [],
-        dealSelectedItems: [],
+        pix: { enabled: false, packages: [] },
+        playerName: '—',
+        coins: 0,
+        view: 'dash',
+        dataAt: 0,              // base do countdown estático das ofertas
+        // edição em curso
         editingItemId: null,
-        editingCategoryId: null,
+        editingCatId: null,
+        editingDealId: null,
+        dealSelected: [],
+        coinsMode: 'give',      // give | set
+        coinsTarget: null,      // { id, name }
+        confirm: null,          // { kind: 'item'|'cat'|'deal'|'code'|'clearAll', id }
+        codesLoaded: false,
     };
 
     // handles para cleanup (A-07)
-    let _countdownInterval = null;
-    let _messageHandler = null;
-    let _keydownHandler = null;
-    let _clickHandler = null;
-    let _toastTimeout = null;
-    let _isVisible = false;
-    let _destroyed = false;
+    var _messageHandler = null;
+    var _keydownHandler = null;
+    var _clickHandler = null;
+    var _toastTimeout = null;
 
-    // ============================================================
-    // ÍCONES SVG INLINE (sem CDN — A-10)
-    // ============================================================
-
-    const ICONS = {
-        coin: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'><circle cx='12' cy='12' r='10' fill='%23f3b53a'/><circle cx='12' cy='12' r='8' fill='none' stroke='%23a89572' stroke-width='1'/><text x='12' y='16.5' text-anchor='middle' font-family='Arial,sans-serif' font-weight='bold' font-size='12' fill='%230c0a06'>$</text></svg>",
-        home: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-4v-5a1 1 0 00-1-1h-2a1 1 0 00-1 1v5H5a1 1 0 01-1-1v-9.5z'/></svg>",
-        car: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M5 17h14M5 17a2 2 0 01-2-2v-3l2-4h10l2 4v3a2 2 0 01-2 2M5 17a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm14 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z'/><path d='M5 10h14'/></svg>",
-        box: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 8l-9-5-9 5v8l9 5 9-5V8z'/><path d='M3 8l9 5 9-5M12 13v8'/></svg>",
-        weapon: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='8'/><path d='M12 2v4M12 18v4M2 12h4M18 12h4'/><circle cx='12' cy='12' r='2'/></svg>",
-        tools: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3-3A6 6 0 0112.7 15L5.4 21.3a2 2 0 01-2.8-2.8L9 11.3A6 6 0 0114.7 6.3z'/></svg>",
-        tutorial: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M7 8h10M7 12h10M7 16h6'/></svg>",
-        redeem: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M2 9V6a1 1 0 011-1h18a1 1 0 011 1v3a2 2 0 100 4v3a1 1 0 01-1 1H3a1 1 0 01-1-1v-3a2 2 0 100-4z'/><path d='M9 12l2 2 4-4'/></svg>",
-        admin: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z'/></svg>",
-        close: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><path d='M18 6L6 18M6 6l12 12'/></svg>",
-        search: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a89572' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='M21 21l-4.35-4.35'/></svg>",
-        fire: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff9a1f'><path d='M12 23c-4.97 0-8-3.03-8-7 0-2.22.98-4.47 2.5-6.2.46-.52 1.23-.33 1.39.34.22.94.63 1.7 1.22 2.25C9.68 8.9 11.05 5.36 10.7 2.57a.83.83 0 011.4-.53c2.44 2.3 4.65 6.16 4.65 9.96 1.2-.84 1.67-2.36 1.75-3.62a.84.84 0 011.44-.5C21.23 9.17 22 11.55 22 14c0 5.52-4.48 9-10 9z'/></svg>",
-        gift: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9c19a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='10' width='18' height='11' rx='1'/><path d='M12 6a3 3 0 00-3-3c-1.66 0-3 1.34-3 3 0 2 3 3 3 3h6s3-1 3-3c0-1.66-1.34-3-3-3a3 3 0 00-3 3zM12 6v15'/><rect x='1' y='8' width='22' height='4' rx='1'/></svg>",
-        placeholder: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><rect width='200' height='200' fill='%231a1610'/><text x='100' y='105' text-anchor='middle' font-family='Arial,sans-serif' font-size='14' fill='%235a4a30'>Sem Imagem</text></svg>",
+    var VIEW_TITLE = {
+        dash: 'Dashboard', catalog: 'Catálogo', cats: 'Categorias',
+        deals: 'Ofertas & Combos', players: 'Jogadores', codes: 'Códigos',
+        pix: 'Pix', import: 'Importar Itens', theme: 'Aparência',
     };
 
-    // mapeamento de ícones por tipo de categoria (default)
-    const CATEGORY_ICONS = {
-        vehicles: ICONS.car,
-        items: ICONS.box,
-        weapons: ICONS.weapon,
-        tools: ICONS.tools,
-    };
+    var CAT_LABEL = { vehicle: 'Veículo', item: 'Item', weapon: 'Arma', tool: 'Ferramenta' };
+
 
     // ============================================================
     // HELPERS
     // ============================================================
 
-    function L(key) { return state.locale[key] || key; }
+    function $(sel) { return document.querySelector(sel); }
+    function ref(name) { return document.querySelector('[data-el="' + name + '"]'); }
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
+    // cria elemento + atrs + filhos; texto vira textNode (anti-XSS)
+    function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        if (attrs) {
+            for (var k in attrs) {
+                if (k === 'class') node.className = attrs[k];
+                else node.setAttribute(k, attrs[k]);
+            }
+        }
+        if (children != null) {
+            var arr = Array.isArray(children) ? children : [children];
+            for (var i = 0; i < arr.length; i++) {
+                var c = arr[i];
+                if (c == null) continue;
+                node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+            }
+        }
+        return node;
     }
 
-    // POST para o resource FiveM (callback NUI)
+    function fmt(n) { return (parseInt(n, 10) || 0).toLocaleString('pt-BR'); }
+
+    function fmtBRL(n) {
+        return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    // tempo restante legível (estático no render — sem timer, A-08)
+    function remainTxt(totalSec) {
+        var s = Math.max(0, Math.floor(totalSec));
+        if (s === 0) return 'expirada';
+        var h = Math.floor(s / 3600);
+        var m = Math.floor((s % 3600) / 60);
+        return h > 0 ? 'expira em ' + h + 'h ' + m + 'm' : 'expira em ' + m + 'm';
+    }
+
+    // POST para o resource (callback NUI); sempre resolve {ok, data?, err?}
     function nuiPost(action, data) {
         return fetch('https://vhub_coinshop/' + action, {
             method: 'POST',
             body: JSON.stringify(data || {}),
-        }).then(function (r) { return r.json(); }).catch(function (err) {
+        }).then(function (r) { return r.json(); }).catch(function () {
             return { ok: false, err: 'network_error' };
         });
     }
 
-    // lib.callback wrapper (cliente aguarda resposta) — via NUI post → cliente lua
-    function nuiCallback(action, data) {
-        return nuiPost(action, data);
+    function toast(message, kind) {
+        var t = ref('toast');
+        if (!t) return;
+        t.textContent = message;
+        t.className = 'csa-toast' + (kind ? ' ' + kind : '');
+        if (_toastTimeout) clearTimeout(_toastTimeout);
+        _toastTimeout = setTimeout(function () { t.classList.add('hidden'); _toastTimeout = null; }, 4000);
     }
 
-    function $(id) { return document.getElementById(id); }
-    function $$(sel) { return document.querySelectorAll(sel); }
+    // aplica listas frescas devolvidas pelo server pós-CRUD (mata o stale — #59)
+    function absorbLists(d) {
+        if (!d) return;
+        if (Array.isArray(d.items)) state.items = d.items;
+        if (Array.isArray(d.categories)) state.categories = d.categories;
+        if (Array.isArray(d.deals)) { state.deals = d.deals; state.dataAt = Date.now(); }
+        if (Array.isArray(d.codes)) state.codes = d.codes;
+    }
 
-    function formatNumber(n) {
-        return (parseInt(n, 10) || 0).toLocaleString('pt-BR');
+
+    // ============================================================
+    // NAVEGAÇÃO ENTRE VIEWS
+    // ============================================================
+
+    function showView(view) {
+        state.view = view;
+        var title = ref('viewTitle');
+        if (title) title.textContent = VIEW_TITLE[view] || view;
+
+        document.querySelectorAll('.csa-nav-btn').forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-view') === view);
+        });
+        document.querySelectorAll('[data-view-panel]').forEach(function (p) {
+            p.hidden = p.getAttribute('data-view-panel') !== view;
+        });
+
+        if (view === 'dash') loadDashboard();
+        if (view === 'catalog') renderCatalog();
+        if (view === 'cats') renderCats();
+        if (view === 'deals') renderDeals();
+        if (view === 'players') loadPlayers();
+        if (view === 'codes') loadCodes();
+        if (view === 'pix') renderPix();
+        if (view === 'import') initImport();
+        if (view === 'theme') populateTheme();
+    }
+
+
+    // ============================================================
+    // DASHBOARD
+    // ============================================================
+
+    function loadDashboard() {
+        nuiPost('getAdminStats').then(function (res) {
+            if (!res || !res.ok || !res.data) return;
+            var d = res.data;
+            ref('statPackages').textContent = fmt(d.totalPackages);
+            ref('statSales').textContent = fmt(d.totalSales);
+            ref('statCoins24h').textContent = fmt(d.coinsSpent24h);
+            ref('statPlayers').textContent = fmt(d.activePlayers);
+        });
+        nuiPost('getRecentTransactions').then(function (res) {
+            if (!res || !res.ok || !Array.isArray(res.data)) return;
+            renderSimpleRows(ref('recentTx'), res.data, function (t) {
+                return [el('span', { class: 'grow' }, String(t.itemName || t.itemId || '—')),
+                        el('span', { class: 'num' }, fmt(t.price))];
+            }, 'Nenhuma transação ainda.');
+        });
+        nuiPost('getTopSelling').then(function (res) {
+            if (!res || !res.ok || !Array.isArray(res.data)) return;
+            renderSimpleRows(ref('topSelling'), res.data, function (t) {
+                return [el('span', { class: 'grow' }, String(t.name || '—')),
+                        el('span', { class: 'num' }, fmt(t.sales) + 'x')];
+            }, 'Nenhuma venda ainda.');
+        });
+    }
+
+    function renderSimpleRows(container, list, rowFn, emptyMsg) {
+        if (!container) return;
+        if (!list.length) {
+            container.replaceChildren(el('div', { class: 'csa-empty' }, emptyMsg));
+            return;
+        }
+        container.replaceChildren.apply(container, list.map(function (item) {
+            return el('div', { class: 'csa-row' }, rowFn(item));
+        }));
+    }
+
+
+    // ============================================================
+    // CATÁLOGO — lista + CRUD de itens
+    // ============================================================
+
+    function renderCatalog() {
+        var listEl = ref('catalogList');
+        if (!listEl) return;
+        var q = (ref('catalogSearch').value || '').trim().toLowerCase();
+        var list = state.items;
+        if (q) {
+            list = list.filter(function (i) {
+                return (i.name || '').toLowerCase().indexOf(q) >= 0 ||
+                       (i.category || '').toLowerCase().indexOf(q) >= 0 ||
+                       (Array.isArray(i.tags) && i.tags.some(function (t) { return String(t).toLowerCase().indexOf(q) >= 0; }));
+            });
+        }
+        if (!list.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhum item no catálogo.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, list.map(function (i) {
+            return el('div', { class: 'csa-row' }, [
+                el('span', { class: 'csa-badge' + (i.trending ? ' gold' : '') }, CAT_LABEL[i.category] || 'Item'),
+                el('span', { class: 'grow' }, [
+                    String(i.name || '—') + ' ',
+                    el('small', {}, '(' + String(i.id) + ')'),
+                ]),
+                el('span', { class: 'num' }, fmt(i.price) + ' moedas'),
+                el('button', { class: 'csa-btn mini', 'data-act': 'editItem', 'data-id': i.id }, 'Editar'),
+                el('button', { class: 'csa-btn mini danger ghost', 'data-act': 'delItem', 'data-id': i.id }, 'Excluir'),
+            ]);
+        }));
+    }
+
+    function itemModalField(name) { return $('[data-modal="item"] [data-f="' + name + '"]'); }
+
+    function applyCategoryConditionals() {
+        var cat = itemModalField('category').value;
+        document.querySelectorAll('[data-modal="item"] [data-cond]').forEach(function (f) {
+            f.hidden = f.getAttribute('data-cond').split(' ').indexOf(cat) < 0;
+        });
+    }
+
+    function openItemModal(itemId) {
+        state.editingItemId = itemId || null;
+        var item = itemId ? state.items.find(function (i) { return i.id === itemId; }) : null;
+        ref('itemModalTitle').textContent = item ? 'Editar item' : 'Novo item';
+
+        itemModalField('id').value = item ? item.id : '';
+        itemModalField('id').disabled = !!item;
+        itemModalField('name').value = item ? (item.name || '') : '';
+        itemModalField('description').value = item ? (item.description || '') : '';
+        itemModalField('price').value = item ? (item.price || 0) : '';
+        itemModalField('category').value = item ? (item.category || 'item') : 'item';
+        itemModalField('spawnName').value = item ? (item.spawnName || '') : '';
+        itemModalField('itemName').value = item ? (item.itemName || '') : '';
+        itemModalField('itemCount').value = item ? (item.itemCount || 1) : 1;
+        itemModalField('weaponName').value = item ? (item.weaponName || '') : '';
+        itemModalField('tags').value = item && Array.isArray(item.tags) ? item.tags.join(', ') : '';
+        itemModalField('images').value = item && Array.isArray(item.images) ? item.images.join(', ') : '';
+        itemModalField('trending').checked = !!(item && item.trending);
+
+        // categorias custom no select
+        var sel = itemModalField('customCategory');
+        sel.replaceChildren(el('option', { value: '' }, 'Nenhuma'));
+        state.categories.forEach(function (c) {
+            if (c.type) return; // padrão não é custom
+            var opt = el('option', { value: c.id }, String(c.name));
+            sel.appendChild(opt);
+        });
+        sel.value = (item && item.customCategory) || '';
+
+        applyCategoryConditionals();
+        updateItemImgPreview();
+        openModal('item');
+    }
+
+    // atualiza preview das imagens do modal de item (sem innerHTML — anti-XSS via src)
+    function updateItemImgPreview() {
+        var preview = ref('itemImgPreview');
+        if (!preview) return;
+        var raw = itemModalField('images').value || '';
+        var urls = raw.split(',').map(function (u) { return u.trim(); }).filter(Boolean);
+        if (!urls.length) { preview.hidden = true; preview.replaceChildren(); return; }
+        preview.replaceChildren.apply(preview, urls.map(function (u) {
+            var img = document.createElement('img');
+            img.alt = '';
+            img.src = u;
+            img.onerror = function () { img.style.opacity = '0.3'; };
+            return img;
+        }));
+        preview.hidden = false;
+    }
+
+    function saveItem() {
+        var data = {
+            id: state.editingItemId || itemModalField('id').value.trim() || undefined,
+            name: itemModalField('name').value.trim(),
+            description: itemModalField('description').value.trim(),
+            price: parseInt(itemModalField('price').value, 10) || 0,
+            category: itemModalField('category').value,
+            spawnName: itemModalField('spawnName').value.trim(),
+            itemName: itemModalField('itemName').value.trim(),
+            itemCount: parseInt(itemModalField('itemCount').value, 10) || 1,
+            weaponName: itemModalField('weaponName').value.trim(),
+            tags: itemModalField('tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
+            images: itemModalField('images').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
+            trending: itemModalField('trending').checked,
+            customCategory: itemModalField('customCategory').value || '',
+        };
+        if (!data.name) { toast('Nome do item é obrigatório', 'error'); return; }
+
+        nuiPost(state.editingItemId ? 'adminEditItem' : 'adminCreateItem', data).then(function (res) {
+            if (res && res.ok) {
+                absorbLists(res.data);
+                toast((res.data && res.data.message) || 'Item salvo', 'success');
+                closeModals();
+                renderCatalog();
+            } else {
+                toast((res && res.err) || 'Erro ao salvar', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // CATEGORIAS
+    // ============================================================
+
+    function renderCats() {
+        var listEl = ref('catsList');
+        if (!listEl) return;
+        if (!state.categories.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhuma categoria.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, state.categories.map(function (c) {
+            var row = [
+                el('span', { class: 'csa-badge' + (c.type ? '' : ' gold') }, c.type ? 'Padrão' : 'Custom'),
+                el('span', { class: 'grow' }, String(c.name || c.id)),
+            ];
+            if (!c.type) { // só custom edita/apaga
+                row.push(el('button', { class: 'csa-btn mini', 'data-act': 'editCat', 'data-id': c.id }, 'Editar'));
+                row.push(el('button', { class: 'csa-btn mini danger ghost', 'data-act': 'delCat', 'data-id': c.id }, 'Excluir'));
+            }
+            return el('div', { class: 'csa-row' }, row);
+        }));
+    }
+
+    function catField(name) { return $('[data-modal="cat"] [data-f="' + name + '"]'); }
+
+    function openCatModal(catId) {
+        state.editingCatId = catId || null;
+        var cat = catId ? state.categories.find(function (c) { return c.id === catId; }) : null;
+        ref('catModalTitle').textContent = cat ? 'Editar categoria' : 'Nova categoria';
+        catField('catName').value = cat ? (cat.name || '') : '';
+        catField('catIcon').value = cat ? (cat.icon || '') : '';
+        openModal('cat');
+    }
+
+    function saveCat() {
+        var data = {
+            id: state.editingCatId || undefined,
+            name: catField('catName').value.trim(),
+            icon: catField('catIcon').value.trim(),
+        };
+        if (!data.name) { toast('Nome da categoria é obrigatório', 'error'); return; }
+        nuiPost(state.editingCatId ? 'adminEditCategory' : 'adminCreateCategory', data).then(function (res) {
+            if (res && res.ok) {
+                absorbLists(res.data);
+                toast((res.data && res.data.message) || 'Categoria salva', 'success');
+                closeModals();
+                renderCats();
+            } else {
+                toast((res && res.err) || 'Erro ao salvar', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // OFERTAS & COMBOS
+    // ============================================================
+
+    function renderDeals() {
+        var listEl = ref('dealsList');
+        if (!listEl) return;
+        if (!state.deals.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhuma oferta ativa.'));
+            return;
+        }
+        var elapsed = Math.floor((Date.now() - state.dataAt) / 1000);
+        listEl.replaceChildren.apply(listEl, state.deals.map(function (d) {
+            return el('div', { class: 'csa-row' }, [
+                el('span', { class: 'csa-badge gold' }, 'Combo'),
+                el('span', { class: 'grow' }, [
+                    String(d.name || '—') + ' ',
+                    el('small', {}, (d.items || []).length + ' item(ns) · ' + remainTxt((d.remainingSeconds || 0) - elapsed)),
+                ]),
+                el('span', { class: 'num' }, fmt(d.price) + ' moedas'),
+                el('button', { class: 'csa-btn mini', 'data-act': 'editDeal', 'data-id': d.id }, 'Editar'),
+                el('button', { class: 'csa-btn mini danger ghost', 'data-act': 'delDeal', 'data-id': d.id }, 'Excluir'),
+            ]);
+        }));
+    }
+
+    function dealField(name) { return $('[data-modal="deal"] [data-f="' + name + '"]'); }
+
+    function renderDealPicker() {
+        var picker = ref('dealPicker');
+        var countEl = ref('dealPickerCount');
+        if (countEl) countEl.textContent = String(state.dealSelected.length);
+
+        var q = (ref('dealPickerSearch') ? ref('dealPickerSearch').value || '' : '').trim().toLowerCase();
+        var list = state.items;
+        if (q) list = list.filter(function (i) { return (i.name || '').toLowerCase().indexOf(q) >= 0; });
+
+        if (!list.length) {
+            picker.replaceChildren(el('div', { class: 'csa-picker-empty' },
+                state.items.length ? 'Nenhum item corresponde à busca.' : 'Catálogo vazio — adicione itens primeiro.'));
+            return;
+        }
+
+        picker.replaceChildren.apply(picker, list.map(function (i) {
+            var sel = state.dealSelected.indexOf(i.id) >= 0;
+            return el('button', {
+                type: 'button',
+                class: 'csa-pick' + (sel ? ' selected' : ''),
+                'data-pick': i.id,
+                title: i.name || i.id,
+            }, [
+                el('span', {}, CAT_LABEL[i.category] ? CAT_LABEL[i.category][0] : '◆'),
+                String(i.name || i.id),
+            ]);
+        }));
+    }
+
+    function openDealModal(dealId) {
+        state.editingDealId = dealId || null;
+        var deal = dealId ? state.deals.find(function (d) { return d.id === dealId; }) : null;
+        ref('dealModalTitle').textContent = deal ? 'Editar oferta' : 'Nova oferta';
+        dealField('dealName').value = deal ? (deal.name || '') : '';
+        dealField('dealDesc').value = deal ? (deal.description || '') : '';
+        dealField('dealPrice').value = deal ? (deal.price || 0) : '';
+        dealField('dealHours').value = '';
+        dealField('dealImage').value = deal ? (deal.image || '') : '';
+        state.dealSelected = deal ? (deal.items || []).map(function (i) { return i.id; }) : [];
+        var search = ref('dealPickerSearch');
+        if (search) search.value = '';
+        renderDealPicker();
+        openModal('deal');
+    }
+
+    function saveDeal() {
+        var hours = parseInt(dealField('dealHours').value, 10) || 0;
+        var data = {
+            id: state.editingDealId || undefined,
+            name: dealField('dealName').value.trim(),
+            description: dealField('dealDesc').value.trim(),
+            price: parseInt(dealField('dealPrice').value, 10) || 0,
+            image: dealField('dealImage').value.trim(),
+            items: state.dealSelected.slice(),
+        };
+        if (hours > 0) data.expiresIn = hours * 3600;
+        if (!data.name) { toast('Nome da oferta é obrigatório', 'error'); return; }
+        if (!state.editingDealId && !data.expiresIn) { toast('Informe o prazo de expiração em horas', 'error'); return; }
+        if (!data.items.length || data.items.length > 10) { toast('Selecione 1 a 10 itens', 'error'); return; }
+
+        nuiPost(state.editingDealId ? 'adminEditDeal' : 'adminCreateDeal', data).then(function (res) {
+            if (res && res.ok) {
+                absorbLists(res.data);
+                toast((res.data && res.data.message) || 'Oferta salva', 'success');
+                closeModals();
+                renderDeals();
+            } else {
+                toast((res && res.err) || 'Erro ao salvar', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // JOGADORES — lista online + give/set + histórico
+    // ============================================================
+
+    function loadPlayers() {
+        nuiPost('getOnlinePlayers').then(function (res) {
+            if (!res || !res.ok || !Array.isArray(res.data)) return;
+            state.players = res.data;
+            renderPlayers();
+        });
+        nuiPost('getPurchaseHistory').then(function (res) {
+            if (!res || !res.ok || !Array.isArray(res.data)) return;
+            state.history = res.data;
+            renderSimpleRows(ref('historyList'), state.history, function (t) {
+                return [el('span', { class: 'grow' }, String(t.itemName || '—') + ' · char ' + String(t.charId)),
+                        el('span', { class: 'num' }, fmt(t.price))];
+            }, 'Nenhuma compra registrada.');
+        });
+    }
+
+    function renderPlayers() {
+        var listEl = ref('playersList');
+        if (!listEl) return;
+        var q = (ref('playerSearch').value || '').trim().toLowerCase();
+        var list = state.players;
+        if (q) {
+            list = list.filter(function (p) {
+                return String(p.id).indexOf(q) >= 0 || (p.name || '').toLowerCase().indexOf(q) >= 0;
+            });
+        }
+        if (!list.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhum jogador online.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, list.map(function (p) {
+            return el('div', { class: 'csa-row player' }, [
+                el('span', {}, String(p.id)),
+                el('span', { class: 'grow' }, String(p.name || '—')),
+                el('span', { class: 'num' }, fmt(p.coins)),
+                el('span', { class: 'csa-row-actions' }, [
+                    el('button', { class: 'csa-btn mini', 'data-act': 'giveCoins', 'data-id': p.id }, 'Dar'),
+                    el('button', { class: 'csa-btn mini', 'data-act': 'setCoins', 'data-id': p.id }, 'Definir'),
+                ]),
+            ]);
+        }));
+    }
+
+    function openCoinsModal(mode, playerId) {
+        var p = state.players.find(function (x) { return x.id === playerId; });
+        state.coinsMode = mode;
+        state.coinsTarget = { id: playerId, name: p ? p.name : ('ID ' + playerId) };
+        ref('coinsModalTitle').textContent = mode === 'give' ? 'Dar moedas' : 'Definir moedas';
+        ref('coinsModalTarget').textContent =
+            'Jogador ' + state.coinsTarget.name + ' (ID ' + playerId + ')' +
+            (p ? ' — saldo atual: ' + fmt(p.coins) : '');
+        $('[data-modal="coins"] [data-f="coinsAmount"]').value = '';
+        openModal('coins');
+    }
+
+    function confirmCoins() {
+        if (!state.coinsTarget) return;
+        var amount = parseInt($('[data-modal="coins"] [data-f="coinsAmount"]').value, 10);
+        if (isNaN(amount) || amount < 0 || (state.coinsMode === 'give' && amount <= 0)) {
+            toast('Quantidade inválida', 'error'); return;
+        }
+        var action = state.coinsMode === 'give' ? 'adminGiveCoins' : 'adminSetCoins';
+        nuiPost(action, { targetId: state.coinsTarget.id, amount: amount }).then(function (res) {
+            if (res && res.ok) {
+                toast((res.data && res.data.message) || 'Feito', 'success');
+                closeModals();
+                loadPlayers();
+            } else {
+                toast((res && res.err) || 'Erro', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // CÓDIGOS DE RESGATE
+    // ============================================================
+
+    function loadCodes() {
+        nuiPost('adminListCodes').then(function (res) {
+            if (!res || !res.ok || !res.data) return;
+            state.codes = res.data.codes || [];
+            renderCodes();
+        });
+    }
+
+    function renderCodes() {
+        var listEl = ref('codesList');
+        if (!listEl) return;
+        if (!state.codes.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhum código criado ainda.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, state.codes.map(function (c) {
+            var pending = c.status === 'pending';
+            var row = [
+                el('span', { class: 'csa-badge ' + (pending ? 'green' : 'red') }, pending ? 'Pendente' : 'Resgatado'),
+                el('span', { class: 'grow mono' }, String(c.key)),
+                el('span', { class: 'num' }, fmt(c.coins) + ' moedas'),
+            ];
+            if (pending) {
+                row.push(el('button', { class: 'csa-btn mini danger ghost', 'data-act': 'delCode', 'data-id': c.key }, 'Apagar'));
+            }
+            return el('div', { class: 'csa-row' }, row);
+        }));
+    }
+
+    function createCode(ev) {
+        ev.preventDefault();
+        var coins = parseInt(ref('codeCoins').value, 10);
+        if (isNaN(coins) || coins <= 0) { toast('Quantidade inválida', 'error'); return; }
+        nuiPost('adminCreateCode', { coins: coins }).then(function (res) {
+            if (res && res.ok && res.data) {
+                state.codes = res.data.codes || state.codes;
+                ref('keyOut').value = res.data.key || '';
+                ref('keyBox').hidden = !res.data.key;
+                ref('codeCoins').value = '';
+                renderCodes();
+                toast('Código gerado — copie agora', 'success');
+            } else {
+                toast((res && res.err) || 'Erro ao gerar código', 'error');
+            }
+        });
+    }
+
+    function copyKey() {
+        var input = ref('keyOut');
+        if (!input || !input.value) return;
+        input.select();
+        input.setSelectionRange(0, 99999);
+        try { document.execCommand('copy'); toast('Copiado!', 'success'); }
+        catch (e) { toast('Selecione e copie com Ctrl+C', 'error'); }
+    }
+
+
+    // ============================================================
+    // IMPORTAR — bulk import do inventário + catálogo de veículos
+    // ============================================================
+
+    var CAT_LABEL_IMP = { vehicle: 'Veículo', item: 'Item', weapon: 'Arma', tool: 'Ferramenta' };
+
+    function getImportSources() {
+        return {
+            inventory: !!document.querySelector('[data-imp="inventory"]') &&
+                       document.querySelector('[data-imp="inventory"]').checked,
+            conce:     !!document.querySelector('[data-imp="conce"]') &&
+                       document.querySelector('[data-imp="conce"]').checked,
+        };
+    }
+
+    function renderImportList(list, badge) {
+        var listEl = ref('importList');
+        var resultCard = ref('importResult');
+        var badgeEl = ref('importBadge');
+        if (!listEl || !resultCard) return;
+        resultCard.hidden = false;
+        if (badgeEl) badgeEl.textContent = String(list.length);
+        if (badge != null && badgeEl) badgeEl.textContent = String(badge);
+        if (!list.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhum item encontrado nas fontes selecionadas.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, list.map(function (item) {
+            var exists = item.exists === true;
+            return el('div', { class: 'csa-row imp' }, [
+                el('span', { class: 'mono' }, String(item.id || '—')),
+                el('span', { class: 'grow' }, String(item.name || '—')),
+                el('span', { class: 'csa-badge' }, CAT_LABEL_IMP[item.category] || 'Item'),
+                el('span', {}, item.source === 'conce' ? 'Concessionária' : 'Inventário'),
+                el('span', { class: 'csa-badge ' + (exists ? 'red' : 'green') }, exists ? 'Já existe' : 'Novo'),
+            ]);
+        }));
+    }
+
+    function initImport() {
+        var resultCard = ref('importResult');
+        if (resultCard) resultCard.hidden = true;
+    }
+
+    function runImportPreview() {
+        var src = getImportSources();
+        if (!src.inventory && !src.conce) { toast('Selecione pelo menos uma fonte', 'error'); return; }
+        nuiPost('adminImportPreview', { sources: src }).then(function (res) {
+            if (!res || !res.ok) { toast((res && res.err) || 'Erro ao pré-visualizar', 'error'); return; }
+            var d = res.data || {};
+            renderImportList(d.preview || [], d.total);
+            toast('Pré-visualização: ' + (d.total || 0) + ' item(ns) encontrado(s)', 'success');
+        });
+    }
+
+    function runImportExecute() {
+        var src = getImportSources();
+        if (!src.inventory && !src.conce) { toast('Selecione pelo menos uma fonte', 'error'); return; }
+        nuiPost('adminImportRun', { sources: src }).then(function (res) {
+            if (!res || !res.ok) { toast((res && res.err) || 'Erro ao importar', 'error'); return; }
+            var d = res.data || {};
+            absorbLists({ items: d.items });
+            toast((d.message) || (d.inserted + ' importado(s)'), 'success');
+            // recarrega pré-visualização para refletir status "Já existe"
+            runImportPreview();
+        });
+    }
+
+
+    // ============================================================
+    // PIX — read-only (slot reservado #59)
+    // ============================================================
+
+    function renderPix() {
+        var status = ref('pixStatus');
+        if (status) {
+            status.textContent = state.pix.enabled
+                ? 'Pix HABILITADO — cobranças reais serão geradas no app do jogador.'
+                : 'Pix DESABILITADO — o app do jogador mostra os pacotes com aviso "em breve".';
+        }
+        var listEl = ref('pixList');
+        if (!listEl) return;
+        var packs = Array.isArray(state.pix.packages) ? state.pix.packages : [];
+        if (!packs.length) {
+            listEl.replaceChildren(el('div', { class: 'csa-empty' }, 'Nenhum pacote configurado.'));
+            return;
+        }
+        listEl.replaceChildren.apply(listEl, packs.map(function (p) {
+            return el('div', { class: 'csa-row' }, [
+                el('span', { class: 'csa-badge gold' }, 'Pacote'),
+                el('span', { class: 'grow' }, [
+                    String(p.name || p.id) + ' ',
+                    el('small', {}, fmt(p.coins) + ' moedas' + (Number(p.bonus) > 0 ? ' +' + fmt(p.bonus) + ' bônus' : '')),
+                ]),
+                el('span', { class: 'num' }, fmtBRL(p.priceBRL)),
+            ]);
+        }));
+    }
+
+
+    // ============================================================
+    // APARÊNCIA — settings da UI (persistidos em GData pelo server)
+    // ============================================================
+
+    var THEME_KEYS = ['accentColor', 'bgColor', 'textColor', 'errorColor', 'cardBorderColor',
+                      'bgImage', 'bgOpacity', 'bgBlur', 'cardBgOpacity', 'cardBorderRadius', 'coinIcon'];
+
+    // chaves de cor que têm swatch [type=color] — somente hex puro #RRGGBB é suportado pelo input
+    var THEME_COLOR_KEYS = ['accentColor', 'bgColor', 'textColor', 'errorColor', 'cardBorderColor'];
+
+    // converte qualquer valor de cor para #rrggbb (melhor esforço; retorna null se não for hex)
+    function toSwatchHex(val) {
+        if (!val) return null;
+        var m = val.match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+        if (!m) return null;
+        var h = m[1];
+        if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+        return '#' + h;
+    }
+
+    function populateTheme() {
+        THEME_KEYS.forEach(function (k) {
+            var input = $('[data-set="' + k + '"]');
+            var val = state.settings[k] || '';
+            if (input) input.value = val;
+            // sincroniza swatch se existir
+            var swatch = $('[data-swatch="' + k + '"]');
+            if (swatch) {
+                var hex = toSwatchHex(val);
+                if (hex) swatch.value = hex;
+            }
+        });
+    }
+
+    function collectTheme() {
+        var out = {};
+        THEME_KEYS.forEach(function (k) {
+            var input = $('[data-set="' + k + '"]');
+            if (input) out[k] = input.value;
+        });
+        return out;
+    }
+
+    function applyTheme(s) {
+        var root = document.documentElement;
+        if (s.accentColor) root.style.setProperty('--accent', s.accentColor);
+        if (s.bgColor) root.style.setProperty('--bg', s.bgColor);
+        if (s.textColor) root.style.setProperty('--text', s.textColor);
+        if (s.errorColor) root.style.setProperty('--error', s.errorColor);
+        if (s.cardBorderColor) root.style.setProperty('--card-border', s.cardBorderColor);
+        if (s.cardBorderRadius) root.style.setProperty('--radius-md', s.cardBorderRadius + 'px');
+    }
+
+    function saveTheme() {
+        var data = collectTheme();
+        nuiPost('adminSaveSettings', data).then(function (res) {
+            if (res && res.ok) {
+                Object.assign(state.settings, data);
+                applyTheme(state.settings);
+                toast((res.data && res.data.message) || 'Configurações salvas', 'success');
+            } else {
+                toast((res && res.err) || 'Erro', 'error');
+            }
+        });
+    }
+
+    function resetTheme() {
+        nuiPost('adminResetSettings').then(function (res) {
+            if (res && res.ok) {
+                toast((res.data && res.data.message) || 'Restaurado', 'success');
+                // defaults canônicos reaplicados no próximo open; limpa overrides locais
+                THEME_KEYS.forEach(function (k) { delete state.settings[k]; });
+                populateTheme();
+                document.documentElement.removeAttribute('style');
+            } else {
+                toast((res && res.err) || 'Erro', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // MODAIS + CONFIRMAÇÃO
+    // ============================================================
+
+    function openModal(name) {
+        var m = $('[data-modal="' + name + '"]');
+        if (m) m.classList.remove('hidden');
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.csa-overlay').forEach(function (m) { m.classList.add('hidden'); });
+    }
+
+    function anyModalOpen() {
+        var open = false;
+        document.querySelectorAll('.csa-overlay').forEach(function (m) {
+            if (!m.classList.contains('hidden')) open = true;
+        });
+        return open;
+    }
+
+    function askConfirm(kind, id, msg) {
+        state.confirm = { kind: kind, id: id };
+        ref('confirmMsg').textContent = msg;
+        openModal('confirm');
+    }
+
+    function confirmYes() {
+        var c = state.confirm;
+        if (!c) return;
+        state.confirm = null;
+
+        var map = {
+            item:     { action: 'adminDeleteItem',     payload: { itemId: c.id },     after: renderCatalog },
+            cat:      { action: 'adminDeleteCategory', payload: { categoryId: c.id }, after: function () { renderCats(); renderCatalog(); } },
+            deal:     { action: 'adminDeleteDeal',     payload: { dealId: c.id },     after: renderDeals },
+            code:     { action: 'adminDeleteCode',     payload: { key: c.id },        after: renderCodes },
+            clearAll: { action: 'adminClearAll',       payload: {},                   after: function () { renderCatalog(); renderCats(); renderDeals(); } },
+        };
+        var task = map[c.kind];
+        if (!task) return;
+
+        nuiPost(task.action, task.payload).then(function (res) {
+            if (res && res.ok) {
+                absorbLists(res.data);
+                if (res.data && Array.isArray(res.data.codes)) state.codes = res.data.codes;
+                toast((res.data && res.data.message) || 'Feito', 'success');
+                closeModals();
+                task.after();
+            } else {
+                toast((res && res.err) || 'Erro', 'error');
+            }
+        });
+    }
+
+
+    // ============================================================
+    // AÇÕES — delegação global de cliques
+    // ============================================================
+
+    function onClick(ev) {
+        var navBtn = ev.target.closest('[data-view]');
+        if (navBtn) { showView(navBtn.getAttribute('data-view')); return; }
+
+        var pick = ev.target.closest('[data-pick]');
+        if (pick) {
+            var pid = pick.getAttribute('data-pick');
+            var idx = state.dealSelected.indexOf(pid);
+            if (idx >= 0) state.dealSelected.splice(idx, 1);
+            else if (state.dealSelected.length < 10) state.dealSelected.push(pid);
+            else { toast('Máximo de 10 itens por combo', 'error'); return; }
+            pick.classList.toggle('selected', state.dealSelected.indexOf(pid) >= 0);
+            var countEl = ref('dealPickerCount');
+            if (countEl) countEl.textContent = String(state.dealSelected.length);
+            return;
+        }
+
+        var act = ev.target.closest('[data-act]');
+        if (act) {
+            var id = act.getAttribute('data-id');
+            switch (act.getAttribute('data-act')) {
+                case 'editItem': openItemModal(id); break;
+                case 'delItem':  askConfirm('item', id, 'Excluir o item "' + id + '" do catálogo?'); break;
+                case 'editCat':  openCatModal(id); break;
+                case 'delCat':   askConfirm('cat', id, 'Excluir a categoria "' + id + '"? Itens vinculados perdem a aba.'); break;
+                case 'editDeal': openDealModal(id); break;
+                case 'delDeal':  askConfirm('deal', id, 'Excluir a oferta "' + id + '"?'); break;
+                case 'delCode':  askConfirm('code', id, 'Apagar o código pendente ' + id + '?'); break;
+                case 'giveCoins': openCoinsModal('give', parseInt(id, 10)); break;
+                case 'setCoins':  openCoinsModal('set', parseInt(id, 10)); break;
+            }
+            return;
+        }
+
+        var action = ev.target.closest('[data-action]');
+        if (!action) return;
+        switch (action.getAttribute('data-action')) {
+            case 'close':          nuiPost('close'); break;
+            case 'newItem':        openItemModal(null); break;
+            case 'newCat':         openCatModal(null); break;
+            case 'newDeal':        openDealModal(null); break;
+            case 'clearAll':       askConfirm('clearAll', null, 'Limpar TODOS os itens, categorias e ofertas? O histórico de compras é preservado.'); break;
+            case 'refreshPlayers': loadPlayers(); break;
+            case 'modalClose':     closeModals(); break;
+            case 'confirmYes':     confirmYes(); break;
+            case 'saveItem':       saveItem(); break;
+            case 'saveCat':        saveCat(); break;
+            case 'saveDeal':       saveDeal(); break;
+            case 'confirmCoins':   confirmCoins(); break;
+            case 'copyKey':        copyKey(); break;
+            case 'importPreview':  runImportPreview(); break;
+            case 'importRun':      runImportExecute(); break;
+            case 'saveTheme':      saveTheme(); break;
+            case 'resetTheme':     resetTheme(); break;
+        }
     }
 
 
@@ -114,1156 +919,98 @@
     // LIFECYCLE — A-02
     // ============================================================
 
+    function onOpen(data) {
+        state.items = data.items || [];
+        state.categories = data.categories || [];
+        state.deals = data.deals || [];
+        state.settings = data.settings || {};
+        state.pix = (data.pix && typeof data.pix === 'object') ? data.pix : { enabled: false, packages: [] };
+        state.playerName = data.playerName || '—';
+        state.coins = data.coins || 0;
+        state.dataAt = Date.now();
+        state.codesLoaded = false;
+
+        ref('meName').textContent = state.playerName;
+        ref('meCoins').textContent = fmt(state.coins);
+        applyTheme(state.settings);
+
+        $('#app').classList.remove('hidden');
+        showView('dash');
+    }
+
+    function onClose() {
+        $('#app').classList.add('hidden');
+        closeModals();
+        if (_toastTimeout) { clearTimeout(_toastTimeout); _toastTimeout = null; }
+        var t = ref('toast');
+        if (t) t.classList.add('hidden');
+    }
+
+    function handleMessage(event) {
+        var data = event.data;
+        if (!data || !data.type) return;
+        switch (data.type) {
+            case 'open':  onOpen(data); break;
+            case 'close': onClose(); break;
+            case 'coinsChanged':
+                state.coins = data.coins || 0;
+                ref('meCoins').textContent = fmt(state.coins);
+                break;
+        }
+    }
+
     function onInit() {
-        // listener de mensagens do cliente Lua (SendNUIMessage)
-        _messageHandler = function (event) {
-            const data = event.data;
-            if (!data || !data.type) return;
-            handleMessage(data);
-        };
+        _messageHandler = handleMessage;
         window.addEventListener('message', _messageHandler);
 
-        // ESC fecha overlays/modais ou a loja
         _keydownHandler = function (e) {
             if (e.key !== 'Escape') return;
-            if (handleEscape()) return; // overlay/modal fechou
+            if (anyModalOpen()) { closeModals(); return; }
             nuiPost('close');
         };
         document.addEventListener('keydown', _keydownHandler);
 
-        // clique global: fecha custom-select ao clicar fora
-        _clickHandler = function (e) {
-            if (!e.target.closest('.custom-select')) {
-                $$('.custom-select-options.open').forEach(function (el) {
-                    el.classList.remove('open');
-                    el.closest('.custom-select').querySelector('.custom-select-trigger').classList.remove('open');
+        _clickHandler = onClick;
+        document.body.addEventListener('click', _clickHandler);
+
+        // buscas + campos condicionais + form de código
+        ref('catalogSearch').addEventListener('input', renderCatalog);
+        ref('playerSearch').addEventListener('input', renderPlayers);
+        ref('codeForm').addEventListener('submit', createCode);
+        itemModalField('category').addEventListener('change', applyCategoryConditionals);
+
+        // deal picker — filtro de busca
+        var dps = ref('dealPickerSearch');
+        if (dps) dps.addEventListener('input', renderDealPicker);
+
+        // swatches de cor: swatch → hex input (tempo real)
+        THEME_COLOR_KEYS.forEach(function (k) {
+            var swatch = $('[data-swatch="' + k + '"]');
+            var hex = $('[data-set="' + k + '"]');
+            if (swatch && hex) {
+                swatch.addEventListener('input', function () { hex.value = swatch.value; });
+                hex.addEventListener('input', function () {
+                    var h = toSwatchHex(hex.value);
+                    if (h) swatch.value = h;
                 });
             }
-        };
-        document.addEventListener('click', _clickHandler);
-
-        // delegação de cliques para botões com data-action
-        document.body.addEventListener('click', function (e) {
-            const btn = e.target.closest('[data-action]');
-            if (!btn) return;
-            handleAction(btn.dataset.action, btn.dataset, btn);
         });
 
-        // aplica ícones SVG aos placeholders [data-svg]
-        applySvgIcons();
-
-        // aplica locale aos elementos com data-i18n
-        applyLocale();
-
-        // bind dos botões de ação específicos (que têm lógica própria)
-        bindActionButtons();
-    }
-
-    function onShow() {
-        _isVisible = true;
-        $('app').classList.remove('hidden');
-        applyLocale();
-        renderNav();
-        buildCategoryPages();
-        updateCoinDisplays();
-        applyTheme(state.settings);
-        renderAllPages();
-        showPage('home');
-        startCountdown();
-        updateCategoryDropdown();
-        // admin button visibilidade
-        const adminBtn = $('admin-btn');
-        if (state.isAdmin) adminBtn.classList.remove('hidden');
-        else adminBtn.classList.add('hidden');
-        // logo + avatar + nome
-        if (state.logo) $('shop-logo').src = state.logo;
-        $('player-name').textContent = state.playerName;
-        if (state.playerAvatar) $('player-avatar').src = state.playerAvatar;
-        // ícone da moeda no header
-        $('coin-icon-header').src = (state.settings.coinIcon || ICONS.coin);
-    }
-
-    function onHide() {
-        _isVisible = false;
-        $('app').classList.add('hidden');
-        // fecha todos os overlays/modais
-        ['payment', 'redeem', 'admin', 'deal-purchase'].forEach(function (name) {
-            const el = $(name + '-overlay');
-            if (el) el.classList.add('hidden');
-        });
-        ['create-modal', 'category-modal', 'deal-modal',
-         'give-coins-modal', 'delete-confirm-modal', 'set-coins-modal', 'clear-all-modal'
-        ].forEach(function (id) { const el = $(id); if (el) el.classList.add('hidden'); });
-        stopCountdown();
+        // preview de imagem no modal de item (atualiza ao digitar)
+        var imgField = itemModalField('images');
+        if (imgField) imgField.addEventListener('input', updateItemImgPreview);
     }
 
     function onDestroy() {
-        _destroyed = true;
         if (_messageHandler) window.removeEventListener('message', _messageHandler);
         if (_keydownHandler) document.removeEventListener('keydown', _keydownHandler);
-        if (_clickHandler) document.removeEventListener('click', _clickHandler);
-        stopCountdown();
+        if (_clickHandler) document.body.removeEventListener('click', _clickHandler);
         if (_toastTimeout) { clearTimeout(_toastTimeout); _toastTimeout = null; }
     }
 
 
     // ============================================================
-    // MESSAGE ROUTER — server→NUI
-    // ============================================================
-
-    function handleMessage(data) {
-        switch (data.type) {
-            case 'open':
-                state.shopItems = data.items || [];
-                state.customCategories = data.categories || [];
-                state.deals = data.deals || [];
-                state.playerCoins = data.coins || 0;
-                state.playerName = data.playerName || 'Jogador';
-                state.playerAvatar = data.playerAvatar || '';
-                state.isAdmin = !!data.isAdmin;
-                state.dealResetHour = data.dealResetHour || 0;
-                state.settings = data.settings || {};
-                state.locale = data.locale || {};
-                onShow();
-                break;
-            case 'close':
-                onHide();
-                break;
-            case 'coinsChanged':
-                state.playerCoins = data.coins || 0;
-                updateCoinDisplays();
-                break;
-            case 'refreshItems':
-                state.shopItems = data.items || [];
-                renderAllPages();
-                renderCreatorPackages();
-                break;
-            case 'refreshCategories':
-                state.customCategories = data.categories || [];
-                renderNav();
-                buildCategoryPages();
-                renderAllPages();
-                renderCreatorPackages();
-                renderCreatorCategories();
-                updateCategoryDropdown();
-                break;
-            case 'refreshDeals':
-                state.deals = data.deals || [];
-                renderTrendingBanner();
-                renderCreatorDeals();
-                break;
-            case 'notify':
-                showToast(data.message, data.kind);
-                break;
-        }
-    }
-
-
-    // ============================================================
-    // SVG ICONS — aplica aos placeholders [data-svg]
-    // ============================================================
-
-    function applySvgIcons() {
-        $$('[data-svg]').forEach(function (el) {
-            const name = el.dataset.svg;
-            if (ICONS[name]) {
-                el.style.backgroundImage = 'url("' + ICONS[name] + '")';
-                el.style.backgroundRepeat = 'no-repeat';
-                el.style.backgroundPosition = 'center';
-                el.style.backgroundSize = 'contain';
-            }
-        });
-    }
-
-
-    // ============================================================
-    // LOCALE — aplica data-i18n aos elementos
-    // ============================================================
-
-    function applyLocale() {
-        $$('[data-i18n]').forEach(function (el) {
-            el.textContent = L(el.dataset.i18n);
-        });
-        $$('[data-i18n-placeholder]').forEach(function (el) {
-            el.placeholder = L(el.dataset.i18nPlaceholder);
-        });
-    }
-
-
-    // ============================================================
-    // THEME — aplica settings de UI (paleta dinâmica)
-    // ============================================================
-
-    function applyTheme(settings) {
-        const root = document.documentElement;
-        const s = settings || {};
-        if (s.accentColor) root.style.setProperty('--accent', s.accentColor);
-        if (s.bgColor) root.style.setProperty('--bg', s.bgColor);
-        if (s.textColor) root.style.setProperty('--text', s.textColor);
-        if (s.errorColor) root.style.setProperty('--error', s.errorColor);
-        if (s.cardBorderColor) root.style.setProperty('--card-border', s.cardBorderColor);
-        if (s.bgOpacity) document.documentElement.style.setProperty('--bg-overlay', s.bgOpacity);
-        if (s.bgBlur) document.documentElement.style.setProperty('--bg-blur', s.bgBlur + 'px');
-        if (s.cardBgOpacity) document.documentElement.style.setProperty('--card-bg-opacity', s.cardBgOpacity);
-        if (s.cardBorderRadius) document.documentElement.style.setProperty('--radius-md', s.cardBorderRadius + 'px');
-        if (s.bgImage) document.documentElement.style.setProperty('--bg-image', "url('" + s.bgImage + "')");
-        if (s.coinIcon) {
-            const coinEls = $$('.coin-icon');
-            coinEls.forEach(function (el) { el.src = s.coinIcon; });
-        }
-    }
-
-
-    // ============================================================
-    // COIN DISPLAYS — atualiza todos os displays de saldo
-    // ============================================================
-
-    function updateCoinDisplays() {
-        const formatted = formatNumber(state.playerCoins);
-        $('player-coins-nav').textContent = formatted;
-        $('payment-coins').textContent = formatted;
-        $('redeem-coins').textContent = formatted;
-        const dealCoins = $('deal-purchase-coins');
-        if (dealCoins) dealCoins.textContent = formatted;
-    }
-
-
-    // ============================================================
-    // NAV — renderiza botões de navegação (home + categorias)
-    // ============================================================
-
-    function renderNav() {
-        const container = $('nav-container');
-        const items = [
-            { id: 'home', label: L('ui_home'), icon: ICONS.home },
-            { id: 'tutorial', label: L('ui_tutorial'), icon: ICONS.tutorial },
-        ];
-        // categorias canônicas (vehicles/items/weapons/tools) + custom
-        const cats = state.customCategories || [];
-        cats.forEach(function (cat) {
-            const icon = cat.icon || CATEGORY_ICONS[cat.id] || CATEGORY_ICONS[cat.type] || ICONS.box;
-            items.push({ id: 'cat_' + cat.id, label: cat.name, icon: icon });
-        });
-        container.innerHTML = items.map(function (item) {
-            return '<button class="nav-btn" data-page="' + item.id + '" onclick="window.__coinshop.showPage(\'' + item.id + '\')">' +
-                '<span class="btn-icon" style="background-image:url(\'' + item.icon + '\')"></span>' +
-                '<span>' + esc(item.label) + '</span>' +
-                '</button>';
-        }).join('');
-    }
-
-
-    // ============================================================
-    // PAGES — cria páginas dinâmicas para cada categoria custom
-    // ============================================================
-
-    function buildCategoryPages() {
-        // remove páginas dinâmicas antigas
-        $$('.dynamic-category-page').forEach(function (el) { el.remove(); });
-        const pagesContainer = $('pages-container');
-        (state.customCategories || []).forEach(function (cat) {
-            const pageId = 'cat_' + cat.id;
-            if ($(pageId + '-page')) return;
-            const page = document.createElement('section');
-            page.id = pageId + '-page';
-            page.className = 'page dynamic-category-page hidden';
-            page.innerHTML =
-                '<div class="page-head">' +
-                  '<div>' +
-                    '<h2 class="page-title">' + esc(L('ui_browse').replace('%s', cat.name)) + '</h2>' +
-                    '<p class="page-sub">' + esc(L('ui_explore').replace('%s', cat.name.toLowerCase())) + '</p>' +
-                  '</div>' +
-                  '<div class="search-box">' +
-                    '<span class="btn-icon" style="background-image:url(\'' + ICONS.search + '\')"></span>' +
-                    '<input type="text" oninput="window.__coinshop.filterItems(\'' + pageId + '\')" id="' + pageId + '-search" placeholder="' + esc(L('ui_search').replace('%s', cat.name.toLowerCase())) + '" class="search-input" />' +
-                  '</div>' +
-                '</div>' +
-                '<div id="' + pageId + '-grid" class="grid"></div>';
-            pagesContainer.appendChild(page);
-        });
-    }
-
-    function showPage(pageId) {
-        state.currentPage = pageId;
-        $$('.page').forEach(function (p) { p.classList.add('hidden'); });
-        const target = $(pageId + '-page') || $(pageId + '-page');
-        const page = document.getElementById(pageId + '-page');
-        if (page) page.classList.remove('hidden');
-        $$('.nav-btn').forEach(function (b) {
-            b.classList.toggle('active', b.dataset.page === pageId);
-        });
-        // renderiza a grade se for home ou categoria
-        if (pageId === 'home') renderHomeGrid();
-        else if (pageId.indexOf('cat_') === 0) renderCategoryGrid(pageId);
-    }
-
-    function renderAllPages() {
-        renderHomeGrid();
-        (state.customCategories || []).forEach(function (cat) {
-            renderCategoryGrid('cat_' + cat.id);
-        });
-    }
-
-    function renderHomeGrid() {
-        const grid = $('home-grid');
-        if (!grid) return;
-        const items = state.shopItems.slice(0, 24); // home mostra topo
-        grid.innerHTML = items.map(function (i) { return createItemCard(i); }).join('');
-    }
-
-    function renderCategoryGrid(pageId) {
-        const grid = $(pageId + '-grid');
-        if (!grid) return;
-        const catId = pageId.replace('cat_', '');
-        const items = state.shopItems.filter(function (i) {
-            return i.category === catId || i.customCategory === catId;
-        });
-        grid.innerHTML = items.map(function (i) { return createItemCard(i); }).join('');
-    }
-
-    function filterItems(pageId) {
-        const input = $(pageId + '-search');
-        if (!input) return;
-        const q = input.value.toLowerCase().trim();
-        const grid = $(pageId + '-grid') || $('home-grid');
-        if (!grid) return;
-        let items;
-        if (pageId === 'home') items = state.shopItems.slice(0, 24);
-        else {
-            const catId = pageId.replace('cat_', '');
-            items = state.shopItems.filter(function (i) {
-                return i.category === catId || i.customCategory === catId;
-            });
-        }
-        if (q) {
-            items = items.filter(function (i) {
-                return (i.name && i.name.toLowerCase().indexOf(q) >= 0) ||
-                       (i.description && i.description.toLowerCase().indexOf(q) >= 0) ||
-                       (i.tags && i.tags.some(function (t) { return t.toLowerCase().indexOf(q) >= 0; }));
-            });
-        }
-        grid.innerHTML = items.map(function (i) { return createItemCard(i); }).join('');
-    }
-
-
-    // ============================================================
-    // ITEM CARD
-    // ============================================================
-
-    function createItemCard(item) {
-        const firstImage = (item.images && item.images.length > 0) ? item.images[0] : ICONS.placeholder;
-        const trendingBadge = item.trending
-            ? '<span class="item-card-trending">' + esc(L('ui_trending')) + '</span>'
-            : '';
-        return '<div class="item-card" onclick="window.__coinshop.openPayment(\'' + esc(item.id) + '\')">' +
-            '<img class="item-card-img" src="' + esc(firstImage) + '" onerror="this.src=\'' + ICONS.placeholder + '\'" />' +
-            '<div class="item-card-name">' + esc(item.name) + '</div>' +
-            '<div class="item-card-desc">' + esc(item.description || '') + '</div>' +
-            '<div class="item-card-footer">' +
-                '<div class="item-card-price">' +
-                    '<img class="coin-icon" src="' + (state.settings.coinIcon || ICONS.coin) + '" />' +
-                    formatNumber(item.price) +
-                '</div>' +
-                trendingBadge +
-            '</div>' +
-        '</div>';
-    }
-
-
-    // ============================================================
-    // OVERLAYS — payment / redeem / admin / deal-purchase
-    // ============================================================
-
-    function showOverlay(name) {
-        const el = $(name + '-overlay');
-        if (el) el.classList.remove('hidden');
-    }
-
-    function hideOverlay(name) {
-        const el = $(name + '-overlay');
-        if (el) el.classList.add('hidden');
-    }
-
-    function openPayment(itemId) {
-        const item = state.shopItems.find(function (i) { return i.id === itemId; });
-        if (!item) return;
-        state.selectedItem = item;
-        $('payment-image').src = (item.images && item.images[0]) || ICONS.placeholder;
-        $('payment-item-name').textContent = item.name;
-        $('payment-item-price').innerHTML = '<img class="coin-icon" src="' + (state.settings.coinIcon || ICONS.coin) + '" /> ' + formatNumber(item.price);
-        // botão de test-drive só aparece para veículos
-        const tdBtn = $('test-drive-btn');
-        if (item.category === 'vehicle') tdBtn.classList.remove('hidden');
-        else tdBtn.classList.add('hidden');
-        showOverlay('payment');
-    }
-
-    function openDealPurchase(dealId) {
-        const deal = state.deals.find(function (d) { return d.id === dealId; });
-        if (!deal) return;
-        state.selectedDeal = deal;
-        $('deal-purchase-name').textContent = deal.name;
-        $('deal-purchase-price').innerHTML = '<img class="coin-icon" src="' + (state.settings.coinIcon || ICONS.coin) + '" /> ' + formatNumber(deal.price);
-        $('deal-purchase-items').innerHTML = deal.items.map(function (i) {
-            return '<div class="data-row"><span>' + esc(i.name) + '</span><span>' + formatNumber(i.price) + '</span></div>';
-        }).join('');
-        showOverlay('deal-purchase');
-    }
-
-
-    // ============================================================
-    // ESC — fecha overlay/modal em ordem (A-07 cleanup implícito)
-    // ============================================================
-
-    function handleEscape() {
-        const modalOrder = ['deal-modal', 'category-modal', 'create-modal', 'give-coins-modal', 'set-coins-modal', 'delete-confirm-modal', 'clear-all-modal'];
-        for (let i = 0; i < modalOrder.length; i++) {
-            const el = $(modalOrder[i]);
-            if (el && !el.classList.contains('hidden')) {
-                el.classList.add('hidden');
-                return true;
-            }
-        }
-        const overlays = ['payment', 'admin', 'redeem', 'deal-purchase'];
-        for (let i = 0; i < overlays.length; i++) {
-            const el = $(overlays[i] + '-overlay');
-            if (el && !el.classList.contains('hidden')) {
-                hideOverlay(overlays[i]);
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    // ============================================================
-    // ACTIONS — delegação de cliques por data-action
-    // ============================================================
-
-    function handleAction(action, ds, btn) {
-        switch (action) {
-            case 'closeShop': nuiPost('close'); break;
-            case 'showOverlay': showOverlay(ds.overlay); break;
-            case 'hideOverlay': hideOverlay(ds.overlay); break;
-            case 'showCreateItem': showCreateModal(null); break;
-            case 'showCreateCategory': showCategoryModal(null); break;
-            case 'showCreateDeal': showDealModal(); break;
-            case 'showClearAll': $('clear-all-modal').classList.remove('hidden'); break;
-            case 'hideClearAll': $('clear-all-modal').classList.add('hidden'); break;
-            case 'hideCreateModal': $('create-modal').classList.add('hidden'); break;
-            case 'hideCategoryModal': $('category-modal').classList.add('hidden'); break;
-            case 'hideDealModal': $('deal-modal').classList.add('hidden'); break;
-            case 'hideGiveCoinsModal': $('give-coins-modal').classList.add('hidden'); break;
-            case 'hideSetCoinsModal': $('set-coins-modal').classList.add('hidden'); break;
-            case 'hideDeleteConfirm': $('delete-confirm-modal').classList.add('hidden'); break;
-            case 'refreshPlayers': loadOnlinePlayers(); break;
-            case 'saveSettings': saveSettings(); break;
-            case 'resetSettings': resetSettings(); break;
-        }
-    }
-
-    // bind dos botões com lógica própria (não-genéricos)
-    function bindActionButtons() {
-        $('confirm-purchase-btn').addEventListener('click', confirmPurchase);
-        $('test-drive-btn').addEventListener('click', confirmTestDrive);
-        $('confirm-redeem-btn').addEventListener('click', confirmRedeem);
-        $('confirm-deal-btn').addEventListener('click', confirmDealPurchase);
-        $('confirm-give-btn').addEventListener('click', confirmGiveCoins);
-        $('confirm-set-btn').addEventListener('click', confirmSetCoins);
-        $('confirm-delete-btn').addEventListener('click', confirmDelete);
-        $('confirm-clear-btn').addEventListener('click', confirmClearAll);
-        $('save-item-btn').addEventListener('click', saveItem);
-        $('save-category-btn').addEventListener('click', saveCategory);
-        $('save-deal-btn').addEventListener('click', saveDeal);
-
-        // tabs admin
-        $$('.admin-tab-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                $$('.admin-tab-btn').forEach(function (b) { b.classList.remove('active'); });
-                btn.classList.add('active');
-                $$('.admin-tab').forEach(function (t) { t.classList.add('hidden'); });
-                $(btn.dataset.tab + '-tab').classList.remove('hidden');
-                // carrega dados da tab
-                if (btn.dataset.tab === 'admin-center') loadAdminCenter();
-                if (btn.dataset.tab === 'creator-center') loadCreatorCenter();
-                if (btn.dataset.tab === 'player-management') loadOnlinePlayers();
-            });
-        });
-
-        // redeem mode toggle
-        $('redeem-self-btn').addEventListener('click', function () { setRedeemMode('self'); });
-        $('redeem-gift-btn').addEventListener('click', function () { setRedeemMode('gift'); });
-
-        // mudança de tipo no create-modal mostra campos condicionais
-        $('create-category').addEventListener('change', function () {
-            const v = this.value;
-            $('create-vehicle-fields').classList.toggle('hidden', v !== 'vehicle');
-            $('create-item-fields').classList.toggle('hidden', v !== 'item' && v !== 'tool');
-            $('create-weapon-fields').classList.toggle('hidden', v !== 'weapon');
-        });
-    }
-
-
-    // ============================================================
-    // PURCHASE / REDEEM / TEST-DRIVE
-    // ============================================================
-
-    function confirmPurchase() {
-        if (!state.selectedItem) return;
-        nuiCallback('purchaseItem', { itemId: state.selectedItem.id }).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('purchase_successful'), 'success');
-                hideOverlay('payment');
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function confirmTestDrive() {
-        if (!state.selectedItem) return;
-        nuiCallback('testDrive', { itemId: state.selectedItem.id }).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('test_drive_started_msg'), 'success');
-                hideOverlay('payment');
-                onHide(); // fecha a loja — test-drive toma over
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function setRedeemMode(mode) {
-        state.redeemMode = mode;
-        $('redeem-self-btn').classList.toggle('active', mode === 'self');
-        $('redeem-gift-btn').classList.toggle('active', mode === 'gift');
-        $('player-id-field').classList.toggle('hidden', mode !== 'gift');
-    }
-
-    function confirmRedeem() {
-        const key = $('redeem-key-input').value.trim();
-        if (!key) { showToast(L('invalid_order_number'), 'error'); return; }
-        const payload = { redeemKey: key };
-        if (state.redeemMode === 'gift') {
-            const tid = $('redeem-player-id').value.trim();
-            if (!tid) { showToast(L('target_not_found'), 'error'); return; }
-            payload.targetId = tid;
-        }
-        nuiCallback('redeemCode', payload).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('successfully_redeemed', 0), 'success');
-                $('redeem-key-input').value = '';
-                $('redeem-player-id').value = '';
-                hideOverlay('redeem');
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function confirmDealPurchase() {
-        if (!state.selectedDeal) return;
-        nuiCallback('purchaseDeal', { dealId: state.selectedDeal.id }).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('deal_purchased'), 'success');
-                hideOverlay('deal-purchase');
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-
-    // ============================================================
-    // ADMIN — CENTER (stats + transações + top-selling)
-    // ============================================================
-
-    function loadAdminCenter() {
-        nuiCallback('getAdminStats').then(function (res) {
-            if (!res || !res.ok || !res.data) return;
-            const d = res.data;
-            $('stat-total-packages').textContent = formatNumber(d.totalPackages || 0);
-            $('stat-total-sales').textContent = formatNumber(d.totalSales || 0);
-            $('stat-coins-24h').textContent = formatNumber(d.coinsSpent24h || 0);
-            $('stat-active-players').textContent = formatNumber(d.activePlayers || 0);
-        });
-        nuiCallback('getRecentTransactions').then(function (res) {
-            if (!res || !res.ok || !res.data) return;
-            $('recent-transactions').innerHTML = res.data.map(function (t) {
-                return '<div class="data-row"><span>' + esc(t.itemName) + '</span><span>' + formatNumber(t.price) + '</span></div>';
-            }).join('') || '<div class="data-row"><span>—</span></div>';
-        });
-        nuiCallback('getTopSelling').then(function (res) {
-            if (!res || !res.ok || !res.data) return;
-            $('top-selling').innerHTML = res.data.map(function (t) {
-                return '<div class="data-row"><span>' + esc(t.name) + '</span><span>' + formatNumber(t.sales) + '</span></div>';
-            }).join('') || '<div class="data-row"><span>—</span></div>';
-        });
-    }
-
-
-    // ============================================================
-    // ADMIN — CREATOR CENTER (CRUD)
-    // ============================================================
-
-    function loadCreatorCenter() {
-        renderCreatorPackages();
-        renderCreatorCategories();
-        renderCreatorDeals();
-    }
-
-    function renderCreatorPackages() {
-        const list = $('creator-packages');
-        if (!list) return;
-        list.innerHTML = state.shopItems.map(function (i) {
-            return '<div class="data-row">' +
-                '<span>' + esc(i.name) + ' <small>(' + esc(i.category) + ')</small></span>' +
-                '<div class="data-row-actions">' +
-                    '<button class="btn btn-ghost" onclick="window.__coinshop.editItem(\'' + esc(i.id) + '\')">' + L('ui_edit') + '</button>' +
-                    '<button class="btn btn-danger" onclick="window.__coinshop.deleteItem(\'' + esc(i.id) + '\')">' + L('ui_delete') + '</button>' +
-                '</div>' +
-            '</div>';
-        }).join('') || '<div class="data-row"><span>—</span></div>';
-    }
-
-    function renderCreatorCategories() {
-        const list = $('creator-categories');
-        if (!list) return;
-        list.innerHTML = (state.customCategories || []).map(function (c) {
-            return '<div class="data-row">' +
-                '<span>' + esc(c.name) + '</span>' +
-                '<div class="data-row-actions">' +
-                    '<button class="btn btn-ghost" onclick="window.__coinshop.editCategory(\'' + esc(c.id) + '\')">' + L('ui_edit') + '</button>' +
-                    '<button class="btn btn-danger" onclick="window.__coinshop.deleteCategory(\'' + esc(c.id) + '\')">' + L('ui_delete') + '</button>' +
-                '</div>' +
-            '</div>';
-        }).join('') || '<div class="data-row"><span>—</span></div>';
-    }
-
-    function renderCreatorDeals() {
-        const list = $('creator-deals');
-        if (!list) return;
-        list.innerHTML = (state.deals || []).map(function (d) {
-            return '<div class="data-row">' +
-                '<span>' + esc(d.name) + ' <small>(' + d.remainingSeconds + 's)</small></span>' +
-                '<div class="data-row-actions">' +
-                    '<button class="btn btn-danger" onclick="window.__coinshop.deleteDeal(\'' + esc(d.id) + '\')">' + L('ui_delete') + '</button>' +
-                '</div>' +
-            '</div>';
-        }).join('') || '<div class="data-row"><span>—</span></div>';
-    }
-
-    // ---- CREATE/EDIT ITEM ----
-
-    function showCreateModal(itemId) {
-        state.editingItemId = itemId || null;
-        $('create-modal-title').textContent = itemId ? L('ui_edit_package_title') : L('ui_create_package_title');
-        const item = itemId ? state.shopItems.find(function (i) { return i.id === itemId; }) : null;
-        $('create-id').value = item ? item.id : '';
-        $('create-name').value = item ? item.name : '';
-        $('create-description').value = item ? item.description : '';
-        $('create-price').value = item ? item.price : '';
-        $('create-category').value = item ? item.category : 'item';
-        $('create-spawnName').value = item ? (item.spawnName || '') : '';
-        $('create-itemName').value = item ? (item.itemName || '') : '';
-        $('create-itemCount').value = item ? (item.itemCount || 1) : 1;
-        $('create-weaponName').value = item ? (item.weaponName || '') : '';
-        $('create-tags').value = item && item.tags ? item.tags.join(', ') : '';
-        $('create-images').value = item && item.images ? item.images.join(', ') : '';
-        $('create-trending').checked = !!(item && item.trending);
-        // dispara change para mostrar campos condicionais
-        $('create-category').dispatchEvent(new Event('change'));
-        updateCategoryDropdown();
-        $('create-modal').classList.remove('hidden');
-    }
-
-    function saveItem() {
-        const data = {
-            id: state.editingItemId || $('create-id').value.trim() || undefined,
-            name: $('create-name').value.trim(),
-            description: $('create-description').value.trim(),
-            price: parseInt($('create-price').value, 10) || 0,
-            category: $('create-category').value,
-            spawnName: $('create-spawnName').value.trim(),
-            itemName: $('create-itemName').value.trim(),
-            itemCount: parseInt($('create-itemCount').value, 10) || 1,
-            weaponName: $('create-weaponName').value.trim(),
-            tags: $('create-tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
-            images: $('create-images').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
-            trending: $('create-trending').checked,
-            customCategory: $('create-custom-category').value,
-        };
-        if (!data.name) { showToast(L('item_name_required'), 'error'); return; }
-        const action = state.editingItemId ? 'adminEditItem' : 'adminCreateItem';
-        nuiCallback(action, data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('create-modal').classList.add('hidden');
-                // refresh items
-                state.shopItems = res.data && res.data.items ? res.data.items : state.shopItems;
-                renderCreatorPackages();
-                renderAllPages();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function editItem(id) { showCreateModal(id); }
-
-    function deleteItem(id) {
-        $('delete-message').textContent = L('ui_delete_msg').replace('%s', id);
-        $('confirm-delete-btn').dataset.targetId = id;
-        $('confirm-delete-btn').dataset.deleteKind = 'item';
-        $('delete-confirm-modal').classList.remove('hidden');
-    }
-
-    function confirmDelete() {
-        const btn = $('confirm-delete-btn');
-        const id = btn.dataset.targetId;
-        const kind = btn.dataset.deleteKind;
-        let action;
-        if (kind === 'item') action = 'adminDeleteItem';
-        else if (kind === 'category') action = 'adminDeleteCategory';
-        else if (kind === 'deal') action = 'adminDeleteDeal';
-        else return;
-        nuiCallback(action, { id: id }).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('delete-confirm-modal').classList.add('hidden');
-                loadCreatorCenter();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    // ---- CATEGORIES ----
-
-    function showCategoryModal(catId) {
-        state.editingCategoryId = catId || null;
-        const cat = catId ? (state.customCategories || []).find(function (c) { return c.id === catId; }) : null;
-        $('category-id').value = cat ? cat.id : '';
-        $('category-name').value = cat ? cat.name : '';
-        $('category-icon').value = cat ? (cat.icon || '') : '';
-        $('category-modal').classList.remove('hidden');
-    }
-
-    function saveCategory() {
-        const data = {
-            id: state.editingCategoryId || $('category-id').value.trim() || undefined,
-            name: $('category-name').value.trim(),
-            icon: $('category-icon').value.trim(),
-        };
-        if (!data.name) { showToast(L('category_name_required'), 'error'); return; }
-        const action = state.editingCategoryId ? 'adminEditCategory' : 'adminCreateCategory';
-        nuiCallback(action, data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('category-modal').classList.add('hidden');
-                loadCreatorCenter();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function editCategory(id) { showCategoryModal(id); }
-
-    function deleteCategory(id) {
-        $('delete-message').textContent = L('ui_delete_msg').replace('%s', id);
-        $('confirm-delete-btn').dataset.targetId = id;
-        $('confirm-delete-btn').dataset.deleteKind = 'category';
-        $('delete-confirm-modal').classList.remove('hidden');
-    }
-
-    // ---- DEALS ----
-
-    function showDealModal() {
-        // renderiza o picker de itens
-        const picker = $('deal-items-picker');
-        picker.innerHTML = state.shopItems.map(function (i) {
-            return '<div class="deal-picker-item" data-item-id="' + esc(i.id) + '" onclick="window.__coinshop.toggleDealItem(\'' + esc(i.id) + '\')">' +
-                '<img src="' + esc((i.images && i.images[0]) || ICONS.placeholder) + '" />' +
-                '<span class="name">' + esc(i.name) + '</span>' +
-            '</div>';
-        }).join('');
-        state.dealSelectedItems = [];
-        $('deal-modal').classList.remove('hidden');
-    }
-
-    function toggleDealItem(itemId) {
-        const idx = state.dealSelectedItems.indexOf(itemId);
-        if (idx >= 0) {
-            state.dealSelectedItems.splice(idx, 1);
-            document.querySelector('.deal-picker-item[data-item-id="' + itemId + '"]').classList.remove('selected');
-        } else {
-            if (state.dealSelectedItems.length >= 10) {
-                showToast(L('deal_items_limit'), 'error');
-                return;
-            }
-            state.dealSelectedItems.push(itemId);
-            document.querySelector('.deal-picker-item[data-item-id="' + itemId + '"]').classList.add('selected');
-        }
-    }
-
-    function saveDeal() {
-        const data = {
-            name: $('deal-name').value.trim(),
-            description: $('deal-description').value.trim(),
-            price: parseInt($('deal-price').value, 10) || 0,
-            expiresIn: parseInt($('deal-expires').value, 10) || 0,
-            image: $('deal-image').value.trim(),
-            items: state.dealSelectedItems,
-        };
-        if (!data.name) { showToast(L('deal_name_required'), 'error'); return; }
-        if (!data.expiresIn || data.expiresIn <= 0) { showToast(L('valid_expiry_required'), 'error'); return; }
-        if (data.items.length === 0) { showToast(L('deal_items_limit'), 'error'); return; }
-        nuiCallback('adminCreateDeal', data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('deal-modal').classList.add('hidden');
-                loadCreatorCenter();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function deleteDeal(id) {
-        $('delete-message').textContent = L('ui_delete_msg').replace('%s', id);
-        $('confirm-delete-btn').dataset.targetId = id;
-        $('confirm-delete-btn').dataset.deleteKind = 'deal';
-        $('delete-confirm-modal').classList.remove('hidden');
-    }
-
-    function confirmClearAll() {
-        nuiCallback('adminClearAll').then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('clear-all-modal').classList.add('hidden');
-                loadCreatorCenter();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-
-    // ============================================================
-    // ADMIN — PLAYER MANAGEMENT
-    // ============================================================
-
-    function loadOnlinePlayers() {
-        nuiCallback('getOnlinePlayers').then(function (res) {
-            if (!res || !res.ok || !Array.isArray(res.data)) return;
-            state.adminPlayers = res.data;
-            renderPlayersList(state.adminPlayers);
-        });
-        // histórico de compras
-        nuiCallback('getPurchaseHistory').then(function (res) {
-            if (!res || !res.ok || !Array.isArray(res.data)) return;
-            $('activity-logs').innerHTML = res.data.map(function (t) {
-                return '<div class="data-row"><span>' + esc(t.itemName) + ' • Char ' + t.charId + '</span><span>' + formatNumber(t.price) + '</span></div>';
-            }).join('') || '<div class="data-row"><span>—</span></div>';
-        });
-    }
-
-    function renderPlayersList(list) {
-        const el = $('admin-players-list');
-        if (!el) return;
-        el.innerHTML = list.map(function (p) {
-            return '<div class="admin-table-row">' +
-                '<div>' + p.id + '</div>' +
-                '<div>' + esc(p.name) + '</div>' +
-                '<div>' + formatNumber(p.coins) + '</div>' +
-                '<div class="data-row-actions">' +
-                    '<button class="btn btn-ghost" onclick="window.__coinshop.showGiveCoinsModal(' + p.id + ')">' + L('ui_give_coins') + '</button>' +
-                    '<button class="btn btn-ghost" onclick="window.__coinshop.showSetCoinsModal(' + p.id + ')">' + L('ui_set_coins') + '</button>' +
-                '</div>' +
-            '</div>';
-        }).join('') || '<div class="admin-table-row"><div colspan="4">—</div></div>';
-    }
-
-    function filterPlayers() {
-        const q = ($('admin-player-search').value || '').toLowerCase().trim();
-        if (!q) { renderPlayersList(state.adminPlayers); return; }
-        const filtered = state.adminPlayers.filter(function (p) {
-            return String(p.id).indexOf(q) >= 0 || (p.name && p.name.toLowerCase().indexOf(q) >= 0);
-        });
-        renderPlayersList(filtered);
-    }
-
-    function showGiveCoinsModal(playerId) {
-        $('give-target-id').value = playerId;
-        $('give-amount').value = '';
-        $('give-coins-modal').classList.remove('hidden');
-    }
-
-    function showSetCoinsModal(playerId) {
-        $('set-target-id').value = playerId;
-        $('set-amount').value = '';
-        $('set-coins-modal').classList.remove('hidden');
-    }
-
-    function confirmGiveCoins() {
-        const data = {
-            targetId: parseInt($('give-target-id').value, 10),
-            amount: parseInt($('give-amount').value, 10) || 0,
-        };
-        if (!data.targetId || data.amount <= 0) { showToast(L('invalid_target_amount'), 'error'); return; }
-        nuiCallback('adminGiveCoins', data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('give-coins-modal').classList.add('hidden');
-                loadOnlinePlayers();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function confirmSetCoins() {
-        const data = {
-            targetId: parseInt($('set-target-id').value, 10),
-            amount: parseInt($('set-amount').value, 10) || 0,
-        };
-        if (!data.targetId || data.amount < 0) { showToast(L('invalid_target_amount'), 'error'); return; }
-        nuiCallback('adminSetCoins', data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || 'OK', 'success');
-                $('set-coins-modal').classList.add('hidden');
-                loadOnlinePlayers();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-
-    // ============================================================
-    // ADMIN — CUSTOMIZE UI
-    // ============================================================
-
-    function saveSettings() {
-        const data = {
-            accentColor: $('theme-accentColor').value,
-            bgColor: $('theme-bgColor').value,
-            textColor: $('theme-textColor').value,
-            errorColor: $('theme-errorColor').value,
-            cardBorderColor: $('theme-cardBorderColor').value,
-            bgImage: $('theme-bgImage').value,
-            bgOpacity: $('theme-bgOpacity').value,
-            bgBlur: $('theme-bgBlur').value,
-            cardBgOpacity: $('theme-cardBgOpacity').value,
-            cardBorderRadius: $('theme-cardBorderRadius').value,
-            coinIcon: $('theme-coinIcon').value,
-        };
-        nuiCallback('adminSaveSettings', data).then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('settings_saved'), 'success');
-                // merge local + reaplica
-                Object.assign(state.settings, data);
-                applyTheme(state.settings);
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function resetSettings() {
-        nuiCallback('adminResetSettings').then(function (res) {
-            if (res && res.ok) {
-                showToast(res.data && res.data.message || L('settings_reset'), 'success');
-                // recarrega defaults via init data
-                state.settings = {
-                    accentColor: '#f3b53a', bgColor: '#0c0a06', textColor: '#d9c19a',
-                    errorColor: '#e8513f', cardBorderColor: 'rgba(243,181,58,0.18)',
-                    bgImage: '', bgOpacity: '0.50', bgBlur: '3',
-                    cardBgOpacity: '0.06', cardBorderRadius: '10',
-                    coinIcon: ICONS.coin,
-                };
-                applyTheme(state.settings);
-                populateThemeInputs();
-            } else {
-                showToast(res && res.err || 'Erro', 'error');
-            }
-        });
-    }
-
-    function populateThemeInputs() {
-        const s = state.settings || {};
-        $('theme-accentColor').value = s.accentColor || '';
-        $('theme-bgColor').value = s.bgColor || '';
-        $('theme-textColor').value = s.textColor || '';
-        $('theme-errorColor').value = s.errorColor || '';
-        $('theme-cardBorderColor').value = s.cardBorderColor || '';
-        $('theme-bgImage').value = s.bgImage || '';
-        $('theme-bgOpacity').value = s.bgOpacity || '';
-        $('theme-bgBlur').value = s.bgBlur || '';
-        $('theme-cardBgOpacity').value = s.cardBgOpacity || '';
-        $('theme-cardBorderRadius').value = s.cardBorderRadius || '';
-        $('theme-coinIcon').value = s.coinIcon || '';
-    }
-
-
-    // ============================================================
-    // CUSTOM SELECT (categoria no create-modal)
-    // ============================================================
-
-    function toggleCustomSelect(selectId) {
-        const wrapper = $(selectId);
-        if (!wrapper) return;
-        const trigger = wrapper.querySelector('.custom-select-trigger');
-        const options = wrapper.querySelector('.custom-select-options');
-        const isOpen = options.classList.contains('open');
-        $$('.custom-select-options.open').forEach(function (el) {
-            el.classList.remove('open');
-            el.closest('.custom-select').querySelector('.custom-select-trigger').classList.remove('open');
-        });
-        if (!isOpen) {
-            options.classList.add('open');
-            trigger.classList.add('open');
-        }
-    }
-
-    function selectCustomOption(selectId, value, label) {
-        const wrapper = $(selectId);
-        if (!wrapper) return;
-        const hiddenInput = wrapper.previousElementSibling;
-        if (hiddenInput && hiddenInput.tagName === 'INPUT') hiddenInput.value = value;
-        wrapper.querySelector('.cs-label').textContent = label;
-        wrapper.querySelectorAll('.custom-select-option').forEach(function (opt) {
-            opt.classList.toggle('selected', opt.dataset.value === value);
-        });
-        wrapper.querySelector('.custom-select-options').classList.remove('open');
-        wrapper.querySelector('.custom-select-trigger').classList.remove('open');
-    }
-
-    function updateCategoryDropdown() {
-        const wrapper = $('create-custom-category-select');
-        if (!wrapper) return;
-        const optionsContainer = wrapper.querySelector('.custom-select-options');
-        if (!optionsContainer) return;
-        const currentVal = $('create-custom-category').value || 'none';
-        let html = '<div class="custom-select-option' + (currentVal === 'none' ? ' selected' : '') + '" data-value="none" onclick="window.__coinshop.selectCustomOption(\'create-custom-category-select\', \'none\', \'' + L('ui_none_default') + '\')">' + L('ui_none_default') + '</div>';
-        (state.customCategories || []).forEach(function (cat) {
-            const escapedName = cat.name.replace(/'/g, "\\'");
-            html += '<div class="custom-select-option' + (currentVal === cat.id ? ' selected' : '') + '" data-value="' + esc(cat.id) + '" onclick="window.__coinshop.selectCustomOption(\'create-custom-category-select\', \'' + esc(cat.id) + '\', \'' + escapedName + '\')">' + esc(cat.name) + '</div>';
-        });
-        optionsContainer.innerHTML = html;
-    }
-
-
-    // ============================================================
-    // COUNTDOWN — ofertas ativas (A-08: só roda quando visível)
-    // ============================================================
-
-    function startCountdown() {
-        stopCountdown();
-        if (!_isVisible) return;
-        _countdownInterval = setInterval(tickCountdown, 1000);
-        tickCountdown(); // tick imediato
-    }
-
-    function stopCountdown() {
-        if (_countdownInterval) {
-            clearInterval(_countdownInterval);
-            _countdownInterval = null;
-        }
-    }
-
-    function tickCountdown() {
-        if (!_isVisible) { stopCountdown(); return; }
-        const pad = function (n) { return String(n).padStart(2, '0'); };
-        let earliest = Infinity;
-        $$('.deal-timer').forEach(function (el) {
-            let remaining = parseInt(el.dataset.remaining, 10);
-            if (remaining > 0) {
-                remaining--;
-                el.dataset.remaining = remaining;
-                const h = Math.floor(remaining / 3600);
-                const m = Math.floor((remaining % 3600) / 60);
-                const s = remaining % 60;
-                el.textContent = pad(h) + 'H ' + pad(m) + 'M ' + pad(s) + 'S';
-                if (remaining < earliest) earliest = remaining;
-            } else {
-                el.textContent = L('ui_expired');
-            }
-        });
-        const headerTimer = $('deal-timer');
-        if (headerTimer) {
-            if (earliest === Infinity || isNaN(earliest)) {
-                headerTimer.textContent = '00H 00M 00S';
-            } else {
-                const h = Math.floor(earliest / 3600);
-                const m = Math.floor((earliest % 3600) / 60);
-                const s = earliest % 60;
-                headerTimer.textContent = pad(h) + 'H ' + pad(m) + 'M ' + pad(s) + 'S';
-            }
-        }
-    }
-
-    function renderTrendingBanner() {
-        const banner = $('trending-deal-banner');
-        if (!banner) return;
-        if (!state.deals || state.deals.length === 0) {
-            banner.classList.add('hidden');
-            return;
-        }
-        const deal = state.deals[0];
-        banner.classList.remove('hidden');
-        $('trending-deal-name').textContent = deal.name + ' — ' + formatNumber(deal.price) + ' moedas';
-        const timer = $('deal-timer');
-        if (timer) timer.dataset.remaining = deal.remainingSeconds || 0;
-    }
-
-
-    // ============================================================
-    // TOAST
-    // ============================================================
-
-    function showToast(message, kind) {
-        const t = $('toast');
-        if (!t) return;
-        t.textContent = message;
-        t.className = 'toast' + (kind ? ' ' + kind : '');
-        t.classList.remove('hidden');
-        if (_toastTimeout) clearTimeout(_toastTimeout);
-        _toastTimeout = setTimeout(function () {
-            t.classList.add('hidden');
-        }, 4000);
-    }
-
-
-    // ============================================================
-    // PUBLIC API — expõe no window para onclick handlers
-    // ============================================================
-
-    window.__coinshop = {
-        showPage: showPage,
-        filterItems: filterItems,
-        filterPlayers: filterPlayers,
-        openPayment: openPayment,
-        openDealPurchase: openDealPurchase,
-        showCreateModal: showCreateModal,
-        showCategoryModal: showCategoryModal,
-        showDealModal: showDealModal,
-        editItem: editItem,
-        deleteItem: deleteItem,
-        editCategory: editCategory,
-        deleteCategory: deleteCategory,
-        deleteDeal: deleteDeal,
-        showGiveCoinsModal: showGiveCoinsModal,
-        showSetCoinsModal: showSetCoinsModal,
-        toggleDealItem: toggleDealItem,
-        toggleCustomSelect: toggleCustomSelect,
-        selectCustomOption: selectCustomOption,
-        L: L,
-    };
-
-    // ============================================================
-    // BOOT — onInit
+    // BOOT
     // ============================================================
 
     if (document.readyState === 'loading') {

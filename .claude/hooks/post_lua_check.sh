@@ -10,7 +10,9 @@ import sys, json
 try:
   d = json.load(sys.stdin)
   ti = d.get('tool_input', {})
-  print(ti.get('file_path') or ti.get('path') or '')
+  p = ti.get('file_path') or ti.get('path') or ''
+  # normaliza separadores Windows → POSIX para que dirname/basename/case funcionem
+  print(p.replace('\\\\', '/'))
 except Exception:
   print('')
 " 2>/dev/null)
@@ -26,7 +28,16 @@ IS_CORE=0
 case "$FILE" in *"resources/[CORE]/vhub/"*) IS_CORE=1 ;; esac
 
 # ── L-13 (BLOQUEANTE): escrita de persistência fora do CORE ────────────────
-if [ "$IS_CORE" -eq 0 ]; then
+# Allowlist: escritores únicos de campos CData/GData PRÓPRIOS (trust gated pelo CORE).
+# Cada entrada = recurso que é dono exclusivo do campo que escreve via exports.vhub:set*Data.
+# Adicionar aqui APENAS quando: (1) o recurso está no vhub_trusted_resources e
+# (2) nenhum outro recurso escreve no mesmo campo.
+L13_ALLOWED=0
+case "$FILE" in
+  # vhub_coinshop: escritor único de 'coinshop_coins' (CData) — campo próprio, gated via trust
+  *vhub_coinshop/server/coins.lua) L13_ALLOWED=1 ;;
+esac
+if [ "$IS_CORE" -eq 0 ] && [ "$L13_ALLOWED" -eq 0 ]; then
   HITS=$(grep -nE "set(V|U|C|G)Data\s*\(" "$FILE" | grep -v "commitVehicleState" || true)
   if [ -n "$HITS" ]; then
     add_issue "L-13: set*Data fora do CORE — use o contrato de commit (ex.: exports.vhub:commitVehicleState):\n$HITS"

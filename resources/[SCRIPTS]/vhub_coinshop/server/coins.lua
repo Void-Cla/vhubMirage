@@ -18,7 +18,7 @@ function Coins.get(char_id)
     if not char_id then return 0 end
     if _cache[char_id] ~= nil then return _cache[char_id] end
 
-    local ok, value = pcall(exports.vhub.getCData, char_id, 'coinshop_coins')
+    local ok, value = pcall(function() return exports.vhub:getCData(char_id, 'coinshop_coins') end)
     local cached = ok and tonumber(value) or 0
     _cache[char_id] = cached
     return cached
@@ -29,7 +29,10 @@ end
 function Coins.set(char_id, amount)
     amount = math.max(0, math.floor(tonumber(amount) or 0))
     _cache[char_id] = amount
-    pcall(exports.vhub.setCData, char_id, 'coinshop_coins', amount)
+    local ok, res = pcall(function() return exports.vhub:setCData(char_id, 'coinshop_coins', amount) end)
+    if not ok or res == false then
+        VHubCoin.Core.logErr('setCData coinshop_coins NEGADO/falhou (trust do CORE?) char=' .. tostring(char_id))
+    end
     return amount
 end
 
@@ -75,10 +78,16 @@ function Coins.isLocked(char_id)
 end
 
 
--- notifica o cliente que o saldo mudou (discreto; não é estado contínuo)
+-- notifica o cliente que o saldo mudou — PONTO ÚNICO de sync das 2 superfícies (#59):
+-- NUI admin fullscreen via evento discreto + app do iPad via appPush (pcall — R7;
+-- o client do iPad descarta o push com o tablet fechado, no-op seguro).
+-- Invalida _lastSnap do relay: reabertura do iPad pós-doação nunca serve saldo stale.
 function Coins.notifyChange(src, char_id)
     if not src or not char_id then return end
-    TriggerClientEvent(VHubCoin.E.COINS_CHANGED, src, Coins.get(char_id))
+    local balance = Coins.get(char_id)
+    TriggerClientEvent(VHubCoin.E.COINS_CHANGED, src, balance)
+    pcall(function() exports.vhub_ipad:appPush(src, 'coinshop', 'coins', { coins = balance }) end)
+    if VHubCoin.IpadRelay_InvalidateSnap then VHubCoin.IpadRelay_InvalidateSnap(src) end
 end
 
 

@@ -1,522 +1,331 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>vHub Coinshop</title>
-    <link rel="stylesheet" href="css/style.css" />
-  </head>
-  <body>
-    <!-- ============================================================
-         RAIZ — oculta por padrão; exibida quando server envia `open`
-         ============================================================ -->
-    <div id="app" class="app hidden">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoinShop — Painel Admin</title>
+  <!-- A-10: zero CDN — fontes de sistema, ícones SVG inline -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
 
-      <!-- superfície Liquid Glass (receita B: vidro simulado, sem backdrop-filter sobre o jogo) -->
-      <div class="surface">
+  <!-- ============================================================
+       PAINEL ADMIN (/coinshop) — decisão #59: a superfície de jogador
+       foi REMOVIDA desta NUI; jogador usa o app CoinShop do iPad.
+       ============================================================ -->
+  <div id="app" class="csa-root hidden">
+    <div class="csa-scrim"></div>
 
-        <!-- ============================================================
-             CABEÇALHO — logo + navegação + resgate + admin + jogador + moedas
-             ============================================================ -->
-        <header class="header">
-          <div class="brand">
-            <img id="shop-logo" class="brand-logo" alt="vHub" src="" />
+    <div class="csa-panel">
+
+      <!-- ======================================================
+           ASIDE — marca + navegação
+           ====================================================== -->
+      <aside class="csa-aside">
+        <div class="csa-brand">
+          <svg class="csa-logo" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" class="csa-logo-disc"/>
+            <circle cx="12" cy="12" r="7.6" class="csa-logo-ring"/>
+            <text x="12" y="16.4" text-anchor="middle" class="csa-logo-cash">$</text>
+          </svg>
+          <div class="csa-brand-txt">
+            <h1>CoinShop</h1>
+            <p>Painel Admin</p>
           </div>
+        </div>
 
-          <nav id="nav-container" class="nav"></nav>
+        <nav class="csa-nav" data-el="nav">
+          <button type="button" class="csa-nav-btn active" data-view="dash">Dashboard</button>
+          <button type="button" class="csa-nav-btn" data-view="catalog">Catálogo</button>
+          <button type="button" class="csa-nav-btn" data-view="cats">Categorias</button>
+          <button type="button" class="csa-nav-btn" data-view="deals">Ofertas &amp; Combos</button>
+          <button type="button" class="csa-nav-btn" data-view="players">Jogadores</button>
+          <button type="button" class="csa-nav-btn" data-view="codes">Códigos</button>
+          <button type="button" class="csa-nav-btn" data-view="pix">Pix</button>
+          <button type="button" class="csa-nav-btn" data-view="import">Importar</button>
+          <button type="button" class="csa-nav-btn" data-view="theme">Aparência</button>
+        </nav>
 
-          <div class="header-actions">
-            <button id="redeem-btn" class="btn btn-ghost" data-action="showOverlay" data-overlay="redeem">
-              <span class="btn-icon" data-svg="redeem"></span>
-              <span id="nav-redeem-text">Resgatar</span>
-            </button>
+        <div class="csa-me">
+          <span class="csa-me-name" data-el="meName">—</span>
+          <span class="csa-me-coins"><strong data-el="meCoins">0</strong> moedas</span>
+        </div>
+      </aside>
 
-            <button id="admin-btn" class="btn btn-ghost hidden" data-action="showOverlay" data-overlay="admin">
-              <span class="btn-icon" data-svg="admin"></span>
-              <span>Admin</span>
-            </button>
+      <!-- ======================================================
+           CONTEÚDO — header + views
+           ====================================================== -->
+      <main class="csa-main">
 
-            <div class="player-chip">
-              <img id="player-avatar" class="avatar" alt="" src="" onerror="this.style.display='none'" />
-              <span id="player-name" class="player-name">Jogador</span>
-            </div>
-
-            <div class="coins-chip">
-              <img class="coin-icon" alt="" src="" id="coin-icon-header" />
-              <span id="player-coins-nav">0</span>
-            </div>
-
-            <button id="close-btn" class="btn btn-icon-only" data-action="closeShop" title="Fechar">
-              <span class="btn-icon" data-svg="close"></span>
-            </button>
-          </div>
+        <header class="csa-head">
+          <h2 class="csa-view-title" data-el="viewTitle">Dashboard</h2>
+          <button type="button" class="csa-close" data-action="close" title="Fechar (ESC)">✕</button>
         </header>
 
-        <!-- ============================================================
-             PÁGINAS — home / tutorial / categorias dinâmicas
-             ============================================================ -->
-        <main id="pages-container" class="pages">
+        <div class="csa-body">
 
-          <!-- HOME -->
-          <section id="home-page" class="page">
-            <div class="page-head">
-              <div>
-                <h2 class="page-title" data-i18n="ui_browse_items">Explorar Itens</h2>
-                <p class="page-sub" data-i18n="ui_explore_items">Explore todos os itens disponíveis.</p>
-              </div>
-              <div class="search-box">
-                <span class="btn-icon" data-svg="search"></span>
-                <input type="text" id="home-search" class="search-input" data-i18n-placeholder="ui_search_placeholder" placeholder="Pesquisar item aqui ..." oninput="window.__coinshop.filterItems('home')" />
-              </div>
+          <!-- DASHBOARD -->
+          <section class="csa-view" data-view-panel="dash">
+            <div class="csa-stats">
+              <div class="csa-stat"><span>Pacotes no catálogo</span><strong data-el="statPackages">0</strong></div>
+              <div class="csa-stat"><span>Moedas vendidas (total)</span><strong data-el="statSales">0</strong></div>
+              <div class="csa-stat"><span>Moedas gastas (24h)</span><strong data-el="statCoins24h">0</strong></div>
+              <div class="csa-stat"><span>Jogadores online</span><strong data-el="statPlayers">0</strong></div>
             </div>
-            <div id="home-grid" class="grid"></div>
-          </section>
-
-          <!-- TUTORIAL -->
-          <section id="tutorial-page" class="page hidden">
-            <div class="page-head">
-              <div>
-                <h2 class="page-title" data-i18n="ui_tutorial">Tutorial</h2>
-                <p class="page-sub" data-i18n="ui_tutorial_desc">Esta seção mostrará tudo que você precisa saber sobre como usar este sistema</p>
+            <div class="csa-cols">
+              <div class="csa-card">
+                <h3>Últimas transações</h3>
+                <div class="csa-list" data-el="recentTx"></div>
               </div>
-            </div>
-            <div class="tutorial-steps">
-              <div class="tutorial-step">
-                <div class="step-badge">1</div>
-                <h3 data-i18n="ui_step_1">Passo 1</h3>
-                <p data-i18n="ui_tutorial_step_1">Primeiro obtenha o TBX ID aqui:</p>
-              </div>
-              <div class="tutorial-step">
-                <div class="step-badge">2</div>
-                <h3 data-i18n="ui_step_2">Passo 2</h3>
-                <p data-i18n="ui_tutorial_step_2">Quando tiver o TBX ID, vá para resgatar e cole o TBX ID na caixa de resgate</p>
-              </div>
-              <div class="tutorial-step">
-                <div class="step-badge">3</div>
-                <h3 data-i18n="ui_step_3_title">Passo 3 - Como Presentear</h3>
-                <p data-i18n="ui_tutorial_step_3">Opcionalmente, se quiser presentear alguém, clique em "Presentear Alguém". A pessoa deve estar online.</p>
+              <div class="csa-card">
+                <h3>Mais vendidos</h3>
+                <div class="csa-list" data-el="topSelling"></div>
               </div>
             </div>
           </section>
 
-          <!-- categorias dinâmicas são inseridas aqui pelo JS -->
-        </main>
-
-        <!-- ============================================================
-             TRENDING BANNER — ofertas ativas em destaque
-             ============================================================ -->
-        <div id="trending-deal-banner" class="trending-banner hidden">
-          <div class="trending-left">
-            <span class="btn-icon deal-fire" data-svg="fire"></span>
-            <div>
-              <div class="trending-title" data-i18n="ui_active_deals">Ofertas Ativas</div>
-              <div id="trending-deal-name" class="trending-name"></div>
+          <!-- CATÁLOGO -->
+          <section class="csa-view" data-view-panel="catalog" hidden>
+            <div class="csa-toolbar">
+              <input type="text" class="csa-input" data-el="catalogSearch"
+                     placeholder="Pesquisar por nome, categoria ou tag..." maxlength="40" />
+              <button type="button" class="csa-btn primary" data-action="newItem">+ Novo item</button>
+              <button type="button" class="csa-btn danger ghost" data-action="clearAll">Limpar tudo</button>
             </div>
-          </div>
-          <div id="deal-timer" class="trending-timer">00H 00M 00S</div>
-        </div>
-      </div>
+            <div class="csa-list wide" data-el="catalogList"></div>
+          </section>
 
-      <!-- ============================================================
-           OVERLAYS — pagamento / resgate / admin / compra de oferta
-           ============================================================ -->
+          <!-- CATEGORIAS -->
+          <section class="csa-view" data-view-panel="cats" hidden>
+            <div class="csa-toolbar">
+              <p class="csa-hint">Categorias padrão (veículo/item/arma/ferramenta) e custom criadas aqui viram abas no app do jogador.</p>
+              <button type="button" class="csa-btn primary" data-action="newCat">+ Nova categoria</button>
+            </div>
+            <div class="csa-list wide" data-el="catsList"></div>
+          </section>
 
-      <!-- PAGAMENTO (compra de item) -->
-      <div id="payment-overlay" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_confirm_payment">Confirmar Pagamento</h3>
-          <p class="modal-sub" data-i18n="ui_confirm_question">Tem certeza que deseja confirmar?</p>
-          <div class="modal-row">
-            <div class="modal-item-preview">
-              <img id="payment-image" alt="" src="" />
-              <div>
-                <div id="payment-item-name" class="modal-item-name"></div>
-                <div id="payment-item-price" class="modal-item-price"></div>
+          <!-- OFERTAS & COMBOS -->
+          <section class="csa-view" data-view-panel="deals" hidden>
+            <div class="csa-toolbar">
+              <p class="csa-hint">Combos de itens com preço único e prazo — aparecem na aba Ofertas do jogador.</p>
+              <button type="button" class="csa-btn primary" data-action="newDeal">+ Nova oferta</button>
+            </div>
+            <div class="csa-list wide" data-el="dealsList"></div>
+          </section>
+
+          <!-- JOGADORES -->
+          <section class="csa-view" data-view-panel="players" hidden>
+            <div class="csa-toolbar">
+              <input type="text" class="csa-input" data-el="playerSearch"
+                     placeholder="Pesquisar jogador por ID ou nome..." maxlength="40" />
+              <button type="button" class="csa-btn" data-action="refreshPlayers">Atualizar</button>
+            </div>
+            <div class="csa-table-head">
+              <span>ID</span><span>Nome</span><span>Moedas</span><span>Ações</span>
+            </div>
+            <div class="csa-list wide" data-el="playersList"></div>
+            <div class="csa-card">
+              <h3>Histórico de compras</h3>
+              <div class="csa-list" data-el="historyList"></div>
+            </div>
+          </section>
+
+          <!-- CÓDIGOS -->
+          <section class="csa-view" data-view-panel="codes" hidden>
+            <form class="csa-toolbar" data-el="codeForm">
+              <input type="number" class="csa-input slim" data-el="codeCoins" min="1" max="10000000"
+                     placeholder="Quantidade de moedas" required />
+              <button type="submit" class="csa-btn primary">Gerar código</button>
+            </form>
+            <div class="csa-keybox" data-el="keyBox" hidden>
+              <span>Código gerado — copie agora (chave completa mostrada uma única vez):</span>
+              <input type="text" class="csa-input mono" data-el="keyOut" readonly />
+              <button type="button" class="csa-btn" data-action="copyKey">Copiar</button>
+            </div>
+            <div class="csa-list wide" data-el="codesList"></div>
+          </section>
+
+          <!-- PIX (read-only — slot reservado #59) -->
+          <section class="csa-view" data-view-panel="pix" hidden>
+            <div class="csa-card">
+              <h3>Status</h3>
+              <p class="csa-hint" data-el="pixStatus">Pix desabilitado.</p>
+              <p class="csa-hint">Os pacotes abaixo aparecem na aba "Comprar Coins" do app do jogador.
+                 Para editar valores ou habilitar o Pix, ajuste <code>shared/config.lua → pix</code>
+                 (a integração com o PSP vai gerar o QR Code nesse slot).</p>
+            </div>
+            <div class="csa-list wide" data-el="pixList"></div>
+          </section>
+
+          <!-- IMPORTAR -->
+          <section class="csa-view" data-view-panel="import" hidden>
+            <div class="csa-card">
+              <h3>Fontes de importação</h3>
+              <p class="csa-hint">
+                Importa itens do inventário e veículos do catálogo da concessionária
+                direto para o catálogo do CoinShop. Itens já existentes são ignorados
+                (idempotente por ID). Preços ficam zerados — ajuste pelo Catálogo.
+              </p>
+              <div class="csa-field-row">
+                <label class="csa-check"><input type="checkbox" data-imp="inventory" checked /> Itens do inventário (vhub_inventory)</label>
+                <label class="csa-check"><input type="checkbox" data-imp="conce" checked /> Veículos da concessionária (vhub_conce)</label>
+              </div>
+              <div class="csa-toolbar end">
+                <button type="button" class="csa-btn ghost" data-action="importPreview">Pré-visualizar</button>
+                <button type="button" class="csa-btn primary" data-action="importRun">Importar agora</button>
               </div>
             </div>
-            <div class="modal-coins">
-              <span data-i18n="ui_coins">Moedas</span>
-              <strong id="payment-coins">0</strong>
+            <div class="csa-card" data-el="importResult" hidden>
+              <h3>Resultado <span class="csa-badge" data-el="importBadge">0</span></h3>
+              <div class="csa-table-head imp-head">
+                <span>ID</span><span>Nome</span><span>Tipo</span><span>Fonte</span><span>Status</span>
+              </div>
+              <div class="csa-list wide" data-el="importList"></div>
             </div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="payment" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-purchase-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
-            <button id="test-drive-btn" class="btn btn-secondary hidden" data-i18n="ui_test_drive">Test Drive</button>
-          </div>
-        </div>
-      </div>
+          </section>
 
-      <!-- RESGATE -->
-      <div id="redeem-overlay" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_redeem_settings">Configurações de Resgate</h3>
-          <p class="modal-sub" data-i18n="ui_redeem_desc">Insira seu número de pedido Tebex para resgatar moedas.</p>
-
-          <div class="redeem-modes">
-            <button id="redeem-self-btn" class="btn btn-toggle active" data-mode="self" data-i18n="ui_redeem_yourself">Resgatar Para Você</button>
-            <button id="redeem-gift-btn" class="btn btn-toggle" data-mode="gift" data-i18n="ui_gift_someone">Presentear Alguém</button>
-          </div>
-
-          <div id="player-id-field" class="form-field hidden">
-            <label data-i18n="ui_player_id">ID do Jogador</label>
-            <input type="number" id="redeem-player-id" data-i18n-placeholder="ui_enter_player_id" placeholder="Digite o ID do jogador ..." />
-          </div>
-
-          <div class="form-field">
-            <label data-i18n="ui_enter_redeem_key">Digite a Chave de Resgate</label>
-            <input type="text" id="redeem-key-input" data-i18n-placeholder="ui_redeem_placeholder" placeholder="tbx-xxxxxxxxxxxxx-xxxxxx" />
-          </div>
-
-          <div class="modal-coins">
-            <span data-i18n="ui_coins">Moedas</span>
-            <strong id="redeem-coins">0</strong>
-          </div>
-
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="redeem" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-redeem-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ADMIN -->
-      <div id="admin-overlay" class="overlay hidden">
-        <div class="modal modal-wide">
-          <div class="modal-head">
-            <h3 class="modal-title" data-i18n="ui_admin_panel">Painel Admin</h3>
-            <button class="btn btn-icon-only" data-action="hideOverlay" data-overlay="admin" title="Fechar">
-              <span class="btn-icon" data-svg="close"></span>
-            </button>
-          </div>
-
-          <div class="admin-tabs">
-            <button class="admin-tab-btn active" data-tab="admin-center" data-i18n="ui_admin_center">Centro Admin</button>
-            <button class="admin-tab-btn" data-tab="creator-center" data-i18n="ui_creator_center">Centro do Criador</button>
-            <button class="admin-tab-btn" data-tab="player-management" data-i18n="ui_player_management">Gerenciamento de Jogadores</button>
-            <button class="admin-tab-btn" data-tab="customize-ui" data-i18n="ui_customize_ui">Personalizar Interface</button>
-          </div>
-
-          <!-- ABA: admin-center (stats + transações + top-selling) -->
-          <div id="admin-center-tab" class="admin-tab">
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-label" data-i18n="ui_total_packages">Total de Pacotes</div>
-                <div id="stat-total-packages" class="stat-value">0</div>
+          <!-- APARÊNCIA -->
+          <section class="csa-view" data-view-panel="theme" hidden>
+            <div class="csa-cols">
+              <div class="csa-card">
+                <h3>Cores</h3>
+                <label class="csa-field csa-color-field"><span>Cor de destaque</span>
+                  <div class="csa-color-row"><input type="color" class="csa-color-swatch" data-swatch="accentColor" /><input type="text" class="csa-input csa-color-hex" data-set="accentColor" placeholder="#c8a96e" maxlength="25" /></div>
+                </label>
+                <label class="csa-field csa-color-field"><span>Cor de fundo</span>
+                  <div class="csa-color-row"><input type="color" class="csa-color-swatch" data-swatch="bgColor" /><input type="text" class="csa-input csa-color-hex" data-set="bgColor" placeholder="#0d0d0d" maxlength="25" /></div>
+                </label>
+                <label class="csa-field csa-color-field"><span>Cor do texto</span>
+                  <div class="csa-color-row"><input type="color" class="csa-color-swatch" data-swatch="textColor" /><input type="text" class="csa-input csa-color-hex" data-set="textColor" placeholder="#e8e4da" maxlength="25" /></div>
+                </label>
+                <label class="csa-field csa-color-field"><span>Cor de erro</span>
+                  <div class="csa-color-row"><input type="color" class="csa-color-swatch" data-swatch="errorColor" /><input type="text" class="csa-input csa-color-hex" data-set="errorColor" placeholder="#e05c5c" maxlength="25" /></div>
+                </label>
+                <label class="csa-field csa-color-field"><span>Borda dos cards</span>
+                  <div class="csa-color-row"><input type="color" class="csa-color-swatch" data-swatch="cardBorderColor" /><input type="text" class="csa-input csa-color-hex" data-set="cardBorderColor" placeholder="#2a2a2a" maxlength="25" /></div>
+                </label>
               </div>
-              <div class="stat-card">
-                <div class="stat-label" data-i18n="ui_total_sales">Total de Vendas</div>
-                <div id="stat-total-sales" class="stat-value">0</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label" data-i18n="ui_coins_spent_24h">Moedas Gastas (24h)</div>
-                <div id="stat-coins-24h" class="stat-value">0</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label" data-i18n="ui_active_players">Jogadores Ativos</div>
-                <div id="stat-active-players" class="stat-value">0</div>
+              <div class="csa-card">
+                <h3>Superfícies</h3>
+                <label class="csa-field"><span>Imagem de fundo (URL)</span><input type="text" class="csa-input" data-set="bgImage" /></label>
+                <label class="csa-field"><span>Opacidade do fundo (0–1)</span><input type="text" class="csa-input" data-set="bgOpacity" /></label>
+                <label class="csa-field"><span>Blur do fundo (px)</span><input type="text" class="csa-input" data-set="bgBlur" /></label>
+                <label class="csa-field"><span>Opacidade dos cards (0–1)</span><input type="text" class="csa-input" data-set="cardBgOpacity" /></label>
+                <label class="csa-field"><span>Raio dos cards (px)</span><input type="text" class="csa-input" data-set="cardBorderRadius" /></label>
+                <label class="csa-field"><span>Ícone da moeda (URL/data URI)</span><input type="text" class="csa-input" data-set="coinIcon" /></label>
               </div>
             </div>
-            <div class="admin-cols">
-              <div class="admin-col">
-                <h4 data-i18n="ui_recent_transactions">Transações Recentes</h4>
-                <div id="recent-transactions" class="data-list"></div>
-              </div>
-              <div class="admin-col">
-                <h4 data-i18n="ui_top_selling">Mais Vendidos</h4>
-                <div id="top-selling" class="data-list"></div>
-              </div>
+            <div class="csa-toolbar end">
+              <button type="button" class="csa-btn ghost" data-action="resetTheme">Restaurar padrão</button>
+              <button type="button" class="csa-btn primary" data-action="saveTheme">Salvar</button>
             </div>
-          </div>
+          </section>
 
-          <!-- ABA: creator-center (CRUD itens/categorias/ofertas) -->
-          <div id="creator-center-tab" class="admin-tab hidden">
-            <div class="creator-actions">
-              <button class="btn btn-primary" data-action="showCreateItem" data-i18n="ui_create_package">+ Criar Pacote</button>
-              <button class="btn btn-primary" data-action="showCreateCategory" data-i18n="ui_create_category">+ Criar Categoria</button>
-              <button class="btn btn-primary" data-action="showCreateDeal" data-i18n="ui_create_deal">+ Criar Oferta Especial</button>
-            </div>
-
-            <h4 data-i18n="ui_custom_categories">Categorias Personalizadas</h4>
-            <div id="creator-categories" class="data-list"></div>
-
-            <h4 data-i18n="ui_active_deals">Ofertas Ativas</h4>
-            <div id="creator-deals" class="data-list"></div>
-
-            <h4 data-i18n="ui_existing_packages">Pacotes Existentes</h4>
-            <div id="creator-packages" class="data-list"></div>
-
-            <button class="btn btn-danger" data-action="showClearAll" data-i18n="ui_clear_all">Limpar Todos os Pacotes, Categorias e Ofertas</button>
-          </div>
-
-          <!-- ABA: player-management -->
-          <div id="player-management-tab" class="admin-tab hidden">
-            <div class="search-box">
-              <span class="btn-icon" data-svg="search"></span>
-              <input type="text" id="admin-player-search" data-i18n-placeholder="ui_search_player" placeholder="Pesquisar jogador por ID ou nome..." oninput="window.__coinshop.filterPlayers()" />
-            </div>
-            <button class="btn btn-secondary" data-action="refreshPlayers" data-i18n="ui_refresh">Atualizar</button>
-
-            <div class="admin-table">
-              <div class="admin-table-head">
-                <div data-i18n="ui_id">ID</div>
-                <div data-i18n="ui_name">Nome</div>
-                <div data-i18n="ui_coins">Moedas</div>
-                <div data-i18n="ui_actions">Ações</div>
-              </div>
-              <div id="admin-players-list"></div>
-            </div>
-
-            <h4 data-i18n="ui_activity_logs">Logs de Atividade</h4>
-            <div id="activity-logs" class="data-list"></div>
-          </div>
-
-          <!-- ABA: customize-ui -->
-          <div id="customize-ui-tab" class="admin-tab hidden">
-            <h4 data-i18n="ui_colors">Cores</h4>
-            <div class="theme-grid">
-              <label data-i18n="ui_accent_color">Cor de Destaque</label>
-              <input type="text" id="theme-accentColor" />
-              <label data-i18n="ui_bg_color">Cor de Fundo</label>
-              <input type="text" id="theme-bgColor" />
-              <label data-i18n="ui_text_color">Cor do Texto</label>
-              <input type="text" id="theme-textColor" />
-              <label data-i18n="ui_error_color">Cor de Erro</label>
-              <input type="text" id="theme-errorColor" />
-              <label data-i18n="ui_card_border_color">Cor da Borda do Cartão</label>
-              <input type="text" id="theme-cardBorderColor" />
-
-              <h4 data-i18n="ui_background">Fundo</h4>
-              <label data-i18n="ui_image_url">URL da Imagem</label>
-              <input type="text" id="theme-bgImage" />
-              <label data-i18n="ui_opacity">Opacidade</label>
-              <input type="text" id="theme-bgOpacity" />
-              <label data-i18n="ui_blur">Desfoque</label>
-              <input type="text" id="theme-bgBlur" />
-
-              <h4 data-i18n="ui_cards">Cartões</h4>
-              <label data-i18n="ui_bg_opacity">Opacidade do Fundo</label>
-              <input type="text" id="theme-cardBgOpacity" />
-              <label data-i18n="ui_border_radius">Raio da Borda</label>
-              <input type="text" id="theme-cardBorderRadius" />
-
-              <h4 data-i18n="ui_coin_icon">Ícone da Moeda</h4>
-              <label data-i18n="ui_icon_url">URL do Ícone</label>
-              <input type="text" id="theme-coinIcon" />
-            </div>
-            <div class="modal-actions">
-              <button class="btn btn-ghost" data-action="resetSettings" data-i18n="ui_reset_defaults">Restaurar Padrões</button>
-              <button class="btn btn-primary" data-action="saveSettings" data-i18n="ui_save_settings">Salvar Configurações</button>
-            </div>
-          </div>
         </div>
-      </div>
-
-      <!-- COMPRA DE OFERTA -->
-      <div id="deal-purchase-overlay" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_confirm_deal">Confirmar Compra da Oferta</h3>
-          <div id="deal-purchase-name" class="modal-item-name"></div>
-          <div id="deal-purchase-price" class="modal-item-price"></div>
-          <p class="modal-sub" data-i18n="ui_items_included">Itens incluídos:</p>
-          <div id="deal-purchase-items" class="deal-items"></div>
-          <div class="modal-coins">
-            <span data-i18n="ui_coins">Moedas</span>
-            <strong id="deal-purchase-coins">0</strong>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideOverlay" data-overlay="deal-purchase" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-deal-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================
-           MODAIS INTERNOS — criar/editar/deletar/oferta
-           ============================================================ -->
-
-      <!-- CRIAR/EDITAR ITEM -->
-      <div id="create-modal" class="overlay hidden">
-        <div class="modal modal-wide">
-          <div class="modal-head">
-            <h3 id="create-modal-title" class="modal-title" data-i18n="ui_create_package_title">Criar Pacote</h3>
-            <button class="btn btn-icon-only" data-action="hideCreateModal" title="Fechar">
-              <span class="btn-icon" data-svg="close"></span>
-            </button>
-          </div>
-          <div class="theme-grid">
-            <input type="hidden" id="create-id" />
-            <label data-i18n="ui_enter_name">Nome</label>
-            <input type="text" id="create-name" data-i18n-placeholder="ui_enter_name" />
-            <label data-i18n="ui_description">Descrição</label>
-            <textarea id="create-description" rows="2" data-i18n-placeholder="ui_enter_description"></textarea>
-            <label data-i18n="ui_price_coins">Preço (Moedas)</label>
-            <input type="number" id="create-price" min="0" data-i18n-placeholder="ui_enter_price" />
-            <label data-i18n="ui_type">Tipo</label>
-            <select id="create-category">
-              <option value="item" data-i18n="ui_item">Item</option>
-              <option value="vehicle" data-i18n="ui_vehicle">Veículo</option>
-              <option value="weapon" data-i18n="ui_weapon">Arma</option>
-              <option value="tool" data-i18n="ui_tool">Ferramenta</option>
-            </select>
-            <label data-i18n="ui_category">Categoria <span data-i18n="ui_category_optional">(opcional)</span></label>
-            <input type="hidden" id="create-custom-category" value="none" />
-            <div id="create-custom-category-select" class="custom-select">
-              <div class="custom-select-trigger" onclick="window.__coinshop.toggleCustomSelect('create-custom-category-select')">
-                <span class="cs-label" data-i18n="ui_none_default">Nenhum (Padrão)</span>
-                <span class="cs-chevron">▾</span>
-              </div>
-              <div class="custom-select-options"></div>
-            </div>
-
-            <!-- Campos condicionais por tipo -->
-            <div id="create-vehicle-fields" class="create-fields hidden">
-              <label data-i18n="ui_spawn_name">Nome de Spawn <span data-i18n="ui_spawn_hint">(nome do modelo GTA, ex: adder)</span></label>
-              <input type="text" id="create-spawnName" />
-            </div>
-            <div id="create-item-fields" class="create-fields hidden">
-              <label data-i18n="ui_item_name">Nome do Item <span data-i18n="ui_item_hint">(item do inventário)</span></label>
-              <input type="text" id="create-itemName" />
-              <label data-i18n="ui_count">Quantidade</label>
-              <input type="number" id="create-itemCount" min="1" value="1" />
-            </div>
-            <div id="create-weapon-fields" class="create-fields hidden">
-              <label data-i18n="ui_weapon_name">Nome da Arma <span data-i18n="ui_weapon_hint">(hash de arma GTA)</span></label>
-              <input type="text" id="create-weaponName" />
-            </div>
-
-            <label data-i18n="ui_tags">Tags (separadas por vírgula)</label>
-            <input type="text" id="create-tags" />
-            <label data-i18n="ui_icon">Imagem (URL)</label>
-            <input type="text" id="create-images" data-i18n-placeholder="ui_enter_image_url" />
-
-            <label class="checkbox-line">
-              <input type="checkbox" id="create-trending" />
-              <span data-i18n="ui_mark_trending">Marcar como Tendência</span>
-            </label>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideCreateModal" data-i18n="ui_cancel">Cancelar</button>
-            <button id="save-item-btn" class="btn btn-primary" data-i18n="ui_save">Salvar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- CRIAR CATEGORIA -->
-      <div id="category-modal" class="overlay hidden">
-        <div class="modal">
-          <div class="modal-head">
-            <h3 class="modal-title" data-i18n="ui_create_category">+ Criar Categoria</h3>
-            <button class="btn btn-icon-only" data-action="hideCategoryModal" title="Fechar">
-              <span class="btn-icon" data-svg="close"></span>
-            </button>
-          </div>
-          <div class="theme-grid">
-            <input type="hidden" id="category-id" />
-            <label data-i18n="ui_enter_name">Nome</label>
-            <input type="text" id="category-name" />
-            <label data-i18n="ui_icon">Ícone <span data-i18n="ui_icon_hint">(URL SVG ou imagem)</span></label>
-            <input type="text" id="category-icon" />
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideCategoryModal" data-i18n="ui_cancel">Cancelar</button>
-            <button id="save-category-btn" class="btn btn-primary" data-i18n="ui_save">Salvar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- CRIAR OFERTA -->
-      <div id="deal-modal" class="overlay hidden">
-        <div class="modal modal-wide">
-          <div class="modal-head">
-            <h3 class="modal-title" data-i18n="ui_create_deal_title">Criar Oferta Especial</h3>
-            <button class="btn btn-icon-only" data-action="hideDealModal" title="Fechar">
-              <span class="btn-icon" data-svg="close"></span>
-            </button>
-          </div>
-          <div class="theme-grid">
-            <label data-i18n="ui_enter_deal_name">Nome</label>
-            <input type="text" id="deal-name" />
-            <label data-i18n="ui_description">Descrição</label>
-            <textarea id="deal-description" rows="2"></textarea>
-            <label data-i18n="ui_price_coins">Preço (Moedas)</label>
-            <input type="number" id="deal-price" min="0" />
-            <label data-i18n="ui_expires_in">Expira Em (segundos)</label>
-            <input type="number" id="deal-expires" min="60" />
-            <label data-i18n="ui_icon">Imagem (URL)</label>
-            <input type="text" id="deal-image" />
-            <label data-i18n="ui_select_items">Selecionar Itens (Máx 10)</label>
-            <div id="deal-items-picker" class="deal-items-picker"></div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideDealModal" data-i18n="ui_cancel">Cancelar</button>
-            <button id="save-deal-btn" class="btn btn-primary" data-i18n="ui_create">Criar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- GIVE COINS -->
-      <div id="give-coins-modal" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_give_coins">Dar Moedas</h3>
-          <div class="theme-grid">
-            <label data-i18n="ui_id">ID</label>
-            <input type="number" id="give-target-id" readonly />
-            <label data-i18n="ui_amount">Quantidade</label>
-            <input type="number" id="give-amount" min="1" data-i18n-placeholder="ui_enter_amount" placeholder="Digite a quantidade..." />
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideGiveCoinsModal" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-give-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- SET COINS -->
-      <div id="set-coins-modal" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_set_coins">Definir Moedas</h3>
-          <div class="theme-grid">
-            <label data-i18n="ui_id">ID</label>
-            <input type="number" id="set-target-id" readonly />
-            <label data-i18n="ui_amount">Quantidade</label>
-            <input type="number" id="set-amount" min="0" data-i18n-placeholder="ui_enter_amount" placeholder="Digite a quantidade..." />
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideSetCoinsModal" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-set-btn" class="btn btn-primary" data-i18n="ui_confirm">Confirmar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DELETE CONFIRM -->
-      <div id="delete-confirm-modal" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_confirm_delete">Confirmar Exclusão</h3>
-          <p id="delete-message" class="modal-sub"></p>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideDeleteConfirm" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-delete-btn" class="btn btn-danger" data-i18n="ui_delete">Excluir</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- CLEAR ALL CONFIRM -->
-      <div id="clear-all-modal" class="overlay hidden">
-        <div class="modal">
-          <h3 class="modal-title" data-i18n="ui_clear_all_title">Limpar Todos os Dados</h3>
-          <p class="modal-sub" data-i18n="ui_clear_all_msg">Isso excluirá permanentemente todos os pacotes, categorias e ofertas da loja. Esta ação não pode ser desfeita.</p>
-          <div class="modal-actions">
-            <button class="btn btn-ghost" data-action="hideClearAll" data-i18n="ui_cancel">Cancelar</button>
-            <button id="confirm-clear-btn" class="btn btn-danger" data-i18n="ui_clear_everything">Limpar Tudo</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- TOAST -->
-      <div id="toast" class="toast hidden"></div>
+      </main>
     </div>
 
-    <script src="js/app.js"></script>
-  </body>
+    <!-- ======================================================
+         MODAIS
+         ====================================================== -->
+
+    <!-- ITEM (criar/editar) -->
+    <div class="csa-overlay hidden" data-modal="item">
+      <div class="csa-modal">
+        <h3 data-el="itemModalTitle">Novo item</h3>
+        <div class="csa-form-grid">
+          <label class="csa-field"><span>ID (vazio = automático)</span><input type="text" class="csa-input" data-f="id" maxlength="50" /></label>
+          <label class="csa-field"><span>Nome *</span><input type="text" class="csa-input" data-f="name" maxlength="100" /></label>
+          <label class="csa-field full"><span>Descrição</span><input type="text" class="csa-input" data-f="description" maxlength="255" /></label>
+          <label class="csa-field"><span>Preço (moedas)</span><input type="number" class="csa-input" data-f="price" min="0" max="1000000" /></label>
+          <label class="csa-field"><span>Tipo</span>
+            <select class="csa-input" data-f="category">
+              <option value="vehicle">Veículo</option>
+              <option value="item" selected>Item</option>
+              <option value="weapon">Arma</option>
+              <option value="tool">Ferramenta</option>
+            </select>
+          </label>
+          <label class="csa-field" data-cond="vehicle"><span>Spawn name do veículo</span><input type="text" class="csa-input" data-f="spawnName" maxlength="50" /></label>
+          <label class="csa-field" data-cond="item tool weapon"><span>Item do inventário</span><input type="text" class="csa-input" data-f="itemName" maxlength="50" /></label>
+          <label class="csa-field" data-cond="item tool"><span>Quantidade</span><input type="number" class="csa-input" data-f="itemCount" min="1" max="1000" value="1" /></label>
+          <label class="csa-field" data-cond="weapon"><span>Arma (WEAPON_...)</span><input type="text" class="csa-input" data-f="weaponName" maxlength="50" /></label>
+          <label class="csa-field"><span>Categoria custom (aba extra)</span><select class="csa-input" data-f="customCategory"><option value="">Nenhuma</option></select></label>
+          <label class="csa-field"><span>Tags (separadas por vírgula)</span><input type="text" class="csa-input" data-f="tags" /></label>
+          <label class="csa-field full"><span>Imagens (URLs separadas por vírgula)</span><input type="text" class="csa-input" data-f="images" /></label>
+          <div class="csa-img-preview" data-el="itemImgPreview" hidden></div>
+          <label class="csa-check"><input type="checkbox" data-f="trending" /><span>Destaque (trending)</span></label>
+        </div>
+        <div class="csa-modal-actions">
+          <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>
+          <button type="button" class="csa-btn primary" data-action="saveItem">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORIA (criar/editar) -->
+    <div class="csa-overlay hidden" data-modal="cat">
+      <div class="csa-modal slim">
+        <h3 data-el="catModalTitle">Nova categoria</h3>
+        <label class="csa-field"><span>Nome *</span><input type="text" class="csa-input" data-f="catName" maxlength="100" /></label>
+        <label class="csa-field"><span>Ícone (URL/data URI, opcional)</span><input type="text" class="csa-input" data-f="catIcon" maxlength="500" /></label>
+        <div class="csa-modal-actions">
+          <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>
+          <button type="button" class="csa-btn primary" data-action="saveCat">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- OFERTA/COMBO (criar/editar) -->
+    <div class="csa-overlay hidden" data-modal="deal">
+      <div class="csa-modal">
+        <h3 data-el="dealModalTitle">Nova oferta</h3>
+        <div class="csa-form-grid">
+          <label class="csa-field"><span>Nome *</span><input type="text" class="csa-input" data-f="dealName" maxlength="100" /></label>
+          <label class="csa-field"><span>Preço (moedas)</span><input type="number" class="csa-input" data-f="dealPrice" min="0" max="1000000" /></label>
+          <label class="csa-field full"><span>Descrição</span><input type="text" class="csa-input" data-f="dealDesc" maxlength="255" /></label>
+          <label class="csa-field"><span>Expira em (horas; na edição vazio = manter)</span><input type="number" class="csa-input" data-f="dealHours" min="1" max="720" /></label>
+          <label class="csa-field"><span>Imagem (URL, opcional)</span><input type="text" class="csa-input" data-f="dealImage" maxlength="500" /></label>
+        </div>
+        <p class="csa-hint">Itens do combo (1 a 10): <strong><span data-el="dealPickerCount">0</span> selecionado(s)</strong></p>
+        <input type="text" class="csa-input" data-el="dealPickerSearch" placeholder="Filtrar itens..." maxlength="40" style="margin-bottom:8px" />
+        <div class="csa-picker" data-el="dealPicker"></div>
+        <div class="csa-modal-actions">
+          <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>
+          <button type="button" class="csa-btn primary" data-action="saveDeal">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOEDAS (dar/definir) -->
+    <div class="csa-overlay hidden" data-modal="coins">
+      <div class="csa-modal slim">
+        <h3 data-el="coinsModalTitle">Dar moedas</h3>
+        <p class="csa-hint" data-el="coinsModalTarget">Jogador —</p>
+        <label class="csa-field"><span>Quantidade</span><input type="number" class="csa-input" data-f="coinsAmount" min="0" max="10000000" /></label>
+        <div class="csa-modal-actions">
+          <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>
+          <button type="button" class="csa-btn primary" data-action="confirmCoins">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIRMAÇÃO (excluir / limpar tudo) -->
+    <div class="csa-overlay hidden" data-modal="confirm">
+      <div class="csa-modal slim">
+        <h3>Tem certeza?</h3>
+        <p class="csa-hint" data-el="confirmMsg">Esta ação não pode ser desfeita.</p>
+        <div class="csa-modal-actions">
+          <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>
+          <button type="button" class="csa-btn danger" data-action="confirmYes">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="csa-toast hidden" data-el="toast"></div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
 </html>
