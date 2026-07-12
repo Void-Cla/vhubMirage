@@ -167,8 +167,16 @@ function playTrack(it, li) {
   if (li) li.classList.add('is-playing');
 
   setTrackMeta(it.title, it.artist);
-  post('soundPlay', { url: it.url, volume: _sound.volume / 100 });
+  post('soundPlay', { url: it.url, volume: _sound.volume / 100, title: it.title || '' });
   setPlaying(true);
+  refreshVideoIfOn();   // se a telinha está ligada, reexibe com a nova faixa
+}
+
+// se o "vídeo no carro" está ligado, reenvia o pedido de exibição (nova faixa/URL).
+// dá um respiro p/ o servidor registrar o som ativo antes de pedir o vídeo.
+function refreshVideoIfOn() {
+  if (!_sound.video) return;
+  setTimeout(function () { post('soundVideo', { show: true }); }, 250);
 }
 
 function togglePlaySearch() {
@@ -189,6 +197,7 @@ function togglePlayRadio() {
 function playRadio() {
   post('soundRadio', { volume: _sound.volume / 100 });
   setPlaying(true);   // confirmação real chega em onSoundNow / onSoundRejected
+  refreshVideoIfOn();
 }
 
 // servidor informa a faixa que entrou no ar (rádio)
@@ -210,8 +219,9 @@ function togglePlayUrl() {
   if (!url) { pulseBtn(el.soundUrlInput); return; }
 
   setTrackMeta('Tocando agora', 'Stream remoto');
-  post('soundPlay', { url: url, volume: _sound.volume / 100 });
+  post('soundPlay', { url: url, volume: _sound.volume / 100, title: 'Link do carro' });
   setPlaying(true);
+  refreshVideoIfOn();
 }
 
 function onSoundRejected() {

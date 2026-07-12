@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caticus Chairs</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="prompt-container" class="prompt-container hidden">
+        <div class="prompt-box" id="prompt-box">
+            <div class="prompt-key">[<span id="prompt-key-text">E</span>]</div>
+            <div class="prompt-text" id="prompt-text">Sit</div>
+        </div>
+    </div>
+    <div id="chair-menu-overlay" class="chair-menu-overlay hidden">
+        <div class="chair-menu-box">
+            <div class="chair-menu-header">
+                <h1>Chair UI Settings</h1>
+                <p>Customize the size and color of the sit prompt.</p>
+            </div>
+
+            <div class="chair-menu-section">
+                <h2>Theme Color</h2>
+                <div class="theme-options">
+                    <button class="theme-btn" data-theme="teal">Teal</button>
+                    <button class="theme-btn" data-theme="purple">Purple</button>
+                    <button class="theme-btn" data-theme="red">Red</button>
+                    <button class="theme-btn" data-theme="white">White</button>
+                </div>
+            </div>
+
+            <div class="chair-menu-section">
+                <h2>UI Size</h2>
+                <div class="size-control">
+                    <input type="range" id="size-slider" min="80" max="130" value="100">
+                    <span id="size-value">100%</span>
+                </div>
+            </div>
+
+            <div class="chair-menu-actions">
+                <button id="chair-menu-save" class="chair-menu-btn primary">Save</button>
+                <button id="chair-menu-cancel" class="chair-menu-btn secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
+

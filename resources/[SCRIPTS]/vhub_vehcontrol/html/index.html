@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>vHub — Controle do Veículo</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style-core.css" />
   <link rel="stylesheet" href="style-controls.css" />
   <link rel="stylesheet" href="style-ficha.css" />
@@ -14,21 +11,15 @@
 </head>
 <body>
 
-  <!-- ============================================================
-       WRAPPER GLOBAL — preserva #vc-panel para compatibilidade com o
-       Lua (showPanel/hidePanel toggla .hidden neste elemento). Aqui ele
-       deixou de ser um único cartão e passou a ser o palco dos 3 asides
-       (Esquerda · Topo-Centro · Direita). Pointer-events fica nos asides.
-       ============================================================ -->
+  <!-- Wrapper global — palco transparente. Lua toggla .hidden aqui. -->
   <div id="vc-panel" class="vc-panel hidden">
-
-    <!-- Botão global de fechar (preserva #btn-close) — fica no aside Som -->
 
     <!-- ============================================================
          ASIDE ESQUERDA — CONTROLES DO VEÍCULO
          ============================================================ -->
     <aside class="vc-aside vc-aside-controls" data-drag-root>
       <div class="vc-aura" aria-hidden="true"></div>
+      <div class="vc-noise" aria-hidden="true"></div>
 
       <header class="vc-header" data-drag-handle>
         <div class="vc-grip" aria-hidden="true">
@@ -41,7 +32,7 @@
         </div>
       </header>
 
-      <!-- Combustível dedicado, full width -->
+      <!-- Combustível -->
       <div class="vc-fuel" title="Combustível">
         <svg class="vc-fuel-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M4 20V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3l2-2 2 2V20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -53,7 +44,6 @@
 
       <div class="vc-controls" data-tab-body="controls">
 
-        <!-- Portas -->
         <div class="vc-section-label">Portas</div>
         <div class="vc-btn-grid vc-doors">
           <button class="vc-btn" data-action="door" data-door="lfdoor" title="Porta dianteira esquerda">
@@ -82,7 +72,6 @@
           </button>
         </div>
 
-        <!-- Janelas -->
         <div class="vc-section-label">Janelas</div>
         <div class="vc-btn-grid vc-windows">
           <button class="vc-btn" data-action="window" data-window="lfdoor" title="Janela dianteira esquerda">
@@ -103,7 +92,6 @@
           </button>
         </div>
 
-        <!-- Controles -->
         <div class="vc-section-label">Controles</div>
         <div class="vc-btn-grid vc-ctrl">
           <button class="vc-btn vc-btn-toggle" id="btn-engine" data-action="engine" title="Ligar/Desligar motor">
@@ -132,15 +120,16 @@
           </button>
         </div>
 
-      </div><!-- /vc-controls -->
-    </aside><!-- /vc-aside-controls -->
+      </div>
+    </aside>
 
 
     <!-- ============================================================
-         ASIDE TOPO-CENTRO — SOM (placeholder visual; sem callbacks)
+         ASIDE TOPO-CENTRO — SOM
          ============================================================ -->
     <aside class="vc-aside vc-aside-sound" data-drag-root>
       <div class="vc-aura" aria-hidden="true"></div>
+      <div class="vc-noise" aria-hidden="true"></div>
 
       <header class="vc-header vc-header-sound" data-drag-handle>
         <div class="vc-grip" aria-hidden="true">
@@ -163,7 +152,6 @@
           </div>
         </div>
 
-        <!-- Visualizador (barrinhas decorativas) -->
         <div class="vc-sound-viz" id="sound-viz" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span>
           <span></span><span></span><span></span><span></span><span></span>
@@ -173,7 +161,6 @@
       </header>
 
       <div class="vc-sound-body">
-        <!-- Transport -->
         <div class="vc-sound-transport">
           <button class="vc-sound-ibtn" id="sound-prev" title="Anterior">
             <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6 4v12H4V4h2zm10 0v12L7 10l9-6z"/></svg>
@@ -186,28 +173,24 @@
           </button>
         </div>
 
-        <!-- Fonte (segmented) -->
         <div class="vc-sound-tabs" role="tablist">
           <button class="vc-sound-tab" data-source="radio">Rádio</button>
           <button class="vc-sound-tab is-active" data-source="search">Buscar</button>
           <button class="vc-sound-tab" data-source="url">Link</button>
         </div>
 
-        <!-- Busca de música (só visível na fonte "Buscar") -->
         <div class="vc-sound-search" id="sound-search-row">
           <input class="vc-sound-url-input" id="sound-search-input" type="text"
                  placeholder="Buscar música ou artista…" maxlength="80" autocomplete="off">
           <ul class="vc-sound-results" id="sound-results"></ul>
         </div>
 
-        <!-- Campo de URL (só visível na fonte "URL") -->
         <div class="vc-sound-url hidden" id="sound-url-row">
           <input class="vc-sound-url-input" id="sound-url-input" type="text"
                  placeholder="YouTube, SoundCloud ou link .mp3 direto…"
                  maxlength="512" autocomplete="off">
         </div>
 
-        <!-- Volume -->
         <div class="vc-sound-volume">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path d="M3 8v4h3l4 3V5L6 8H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -217,7 +200,6 @@
           <strong id="sound-volume-val">55%</strong>
         </div>
 
-        <!-- DVD no carro: mostra o clipe do vídeo do YouTube numa telinha (só quem está no carro) -->
         <button class="vc-sound-video" id="sound-video" type="button" aria-pressed="false" title="Mostrar vídeo no carro">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <rect x="2.5" y="4.5" width="15" height="11" rx="1.6" stroke="currentColor" stroke-width="1.4"/>
@@ -226,15 +208,15 @@
           <span>Vídeo no carro</span>
         </button>
       </div>
-    </aside><!-- /vc-aside-sound -->
+    </aside>
 
 
     <!-- ============================================================
          ASIDE DIREITA — FICHA / REMAP
-         (preserva todos os IDs antigos da ficha + nitro)
          ============================================================ -->
     <aside class="vc-aside vc-aside-ficha" data-drag-root>
       <div class="vc-aura" aria-hidden="true"></div>
+      <div class="vc-noise" aria-hidden="true"></div>
 
       <header class="vc-header" data-drag-handle>
         <div class="vc-grip" aria-hidden="true">
@@ -247,9 +229,6 @@
         </div>
       </header>
 
-      <!-- Tabs preservadas (escondidas via CSS) — switchTab() permanece
-           funcional p/ compat. data-tab-body="controls" continua existindo
-           no aside esquerdo; data-tab-body="ficha" aqui no direito. -->
       <div class="vc-tabs" role="tablist" hidden>
         <button class="vc-tab is-active" data-tab="controls" role="tab">Controles</button>
         <button class="vc-tab" data-tab="ficha" role="tab">Ficha</button>
@@ -257,13 +236,11 @@
 
       <div class="vc-ficha" data-tab-body="ficha">
 
-        <!-- carro sem p1 (não suporta skill) -->
         <div class="vc-ficha-empty hidden" id="ficha-empty">
           Este veículo não possui ficha de performance.
         </div>
 
         <div id="ficha-body">
-          <!-- Cabeçalho: tier + score -->
           <div class="vc-ficha-head">
             <div class="vc-tier-badge" id="ficha-tier">—</div>
             <div class="vc-ficha-headinfo">
@@ -273,23 +250,19 @@
             <button class="vc-ficha-editbtn" id="btn-ficha-edit" title="Calibrar pontos">Calibrar</button>
           </div>
 
-          <!-- Pontos -->
           <div class="vc-ficha-budget">
             <span id="ficha-budget-label">Pontos</span>
             <strong><span id="ficha-used">0</span> / <span id="ficha-budget">0</span></strong>
           </div>
 
-          <!-- Distribuição -->
           <div class="vc-section-label">Distribuição</div>
           <div class="vc-bars" id="ficha-alloc"></div>
 
-          <!-- Afinidade -->
           <div id="ficha-affinity-wrap">
             <div class="vc-section-label">Afinidade</div>
             <div class="vc-bars" id="ficha-affinity"></div>
           </div>
 
-          <!-- Nitro -->
           <div id="ficha-nitro-wrap">
             <div class="vc-section-label">Nitro</div>
 
@@ -320,22 +293,34 @@
             </div>
           </div>
 
-          <!-- Rodapé edição -->
           <div class="vc-ficha-editftr hidden" id="ficha-editftr">
             <button class="vc-btn" id="btn-ficha-cancel">Cancelar</button>
             <button class="vc-btn vc-btn-primary" id="btn-ficha-save">Salvar calibração</button>
           </div>
         </div>
 
-      </div><!-- /vc-ficha -->
-    </aside><!-- /vc-aside-ficha -->
+      </div>
+    </aside>
 
-  </div><!-- /vc-panel -->
+  </div>
 
-  <!-- Ordem importa: core primeiro (cacheia el e expõe vhub.ready) -->
+
+  <!-- TELINHA "DVD DO CARRO" — fora do painel de propósito -->
+  <div id="vc-dvd" class="vc-dvd hidden" data-drag-root>
+    <header class="vc-dvd-bar" data-drag-handle>
+      <span class="vc-dvd-dot" aria-hidden="true"></span>
+      <span class="vc-dvd-title" id="vc-dvd-title">DVD do carro</span>
+      <button class="vc-dvd-close" id="vc-dvd-close" title="Fechar vídeo" aria-label="Fechar">✕</button>
+    </header>
+    <div class="vc-dvd-frame" id="vc-dvd-frame"></div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+
   <script src="core.js"></script>
   <script src="controls.js"></script>
   <script src="ficha.js"></script>
   <script src="sound.js"></script>
+  <script src="video.js"></script>
 </body>
 </html>

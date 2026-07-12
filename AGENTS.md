@@ -5,13 +5,13 @@ Framework FiveM GTARP server-authoritative, Lua 5.4. Foco: cidade de corrida.
 
 ## Leitura obrigatória antes de qualquer ação (nesta ordem — economia de tokens)
 
-1. **Este `CLAUDE.md`** — leis L-01..L-19 (fonte única), Registro de Ownership, Orçamentos, **Fase Atual**
-2. `.claude/contexto.md` — memória institucional (SOMENTE o índice + as seções citadas pela tarefa)
-3. `.claude/AGENTS.md` — como os agentes operam (fluxo, formato de veredito, economia)
-4. `.claude/skills/*.md` — padrões JÁ validados (aplicar, não reinventar)
-5. `.claude/plano_core_v2/frozen_core_2.md` — **plano de descongelamento** do CORE (só quando a tarefa toca o CORE ou veículos)
+1. **Este `AGENTS.md`** — leis L-01..L-19 (fonte única), Registro de Ownership, Orçamentos, **Fase Atual**
+2. `.Codex/contexto.md` — memória institucional (SOMENTE o índice + as seções citadas pela tarefa)
+3. `.Codex/AGENTS.md` — como os agentes operam (fluxo, formato de veredito, economia)
+4. `.Codex/skills/*.md` — padrões JÁ validados (aplicar, não reinventar)
+5. `.Codex/plano_core_v2/frozen_core_2.md` — **plano de descongelamento** do CORE (só quando a tarefa toca o CORE ou veículos)
 
-> Hierarquia de verdade: **código/manifests atuais → CLAUDE.md → contexto.md → plano_core_v2/**.
+> Hierarquia de verdade: **código/manifests atuais → AGENTS.md → contexto.md → plano_core_v2/**.
 > Divergência doc×código: prevalece o código; registrar o risco.
 
 ---
@@ -21,13 +21,13 @@ Framework FiveM GTARP server-authoritative, Lua 5.4. Foco: cidade de corrida.
 > O time deixou de ser **guardião do freeze** e passou a ser **guia da migração**. A missão
 > não é mais "não tocar no CORE"; é **mover para o CORE o que é dele, sob gate**, sem gambiarra.
 
-> **STATUS 2026-07-03 — FASE 1 APLICADA e VALIDADA EM DEV; itens estáticos das FASES 2..6
-> aplicados** (decisões/ADRs #37–#50 — mesma numeração no `contexto.md` e no
-> `.claude/plano_core_v2/WORKLOG_CORE_V2.md`; **próximo livre = #51**): CORE v2.0.0-alpha.1 —
+> **STATUS 2026-07-10 — FASE 1 APLICADA e VALIDADA EM DEV; fuel da FASE 2 cortado
+> para o CORE** (decisões/ADRs #37–#50 e #61–#65 — mesma numeração no `contexto.md` e no
+> `.claude/plano_core_v2/WORKLOG_CORE_V2.md`; **próximo livre = #66**): CORE v2.0.0-alpha.3 —
 > handlers veiculares reanimados com gate físico (boot dev limpo 2026-07-03),
 > `commitVehicleState`/`getVehicleState`(cópia)/`vh_audit`, VRAM eviction TTL, batch com cap
 > de retry, registro efêmero anti-FK, despawn server-side (zero broadcast `-1`), dual-write
-> de fuel conce→CORE. Fuel em shadow-mode (`vhub_core_fuel=0`) até a FASE 2. Trust populado
+> de fuel conce→CORE concluído. Fuel autoritativo ativo (`vhub_core_fuel=1`). Trust populado
 > via `setr vhub_trusted_resources` no `config/server.cfg`. Orientação rápida:
 > `.claude/skills/mapa_core_v2.md`. **Checklist PARTE V (pentest/stress) pendente — bloqueia produção.**
 
@@ -72,9 +72,9 @@ resources/[CORE]/vhub_oxmysql/     ← adaptador vHub para oxmysql
 resources/[TOOLS]/vhub_testrunner/ ← runner de testes server-side
 tools/                             ← scripts PS1 de manutenção SQL
 metas/                             ← roadmap, decisões técnicas, referência natives
-.claude/
+.Codex/
   contexto.md    AGENTS.md         ← memória institucional e protocolo
-  agents/*.md                      ← agentes especializados (Claude Code nativo)
+  agents/*.md                      ← agentes especializados (Codex nativo)
 ```
 
 ## Leis imutáveis (L-01 a L-12)
@@ -121,7 +121,7 @@ Parar e reduzir escopo imediatamente ao detectar:
 
 ## Sistema multi-agente
 
-Agentes definidos em `.claude/agents/*.md` — formato nativo Claude Code, invocáveis via `Agent` tool.
+Agentes definidos em `.Codex/agents/*.md` — formato nativo Codex, invocáveis via `Agent` tool.
 
 ### Quando invocar cada agente
 
@@ -135,16 +135,16 @@ Agentes definidos em `.claude/agents/*.md` — formato nativo Claude Code, invoc
 | `vhub_guardiao_simplicidade` | Criar módulo, helper, camada nova, ou qualquer refactor |
 | `vhub_guardiao_designer` | Tocar NUI, CEF, HUD, `client/`, `SendNUIMessage`, `RegisterNUICallback` — identidade visual + CEF |
 | `vhub_guardiao_runtime` | Tocar engine NUI (`web/runtime/*`), lifecycle de módulo, store/eventbus/router, native bridge, lazy load |
-| `vhub_guardiao_revisao` | Gate final antes de todo commit relevante; único autorizado a escrever em `contexto.md` |
+| `vhub_guardiao_revisao` | O guardiao da revisao morreu, agora todos os agentes escrevem em contexto de forma resumida mas cirugica sobre oque acabou de fazer e onde mexeu. |
 | `vhub_designer` | Proposta ou redesign de NUI/interface componentizada |
 
 ### Fluxo preferencial multi-agente
 
 ```
-1. Ler .claude/contexto.md
+1. Ler .Codex/contexto.md
 2. Mapear arquivos tocados
 3. vhub_arquiteto → ownership, placement, fase
-4. Guardiões relevantes em PARALELO (somente os pertinentes ao risco)
+4. Guardiões relevantes em PARALELO (somente os pertinentes ao risco — ver "Gate mínimo" em AGENTS.md)
 5. Worker executa SOMENTE após todos aprovarem
 6. vhub_guardiao_revisao → gate final + atualiza contexto.md se necessário
 ```
@@ -472,13 +472,21 @@ O model padrão é `opusplan` — Opus 4.8 em PLAN MODE, Sonnet 4.6 em EXECUTE M
 | `vhub_arquiteto` | Opus 4.7 | xhigh | Decisões estruturais requerem raciocínio profundo. 4.7 tem xhigh como padrão |
 | `vhub_guardiao_revisao` | Opus 4.8 | xhigh | Gate final: máxima precisão, zero tolerância a erro |
 | `vhub_guardiao_seguranca` | Opus 4.8 | high | Zero-trust: precisão crítica, 4.8 mais confiável em edge cases |
+| `vhub_guardiao_persistencia` | Opus 4.8 | high | L-13: histórico real de perda de dados (bind `@dkey`, 8 call-sites externos) — sem corte |
 | `vhub_designer` | Opus 4.7 | high | Design técnico + criativo requer capacidade acima da média |
-| `vhub_guardiao_contrato` | Sonnet 4.6 | high | Pattern matching contra contratos conhecidos |
-| `vhub_guardiao_natives` | Sonnet 4.6 | high | Lookup de referência + pattern check |
-| `vhub_guardiao_performance` | Sonnet 4.6 | high | Análise de padrões de performance |
-| `vhub_guardiao_designer` | Sonnet 4.6 | high | Verificação de identidade visual |
-| `vhub_guardiao_runtime` | Sonnet 4.6 | high | Patterns arquiteturais JS (A-01..A-08) |
-| `vhub_guardiao_simplicidade` | Sonnet 4.6 | medium | Checks simples, não requer raciocínio profundo |
+| `vhub_guardiao_natives` | Sonnet 4.6 | high | Autoridade de entidade/spawn é sutil (L-16) — mantido em high |
+| `vhub_guardiao_contrato` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Pattern matching contra contratos conhecidos — mecânico o bastante para medium |
+| `vhub_guardiao_performance` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Checagem contra tabela de Orçamentos (contrato fixo), não raciocínio aberto |
+| `vhub_guardiao_designer` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Checklist de identidade visual (A-09/A-10), fixo |
+| `vhub_guardiao_runtime` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Patterns arquiteturais JS (A-01..A-08), fixo |
+| `vhub_guardiao_simplicidade` | **Haiku 4.5** (2026-07-08, ↓ de Sonnet) | medium | Check mais mecânico (L-15 dead code/duplicação) — não precisa de Sonnet |
+
+> Downgrades de 2026-07-08: motivados por auditoria de custo de tokens (subagentes = 83% do
+> uso do mês). Critério aplicado: guardiões com checklist/tabela fixa → `medium`; o mais
+> mecânico (`simplicidade`) → Haiku. **Não** tocado: `persistencia`, `seguranca`, `revisao`,
+> `arquiteto`, `natives` — histórico de risco real (perda de dado, spawn, gate final) não
+> negocia custo. Se algum guardião rebaixado começar a deixar passar problema real, suba de
+> volta primeiro para ele antes de qualquer outro ajuste.
 
 ### Economia de tokens na prática
 
@@ -500,12 +508,12 @@ Inclua `ultrathink` no prompt para solicitar raciocínio mais profundo naquele t
 
 ## Auto-memory
 
-O Claude Code gera memórias automáticas das conversas (`autoMemory: true` no settings.json).
-Estas memórias ficam em `.claude/memory/` e são carregadas em sessões futuras.
+O Codex gera memórias automáticas das conversas (`autoMemory: true` no settings.json).
+Estas memórias ficam em `.Codex/memory/` e são carregadas em sessões futuras.
 
 **IMPORTANTE**: As memórias automáticas COMPLEMENTAM, não substituem o `contexto.md`.
 - `contexto.md` = verdade institucional (escrita por `vhub_guardiao_revisao`)
-- `.claude/memory/` = padrões de uso e preferências detectados automaticamente
+- `.Codex/memory/` = padrões de uso e preferências detectados automaticamente
 
 Se houver conflito, **prevalece o `contexto.md`**.
 
@@ -516,9 +524,9 @@ Se houver conflito, **prevalece o `contexto.md`**.
 O dono concedeu **autonomia detalhada de produção**: agir sem pedir confirmação a cada passo, tomando as decisões de engenharia e seguindo o fluxo lógico de criação/manutenção — para economizar tempo/tokens e manter o projeto coeso, semântico, seguro e flexível.
 
 - **Autonomia ≠ pular governança.** Continue rodando os gates: `vhub_arquiteto` (estrutura/placement/ownership), guardiões pertinentes ao risco (em paralelo), e `vhub_guardiao_revisao` (gate final + escrita do `contexto.md`). Pare apenas nas **condições de parada obrigatória** reais (2ª fonte de verdade, core frozen sem destrave, cliente decidindo verdade crítica, etc.).
-- **Fábrica de skills (`.claude/skills/`):** ao validar um padrão novo (aprovado em revisão de agente), documente-o como skill reutilizável. Só padrões **validados** — nunca fabricar. Em sessões futuras, consulte `.claude/skills/` e aplique.
+- **Fábrica de skills (`.Codex/skills/`):** ao validar um padrão novo (aprovado em revisão de agente), documente-o como skill reutilizável. Só padrões **validados** — nunca fabricar. Em sessões futuras, consulte `.Codex/skills/` e aplique.
 - **`contexto.md` é o segundo cérebro COMPLETO.** Escreva tudo lá (via gate `vhub_guardiao_revisao`); **não enxugue por tamanho** — o cap de 20 KB do protocolo NÃO se aplica (o dono quer o registro completo; é o que economiza tokens em sessões futuras). Deduplicar conteúdo **stale/contraditório** é correção válida; encolher por tamanho, não.
-- Encodar convenções/decisões permanentes neste `CLAUDE.md` é permitido sob esta autonomia.
+- Encodar convenções/decisões permanentes neste `AGENTS.md` é permitido sob esta autonomia.
 
 Ver convenção **Export-first** em "Padrões obrigatórios de código → Regras de escrita".
 
@@ -541,11 +549,11 @@ Enquanto o CORE está sendo descongelado, escrever em `resources/[CORE]/vhub/**`
 
 ## MCP — Model Context Protocol
 
-Servidores MCP declarados em `.mcp.json` (raiz do repo, ao lado de `.claude/`). São ferramentas
+Servidores MCP declarados em `.mcp.json` (raiz do repo, ao lado de `.Codex/`). São ferramentas
 extras que a sessão e os agentes podem usar; ativação por servidor, sem segredo hardcoded.
 
-- **`filesystem`** (ativo): leitura/escrita restrita à raiz do projeto — navegação e edição sob as mesmas regras de permissão/hook do Claude Code.
+- **`filesystem`** (ativo): leitura/escrita restrita à raiz do projeto — navegação e edição sob as mesmas regras de permissão/hook do Codex.
 - **`git`** (opcional): histórico, diff e blame estruturados — útil para o `vhub_guardiao_revisao` inspecionar a mudança sem custo de shell. Requer `uvx`/Python; habilitar quando disponível.
 - Regras: nenhum servidor MCP contorna os gates de `settings.json` nem escreve em `contexto.md`/CORE sem o mesmo gate. Chave/token de servidor MCP vai em `.env`/variável de ambiente, **nunca** no `.mcp.json` versionado.
 
-Para adicionar um servidor, editar `.mcp.json` e reiniciar a sessão (o Claude Code recarrega MCP no boot).
+Para adicionar um servidor, editar `.mcp.json` e reiniciar a sessão (o Codex recarrega MCP no boot).

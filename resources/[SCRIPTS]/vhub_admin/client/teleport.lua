@@ -132,3 +132,14 @@ RegisterCommand('tplast', function()
   if not VHubAdmin.state.is_admin then return end
   TriggerServerEvent(E.ACT_TPLAST)
 end, false)
+
+RegisterCommand('tpz', function(_, args)
+  if not VHubAdmin.state.is_admin then return end
+  local zone = args[1] and args[1]:lower()
+  if zone then TriggerServerEvent(E.ACT_TPZ, zone); return end
+  -- sem arg: lista zonas dispon veis (config compartilhada)
+  local names = {}
+  for k in pairs(VHubAdmin.cfg.teleport_zones) do names[#names+1] = k end
+  table.sort(names)
+  VHubAdmin.notify('Uso: /tpz <zona>  Zonas: ' .. table.concat(names, ', '))
+end, false)

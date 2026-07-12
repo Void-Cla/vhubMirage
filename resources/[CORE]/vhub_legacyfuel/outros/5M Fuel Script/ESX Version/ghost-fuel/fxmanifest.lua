@@ -1,0 +1,32 @@
+fx_version 'cerulean'
+game 'gta5'
+
+author 'Gh0st / Team 5M'
+description 'A simple free and open source fuel script that adds realistic hoses for fuel nozzles'
+website 'www.5Mservers.com'
+
+version '1.0.0'
+
+shared_scripts {
+    '@ox_lib/init.lua',
+    '@es_extended/imports.lua',
+	'@es_extended/locale.lua',
+	'locales/*.lua',
+    'config.lua'
+}
+
+
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+	'server/main.lua'
+}
+
+client_scripts {
+	'client/main.lua'
+}
+
+dependencies {
+	'es_extended',
+}
+
+lua54 'yes'

@@ -12,28 +12,27 @@ local E    = VHubCustom.E
 -- HELPERS INTERNOS
 -- ============================================================
 
--- calcula custo de cosmético por tipo de campo recebido no payload
-local function calcCost(payload)
+-- calcula custo de cosmético pelo patch JÁ validado (após buildCosmeticPatch).
+-- Derivar do custPatch (não do payload bruto) evita cobrar mods rejeitados pela whitelist.
+local function calcCost(patch)
   local prices = CFG.prices
   local total  = 0
 
-  if payload.colours     then total = total + prices.cor_primaria + prices.cor_secundaria end
-  if payload.custom_primary   then total = total + prices.cor_custom end
-  if payload.custom_secondary then total = total + prices.cor_custom end
-  if payload.extra_colours then
-    total = total + prices.cor_perolado + prices.cor_roda
-  end
-  if payload.neons       then total = total + prices.neon end
-  if payload.neon_colour then total = total + prices.neon_cor end
-  if payload.smoke       then total = total + prices.fumaca end
-  if payload.tyre_smoke_color then total = total + prices.fumaca_cor end
-  if payload.xenon       then total = total + prices.xenon end
-  if payload.window_tint then total = total + prices.tint end
-  if payload.livery      then total = total + prices.livery end
-  if payload.plate_index then total = total + prices.plate_index end
-  if payload.wheel_type  then total = total + prices.wheel_type end
-  if payload.mods then
-    for _ in pairs(payload.mods) do total = total + prices.mod_cosmetic end
+  if patch.colours          then total = total + prices.cor_primaria + prices.cor_secundaria end
+  if patch.custom_primary   then total = total + prices.cor_custom end
+  if patch.custom_secondary then total = total + prices.cor_custom end
+  if patch.extra_colours    then total = total + prices.cor_perolado + prices.cor_roda end
+  if patch.neons            then total = total + prices.neon end
+  if patch.neon_colour      then total = total + prices.neon_cor end
+  if patch.smoke      ~= nil then total = total + prices.fumaca end
+  if patch.tyre_smoke_color then total = total + prices.fumaca_cor end
+  if patch.xenon      ~= nil then total = total + prices.xenon end
+  if patch.window_tint ~= nil then total = total + prices.tint end
+  if patch.livery     ~= nil then total = total + prices.livery end
+  if patch.plate_index ~= nil then total = total + prices.plate_index end
+  if patch.wheel_type ~= nil then total = total + prices.wheel_type end
+  if patch.mods then
+    for _ in pairs(patch.mods) do total = total + prices.mod_cosmetic end
   end
 
   return total
@@ -154,8 +153,8 @@ AddEventHandler(E.BENNYS_APPLY, function(plate, payload)
       Core.notify(src, 'Nenhum item cosmético válido selecionado.', 'error'); return
     end
 
-    -- 6. custo server-side
-    local custo = calcCost(payload)
+    -- 6. custo derivado do patch validado (não do payload bruto — evita cobrar mods rejeitados)
+    local custo = calcCost(custPatch)
     if custo > 0 and not Core.pay(src, custo) then
       Core.notify(src, ('Saldo insuficiente. Custo: R$ %d.'):format(custo), 'error')
       TriggerClientEvent(E.BENNYS_CONFIRM, src, p, false)

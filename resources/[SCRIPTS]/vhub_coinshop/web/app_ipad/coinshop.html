@@ -1,0 +1,239 @@
+<!-- web/app_ipad/coinshop.html — app CoinShop do iPad v2.4.0
+     Fragmento injetado em .mod-coinshop pelo shell do iPad.
+     Sem <html>/<head>/<body>, sem botão fechar (navbar do iPad fecha).
+     Sem CSS/JS inline. Escopo: .mod-coinshop .cs-* -->
+<section class="cs-shell">
+
+  <!-- ============================================================
+       ASIDE — marca + saldo + navegação vertical com ícones SVG
+       ============================================================ -->
+  <aside class="cs-aside">
+
+    <div class="cs-brand">
+      <svg class="cs-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" class="cs-logo-disc"/>
+        <circle cx="12" cy="12" r="7.6" class="cs-logo-ring"/>
+        <text x="12" y="16.4" text-anchor="middle" class="cs-logo-cash">$</text>
+      </svg>
+      <div class="cs-brand-txt">
+        <h1>CoinShop</h1>
+        <p data-el="player">—</p>
+      </div>
+    </div>
+
+    <div class="cs-coins" title="Seu saldo de moedas">
+      <svg viewBox="0 0 20 20" class="cs-coin-ico" aria-hidden="true">
+        <circle cx="10" cy="10" r="9" fill="#f3b53a"/>
+        <text x="10" y="14.5" text-anchor="middle"
+              font-size="10" font-weight="700" fill="#0c0a06"
+              font-family="'Barlow Condensed',system-ui">$</text>
+      </svg>
+      <strong data-el="coins">0</strong>
+      <span>moedas</span>
+    </div>
+
+    <!-- nav — entradas dinâmicas injetadas pelo JS -->
+    <nav class="cs-nav" data-el="nav"></nav>
+
+  </aside>
+
+  <!-- ============================================================
+       MAIN — topbar + status + corpo de views
+       ============================================================ -->
+  <main class="cs-main">
+
+    <!-- Topbar: título da view à esquerda, busca à direita -->
+    <div class="cs-topbar" data-el="toolbar">
+      <h2 class="cs-view-title" data-el="viewTitle">Destaques</h2>
+      <input class="cs-search" data-el="search" type="text"
+             placeholder="Pesquisar..." maxlength="40" />
+    </div>
+
+    <p class="cs-status" data-el="status" hidden></p>
+
+    <div class="cs-body">
+
+      <!-- ── JOGADOR ─────────────────────────────────────── -->
+
+      <div class="cs-grid" data-el="grid"></div>
+
+      <div class="cs-deals" data-el="deals" hidden></div>
+
+      <form class="cs-redeem" data-el="redeem" hidden>
+        <h2>Resgatar código</h2>
+        <p class="cs-sub">Cole o número do pedido ou código recebido para ganhar suas moedas.</p>
+        <input class="cs-input" data-el="redeemKey" type="text"
+               placeholder="VHC-XXXXXX-... ou tbx-xxxxxxxx" maxlength="100" autocomplete="off" />
+        <label class="cs-gift-row">
+          <input type="checkbox" data-el="giftToggle" />
+          <span>Presentear alguém (ID do jogador online)</span>
+        </label>
+        <input class="cs-input" data-el="giftId" type="text" inputmode="numeric"
+               placeholder="ID do jogador" maxlength="8" hidden />
+        <button type="submit" class="cs-btn primary">Resgatar</button>
+      </form>
+
+      <!-- Comprar Coins via Pix -->
+      <div class="cs-pix" data-el="pix" hidden>
+        <p class="cs-sub">Escolha um pacote, pague com Pix e receba as moedas na hora.</p>
+        <div class="cs-pix-packs" data-el="pixPacks"></div>
+        <div class="cs-pix-checkout" data-el="pixCheckout" hidden>
+          <div class="cs-pix-qr">
+            <img data-el="pixQrImg" alt="QR Code Pix" hidden />
+            <div class="cs-pix-qr-fallback" data-el="pixQrFallback">
+              <span class="cs-pix-qr-ico">▦</span>
+              <span data-el="pixQrTxt">O QR Code Pix aparecerá aqui</span>
+            </div>
+          </div>
+          <p class="cs-pix-expire" data-el="pixExpire" hidden></p>
+          <p class="cs-pix-msg" data-el="pixMsg" hidden></p>
+          <div class="cs-pix-copy-row" data-el="pixCopyRow" hidden>
+            <input class="cs-input cs-pix-copy-input" data-el="pixCopy" type="text" readonly
+                   title="Pix copia-e-cola" />
+            <button type="button" class="cs-btn cs-pix-copy-btn" data-el="pixCopyBtn"
+                    data-action="pix-copy">Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ADMIN: DASHBOARD ────────────────────────────── -->
+      <div class="cs-adm" data-el="admDash" hidden>
+        <div class="cs-adm-stats" data-el="admStats">
+          <div class="cs-stat-card">
+            <span class="cs-stat-lbl">Total de Itens</span>
+            <strong data-el="statItems">—</strong>
+          </div>
+          <div class="cs-stat-card">
+            <span class="cs-stat-lbl">Total Vendido</span>
+            <strong data-el="statSales">—</strong>
+          </div>
+          <div class="cs-stat-card">
+            <span class="cs-stat-lbl">Moedas (24h)</span>
+            <strong data-el="statCoins24h">—</strong>
+          </div>
+          <div class="cs-stat-card">
+            <span class="cs-stat-lbl">Online</span>
+            <strong data-el="statOnline">—</strong>
+          </div>
+        </div>
+        <h3 class="cs-adm-sec">Transações Recentes</h3>
+        <div class="cs-adm-list" data-el="admRecentTx"></div>
+      </div>
+
+      <!-- ── ADMIN: CATÁLOGO ─────────────────────────────── -->
+      <div class="cs-adm" data-el="admCatalog" hidden>
+        <div class="cs-adm-toolbar">
+          <button type="button" class="cs-btn primary" data-action="adm-item-new">+ Novo Item</button>
+          <button type="button" class="cs-btn ghost" data-action="adm-clear-all">Limpar Tudo</button>
+        </div>
+        <div class="cs-adm-list" data-el="admItemList"></div>
+      </div>
+
+      <!-- ── ADMIN: CATEGORIAS ───────────────────────────── -->
+      <div class="cs-adm" data-el="admCats" hidden>
+        <div class="cs-adm-toolbar">
+          <button type="button" class="cs-btn primary" data-action="adm-cat-new">+ Nova Categoria</button>
+        </div>
+        <div class="cs-adm-list" data-el="admCatList"></div>
+      </div>
+
+      <!-- ── ADMIN: OFERTAS ──────────────────────────────── -->
+      <div class="cs-adm" data-el="admDeals" hidden>
+        <div class="cs-adm-toolbar">
+          <button type="button" class="cs-btn primary" data-action="adm-deal-new">+ Nova Oferta</button>
+        </div>
+        <div class="cs-adm-list" data-el="admDealList"></div>
+      </div>
+
+      <!-- ── ADMIN: JOGADORES / MOEDAS ──────────────────── -->
+      <div class="cs-adm" data-el="admPlayers" hidden>
+        <div class="cs-adm-toolbar">
+          <button type="button" class="cs-btn sand" data-action="adm-players-refresh">↻ Atualizar</button>
+        </div>
+        <div class="cs-adm-list" data-el="admPlayerList"></div>
+      </div>
+
+      <!-- ── ADMIN: CÓDIGOS TEBEX ───────────────────────── -->
+      <div class="cs-adm" data-el="admCodes" hidden>
+        <div class="cs-adm-toolbar">
+          <button type="button" class="cs-btn primary" data-action="adm-code-new">+ Criar Código</button>
+          <button type="button" class="cs-btn sand" data-action="adm-codes-refresh">↻ Atualizar</button>
+        </div>
+        <div class="cs-adm-list" data-el="admCodeList"></div>
+      </div>
+
+      <!-- ── ADMIN: APARÊNCIA ────────────────────────────── -->
+      <div class="cs-adm" data-el="admTheme" hidden>
+        <form class="cs-adm-form" data-el="admThemeForm">
+          <label class="cs-adm-field">
+            <span>Cor de Destaque</span>
+            <input class="cs-input" type="text" name="accentColor" placeholder="#f3b53a" maxlength="20" />
+          </label>
+          <label class="cs-adm-field">
+            <span>Cor de Fundo</span>
+            <input class="cs-input" type="text" name="bgColor" placeholder="#0c0a06" maxlength="20" />
+          </label>
+          <label class="cs-adm-field">
+            <span>Ícone de Moeda (URL)</span>
+            <input class="cs-input" type="text" name="coinIcon" placeholder="URL da imagem" maxlength="255" />
+          </label>
+          <div class="cs-adm-actions">
+            <button type="submit" class="cs-btn primary">Salvar</button>
+            <button type="button" class="cs-btn ghost" data-action="adm-theme-reset">Restaurar Padrão</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ── ADMIN: IMPORTAR ─────────────────────────────── -->
+      <div class="cs-adm" data-el="admImport" hidden>
+        <p class="cs-sub">Cole o JSON do catálogo abaixo e clique em Pré-visualizar antes de importar.</p>
+        <textarea class="cs-input cs-import-area" data-el="admImportJson"
+                  placeholder='[{"id":"meu_carro","name":"Meu Carro","category":"vehicle","price":500}]'
+                  rows="6"></textarea>
+        <div class="cs-adm-actions">
+          <button type="button" class="cs-btn sand" data-action="adm-import-preview">Pré-visualizar</button>
+          <button type="button" class="cs-btn primary" data-action="adm-import-run">Importar</button>
+        </div>
+        <div class="cs-adm-list" data-el="admImportResult"></div>
+      </div>
+
+    </div><!-- /.cs-body -->
+  </main>
+
+  <!-- ============================================================
+       MODAL JOGADOR — confirmação de compra
+       ============================================================ -->
+  <div class="cs-overlay" data-el="overlay" hidden>
+    <div class="cs-modal">
+      <div class="cs-modal-media">
+        <img data-el="mImg" alt="" hidden />
+        <span class="cs-modal-fallback" data-el="mFallback">◆</span>
+      </div>
+      <h3 data-el="mName"></h3>
+      <p class="cs-modal-desc" data-el="mDesc"></p>
+      <div class="cs-modal-price">
+        <span>Preço</span>
+        <strong data-el="mPrice">0</strong>
+      </div>
+      <div class="cs-modal-actions">
+        <button type="button" class="cs-btn ghost"   data-action="modal-close">Cancelar</button>
+        <button type="button" class="cs-btn primary" data-el="mBuy" data-action="modal-buy">Comprar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL ADMIN — formulário genérico (item / cat / deal / coins / confirm)
+       ============================================================ -->
+  <div class="cs-overlay cs-adm-overlay" data-el="admOverlay" hidden>
+    <div class="cs-modal cs-adm-modal">
+      <h3 data-el="admModalTitle">Formulário</h3>
+      <div class="cs-adm-modal-body" data-el="admModalBody"></div>
+      <div class="cs-modal-actions">
+        <button type="button" class="cs-btn ghost"   data-action="adm-modal-close">Cancelar</button>
+        <button type="button" class="cs-btn primary" data-el="admModalOk" data-action="adm-modal-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+</section>

@@ -15,7 +15,8 @@ local ok = exports.vhub:commitVehicleState(plate, { fuel = 42.5 }, 'pump')
 ```
 O CORE valida em camadas: (1) invoker no `trusted_resources` (convar
 `vhub_trusted_resources` no server.cfg — sem ele TUDO nega); (2) `source_tag` conhecido;
-(3) cada campo do patch permitido para aquele source (SOURCE_GATES: pump→fuel;
+(3) cada campo do patch permitido para aquele source (SOURCE_GATES:
+pump/fuel_can/fuel_admin→fuel pelo legacyfuel; fuel_migration/fuel_compat→fuel pelo conce;
 repair→health/damage; tune→tuning; garage→lifecycle; system→tudo). Passou → VRAM +
 State Bags + SQL batch + evento `vHub:vehicleCommitted(plate, source, patch)` + `vh_audit`.
 
@@ -25,11 +26,9 @@ State Bags + SQL batch + evento `vHub:vehicleCommitted(plate, source, patch)` + 
 2. **Toda mutação audita sozinha** (R12): `vh_audit` recebe actor/action/target/source/
    before/after via batch — quem chama não escreve log manual.
 3. **Reagir a mudanças = escutar `vHub:vehicleCommitted`**, nunca pollar getVehicleState.
-4. **Shadow-flags durante migração de ownership**: quando o CORE ainda NÃO é o dono
-   aplicador de um campo (hoje: fuel — dono é legacyfuel/prontuário), o CORE aceita e
-   PERSISTE o commit mas NÃO escreve a bag nem aplica físico (`core_fuel_enabled=false`,
-   `veh_state_apply=false`). Ligar os dois donos ao mesmo tempo = escritor duplo (L-04)
-   e HUD divergente (vhub_velo lê `vh_fuel` com fallback native).
+4. **Shadow-flags durante migração de ownership**: enquanto uma flag estiver desligada,
+   o CORE persiste sem aplicar aquela fronteira física. Fuel concluiu o corte na #61
+   (`core_fuel_enabled=true`); health/body seguem com `veh_state_apply=false`.
 5. **Dual-write de aquecimento (padrão de cutover)**: o dono ATUAL espelha o campo no
    CORE em thread própria, soft-dep (`pcall` + `GetResourceState`), APÓS persistir no
    seu lado — ver `vhub_conce/server/vstate.lua` (ADR #44). Espelhar SÓ o campo que o

@@ -60,15 +60,17 @@
   --radius-sm: 8px;
 
   /* piso translúcido em camadas — vidro sem backdrop-filter (A-09) */
+  /* PRIME v3: piso mais rico (dois realces dourados) + moldura dourada mais presente */
   --glass-bg:
-    radial-gradient(120% 60% at 50% 0%, rgba(243,181,58,0.10), rgba(243,181,58,0) 55%),
-    linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.62));
-  --glass-border: 1px solid rgba(243,181,58,0.22);
+    radial-gradient(130% 75% at 50% 0%, rgba(243,181,58,0.16), rgba(243,181,58,0) 52%),
+    radial-gradient(100% 60% at 50% 100%, rgba(255,154,31,0.06), rgba(255,154,31,0) 60%),
+    linear-gradient(180deg, rgba(217,193,154,0.14), rgba(12,10,6,0.72));
+  --glass-border: 1.5px solid rgba(243,181,58,0.42);
   --glass-shadow:
-    0 24px 64px rgba(0,0,0,0.62),
-    0 0 32px rgba(243,181,58,0.10),
-    inset 0 0 0 1px rgba(255,213,115,0.05),
-    inset 0 1px 0 rgba(255,213,115,0.14);
+    0 32px 80px rgba(0,0,0,0.70),
+    0 0 60px rgba(243,181,58,0.16),
+    inset 0 0 0 1px rgba(255,213,115,0.08),
+    inset 0 1px 0 rgba(255,213,115,0.22);
 
   /* easings & timings de referência */
   --ease-out: cubic-bezier(.22,.61,.36,1);
@@ -164,14 +166,14 @@ button { font-family: var(--font-sans); color: inherit; }
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 1060px;
+  width: 1100px;
   max-width: 96vw;
-  max-height: 88vh;
+  max-height: 90vh;
   background:
-    radial-gradient(140% 60% at 50% 0%, rgba(243,181,58,0.10), rgba(243,181,58,0) 55%),
-    linear-gradient(180deg, rgba(37,30,20,0.72), rgba(12,10,6,0.90));
+    radial-gradient(140% 70% at 50% 0%, rgba(243,181,58,0.16), rgba(243,181,58,0) 52%),
+    linear-gradient(180deg, rgba(37,30,20,0.78), rgba(12,10,6,0.92));
   border: var(--glass-border);
-  border-radius: var(--radius);
+  border-radius: 18px;
   overflow: hidden;
   box-shadow: var(--glass-shadow);
   animation: mo-panel-in 320ms var(--ease-out);
@@ -181,13 +183,15 @@ button { font-family: var(--font-sans); color: inherit; }
   to   { opacity: 1; transform: none; }
 }
 
-/* hairline dourada no topo do panel (light-edge premium) */
+/* barra dourada no topo do panel (accent premium — mais presente que hairline) */
 .mod-oficina .panel::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.75), transparent);
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.85) 30%, rgba(255,213,115,1) 50%, rgba(243,181,58,0.85) 70%, transparent);
+  box-shadow: 0 0 12px rgba(243,181,58,0.55);
   pointer-events: none;
+  z-index: 2;
 }
 /* halo dourado superior (specular sutil) */
 .mod-oficina .panel::after {
@@ -240,36 +244,38 @@ button { font-family: var(--font-sans); color: inherit; }
   border-right: 1px solid rgba(243,181,58,0.12);
 }
 .mod-oficina .brand-mark {
-  width: 34px; height: 34px;
-  border-radius: 9px;
+  width: 46px; height: 46px;
+  border-radius: 12px;
   background:
-    radial-gradient(120% 80% at 50% 0%, rgba(255,213,115,0.28), rgba(243,181,58,0.02) 60%),
-    linear-gradient(160deg, rgba(243,181,58,0.24), rgba(243,181,58,0.06));
-  border: 1px solid rgba(243,181,58,0.55);
+    radial-gradient(120% 90% at 50% 0%, rgba(255,213,115,0.38), rgba(243,181,58,0.03) 60%),
+    linear-gradient(160deg, rgba(243,181,58,0.30), rgba(243,181,58,0.06));
+  border: 1.5px solid rgba(243,181,58,0.65);
   color: var(--vh-gold-soft);
   display: flex; align-items: center; justify-content: center;
   box-shadow:
-    0 0 22px rgba(243,181,58,0.22),
-    inset 0 1px 0 rgba(255,255,255,0.12);
+    0 0 30px rgba(243,181,58,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.16);
 }
+.mod-oficina .brand-mark svg { width: 28px; height: 28px; }
 .mod-oficina .brand-text { display: flex; flex-direction: column; line-height: 1; }
 .mod-oficina .brand-name {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 20px;
-  letter-spacing: 0.05em;
+  font-size: 28px;
+  letter-spacing: 0.01em;
   color: var(--vh-sand-soft);
   text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+  text-shadow: 0 0 20px rgba(243,181,58,0.22), 0 1px 0 rgba(0,0,0,0.4);
 }
 .mod-oficina .brand-sub {
-  margin-top: 4px;
+  margin-top: 5px;
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.26em;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.30em;
   color: var(--vh-gold);
   text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(243,181,58,0.30);
 }
 
 .mod-oficina .hdr-left {
@@ -277,14 +283,14 @@ button { font-family: var(--font-sans); color: inherit; }
 }
 
 .mod-oficina .tier-badge {
-  width: 54px; height: 54px;
-  border-radius: 10px;
+  width: 66px; height: 66px;
+  border-radius: 13px;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 900;
   letter-spacing: 0.02em;
-  border: 1.5px solid currentColor;
+  border: 2px solid currentColor;
   flex-shrink: 0;
   background:
     radial-gradient(120% 60% at 50% 0%, rgba(255,255,255,0.10), rgba(0,0,0,0) 55%),
@@ -311,14 +317,14 @@ button { font-family: var(--font-sans); color: inherit; }
 .mod-oficina .hdr-info { min-width: 0; }
 .mod-oficina .veh-nome {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 30px;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--vh-sand-soft);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 220px;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+  max-width: 260px;
+  text-shadow: 0 0 16px rgba(243,181,58,0.15), 0 1px 0 rgba(0,0,0,0.4);
 }
 .mod-oficina .veh-sub {
   margin-top: 3px;
@@ -349,11 +355,12 @@ button { font-family: var(--font-sans); color: inherit; }
 }
 .mod-oficina .score-val {
   font-family: var(--font-mono);
-  font-size: 26px;
+  font-size: 34px;
   font-weight: 700;
   color: var(--vh-sand);
   transition: color 300ms;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(243,181,58,0.20);
 }
 .mod-oficina .score-max {
   font-family: var(--font-mono);
@@ -459,9 +466,10 @@ button { font-family: var(--font-sans); color: inherit; }
   border-bottom: 1px solid rgba(243,181,58,0.14);
 }
 .mod-oficina .ct-bar {
-  width: 14px; height: 2px; background: var(--vh-gold);
-  box-shadow: 0 0 8px rgba(243,181,58,0.65);
-  border-radius: 1px;
+  width: 4px; height: 16px;
+  background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
+  box-shadow: 0 0 10px rgba(243,181,58,0.75);
+  border-radius: 2px;
 }
 .mod-oficina .comp-nav {
   padding: 10px 8px;
@@ -947,10 +955,10 @@ button { font-family: var(--font-sans); color: inherit; }
 .mod-oficina .total-val {
   margin-top: 6px;
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--vh-gold);
-  text-shadow: 0 0 16px rgba(243,181,58,0.45);
+  text-shadow: 0 0 20px rgba(243,181,58,0.52);
   font-variant-numeric: tabular-nums;
 }
 

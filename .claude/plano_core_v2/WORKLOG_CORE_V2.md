@@ -345,3 +345,40 @@ gated. Reversível via: git.
 3. `setr vhub_trusted_resources "vhub_conce,vhub_garage,vhub_custom,vhub_vehcontrol,vhub_nitro,vhub_racha,vhub_admin,vhub_ferinha"` no server.cfg.
 4. FASE 1.3/1.11 (migração b64→JSON + WAL) com banco real e backup.
 5. Registrar decisões #37..#43 no contexto.md (escritor: vhub_guardiao_revisao).
+
+---
+
+### [ADR #61] 2026-07-10 | módulo: fuel / vehicle state
+
+**Fuel passa ao CORE; `vhub_legacyfuel` passa a ser domínio de abastecimento.**
+
+- Escritor único: `vhub.Vehicle.state.fuel` → `vh_vehicle_data/state`.
+- Escrita externa: `commitVehicleState(..., 'pump'|'fuel_admin')`, gated por invoker.
+- Migração: `vhub_vehicle_state.fuel` → CORE em chunks; marcador idempotente em GData.
+- Réplica: `vh_fuel`; aplicação native somente no controlador da entidade.
+- `vhub_veh_state_apply=0`: health/body permanecem no corte físico legado.
+- Ghost/Caticus: somente referência; nenhum código ESX/QB/ofuscado entra no runtime.
+- `hologram_box_model`: asset veicular arquivado no vendor; proibido como bomba/nozzle.
+- Versão CORE: `2.0.0-alpha.2`.
+
+Validação estática: `luac -p`, `git diff --check`, grep de `syncfuel`/Decor no runtime.
+Validação runtime obrigatória: migração com backup, abastecimento, galão, elétrica,
+relogin/restart, resmon e spoof de netId/proximidade.
+
+### [ADR #65] 2026-07-10 | módulos: CORE vehicle / fuel / inventory
+
+**Reconciliar o vínculo físico antes de replicar fuel e completar a mangueira nativa.**
+
+- Causa-raiz: `getVehicleState` podia carregar VD antes do spawn; `onEnter` aceitava o VD
+  existente sem executar `onSpawned`, mantendo `vd.netid=nil`; commits persistiam, mas
+  `_syncBags()` não alcançava a entidade.
+- `onSpawned` agora valida netid/entidade/placa física, é replay-safe, limpa colisões de
+  netid reciclado, zera ocupantes stale e reinicia caches delta antes da réplica.
+- `onEnter` reconcilia VD ausente, não-spawned ou ligado a outro netid.
+- Fuel transmite progresso autoritativo targeted a 1 Hz; cliente apenas reflete native/HUD.
+- Mangueira local usa bomba exata + `AttachEntitiesToRope` em duas pontas; zero broadcast `-1`.
+- Galão parcial preserva saldo e serial por export gated do inventário.
+- Versões: CORE `2.0.0-alpha.3`; fuel `2.1.0`; inventory `2.2.0`.
+
+Reversível por arquivo. Validação estática: `luac -p` e `git diff --check`.
+Runtime obrigatório: reinício completo, bomba/galão/elétrico, dois clientes, relog e resmon.

@@ -22,6 +22,7 @@ VHubAdmin.ACTIONS = {
   tpcds     = { perm='tpcds',     cat='teleport',   desc='Ir a coordenadas X Y Z',   fields={'x','y','z'},         dangerous=false },
   tpall     = { perm='tpall',     cat='teleport',   desc='Trazer todos at  mim',     fields={},                    dangerous=true  },
   tplast    = { perm='tp',        cat='teleport',   desc='Voltar   posi  o anterior',fields={},                    dangerous=false },
+  tpz       = { perm='tp',        cat='teleport',   desc='Ir a zona nomeada',        fields={'zone'},              dangerous=false },
 
   -- ---------- Jogador ------------------------------------------------------
   heal      = { perm='heal',      cat='player',     desc='Curar jogador',            fields={'target'},            dangerous=false },
@@ -34,6 +35,9 @@ VHubAdmin.ACTIONS = {
   skin      = { perm='skin',      cat='player',     desc='Trocar skin do alvo',      fields={'target','model'},    dangerous=false },
   spec      = { perm='spec',      cat='player',     desc='Espectar jogador',         fields={'target'},            dangerous=false },
   kill      = { perm='god',       cat='player',     desc='Matar jogador',            fields={'target'},            dangerous=true  },
+  stamina   = { perm='buff',      cat='player',     desc='Alternar stamina infinita',fields={},                    dangerous=false },
+  jump      = { perm='buff',      cat='player',     desc='Alternar super pulo',      fields={},                    dangerous=false },
+  cleanped  = { perm='heal',      cat='player',     desc='Limpar sangue e sujeira',  fields={},                    dangerous=false },
 
   -- ---------- Ve culo ------------------------------------------------------
   spawncar  = { perm='spawncar',  cat='vehicle',    desc='Spawnar ve culo (admin)',     fields={'model'},             dangerous=false },
@@ -41,12 +45,17 @@ VHubAdmin.ACTIONS = {
   fix       = { perm='fix',       cat='vehicle',    desc='Reparar ve culo pr ximo',     fields={},                    dangerous=false },
   tuning    = { perm='tuning',    cat='vehicle',    desc='Aplicar tuning completo',     fields={},                    dangerous=false },
   carcolor  = { perm='carcolor',  cat='vehicle',    desc='Cor RGB do ve culo',          fields={'r','g','b'},         dangerous=false },
+  boost     = { perm='boost',     cat='vehicle',    desc='Boost tempor rio de motor',   fields={},                    dangerous=false },
+  flip      = { perm='fix',       cat='vehicle',    desc='Desvirar ve culo pr ximo',    fields={},                    dangerous=false },
 
   -- ---------- Mundo --------------------------------------------------------
   weather   = { perm='weather',   cat='world',      desc='Mudar clima',                 fields={'wx'},                dangerous=false },
   time      = { perm='time',      cat='world',      desc='Definir hor rio do dia',      fields={'hour','minute'},     dangerous=false },
   blackout  = { perm='blackout',  cat='world',      desc='Alternar apag o',             fields={},                    dangerous=true  },
   clearzone = { perm='clearzone', cat='world',      desc='Limpar  rea (raio em metros)',fields={'radius'},            dangerous=true  },
+  wipeveh   = { perm='wipe',      cat='world',      desc='Deletar ve culos vazios (global)', fields={},               dangerous=true  },
+  wipeped   = { perm='wipe',      cat='world',      desc='Deletar NPCs (global)',       fields={},                    dangerous=true  },
+  wipeobj   = { perm='wipe',      cat='world',      desc='Deletar objetos soltos (global)', fields={},                dangerous=true  },
   announce  = { perm='announce',  cat='world',      desc='An ncio global',              fields={'message'},           dangerous=false },
   staffchat = { perm='staffchat', cat='world',      desc='Chat privado da equipe',      fields={'message'},           dangerous=false },
 

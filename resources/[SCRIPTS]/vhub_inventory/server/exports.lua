@@ -7,6 +7,7 @@
 local Backpack = Inventory.Bag
 local ItemUse  = Inventory.ItemUse
 local Cat      = Inventory.Catalog
+local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true }
 
 
 -- ============================================================
@@ -26,6 +27,27 @@ end
 -- ============================================================
 -- LEITURA (publica)
 -- ============================================================
+
+-- retorna uma cópia enxuta e ordenada do catálogo para importadores autorizados
+exports('getCatalogSnapshot', function()
+  local caller = GetInvokingResource()
+  if caller and caller ~= GetCurrentResourceName() and not CATALOG_SNAPSHOT_TRUSTED[caller] then
+    return {}
+  end
+
+  local out = {}
+  for id, def in pairs(Inventory.Items) do
+    if type(id) == 'string' and type(def) == 'table' then
+      out[#out + 1] = {
+        id       = id,
+        name     = tostring(def.nome or id):sub(1, 100),
+        category = tostring(def.categoria or ''):sub(1, 32),
+      }
+    end
+  end
+  table.sort(out, function(a, b) return a.id < b.id end)
+  return out
+end)
 
 -- retorna { slots, weight, max, size } da mochila (copia ao cruzar resource)
 exports('getInventory', function(src)
@@ -51,6 +73,15 @@ end)
 exports('takeItem', function(src, id, amount)
   if not _invoker_allowed() then return false end
   return (Backpack.take(src, id, amount)) == true
+end)
+
+-- Retira quantidade de um slot validado para domínios que preservam metadata.
+exports('takeItemFromSlot', function(src, slot, amount)
+  if not _invoker_allowed() then return false end
+  src, slot, amount = tonumber(src), tonumber(slot), tonumber(amount)
+  if not src or not slot or slot % 1 ~= 0 or not amount or amount % 1 ~= 0 then return false end
+  if amount < 1 or amount > 1000 then return false end
+  return Backpack.takeFromSlot(src, slot, amount) == true
 end)
 
 -- registra o efeito de uso de um item (dono do dominio chama isto)

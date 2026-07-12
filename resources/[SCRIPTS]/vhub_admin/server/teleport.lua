@@ -75,6 +75,18 @@ AddEventHandler(E.ACT_TPALL, function()
   Core:audit(src, 'tpall', nil, {})
 end)
 
+-- TP para zona nomeada (server valida a zona; hist rico preservado)
+RegisterNetEvent(E.ACT_TPZ)
+AddEventHandler(E.ACT_TPZ, function(zone)
+  local src = source; if not Core.hasPerm(src, 'tp') then return end
+  local z = CFG.teleport_zones[tostring(zone or ''):lower()]
+  if not z then Core.notify(src, 'Zona desconhecida.'); return end
+  local c = Core.coordsOf(src)
+  if c then push(src, { x = c.x, y = c.y, z = c.z }) end
+  TriggerClientEvent(E.DO_TP, src, z.x, z.y, z.z, nil, z.h)
+  Core:audit(src, 'tpz', nil, { zone = zone })
+end)
+
 -- Voltar  posi  o anterior
 RegisterNetEvent(E.ACT_TPLAST)
 AddEventHandler(E.ACT_TPLAST, function()

@@ -38,9 +38,6 @@ window.addEventListener('message', function (event) {
     case 'resume':        onResumeMsg(d); break;
     case 'volume':        onVolume(d); break;
     case 'distance':      onDistance(d); break;
-    case 'position':      onPosition(d); break;
-    case 'video.attach':  onVideoAttach(d); break;
-    case 'video.detach':  onVideoDetach(d); break;
   }
 });
 
@@ -90,16 +87,15 @@ function playYouTube(name, videoId, vol, loop, title) {
     var div = document.createElement('div');
     div.id = 'ytp-' + safeId(name);
     document.getElementById('wow-players').appendChild(div);
-    entry.mount = div;   // guardado p/ mover ao palco visível (video.attach)
 
-    // host nocookie (menos anúncio); controles ocultos p/ overlay limpo no carro
     var pv = {
       autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1,
       playsinline: 1, rel: 0, iv_load_policy: 3,
-      host: 'https://www.youtube-nocookie.com',
     };
     if (loop) { pv.loop = 1; pv.playlist = videoId; }   // loop de 1 vídeo exige playlist=id
 
+    // host nocookie (menos anúncio) — SO no construtor (a IFrame API monta o iframe
+    // interno em youtube-nocookie.com/embed). NAO repetir em playerVars.
     entry.handle = new YT.Player(div.id, {
       width: '1', height: '1', videoId: videoId, playerVars: pv,
       host: 'https://www.youtube-nocookie.com',
@@ -107,8 +103,12 @@ function playYouTube(name, videoId, vol, loop, title) {
         onReady: function (e) {
           if (sounds[name] !== entry) { try { e.target.destroy(); } catch (x) {} return; }
           entry.ready = true;
-          try { e.target.setVolume(Math.round(entry.volume * 100)); } catch (x) {}
+          // autoplay robusto no CEF: começa MUTADO, dá play, e desmuta no volume alvo.
+          // (player mutado sempre pode autoplay; unmute logo após já sai com som)
+          try { e.target.mute(); } catch (x) {}
           try { e.target.playVideo(); } catch (x) {}
+          try { e.target.unMute(); } catch (x) {}
+          try { e.target.setVolume(Math.round(clampVolume(entry.volume) * 100)); } catch (x) {}
         },
         onError: function () { /* vídeo bloqueado/embargado: silencioso, não trava a UI */ },
       },
@@ -152,71 +152,6 @@ function playSoundCloud(name, url, vol, loop) {
 
 
 // ============================================================
-// VIDEO — palco visível "DVD no carro" (só YouTube; move o iframe já existente)
-// ============================================================
-
-// nome do som atualmente ancorado no palco visível (só 1 por vez)
-var videoStageName = null;
-
-// exibe o iframe do som 'name' no palco liquid-glass (sem criar player novo)
-function onVideoAttach(d) {
-  var s = sounds[d.name];
-  if (!s || s.backend !== 'youtube' || !s.mount) return;
-
-  if (videoStageName && videoStageName !== d.name) onVideoDetach({ name: videoStageName });
-
-  var stage = document.getElementById('wow-video-stage');
-  if (!stage) return;
-
-  // o iframe do YT vive dentro de s.mount — basta reparentar o mount ao palco e crescê-lo
-  s.mount.style.position = 'absolute';
-  s.mount.style.inset = '0';
-  s.mount.style.width = '100%';
-  s.mount.style.height = '100%';
-  stage.appendChild(s.mount);
-
-  try {
-    var f = s.mount.querySelector('iframe');
-    if (f) { f.style.width = '100%'; f.style.height = '100%'; }
-  } catch (e) {}
-
-  // título: o player do YT sabe o nome real da faixa (fallback genérico)
-  var title = s.title;
-  try {
-    if (!title && s.handle && s.handle.getVideoData) title = s.handle.getVideoData().title;
-  } catch (e) {}
-  setVideoLabel(title);
-
-  stage.classList.add('visible');
-  videoStageName = d.name;
-}
-
-// tira o iframe do palco e o devolve ao container oculto (áudio continua)
-function onVideoDetach(d) {
-  var stage = document.getElementById('wow-video-stage');
-  var s = d && d.name ? sounds[d.name] : null;
-
-  if (stage) stage.classList.remove('visible');
-
-  if (s && s.mount) {
-    var hidden = document.getElementById('wow-players');
-    if (hidden) {
-      s.mount.style.width = '1px';
-      s.mount.style.height = '1px';
-      hidden.appendChild(s.mount);
-    }
-  }
-  if (videoStageName === (d && d.name)) videoStageName = null;
-}
-
-// escreve o rótulo da faixa no palco (textContent — anti-XSS; nunca innerHTML)
-function setVideoLabel(text) {
-  var label = document.getElementById('wow-video-label');
-  if (label) label.textContent = text || 'Reproduzindo';
-}
-
-
-// ============================================================
 // CONTROLES — despacham pelo backend
 // ============================================================
 
@@ -250,19 +185,6 @@ function onVolume(d) {
   else if (s.backend === 'soundcloud') { if (s.handle && s.ready) try { s.handle.setVolume(Math.round(v * 100)); } catch (e) {} }
 }
 
-function onDistance(d) {
-  var s = sounds[d.name];
-  if (s && s.backend === 'audio') s.distance = d.distance;
-}
-
-// posição 3D só faz sentido p/ <audio> (e ainda é andaime — sem atenuação real).
-// YT/SC tocam 2D no CEF (só o motorista ouve) — ignoram.
-function onPosition(d) {
-  var s = sounds[d.name];
-  if (s && s.backend === 'audio') s.lastPos = { x: d.x, y: d.y, z: d.z };
-}
-
-
 // ============================================================
 // HELPERS
 // ============================================================
@@ -272,13 +194,6 @@ function destroyIfExists(name) {
   var s = sounds[name];
   if (!s) return;
   delete sounds[name];   // marca destruído ANTES (evita onReady tardio reativar)
-
-  // se este som estava no palco visível, esconde o palco (evita telinha órfã)
-  if (videoStageName === name) {
-    var stage = document.getElementById('wow-video-stage');
-    if (stage) stage.classList.remove('visible');
-    videoStageName = null;
-  }
 
   if (s.backend === 'audio') {
     s.handle.pause();

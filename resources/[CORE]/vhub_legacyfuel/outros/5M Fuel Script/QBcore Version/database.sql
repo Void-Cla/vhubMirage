@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS `owned_vehicles` (
+    `fuel` INT(11) NOT NULL DEFAULT 100,
+    PRIMARY KEY (`plate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4; 

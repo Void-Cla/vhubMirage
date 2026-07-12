@@ -250,9 +250,12 @@ function M:dossier(plate)
   local p = U.normalizePlate(plate); if not p then return nil end
   local v = VHubConce.SQL:getVehicle(p); if not v then return nil end
   local st = self:get(p) or factoryState()
+  local coreFuel
+  local ok, coreState = pcall(function() return exports.vhub:getVehicleState(p) end)
+  if ok and type(coreState) == 'table' then coreFuel = coreState.fuel end
   return {
     plate = p, model = v.model, vtype = v.vtype, status = v.status,
-    fuel = st.fuel, engine_health = st.engine_health, body_health = st.body_health,
+    fuel = coreFuel, engine_health = st.engine_health, body_health = st.body_health,
     odometer_km = st.odometer_km, damage = st.damage, updated_at = st.updated_at,
   }
 end
@@ -266,9 +269,9 @@ end
 -- preservados (linha existente) ou recebem default de fábrica (linha nova).
 -- customization é coluna composta: MERGE por chave sobre o persistido (mods por índice),
 -- nunca REPLACE — patch parcial preserva o resto (ver mergeCust).
--- patch: { fuel, engine_health, body_health, odometer_add (DELTA km),
+-- patch: { engine_health, body_health, odometer_add (DELTA km),
 --          customization (tabela), damage (tabela; {} = limpa) }
--- source: 'telemetry' | 'store' | 'pump' | 'seed' | 'repair' | 'cosmetic' | 'tune' | 'handling' | 'system'
+-- source: 'telemetry' | 'store' | 'seed' | 'repair' | 'cosmetic' | 'tune' | 'handling' | 'system'
 function M:save(plate, patch, source)
   local p = U.normalizePlate(plate)
   if not p or type(patch) ~= 'table' then return false end
@@ -293,9 +296,6 @@ function M:save(plate, patch, source)
     cols[#cols+1] = c; vals[#vals+1] = v
     upds[#upds+1] = updExpr or (c .. ' = VALUES(' .. c .. ')')
   end
-
-  local fuel = finiteNum(patch.fuel, 0.0, 100.0)
-  if fuel then setcol('fuel', fuel) end
 
   local eng = finiteNum(patch.engine_health, -4000.0, 1000.0)
   if eng then
@@ -358,17 +358,29 @@ function M:save(plate, patch, source)
   local ok = se(sql, vals)
   _cache[p] = nil   -- invalidação no write (read-through repõe)
 
-  -- ADR #44 (FASE 2.1-lite): espelha FUEL no CORE via contrato de commit — camada B
-  -- (assíncrono, soft-dep pcall). Aquece o vd.state do CORE com dado REAL antes do
-  -- cutover da FASE 2. Só fuel: health/odômetro o CORE já recebe da telemetria
-  -- validada (vState); espelhar esses seria segundo escritor do mesmo dado (L-04).
-  if ok ~= nil and fuel and GetResourceState('vhub') == 'started' then
-    Citizen.CreateThread(function()
-      pcall(function() return exports.vhub:commitVehicleState(p, { fuel = fuel }, 'pump') end)
+  return ok ~= nil
+end
+
+-- Migra fuel legado ao escritor único CORE; idempotente e chunked.
+function M:migrateFuelToCore()
+  local rows = VHubConce.SQL:listLegacyFuel()
+  local result = { total = #rows, migrated = 0, failed = 0 }
+
+  for i = 1, #rows do
+    local row = rows[i]
+    local fuel = finiteNum(tonumber(row.fuel), 0.0, 100.0)
+    local ok, accepted = pcall(function()
+      return exports.vhub:commitVehicleState(row.plate, { fuel = fuel }, 'fuel_migration')
     end)
+    if fuel and ok and accepted == true then
+      result.migrated = result.migrated + 1
+    else
+      result.failed = result.failed + 1
+    end
+    if i % 25 == 0 then Citizen.Wait(0) end
   end
 
-  return ok ~= nil
+  return result
 end
 
 -- reparo TRUSTED (manutenção/admin): único caminho que ELEVA health e limpa dano

@@ -39,6 +39,8 @@ body.visible { display: flex; }
   background: var(--screen-bg);
   display: flex;
   flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 #ipad-wallpaper {
@@ -65,14 +67,14 @@ body.visible { display: flex; }
   position: relative;
   z-index: 3;
   height: var(--statusbar-h);
-  min-height: 22px;
+  min-height: 20px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4%;
+  padding: 0 3.4%;
   color: var(--text);
-  font-size: 0.78vw;
+  font-size: 0.74vw;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
@@ -114,16 +116,16 @@ body.visible { display: flex; }
   position: relative;
   z-index: 3;
   height: var(--navbar-h);
-  min-height: 34px;
+  min-height: 32px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6%;
-  background: var(--glass-strong);
+  gap: 5.2%;
+  background: linear-gradient(180deg, rgba(14,14,17,0.72) 0%, rgba(8,8,10,0.92) 100%);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid rgba(255,255,255,0.10);
 }
 
 #ipad-navbar button {

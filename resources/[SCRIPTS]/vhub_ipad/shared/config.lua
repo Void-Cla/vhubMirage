@@ -103,6 +103,20 @@ VHubIpadCFG.BUILTIN_APPS = {
            js   = 'web/app_ipad/lspd.js' },
     relay = { resource = 'vhub_lspdtool', export = 'ipadRelay' },
   },
+  {
+    -- CoinShop: loja de moedas com UI REMOTA (arquivos no próprio vhub_coinshop).
+    -- Superfície do JOGADOR (#58): comprar/ofertas/resgatar/test-drive; o painel
+    -- ADMIN vive na NUI fullscreen via /coinshop (server-side, admin-only).
+    id = 'coinshop', version = '2.2.0', manifest_level = 1,
+    label = 'CoinShop', icon = 'coinshop.png',
+    category = 'loja', removable = false,
+    dependency = 'vhub_coinshop',         -- só disponível se o coinshop estiver 'started'
+    ui = { source = 'remote', resource = 'vhub_coinshop',
+           html = 'web/app_ipad/coinshop.html',
+           css  = 'web/app_ipad/coinshop.css',
+           js   = 'web/app_ipad/coinshop.js' },
+    relay = { resource = 'vhub_coinshop', export = 'ipadRelay' },
+  },
 }
 
 -- Apps REMOVÍVEIS pré-instalados num personagem novo (vazio = só os de sistema na home).

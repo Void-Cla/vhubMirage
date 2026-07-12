@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html style="background: transparent !important;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Display</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        * {
+            text-shadow: none !important;
+            box-shadow: none !important;
+            filter: none !important;
+            -webkit-filter: none !important;
+        }
+    </style>
+</head>
+<body style="background: transparent !important; margin: 0; padding: 0; text-shadow: none !important;">
+    <div id="fuelDisplay" class="hidden">
+        <div class="display-container">
+            <div class="fuel-line">
+                <span class="label">FUEL:</span>
+                <span class="value" id="fuelAmount">0.0 L</span>
+            </div>
+            <div class="price-line">
+                <span class="label">TOTAL:</span>
+                <span class="value" id="priceAmount">$0.00</span>
+            </div>
+            <div class="status-line">
+                <span class="status" id="statusText">FILLING</span>
+                <span class="progress" id="progressText">0%</span>
+            </div>
+        </div>
+    </div>
+    <script src="js/script.js"></script>
+</body>
+</html>

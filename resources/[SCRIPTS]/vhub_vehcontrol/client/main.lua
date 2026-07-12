@@ -236,7 +236,6 @@ RegisterKeyMapping('vhubvc_seatbelt', 'Veiculo: cinto de seguranca', 'keyboard',
 -- persiste via escritor único do conce. Ao entrar, pede o estado salvo
 -- (requestState) e aplica nos natives (substitui o vHub:vehicleStateLoad do CORE).
 
-local FUEL_DECOR   = 'FUEL_LEVEL'   -- decor do vhub_legacyfuel (a bomba lê daqui)
 local SNAP_MS      = 15000          -- cadência do snapshot periódico (L-18)
 local vc_veh       = 0              -- veiculo atual rastreado
 local vc_plate     = nil            -- placa que estou dirigindo (nil = nao sou motorista)
@@ -245,10 +244,6 @@ local vc_lastReq   = 0
 local vc_reqTries  = 0
 local vc_odoAcc    = 0.0            -- km acumulados desde o ultimo snapshot
 local vc_lastSnap  = 0
-local vc_lastDecor = -10.0
-
--- multiplicador de drenagem por classe GTA (espelha o legacyfuel; default 0.4)
-local CLASS_DRAIN = { [13]=0.0, [14]=0.0, [15]=0.0, [16]=0.0, [17]=0.3, [18]=0.3, [21]=0.0 }
 
 -- bones de janela por indice (IsVehicleWindowIntact retorna false p/ janela
 -- INEXISTENTE no modelo — bone-check obrigatorio antes de persistir/aplicar)
@@ -290,7 +285,6 @@ end
 -- snapshot completo do estado fisico atual (telemetria manda SEMPRE full-field)
 local function buildSnapshot(v, final)
   local snap = {
-    fuel          = GetVehicleFuelLevel(v),
     engine_health = GetVehicleEngineHealth(v),
     body_health   = GetVehicleBodyHealth(v),
     odo_delta_km  = vc_odoAcc,
@@ -319,12 +313,6 @@ AddEventHandler(E .. 'applyState', function(pl, st)
   -- CRITICO: '+ 0.0' força subtipo FLOAT (Lua 5.4). Numeros inteiros vindos do
   -- msgpack (100, 1000) passados a native de param float são BIT-REINTERPRETADOS
   -- (1000 → 1.4e-42) — fuel/motor viravam ~0 e o snapshot persistia o lixo.
-  if type(st.fuel) == 'number' then
-    SetVehicleFuelLevel(v, st.fuel + 0.0)
-    if DecorIsRegisteredAsType(FUEL_DECOR, 1) then DecorSetFloat(v, FUEL_DECOR, st.fuel + 0.0) end
-    vc_lastDecor = st.fuel
-  end
-
   CreateThread(function()
     if not ensureControl(v) then return end
     if type(st.engine_health) == 'number' then SetVehicleEngineHealth(v, st.engine_health + 0.0) end
@@ -424,18 +412,6 @@ CreateThread(function()
       -- odometro: integra velocidade (km) — clamp server-side cobre o resto
       vc_odoAcc = vc_odoAcc + (GetEntitySpeed(v) or 0.0) * 3.6 / 3600.0
 
-      if GetIsVehicleEngineRunning(v) then
-        local rpm   = GetVehicleCurrentRpm(v) or 0.0
-        local mult  = CLASS_DRAIN[GetVehicleClass(v)] or 0.4
-        local fuel  = GetVehicleFuelLevel(v)
-        local nf    = math.max(0.0, fuel - rpm * mult / 10.0)
-        SetVehicleFuelLevel(v, nf)
-        -- decor p/ a bomba do legacyfuel; delta-gate 0.5 evita churn de sync
-        if DecorIsRegisteredAsType(FUEL_DECOR, 1) and math.abs(nf - vc_lastDecor) >= 0.5 then
-          DecorSetFloat(v, FUEL_DECOR, nf)
-          vc_lastDecor = nf
-        end
-      end
       Wait(1000)
     else
       Wait(2000)

@@ -2,7 +2,7 @@
 vHub Coinshop — Guia de Instalação (PT-BR)
 ============================================================
 
-Recurso: vhub_coinshop v2.0.0
+Recurso: vhub_coinshop v2.1.0
 Padrão: vHub Mirage (Lua 5.4, server-authoritative, exports.vhub:*)
 Compatibilidade: ESX/qbcore/qbox/fearx_bridge REMOVIDOS — apenas core vHub
 
@@ -13,11 +13,11 @@ Compatibilidade: ESX/qbcore/qbox/fearx_bridge REMOVIDOS — apenas core vHub
 Antes de instalar o vhub_coinshop, o servidor deve ter:
 
 ✓ Core vHub Mirage rodando (resources/[CORE]/vhub/)
-  - exports.vhub:getUser / getCData / setCData / getGData / setGData / notify
+  - exports.vhub:getUser / getCData / setCData / getGData / setGData
 ✓ vhub_groups (checagem de permissão ACE + grupos)
-✓ vhub_inventory (giveItem / giveWeapon)
+✓ vhub_inventory (giveItem)
 ✓ vhub_player_state (teleport do test-drive — owner único do ped)
-✓ vhub_conce (registerVehicle — contrato de commit para veículos)
+✓ vhub_conce (grantVehicle — contrato de commit para veículos)
 ✓ oxmysql (driver MySQL upstream)
 
 Sem estes, o coinshop NÃO funcionará — ele depende exclusivamente
@@ -38,9 +38,9 @@ dos exports do core vHub.
 3) Adicione no server.cfg:
    ensure vhub_coinshop
 
-4) Configure permissões admin no server.cfg:
-   add_ace vhub.coinshop.admin allow
-   add_principal identifier.license:sua_license_here vhub.coinshop.admin
+4) Configure permissões admin no config/acl.cfg:
+   add_ace group.admin vhub.coinshop.admin allow
+   add_principal identifier.license:SUA_LICENSE_REAL group.admin
 
    Ou crie o grupo no vhub_groups e adicione os admins lá.
 
@@ -52,19 +52,22 @@ dos exports do core vHub.
 ------------------------------------------------------------
 
 COMANDOS:
-  /coinshop         — abre/fecha a loja (também mapeado em F5)
+  /coinshop         — abre/fecha o painel administrativo (somente admin)
   /givecoins <id> <qtd>   — admin dá moedas a um jogador online
   /setcoins <id> <qtd>    — admin define saldo absoluto
   /coinshop_addcode <order> <coins>  — cria código Tebex (console/agent)
 
 TEST-DRIVE:
-  Botão "Test Drive" no card do veículo → isola em routing bucket
-  próprio por 10 segundos (configurável em shared/config.lua).
+  Botão "Test Drive" no card do veículo → servidor cria/remove o veículo
+  em routing bucket exclusivo por 10 segundos (configurável em shared/config.lua).
+
+VEÍCULOS COMPRADOS:
+  O CoinShop registra o veículo e sua chave; retire-o pela garagem canônica.
 
 RESGATE TEBEX:
   Após compra de pacote de moedas no site Tebex, o agente automático
   executa `coinshop_addcode <order_id> <coins>` (ou você roda manualmente).
-  O jogador resgata pelo painel "Resgatar" da NUI.
+  O jogador resgata pelo app CoinShop do iPad.
 
 ------------------------------------------------------------
 4. CONFIGURAÇÃO
@@ -74,7 +77,7 @@ Edite shared/config.lua:
 
   VHubCoin.cfg.debug            — liga logs de depuração (false em produção)
   VHubCoin.cfg.command          — comando para abrir a loja (padrão: 'coinshop')
-  VHubCoin.cfg.key              — tecla de atalho (padrão: 'F5')
+  VHubCoin.cfg.import           — teto e tamanho do lote de importação administrativa
   VHubCoin.cfg.testDriveDuration — segundos do test-drive (padrão: 10)
   VHubCoin.cfg.rates            — rate-limit por ação (anti-spam, L-18)
   VHubCoin.cfg.adminPermission  — permissão ACE exigida (padrão: 'coinshop.admin')
@@ -91,7 +94,7 @@ Estrutura por responsabilidade (manual vHub §1):
   shared/   — config, events (registro único), utils (locale PT-BR + helpers)
   server/   — núcleo autoritativo (sql, core, init, coins, items, purchases,
               discord, webhooks, testdrive, commands, exports)
-  client/   — HAL (init, nui, testdrive, vehicle_spawn)
+  client/   — HAL (init, nui, testdrive)
   nui/      — interface Liquid Glass (index.html, css/style.css, js/app.js)
   sql/      — schema.sql (idempotente)
   INSTALL/  — este guia + SQL de instalação e drop
@@ -103,11 +106,12 @@ Ownership (Registro):
 
 Contratos de escrita usados:
   - exports.vhub:setCData/getCData    (moedas e settings)
-  - exports.vhub_inventory:giveItem/giveWeapon  (entrega de itens)
-  - exports.vhub_conce:registerVehicle          (registro de veículo comprado)
+  - exports.vhub_inventory:giveItem              (entrega de itens)
+  - exports.vhub_conce:grantVehicle              (registro de veículo comprado)
+  - exports.vhub_player_state:begin/attach/endActivity (bucket exclusivo)
   - exports.vhub_player_state:teleport           (teleport do test-drive)
   - exports.vhub_groups:hasPermission            (checagem admin)
-  - exports.vhub:notify                          (notificações ao jogador)
+  - evento vHub:notify                            (notificações ao jogador)
 
 ------------------------------------------------------------
 6. PERFORMANCE

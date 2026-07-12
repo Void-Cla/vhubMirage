@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_money'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.0.1'
 description 'Fleeca Camell — carteira, banco, ATMs, transferencias P2P e auditoria.'
 
 dependencies {

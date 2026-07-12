@@ -28,6 +28,41 @@ Hierarquia de verdade: **1) código/manifests atuais → 2) CLAUDE.md → 3) con
 5. vhub_guardiao_revisao → gate final + (se durável) atualiza contexto.md
 ```
 
+## Gestão de sessão — `/clear` vs `/compact` (julgamento obrigatório, não automático)
+
+Um hook `UserPromptSubmit` (`.claude/hooks/session_lifecycle_hint.sh`) injeta uma dica
+heurística (`[gestao-sessao] ...`) quando o transcript está grande. **A decisão final é sua,
+não do hook** — o hook só mede tamanho de transcript + overlap de palavras-chave; ele não
+sabe se a continuidade importa. Ao receber a dica (ou mesmo sem ela, se você perceber a troca
+de assunto), julgue:
+
+| Sinal | Ação a recomendar ao usuário |
+|---|---|
+| Prompt não tem relação com o arquivo/feature/bug da última resposta (troca de resource, de domínio, ou o usuário diz "outra coisa"/"muda de assunto") | **`/clear`** — não vale carregar histórico irrelevante; comece limpo |
+| Mesma tarefa continuando, mas contexto já grande (dica do hook, ou você sente que respostas recentes ficaram genéricas) | **`/compact foco em <o que importa>`** — nomeie o que preservar |
+| Contexto pequeno, tarefa em andamento | Nada — não sugira `/clear`/`/compact` por precaução; interromper sem necessidade também custa tokens (perde cache) |
+
+Regra prática: **você não pode executar `/clear`/`/compact` sozinho** (são comandos do usuário).
+Seu papel é *avisar* de forma direta e objetiva no início da resposta quando o sinal for claro
+— uma linha, não um parágrafo — e seguir com a tarefa normalmente. Não pergunte "quer que eu
+limpe?" a cada troca pequena; isso vira ruído. Só avise quando a evidência for real (assunto
+claramente diferente + contexto não-trivial acumulado).
+
+## Gate mínimo — quando NÃO chamar todos os guardiões
+
+"Guardiões pertinentes em paralelo" (fluxo acima) não significa "todos sempre". Antes de
+disparar a matriz de invocação inteira, filtre por tamanho e risco real:
+
+- **Diff cosmético** (rename, comentário, formatação, log, PT-BR de string) e que **não** toca
+  `[CORE]/vhub/**`, auth, spawn, exports, SQL, ou threads: pule os guardiões — só
+  `vhub_guardiao_simplicidade` (rápido, barato) decide se precisa de mais alguém.
+- **Diff < ~30 linhas** fora de caminho sensível: chame só o(s) guardião(ões) cujo domínio
+  o diff toca de fato (ex.: só toca `client/hud.lua` → só `guardiao_designer`/`runtime` se for
+  NUI; não chame `seguranca`/`persistencia` sem motivo).
+- **Diff > 400 linhas**: já coberto acima — dividir antes de chamar qualquer guardião.
+- Guardiões críticos (`persistencia`, `seguranca`, `revisao`, `arquiteto`) **nunca** são pulados
+  quando o diff toca CORE, dinheiro, spawn, auth ou schema — não negocie custo nesses casos.
+
 ## Economia de tokens (orçamento por chamada — obrigatório)
 
 - Input ao agente: **objetivo (≤3 linhas) + restrições + diff + lista de arquivos**. Nunca histórico de chat; nunca `contexto.md` inteiro.

@@ -6,7 +6,7 @@ lua54      'yes'
 
 name        'vhub_ipad'
 author      'vHub Mirage'
-version     '3.0.0'
+version     '3.0.2'
 description 'Tablet iOS-style — plataforma de apps vHub (registry server-authoritative, estado per-char)'
 
 -- vhub = core (getUser/hasPerm). vhub_inventory = soft-dep (item 'ipad', verificado em runtime).

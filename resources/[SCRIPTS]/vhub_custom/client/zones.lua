@@ -1,6 +1,8 @@
 -- client/zones.lua — detecção de zona e markers (2 threads pré-criadas, sem spawn no loop)
--- Thread FRIA (1 Hz): detecta proximidade, sem render.
--- Thread QUENTE (pré-criada): DrawMarker + prompt [E], dorme 500 ms fora de zona.
+-- Thread FRIA  (1 Hz): detecta proximidade, sem render.
+-- Thread QUENTE: DrawMarker + prompt [E]. Budget: 16 ms (~60 Hz) dentro de zona (L-18 renegociado:
+--   DrawMarker exige tick-a-tick; 16 ms é o mínimo visual aceitável e não estoura o frame budget
+--   do client FiveM que já executa o render loop nessa janela).
 ---@diagnostic disable: undefined-global
 
 local CFG = VHubCustom.cfg
@@ -97,7 +99,7 @@ Citizen.CreateThread(function()
         end
       end
 
-      Citizen.Wait(0)
+      Citizen.Wait(16)   -- budget: ~60 Hz (DrawMarker exige tick; L-18 renegociado no header)
     end
   end
 end)

@@ -1,7 +1,7 @@
 ---
 name: vhub_guardiao_simplicidade
 description: Use when creating a new module, helper, abstraction layer, or refactoring existing code in the vHub Mirage project. Removes structural inflation and duplication and enforces the zero-dead-code law (L-15).
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 effort: medium
 ---
 

@@ -22,14 +22,9 @@ VHubCoin.locale = {
     refresh                    = 'Atualizar',
 
     -- CLIENTE — notificações
-    test_drive_ended           = 'Test drive encerrado.',
-    test_drive_already_active  = 'Test drive já ativo',
     vehicle_not_found          = 'Veículo não encontrado',
     failed_load_vehicle        = 'Falha ao carregar modelo do veículo',
-    test_drive_started         = 'Test drive iniciado! %d segundos.',
-    test_drive_started_msg     = 'Test drive iniciado',
-    failed_spawn_vehicle       = 'Falha ao spawnar veículo. Verifique sua garagem.',
-    vehicle_purchased          = 'Veículo comprado e spawnado! Placa: %s',
+    vehicle_purchased          = 'Veículo comprado. Retire-o na garagem. Placa: %s',
 
     -- SERVIDOR — mensagens
     no_permission              = 'Sem permissão',
@@ -51,9 +46,11 @@ VHubCoin.locale = {
     coins_set_to               = 'Suas moedas foram definidas para %d',
     invalid_data               = 'Dados inválidos',
     invalid_target_amount      = 'Alvo ou quantidade inválidos',
+    coin_persistence_failed    = 'Falha ao persistir moedas. Nenhuma operação foi concluída.',
 
     -- ADMIN
     item_name_required         = 'Nome do item é obrigatório',
+    item_price_required        = 'Item publicado precisa ter preço maior que zero',
     item_id_exists             = 'Já existe um item com este ID',
     item_id_required           = 'ID do item é obrigatório',
     item_created               = 'Item "%s" criado com sucesso',
@@ -71,7 +68,9 @@ VHubCoin.locale = {
     deal_items_limit           = 'Selecione 1-10 itens para a oferta',
     deal_created               = 'Oferta "%s" criada com sucesso',
     deal_id_required           = 'ID da oferta é obrigatório',
+    deal_updated               = 'Oferta atualizada com sucesso',
     deal_deleted               = 'Oferta deletada com sucesso',
+    code_deleted               = 'Código pendente apagado',
     deal_not_found             = 'Oferta não encontrada ou expirada',
     deal_no_items              = 'Oferta não tem itens',
     deal_purchased             = 'Oferta comprada com sucesso!',
@@ -80,6 +79,7 @@ VHubCoin.locale = {
     set_coins_msg              = 'Moedas do jogador %s definidas para %d',
     settings_saved             = 'Configurações salvas',
     settings_reset             = 'Configurações restauradas para padrão',
+    settings_persistence_failed = 'Falha ao persistir configurações',
 
     -- COMANDOS
     usage_givecoins            = 'Uso: /givecoins [id] [quantidade]',
@@ -113,7 +113,6 @@ VHubCoin.locale = {
     -- NUI — pagamento
     ui_confirm_payment         = 'Confirmar Pagamento',
     ui_confirm_question        = 'Tem certeza que deseja confirmar?',
-    ui_test_drive              = 'Test Drive',
 
     -- NUI — resgate
     ui_redeem_settings         = 'Configurações de Resgate',

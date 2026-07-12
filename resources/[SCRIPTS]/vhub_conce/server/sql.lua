@@ -57,6 +57,15 @@ function M:backfillMirror()
   return pexec('INSERT IGNORE INTO vh_vehicles (plate) SELECT plate FROM vhub_vehicles', {})
 end
 
+-- Retorna o legado de fuel para a migração única da ADR #61.
+function M:listLegacyFuel()
+  return pquery([[SELECT s.plate, s.fuel
+                    FROM vhub_vehicle_state s
+                    JOIN vhub_vehicles v ON v.plate = s.plate
+                   WHERE s.fuel IS NOT NULL
+                   ORDER BY s.plate]], {})
+end
+
 
 -- ============================================================
 -- vhub_vehicles (QUERIES)

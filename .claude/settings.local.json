@@ -1,14 +1,10 @@
 {
-  "_note": "GITIGNORE ESTE ARQUIVO — contém overrides pessoais. NÃO commitar.",
-
-  "model": "opus",
-  "effortLevel": "xhigh",
+  "_note": "GITIGNORE ESTE ARQUIVO — overrides pessoais/temporários. NAO commitar.",
+  "_alerta_2026-07-08": "Encontrado com 'model':'opus','effortLevel':'xhigh' permanentes + allow permanente de Write/Edit em resources/[CORE]/vhub/** e .claude/contexto.md. Isso força toda sessão interativa (main + qualquer subagente com model:inherit) a rodar em Opus no maior effort SEMPRE, e desativa os dois gates que o proprio CLAUDE.md diz que devem ser 'ask'/'deny'. Provavel maior causa isolada do gasto de tokens. Revertido para o padrao documentado em CLAUDE.md -> 'Gate do CORE': allow de escrita no CORE so deve existir aqui DURANTE uma sprint ativa de CORE, e removido ao final (volta a 'ask'). contexto.md nunca deve entrar no allow (permanece 'deny', escritor exclusivo = vhub_guardiao_revisao).",
 
   "permissions": {
     "allow": [
-      "Write(resources/[CORE]/vhub/**)",
-      "Edit(.claude/contexto.md)",
-      "Write(.claude/contexto.md)"
+      "Bash(grep -v \"^S$\")"
     ]
   }
 }

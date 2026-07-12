@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_vehcontrol'
 author      'vHub Mirage Adaptation'
-version     '1.1.0'
+version     '1.3.0'
 description 'Controle de veiculo (portas, motor, trava, luzes, banco, camera). Adaptado p/ vHub. Integracao: veh_key.'
 
 -- SOFT-deps (via export com pcall, NAO em dependencies p/ nao travar o boot):
@@ -49,6 +49,7 @@ files {
   'html/controls.js',
   'html/ficha.js',
   'html/sound.js',
+  'html/video.js',          -- telinha "DVD do carro" (iframe YT mute, decisao #53)
   'html/style-core.css',
   'html/style-controls.css',
   'html/style-ficha.css',

@@ -215,7 +215,6 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
       end
       pcall(function()
         exports.vhub_conce:saveVehicleState(p, {
-          fuel          = U.finiteNum(payload.fuel, 0.0, 100.0),
           engine_health = U.finiteNum(payload.engine_health, -4000.0, 1000.0),
           body_health   = U.finiteNum(payload.body_health, 0.0, 1000.0),
           damage        = (type(payload.damage) == 'table') and payload.damage or nil,

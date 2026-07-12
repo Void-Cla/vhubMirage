@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS `vhub_coinshop_items` (
     `weapon_name`      VARCHAR(50)  DEFAULT NULL,
     `trending`         TINYINT(1)   DEFAULT 0,
     `custom_category`  VARCHAR(50)  DEFAULT NULL,
+    `published`        TINYINT(1)   NOT NULL DEFAULT 1,
     `created_at`       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -56,8 +57,8 @@ CREATE TABLE IF NOT EXISTS `vhub_coinshop_deals` (
     `price`        INT          NOT NULL DEFAULT 0,
     `image`        VARCHAR(500) DEFAULT '',
     `items`        TEXT,
-    `expires_at`   TIMESTAMP    NOT NULL,
-    `created_at`   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    `expires_at`   DATETIME     NOT NULL,
+    `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -91,6 +92,25 @@ CREATE TABLE IF NOT EXISTS `vhub_coinshop_redeems` (
     CONSTRAINT `fk_coinshop_redeems_char`
         FOREIGN KEY (`char_id`) REFERENCES `vh_characters`(`id`)
         ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Transações Pix MercadoPago: ciclo pending → paid/expired
+CREATE TABLE IF NOT EXISTS `vhub_coinshop_pix_tx` (
+    `id`          INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+    `txid`        VARCHAR(64)   NOT NULL,
+    `char_id`     INT UNSIGNED  NOT NULL,
+    `src`         INT           NOT NULL,
+    `package_id`  VARCHAR(50)   NOT NULL,
+    `coins`       INT           NOT NULL DEFAULT 0,
+    `amount_brl`  DECIMAL(10,2) NOT NULL,
+    `status`      ENUM('pending','paid','expired') NOT NULL DEFAULT 'pending',
+    `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at`  DATETIME      NOT NULL,
+    `paid_at`     DATETIME      NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_txid` (`txid`),
+    KEY `idx_char` (`char_id`),
+    KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================

@@ -1,32 +1,45 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 
--- client/engine.lua — estado dos sons ativos + motor de posicao (1 thread, zero idle)
+-- client/engine.lua — estado dos sons + motor de ATENUACAO 3D (1 thread, zero idle).
+--
+-- O audio fica PRESO A FONTE (netId do veiculo, ou coord fixa): alto perto, some ao
+-- afastar. O YouTube/SoundCloud nao expoem audio p/ Web Audio (CORS), entao a atenuacao
+-- e SIMULADA ajustando o volume do player por degraus de distancia (tecnica principallafy).
+-- O volume final = baseVolume (escolha do usuario) x fator de distancia (0..1).
 
-local sounds = {}       -- [soundName] = { url, volume, distance, loop, netId, playing }
+local sounds = {}       -- [name] = { url, baseVolume, distance, loop, netId|coords, playing, lastSent }
 local soundCount = 0
 local engineRunning = false
 
 
 -- ============================================================
--- MOTOR — nasce no 1o som, morre no ultimo (L-06: zero custo idle)
+-- ATENUACAO — mapeia distancia -> fator de volume (0..1)
 -- ============================================================
 
--- resolve posicao 3D de um som ancorado a entidade e atualiza a NUI.
--- (coord estatica nao precisa de tick — e enviada 1x no play e nao muda)
-local function pushPosition(name, data)
-  if not data.netId then return end
+local NEAR_RADIUS = 4.0   -- ate aqui: volume cheio (cabine do carro)
 
-  local ent = NetworkGetEntityFromNetworkId(data.netId)
-  if ent == 0 or not DoesEntityExist(ent) then
-    SendNUIMessage({ type = 'destroy', name = name })
-    sounds[name] = nil
-    soundCount = soundCount - 1
-    return
-  end
-
-  local pos = GetEntityCoords(ent)
-  SendNUIMessage({ type = 'position', name = name, x = pos.x, y = pos.y, z = pos.z })
+-- fator de volume por distancia: 1.0 ate NEAR_RADIUS, decai linear ate 0.0 no raio maximo
+local function distanceFactor(dist, maxDist)
+  if dist <= NEAR_RADIUS then return 1.0 end
+  if dist >= maxDist then return 0.0 end
+  return 1.0 - ((dist - NEAR_RADIUS) / (maxDist - NEAR_RADIUS))
 end
+
+-- coord da fonte de um som (entidade viva -> coords; coord fixa -> ela mesma; senao nil)
+local function sourceCoords(data)
+  if data.netId then
+    local ent = NetworkGetEntityFromNetworkId(data.netId)
+    if ent == 0 or not DoesEntityExist(ent) then return nil, true end   -- 2o retorno = morreu
+    return GetEntityCoords(ent), false
+  end
+  if data.coords then return data.coords, false end
+  return nil, false
+end
+
+
+-- ============================================================
+-- MOTOR — nasce no 1o som posicional, morre no ultimo (L-06: zero custo idle)
+-- ============================================================
 
 local function startEngine()
   if engineRunning then return end
@@ -34,56 +47,91 @@ local function startEngine()
 
   CreateThread(function()
     while soundCount > 0 do
-      local anyDynamic = false
+      local anyPositional = false
+      local listenerPos = GetEntityCoords(PlayerPedId())
+
+      -- coleta mortos em lista separada: nao mutar sounds[] dentro de pairs()
+      local toDestroy = {}
 
       for name, data in pairs(sounds) do
-        if data.netId then
-          pushPosition(name, data)
-          anyDynamic = true
+        if data.netId or data.coords then
+          if not data.playing then
+            -- pausado: nao recalcula volume (evita SendNUIMessage desperdicado)
+            anyPositional = true
+          else
+            local src, dead = sourceCoords(data)
+
+            if dead then
+              toDestroy[#toDestroy + 1] = name
+            elseif src then
+              anyPositional = true
+              local dist = #(listenerPos - src)
+              local factor = distanceFactor(dist, data.distance or 30.0)
+              local vol = data.baseVolume * factor
+
+              if not data.lastSent or math.abs(vol - data.lastSent) > 0.02 then
+                data.lastSent = vol
+                SendNUIMessage({ type = 'volume', name = name, volume = vol })
+              end
+            end
+          end
         end
       end
 
-      Wait(anyDynamic and 150 or 1000)
+      -- aplica destruicoes fora do pairs() (safe)
+      for _, name in ipairs(toDestroy) do
+        if sounds[name] ~= nil then   -- guard: destroy pode ter chegado entre coleta e aqui
+          sounds[name] = nil
+          soundCount = soundCount - 1
+          SendNUIMessage({ type = 'destroy', name = name })
+        end
+      end
+
+      Wait(anyPositional and 150 or 1000)
     end
 
     engineRunning = false
+    -- guard: novo som chegou enquanto o ultimo Wait ainda rodava (race condition)
+    if soundCount > 0 then startEngine() end
   end)
 end
 
 
 -- ============================================================
--- HANDLERS — recebem do server, aplicam na NUI, mantem soundInfo local
+-- HANDLERS — recebem do server, aplicam na NUI, mantem estado local
 -- ============================================================
 
+-- som 2D (sem posicao): toca no volume base fixo, segue o jogador
 RegisterNetEvent('vhub_wow:play', function(name, url, volume, loop)
   if sounds[name] == nil then soundCount = soundCount + 1 end
-  sounds[name] = { url = url, volume = volume, loop = loop, playing = true }
+  sounds[name] = { url = url, baseVolume = volume or 0.5, loop = loop, playing = true }
 
   SendNUIMessage({ type = 'play', name = name, url = url, volume = volume, loop = loop })
 end)
 
+-- som 3D preso a uma ENTIDADE (netId do veiculo): atenua por distancia no tick
 RegisterNetEvent('vhub_wow:playAtEntity', function(name, url, volume, netId, distance, loop)
   if sounds[name] == nil then soundCount = soundCount + 1 end
-  sounds[name] = { url = url, volume = volume, distance = distance, loop = loop, netId = netId, playing = true }
+  sounds[name] = {
+    url = url, baseVolume = volume or 0.5, distance = distance,
+    loop = loop, netId = netId, playing = true, lastSent = nil,
+  }
 
-  SendNUIMessage({
-    type = 'play', name = name, url = url, volume = volume, loop = loop,
-    dynamic = true, distance = distance,
-  })
-
+  -- comeca no volume base; o tick ajusta pela distancia ja no proximo ciclo
+  SendNUIMessage({ type = 'play', name = name, url = url, volume = volume, loop = loop })
   startEngine()
 end)
 
+-- som 3D preso a uma COORD fixa (base p/ "TV da cidade"): atenua por distancia no tick
 RegisterNetEvent('vhub_wow:playAt', function(name, url, volume, coords, distance, loop)
   if sounds[name] == nil then soundCount = soundCount + 1 end
-  sounds[name] = { url = url, volume = volume, distance = distance, loop = loop, playing = true }
+  sounds[name] = {
+    url = url, baseVolume = volume or 0.5, distance = distance,
+    loop = loop, coords = vector3(coords.x, coords.y, coords.z), playing = true, lastSent = nil,
+  }
 
-  -- coord fixa: manda a posicao 1x (nao entra no tick — nao muda)
-  SendNUIMessage({
-    type = 'play', name = name, url = url, volume = volume, loop = loop,
-    dynamic = true, distance = distance,
-  })
-  SendNUIMessage({ type = 'position', name = name, x = coords.x, y = coords.y, z = coords.z })
+  SendNUIMessage({ type = 'play', name = name, url = url, volume = volume, loop = loop })
+  startEngine()
 end)
 
 RegisterNetEvent('vhub_wow:destroy', function(name)
@@ -93,29 +141,6 @@ RegisterNetEvent('vhub_wow:destroy', function(name)
   end
 
   SendNUIMessage({ type = 'destroy', name = name })
-end)
-
-
--- ============================================================
--- VIDEO — visibilidade da telinha (server propoe, client confirma a bordo — R1)
--- ============================================================
-
--- torna a telinha visivel SO se o ped local esta de fato dentro do veiculo alegado.
--- o server manda o attach; a decisao final e local (anti "ver DVD do carro alheio").
-RegisterNetEvent('vhub_wow:videoAttach', function(name, netId)
-  if sounds[name] == nil then return end   -- so exibe video de som que existe aqui
-
-  local ent = NetworkGetEntityFromNetworkId(netId)
-  if ent == 0 or not DoesEntityExist(ent) then return end
-
-  local ped = PlayerPedId()
-  if not IsPedInVehicle(ped, ent, false) then return end   -- confirmacao fisica local
-
-  SendNUIMessage({ type = 'video.attach', name = name, mode = 'incar' })
-end)
-
-RegisterNetEvent('vhub_wow:videoDetach', function(name)
-  SendNUIMessage({ type = 'video.detach', name = name })
 end)
 
 RegisterNetEvent('vhub_wow:pause', function(name)
@@ -134,20 +159,24 @@ RegisterNetEvent('vhub_wow:resume', function(name)
   SendNUIMessage({ type = 'resume', name = name })
 end)
 
+-- ajuste do volume BASE (slider do usuario). O tick reaplica com a atenuacao por cima.
 RegisterNetEvent('vhub_wow:setVolume', function(name, volume)
   local data = sounds[name]
   if not data then return end
-  data.volume = volume
+  data.baseVolume = volume or 0.5
+  data.lastSent = nil   -- forca o proximo tick a reenviar com o novo base
 
-  SendNUIMessage({ type = 'volume', name = name, volume = volume })
+  -- som 2D nao entra no tick: aplica direto
+  if not (data.netId or data.coords) then
+    SendNUIMessage({ type = 'volume', name = name, volume = data.baseVolume })
+  end
 end)
 
 RegisterNetEvent('vhub_wow:setDistance', function(name, distance)
   local data = sounds[name]
   if not data then return end
   data.distance = distance
-
-  SendNUIMessage({ type = 'distance', name = name, distance = distance })
+  data.lastSent = nil
 end)
 
 
@@ -171,7 +200,7 @@ exports('getInfo', function(name)
   if not data then return nil end
 
   return {
-    url = data.url, volume = data.volume, distance = data.distance,
+    url = data.url, volume = data.baseVolume, distance = data.distance,
     loop = data.loop, playing = data.playing,
   }
 end)

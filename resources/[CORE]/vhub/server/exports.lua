@@ -35,6 +35,30 @@ vHub.Kernel:export("getVehicle",   function(plate)
 end)
 vHub.Kernel:export("getVehicleByKey", function(key)     return vHub.Vehicle:byKey(key)   end)
 
+vHub.Kernel:export("getCData", function(cid, key)
+  if not _invoker_allowed() then return nil end
+  return vHub.getCData(cid, key)
+end)
+
+vHub.Kernel:export("setCData", function(cid, key, value, tx)
+  if not _invoker_allowed() then return false end
+  local ok = vHub.setCData(cid, key, value, tx)
+  vHub.audit(GetInvokingResource() or "?", "setCData", tostring(cid), nil, nil, { key = key, value = value })
+  return ok
+end)
+
+vHub.Kernel:export("getGData", function(key)
+  if not _invoker_allowed() then return nil end
+  return vHub.getGData(key)
+end)
+
+vHub.Kernel:export("setGData", function(key, value, tx)
+  if not _invoker_allowed() then return false end
+  local ok = vHub.setGData(key, value, tx)
+  vHub.audit(GetInvokingResource() or "?", "setGData", "__g", nil, nil, { key = key, value = value })
+  return ok
+end)
+
 -- Motorista atual da placa (src) ou nil — gate de autoridade de input (FASE 3.1)
 vHub.Kernel:export("getVehicleDriver", function(plate)
   local p = plate and plate:upper() or nil
@@ -97,7 +121,11 @@ end)
 
 -- Campos que cada origem de negócio pode mutar. `true` = todos (admin/migração).
 local SOURCE_GATES = {
-  pump   = { fuel = true },
+  pump   = { fuel = true, _resource = "vhub_legacyfuel" },
+  fuel_can = { fuel = true, _resource = "vhub_legacyfuel" },
+  fuel_admin = { fuel = true, _resource = "vhub_legacyfuel" },
+  fuel_migration = { fuel = true, _resource = "vhub_conce" },
+  fuel_compat = { fuel = true, _resource = "vhub_conce" },
   repair = { engine_health = true, body_health = true, damage = true },
   tune   = { tuning = true },
   garage = { fuel = true, engine_health = true, body_health = true, damage = true,
@@ -118,8 +146,15 @@ vHub.Kernel:export("commitVehicleState", function(plate, patch, source_tag)
       ("commitVehicleState: source '%s' não autorizado"):format(tostring(source_tag)))
     return false
   end
+  local invoker = GetInvokingResource()
+  if allowed ~= true and allowed._resource and allowed._resource ~= invoker then
+    vHub.Logger:warn("exports",
+      ("commitVehicleState: source '%s' negada para '%s'"):format(
+        tostring(source_tag), tostring(invoker)))
+    return false, { code = "forbidden_source" }
+  end
   for campo in pairs(patch) do
-    if allowed ~= true and not allowed[campo] then
+    if campo == "_resource" or (allowed ~= true and not allowed[campo]) then
       vHub.Logger:warn("exports",
         ("commitVehicleState: source '%s' não pode mutar '%s'"):format(
           tostring(source_tag), tostring(campo)))
@@ -127,8 +162,19 @@ vHub.Kernel:export("commitVehicleState", function(plate, patch, source_tag)
     end
   end
 
+  if patch.fuel ~= nil then
+    local fuel = patch.fuel
+    if type(fuel) ~= "number" or fuel ~= fuel or math.abs(fuel) == math.huge then
+      return false, { code = "invalid_fuel" }
+    end
+    patch.fuel = math.max(0.0, math.min(100.0, fuel))
+  end
+
   local vd = vHub.Vehicle:register(plate, nil)
   if not vd then return false end
+  if patch.fuel ~= nil and not vd.anchored then
+    return false, { code = "unanchored", anchored = false }
+  end
 
   local antes = {}
   for campo, valor in pairs(patch) do
@@ -141,7 +187,7 @@ vHub.Kernel:export("commitVehicleState", function(plate, patch, source_tag)
 
   TriggerEvent(vHub.E.EVT_VEH_COMMITTED, vd.plate, source_tag, patch)
   vHub.audit(GetInvokingResource() or "?", "commitVehicleState", vd.plate, source_tag, antes, patch)
-  return true
+  return true, { code = "queued", anchored = vd.anchored == true, persistence = "queued" }
 end)
 
 
@@ -155,8 +201,7 @@ vHub.Kernel:export("registerVehicleSpawn", function(plate, netid)
   if not _invoker_allowed() then return false end
   vHub.assertThread()
   if type(netid) ~= "number" then return false end
-  vHub.Vehicle:onSpawned(plate, netid)
-  return true
+  return vHub.Vehicle:onSpawned(plate, netid) == true
 end)
 
 -- Registra despawn físico (salva estado + posição e libera índices do CORE).

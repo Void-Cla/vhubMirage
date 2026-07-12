@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_conce'
 author      'vHub Mirage'
-version     '0.1.0'
+version     '0.3.1'
 -- Responsabilidade ÚNICA: identidade do veículo — relação CHAVE↔PLACA↔DONO,
 -- concessionária (compra/test-drive/estoque/placa única), emissão/clone/
 -- empréstimo/revogação de chave, cron 24h e status/IPVA. Não renderiza, não

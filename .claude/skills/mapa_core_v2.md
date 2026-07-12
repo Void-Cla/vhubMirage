@@ -1,6 +1,6 @@
 # Skill — Mapa mestre do CORE v2 (leia ISTO antes de tocar em veículo/CORE)
 
-> Estado consolidado do descongelamento (decisões #37–#50, 2026-07-02/03). Fonte
+> Estado consolidado do descongelamento (decisões #37–#50, #61 e #65). Fonte
 > detalhada: `.claude/plano_core_v2/WORKLOG_CORE_V2.md` (mapa, métricas, checklists).
 > Esta skill é o atalho de orientação para uma sessão nova dominar a estrutura em 2 min.
 
@@ -8,22 +8,23 @@
 | Dado | Dono ATUAL | Rumo (FASE 2) |
 |------|-----------|----------------|
 | Identidade do veículo (placa↔chave↔dono) | `vhub_conce` (`vhub_vehicles`/`_keys` + espelho `vh_vehicles`) | permanece |
-| Físico PERSISTIDO (fuel/health/custom) | prontuário `vhub_vehicle_state` (conce, Doutrina da Placa) | CORE vira fonte; conce vira cache/validação |
+| Físico PERSISTIDO (fuel) | CORE `Veh.state` + `vh_vehicle_data` (#61) | permanece |
+| Health/custom legado | prontuário `vhub_vehicle_state` (conce) | CORE vira fonte; conce vira cache/validação |
 | Físico em RUNTIME (VRAM + bags) | CORE `Veh._veh` — reanimado, validado em dev | permanece |
 | Aplicação física no carro (natives) | `vhub_vehcontrol` (requestState) | CORE `vehicleStateLoad` (flag `vhub_veh_state_apply`) |
-| Fuel | `vhub_legacyfuel` + prontuário; CORE em SHADOW (espelho #44 aquece) | CORE (`vhub_core_fuel 1` + bag `vh_fuel`) |
+| Fuel | CORE (`vhub_core_fuel 1` + bag `vh_fuel`); legacyfuel só orquestra abastecimento | permanece |
 | Spawn/despawn de veículo | garage/conce server-side; CORE via exports `registerVehicleSpawn/Despawn` | permanece |
 
 ## Interruptores (convars no `config/server.cfg`)
 - `vhub_trusted_resources` (CSV) — allowlist dos exports sensíveis do CORE. **Vazio = CORE
   nega tudo** (warn de boot orienta). Hoje: conce, garage, custom, vehcontrol, nitro,
   racha, admin, ferinha, legacyfuel.
-- `vhub_core_fuel` (0) e `vhub_veh_state_apply` (0) — cutover da FASE 2. NÃO ligar sem
-  desligar o dono atual do campo (escritor duplo, L-04).
+- `vhub_core_fuel` (1) e `vhub_veh_state_apply` (0) — fuel cortado na #61; health/body
+  ainda aguardam o corte físico.
 - `GlobalState.vh_core_active` (setado em `server/boot.lua`) — kill-switch do pipeline
   veicular: false = client para de emitir vEnter/vLeave/vState sem restart.
 
-## Superfícies novas do CORE (v2.0.0-alpha.1)
+## Superfícies do CORE (v2.0.0-alpha.3)
 - Exports: `commitVehicleState` (gated, SOURCE_GATES), `getVehicleState` (CÓPIA),
   `getVehicle` (CÓPIA desde #50), `getVehicleDriver`, `getVehicleOccupants`,
   `registerVehicleSpawn/Despawn` (gated). `getVHub()` segue vivo por contrato (#36) —
@@ -43,7 +44,7 @@
 
 ## O que NÃO fazer (aprendido com sangue)
 - ❌ Chamar `NetworkSetEntityOwner` no server (não existe — crash).
-- ❌ Escrever `vh_fuel`/drain no CORE com legacyfuel ativo (HUD diverge).
+- ❌ Reintroduzir Decor/drain client-side ou escrever `vh_fuel` fora do CORE.
 - ❌ Flipar `if not caller then return true` em outros resources sem verificar chamadas
   internas (idioma padrão FiveM; só o garage foi flipado, com prova).
 - ❌ Mexer em `fTractionCurveMax/Min` no Drift OU vehcontrol sem teste em jogo — os dois
@@ -52,7 +53,7 @@
 
 ## Pendências que valem a próxima sessão
 1. Checklist PARTE V do `frozen_core_2.md` em dev (pentest spoof vEnter = inegociável).
-2. FASE 2 cutover (conce→CORE; ligar as 2 flags; unificar fuel — F-050/F-066).
+2. Concluir FASE 2 para health/body/custom; fuel/F-050/F-066 foi fechado na #61/#65.
 3. F-059 (Drift×vehcontrol) com 2 players em jogo; F-053 (handling model-wide).
 4. Auditoria caso-a-caso do idioma `caller nil` (conce/money/ferinha/inventory/ipad/groups).
 5. b64→JSON (F-021) e WAL (F-010) — exigem banco real + backup.

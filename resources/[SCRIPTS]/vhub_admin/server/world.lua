@@ -51,6 +51,67 @@ AddEventHandler(E.ACT_CLEARZONE, function(radius)
   Core:audit(src, 'clearzone', nil, { r = r })
 end)
 
+-- ----------------------------------------------------------------------------
+-- WIPE global server-side (R1: zero broadcast; entidade some via replica  o)
+-- Prote  es: ve culo com jogador dentro e ped de jogador NUNCA s o deletados.
+-- Custo: O(entidades) one-shot, sem thread residente.
+-- ----------------------------------------------------------------------------
+local function playerVehicleSet()
+  local set = {}
+  for _, s in ipairs(GetPlayers()) do
+    local ped = GetPlayerPed(s)
+    if ped and ped ~= 0 then
+      local veh = GetVehiclePedIsIn(ped, false)
+      if veh and veh ~= 0 then set[veh] = true end
+    end
+  end
+  return set
+end
+
+local function playerPedSet()
+  local set = {}
+  for _, s in ipairs(GetPlayers()) do
+    local ped = GetPlayerPed(s)
+    if ped and ped ~= 0 then set[ped] = true end
+  end
+  return set
+end
+
+local WIPE_KINDS = { vehicles = true, peds = true, objects = true }
+
+RegisterNetEvent(E.ACT_WIPE)
+AddEventHandler(E.ACT_WIPE, function(kind)
+  local src = source; if not reqPerm(src, 'wipe') then return end
+  kind = tostring(kind or '')
+  if not WIPE_KINDS[kind] then return end
+
+  local removed = 0
+  if kind == 'vehicles' then
+    local occupied = playerVehicleSet()
+    for _, veh in ipairs(GetAllVehicles()) do
+      if not occupied[veh] and DoesEntityExist(veh) then
+        DeleteEntity(veh); removed = removed + 1
+      end
+    end
+  elseif kind == 'peds' then
+    local players = playerPedSet()
+    for _, ped in ipairs(GetAllPeds()) do
+      if not players[ped] and DoesEntityExist(ped) then
+        DeleteEntity(ped); removed = removed + 1
+      end
+    end
+  else
+    for _, obj in ipairs(GetAllObjects()) do
+      if DoesEntityExist(obj) then
+        DeleteEntity(obj); removed = removed + 1
+      end
+    end
+  end
+
+  Core.notify(src, ('Wipe %s: %d removidos.'):format(kind, removed))
+  Core:audit(src, 'wipe', nil, { kind = kind, removed = removed })
+end)
+
 RegisterNetEvent(E.ACT_ANNOUNCE)
 AddEventHandler(E.ACT_ANNOUNCE, function(message)
   local src = source; if not reqPerm(src, 'announce') then return end

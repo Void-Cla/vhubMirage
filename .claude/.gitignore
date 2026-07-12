@@ -1,0 +1,5 @@
+# Estado efêmero do hook de gestão de sessão — não versionar
+.session_state/
+
+# Overrides pessoais/temporários — nunca commitar (ver _note em settings.local.json)
+settings.local.json

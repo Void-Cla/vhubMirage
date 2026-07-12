@@ -29,4 +29,8 @@ VHubVeh.E = {
   -- client/handling.lua escuta (gatilho event-driven, sem polling novo — L-06)
   BECAME_DRIVER = 'vhub_vehcontrol:becameDriver',  -- (veh, plate) virei motorista desta placa
   LEFT_VEHICLE  = 'vhub_vehcontrol:leftVehicle',   -- (veh) saí do banco do motorista (restaura base)
+
+  -- telinha DVD no carro (decisão #53) — servidor → cliente: exibe/esconde o iframe do YouTube (mute)
+  VIDEO_ATTACH = 'vhub_vehcontrol:soundVideoAttach',  -- (videoId, title)
+  VIDEO_DETACH = 'vhub_vehcontrol:soundVideoDetach',  -- ()
 }

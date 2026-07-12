@@ -282,6 +282,7 @@ body {
 .csa-badge.gold   { background: var(--accent); color: var(--bg); }
 .csa-badge.green  { background: rgba(127, 191, 106, 0.2); color: var(--ok); }
 .csa-badge.red    { background: rgba(232, 81, 63, 0.18); color: var(--error); }
+.csa-badge.draft  { margin-left: 6px; background: rgba(243, 181, 58, 0.14); color: var(--accent); }
 
 .csa-empty { text-align: center; padding: 26px 10px; opacity: 0.55; font-size: 12.5px; }
 

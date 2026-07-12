@@ -1,8 +1,28 @@
--- server/commands.lua — comandos admin (givecoins, setcoins, coinshop_addcode)
+-- server/commands.lua — comandos admin (coinshop, givecoins, setcoins, coinshop_addcode)
 
 VHubCoin = VHubCoin or {}
 local Core  = VHubCoin.Core
 local Coins = VHubCoin.Coins
+
+
+-- ============================================================
+-- /coinshop — abre o iPad no app CoinShop (admin vê painel completo) — ADMIN-ONLY
+-- Jogador comum usa o app CoinShop do iPad via catálogo do tablet.
+-- restricted=false: Core.isAdmin cobre owner uid=1 > ACE vhub.coinshop.admin > vhub_groups.
+-- ============================================================
+
+RegisterCommand(VHubCoin.cfg.command, function(source)
+    local src = source
+    if src == 0 then
+        print('[vhub_coinshop] /coinshop abre o iPad — use in-game (admin)')
+        return
+    end
+    if not Core.isAdmin(src) then
+        Core.notify(src, T('no_permission'), 'error')
+        return
+    end
+    pcall(function() exports.vhub_ipad:openIpad(src) end)
+end, false)
 
 
 -- ============================================================
@@ -32,7 +52,11 @@ RegisterCommand('givecoins', function(source, args)
     end
 
     local oldCoins = Coins.get(targetChar)
-    Coins.credit(targetChar, amount)
+    if not Coins.credit(targetChar, amount) then
+        local msg = T('coin_persistence_failed')
+        if src ~= 0 then Core.notify(src, msg, 'error') else print(msg) end
+        return
+    end
     Coins.notifyChange(targetId, targetChar)
     Core.notify(targetId, T('received_coins', amount), 'success')
 
@@ -45,7 +69,7 @@ RegisterCommand('givecoins', function(source, args)
 
     local msg = T('gave_coins', amount, targetId)
     if src ~= 0 then Core.notify(src, msg) else print(msg) end
-end, true)
+end, false)
 
 
 -- ============================================================
@@ -75,7 +99,11 @@ RegisterCommand('setcoins', function(source, args)
     end
 
     local oldCoins = Coins.get(targetChar)
-    Coins.set(targetChar, amount)
+    if not Coins.set(targetChar, amount) then
+        local msg = T('coin_persistence_failed')
+        if src ~= 0 then Core.notify(src, msg, 'error') else print(msg) end
+        return
+    end
     Coins.notifyChange(targetId, targetChar)
     Core.notify(targetId, T('coins_set_to', amount), 'info')
 
@@ -87,7 +115,7 @@ RegisterCommand('setcoins', function(source, args)
 
     local msg = T('set_coins_msg', targetId, amount)
     if src ~= 0 then Core.notify(src, msg) else print(msg) end
-end, true)
+end, false)
 
 
 -- ============================================================
@@ -120,4 +148,4 @@ RegisterCommand('coinshop_addcode', function(source, args)
         )
         print(('[vhub_coinshop] Código criado | Pedido: %s | Moedas: %s'):format(orderId, tostring(coins)))
     end)
-end, true)
+end, false)

@@ -13,10 +13,13 @@ VHubCoin.Purchases = Purch
 -- ============================================================
 
 -- entrega um item de inventário via exports.vhub_inventory (pcall na fronteira externa — R7)
+-- giveItem retorna boolean estrito: false = negado/falhou → NÃO conta como entrega
 local function deliverItem(src, itemName, count)
     if not VHubCoin.isNonEmptyStr(itemName) then return false end
-    local ok = pcall(exports.vhub_inventory.giveItem, src, itemName, VHubCoin.clamp(count or 1, 1, 1000))
-    return ok == true
+    local ok, res = pcall(function()
+        return exports.vhub_inventory:giveItem(src, itemName, VHubCoin.clamp(count or 1, 1, 1000))
+    end)
+    return ok and res == true
 end
 
 -- entrega uma arma equipando no ped via vhub_player_state (dono do ped).
@@ -64,7 +67,7 @@ function Purch.buyItem(src, char_id, itemId)
     if Coins.isLocked(char_id) then return false, T('purchase_in_progress') end
 
     local item = Items.find(itemId)
-    if not item then return false, T('item_not_found') end
+    if not item or item.published ~= true then return false, T('item_not_found') end
 
     local currentBalance = Coins.get(char_id)
     if currentBalance < item.price then return false, T('not_enough_coins') end
@@ -76,12 +79,12 @@ function Purch.buyItem(src, char_id, itemId)
 
     -- entrega por categoria (falha → reembolso atômico)
     local delivered = false
+    local successMessage = T('purchase_successful')
     if item.category == 'vehicle' then
         local plate = deliverVehicle(src, item.spawnName)
         if plate then
-            -- servidor pede ao cliente para spawnar o veículo comprado
-            TriggerClientEvent(VHubCoin.E.SPAWN_VEHICLE, src, item.spawnName, plate)
             delivered = true
+            successMessage = T('vehicle_purchased', plate)
         end
     elseif item.category == 'weapon' then
         if VHubCoin.isNonEmptyStr(item.itemName) then
@@ -97,8 +100,12 @@ function Purch.buyItem(src, char_id, itemId)
 
     if not delivered then
         -- reembolso (credita de volta)
-        Coins.credit(char_id, item.price)
+        local refunded = Coins.credit(char_id, item.price)
         Coins.releaseLock(char_id)
+        if not refunded then
+            Core.logErr('reembolso de compra falhou char=' .. tostring(char_id) .. ' item=' .. itemId)
+            return false, T('coin_persistence_failed')
+        end
         local reason = item.category == 'vehicle' and T('failed_register_vehicle') or T('failed_give_item')
         return false, reason
     end
@@ -120,10 +127,14 @@ function Purch.buyItem(src, char_id, itemId)
         { name = 'Item',        value = item.name .. ' (`' .. itemId .. '`)',               inline = false },
         { name = 'Categoria',   value = item.category,                                      inline = true },
         { name = 'Preço',       value = tostring(item.price) .. ' moedas',                  inline = true },
-        { name = 'Saldo',       value = tostring(currentBalance) .. ' → ' .. tostring(currentBalance - item.price), inline = true },
+        {
+            name = 'Saldo',
+            value = tostring(currentBalance) .. ' → ' .. tostring(currentBalance - item.price),
+            inline = true,
+        },
     })
 
-    return true, T('purchase_successful')
+    return true, successMessage
 end
 
 
@@ -145,6 +156,10 @@ function Purch.buyDeal(src, char_id, dealId)
     end
     if not deal then return false, T('deal_not_found') end
     if #deal.items == 0 then return false, T('deal_no_items') end
+    for _, dealItem in ipairs(deal.items) do
+        local listed = Items.find(dealItem.id)
+        if not listed or listed.published ~= true then return false, T('deal_not_found') end
+    end
 
     local currentBalance = Coins.get(char_id)
     if currentBalance < deal.price then return false, T('not_enough_coins') end
@@ -162,7 +177,7 @@ function Purch.buyDeal(src, char_id, dealId)
         elseif item.category == 'vehicle' then
             local plate = deliverVehicle(src, item.spawnName)
             if plate then
-                TriggerClientEvent(VHubCoin.E.SPAWN_VEHICLE, src, item.spawnName, plate)
+                Core.notify(src, T('vehicle_purchased', plate), 'success')
             else
                 failedItems[#failedItems + 1] = item.name
             end
@@ -175,15 +190,21 @@ function Purch.buyDeal(src, char_id, dealId)
             end
             if not ok then failedItems[#failedItems + 1] = item.name end
         elseif item.category == 'item' or item.category == 'tool' then
-            local ok = VHubCoin.isNonEmptyStr(item.itemName) and deliverItem(src, item.itemName, item.itemCount or 1) or false
+            local ok = VHubCoin.isNonEmptyStr(item.itemName)
+                and deliverItem(src, item.itemName, item.itemCount or 1)
+                or false
             if not ok then failedItems[#failedItems + 1] = item.name end
         end
     end
 
     -- TODOS falharam → reembolso total
     if #failedItems == #deal.items then
-        Coins.credit(char_id, deal.price)
+        local refunded = Coins.credit(char_id, deal.price)
         Coins.releaseLock(char_id)
+        if not refunded then
+            Core.logErr('reembolso de oferta falhou char=' .. tostring(char_id) .. ' deal=' .. dealId)
+            return false, T('coin_persistence_failed')
+        end
         return false, T('failed_give_item')
     end
 
@@ -205,7 +226,11 @@ function Purch.buyDeal(src, char_id, dealId)
         { name = 'Oferta',  value = deal.name .. ' (`' .. dealId .. '`)', inline = false },
         { name = 'Itens',   value = tostring(#deal.items) .. ' item(ns)', inline = true },
         { name = 'Preço',   value = tostring(deal.price) .. ' moedas', inline = true },
-        { name = 'Saldo',   value = tostring(currentBalance) .. ' → ' .. tostring(currentBalance - deal.price), inline = true },
+        {
+            name = 'Saldo',
+            value = tostring(currentBalance) .. ' → ' .. tostring(currentBalance - deal.price),
+            inline = true,
+        },
     })
 
     return true, T('deal_purchased')
@@ -252,7 +277,15 @@ function Purch.redeemCode(src, char_id, redeemKey, targetId)
 
     local coinsToAdd = tonumber(codeRow.coins) or 0
     local oldCoins   = Coins.get(targetCharId)
-    Coins.credit(targetCharId, coinsToAdd)
+    if not Coins.credit(targetCharId, coinsToAdd) then
+        SQL.execute(
+            'UPDATE vhub_coinshop_codes SET status = ?, redeemed_by = NULL, redeemed_at = NULL ' ..
+            'WHERE tbx_id = ? AND status = ? AND redeemed_by = ?',
+            { 'pending', key, 'redeemed', targetCharId }
+        )
+        Core.logErr('resgate revertido: crédito CData falhou key=' .. key)
+        return false, T('coin_persistence_failed')
+    end
 
     -- audit
     SQL.insert(
@@ -260,10 +293,11 @@ function Purch.redeemCode(src, char_id, redeemKey, targetId)
         { targetCharId, key, coinsToAdd }
     )
 
-    -- notifica alvo (se for presente)
+    -- sync de saldo SEMPRE no alvo (self ou presente) — antes o resgate para si
+    -- mesmo nunca disparava notifyChange e a UI ficava com saldo stale (#59)
+    Coins.notifyChange(targetSrc, targetCharId)
     if targetSrc ~= src then
         Core.notify(targetSrc, T('received_coins_gift', coinsToAdd), 'success')
-        Coins.notifyChange(targetSrc, targetCharId)
     end
 
     VHubCoin.Webhooks.fire('redeems',

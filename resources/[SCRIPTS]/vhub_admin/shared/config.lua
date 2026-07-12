@@ -30,12 +30,15 @@ VHubAdmin.cfg = {
     invisible   = 'admin.invisible',
     skin        = 'admin.skin',
     spec        = 'admin.spec',
+    buff        = 'admin.buff',       -- stamina infinita / super pulo (self)
     -- vehicle
     spawncar    = 'admin.spawncar',
     delveh      = 'admin.delveh',
     fix         = 'admin.fix',
     tuning      = 'admin.tuning',
     carcolor    = 'admin.carcolor',
+    boost       = 'admin.boost',      -- boost temporário de motor
+    wipe        = 'admin.wipe',       -- limpeza global de entidades (server-side)
     -- world
     weather     = 'admin.weather',
     time        = 'admin.time',
@@ -80,6 +83,21 @@ VHubAdmin.cfg = {
 
   -- ---------- Coords do "jail" -------------------------------------------
   jail_pos = { x = 1681.05, y = 2516.59, z = 45.56, h = 270.0 },
+
+  -- ---------- Boost de veículo (tetos server-side) ------------------------
+  vehicle_boost = {
+    multiplier  = 2.2,      -- top speed / torque
+    duration_ms = 10000,    -- auto-restaura ao expirar
+  },
+
+  -- ---------- Zonas de teleporte nomeadas ---------------------------------
+  -- Primitivos {x,y,z,h} (L-19: coord cruza fronteira server→client como flat)
+  teleport_zones = {
+    hospital  = { x = 308.19,    y = -595.35,  z = 43.29, h = 70.0  },
+    garagem   = { x = 215.12,    y = -805.85,  z = 30.81, h = 340.0 },
+    aeroporto = { x = -1037.74,  y = -2737.77, z = 20.17, h = 330.0 },
+    base      = { x = -75.23,    y = -818.58,  z = 326.18, h = 250.0 },
+  },
 
   -- ---------- Webhook Discord (opcional) ---------------------------------
   webhook = {

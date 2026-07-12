@@ -1,4 +1,4 @@
--- client/init.lua — bootstrap do cliente vhub_coinshop: comando, keybind, state local, roteamento NUI
+-- client/init.lua — bootstrap do cliente vhub_coinshop: state local, net events
 
 VHubCoin = VHubCoin or {}
 local Client = {}
@@ -9,29 +9,23 @@ VHubCoin.Client = Client
 -- STATE LOCAL (efêmero; servidor é verdade — L-02/L-03)
 -- ============================================================
 
-Client.isShopOpen     = false
-Client.shopItems      = {}
-Client.shopCategories = {}
+Client.isShopOpen = false
 
 
 -- ============================================================
--- COMANDO E KEYBIND
+-- NET EVENTS — server→client (discrete; nunca para estado contínuo)
+-- (keybind F5 e comando client REMOVIDOS — decisão #58: /coinshop é
+--  server-side admin-only; jogador abre a loja pelo app do iPad)
 -- ============================================================
 
-RegisterCommand(VHubCoin.cfg.command, function()
+-- servidor autorizou (/coinshop admin): abre a NUI fullscreen com painel completo
+RegisterNetEvent(VHubCoin.E.OPEN_SHOP_ADMIN, function()
     if Client.isShopOpen then
         VHubCoin.Shop.closeShop()
     else
         VHubCoin.Shop.openShop()
     end
-end, false)
-
-RegisterKeyMapping(VHubCoin.cfg.command, VHubCoin.cfg.keyDescription, 'keyboard', VHubCoin.cfg.key)
-
-
--- ============================================================
--- NET EVENTS — server→client (discrete; nunca para estado contínuo)
--- ============================================================
+end)
 
 -- saldo de moedas mudou — repassa à NUI se aberta
 RegisterNetEvent(VHubCoin.E.COINS_CHANGED, function(coins)
@@ -39,12 +33,6 @@ RegisterNetEvent(VHubCoin.E.COINS_CHANGED, function(coins)
         SendNUIMessage({ type = 'coinsChanged', coins = coins })
     end
 end)
-
--- servidor pede para spawnar veículo comprado (modelo + placa)
-RegisterNetEvent(VHubCoin.E.SPAWN_VEHICLE, function(modelName, plate)
-    VHubCoin.VehicleSpawn.spawnPurchased(modelName, plate)
-end)
-
 
 -- ============================================================
 -- CLEANUP — onResourceStop (sem leak)
@@ -55,5 +43,4 @@ AddEventHandler('onResourceStop', function(stopping)
     if Client.isShopOpen then
         SetNuiFocus(false, false)
     end
-    VHubCoin.TestDrive.cleanup()
 end)

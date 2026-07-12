@@ -21,13 +21,13 @@ Framework FiveM GTARP server-authoritative, Lua 5.4. Foco: cidade de corrida.
 > O time deixou de ser **guardião do freeze** e passou a ser **guia da migração**. A missão
 > não é mais "não tocar no CORE"; é **mover para o CORE o que é dele, sob gate**, sem gambiarra.
 
-> **STATUS 2026-07-03 — FASE 1 APLICADA e VALIDADA EM DEV; itens estáticos das FASES 2..6
-> aplicados** (decisões/ADRs #37–#50 — mesma numeração no `contexto.md` e no
-> `.claude/plano_core_v2/WORKLOG_CORE_V2.md`; **próximo livre = #51**): CORE v2.0.0-alpha.1 —
+> **STATUS 2026-07-10 — FASE 1 APLICADA e VALIDADA EM DEV; fuel da FASE 2 cortado
+> para o CORE** (decisões/ADRs #37–#50 e #61–#65 — mesma numeração no `contexto.md` e no
+> `.claude/plano_core_v2/WORKLOG_CORE_V2.md`; **próximo livre = #66**): CORE v2.0.0-alpha.3 —
 > handlers veiculares reanimados com gate físico (boot dev limpo 2026-07-03),
 > `commitVehicleState`/`getVehicleState`(cópia)/`vh_audit`, VRAM eviction TTL, batch com cap
 > de retry, registro efêmero anti-FK, despawn server-side (zero broadcast `-1`), dual-write
-> de fuel conce→CORE. Fuel em shadow-mode (`vhub_core_fuel=0`) até a FASE 2. Trust populado
+> de fuel conce→CORE concluído. Fuel autoritativo ativo (`vhub_core_fuel=1`). Trust populado
 > via `setr vhub_trusted_resources` no `config/server.cfg`. Orientação rápida:
 > `.claude/skills/mapa_core_v2.md`. **Checklist PARTE V (pentest/stress) pendente — bloqueia produção.**
 
@@ -135,7 +135,7 @@ Agentes definidos em `.claude/agents/*.md` — formato nativo Claude Code, invoc
 | `vhub_guardiao_simplicidade` | Criar módulo, helper, camada nova, ou qualquer refactor |
 | `vhub_guardiao_designer` | Tocar NUI, CEF, HUD, `client/`, `SendNUIMessage`, `RegisterNUICallback` — identidade visual + CEF |
 | `vhub_guardiao_runtime` | Tocar engine NUI (`web/runtime/*`), lifecycle de módulo, store/eventbus/router, native bridge, lazy load |
-| `vhub_guardiao_revisao` | Gate final antes de todo commit relevante; único autorizado a escrever em `contexto.md` |
+| `vhub_guardiao_revisao` | O guardiao da revisao morreu, agora todos os agentes escrevem em contexto de forma resumida mas cirugica sobre oque acabou de fazer e onde mexeu. |
 | `vhub_designer` | Proposta ou redesign de NUI/interface componentizada |
 
 ### Fluxo preferencial multi-agente
@@ -144,7 +144,7 @@ Agentes definidos em `.claude/agents/*.md` — formato nativo Claude Code, invoc
 1. Ler .claude/contexto.md
 2. Mapear arquivos tocados
 3. vhub_arquiteto → ownership, placement, fase
-4. Guardiões relevantes em PARALELO (somente os pertinentes ao risco)
+4. Guardiões relevantes em PARALELO (somente os pertinentes ao risco — ver "Gate mínimo" em AGENTS.md)
 5. Worker executa SOMENTE após todos aprovarem
 6. vhub_guardiao_revisao → gate final + atualiza contexto.md se necessário
 ```
@@ -472,13 +472,21 @@ O model padrão é `opusplan` — Opus 4.8 em PLAN MODE, Sonnet 4.6 em EXECUTE M
 | `vhub_arquiteto` | Opus 4.7 | xhigh | Decisões estruturais requerem raciocínio profundo. 4.7 tem xhigh como padrão |
 | `vhub_guardiao_revisao` | Opus 4.8 | xhigh | Gate final: máxima precisão, zero tolerância a erro |
 | `vhub_guardiao_seguranca` | Opus 4.8 | high | Zero-trust: precisão crítica, 4.8 mais confiável em edge cases |
+| `vhub_guardiao_persistencia` | Opus 4.8 | high | L-13: histórico real de perda de dados (bind `@dkey`, 8 call-sites externos) — sem corte |
 | `vhub_designer` | Opus 4.7 | high | Design técnico + criativo requer capacidade acima da média |
-| `vhub_guardiao_contrato` | Sonnet 4.6 | high | Pattern matching contra contratos conhecidos |
-| `vhub_guardiao_natives` | Sonnet 4.6 | high | Lookup de referência + pattern check |
-| `vhub_guardiao_performance` | Sonnet 4.6 | high | Análise de padrões de performance |
-| `vhub_guardiao_designer` | Sonnet 4.6 | high | Verificação de identidade visual |
-| `vhub_guardiao_runtime` | Sonnet 4.6 | high | Patterns arquiteturais JS (A-01..A-08) |
-| `vhub_guardiao_simplicidade` | Sonnet 4.6 | medium | Checks simples, não requer raciocínio profundo |
+| `vhub_guardiao_natives` | Sonnet 4.6 | high | Autoridade de entidade/spawn é sutil (L-16) — mantido em high |
+| `vhub_guardiao_contrato` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Pattern matching contra contratos conhecidos — mecânico o bastante para medium |
+| `vhub_guardiao_performance` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Checagem contra tabela de Orçamentos (contrato fixo), não raciocínio aberto |
+| `vhub_guardiao_designer` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Checklist de identidade visual (A-09/A-10), fixo |
+| `vhub_guardiao_runtime` | Sonnet 4.6 | **medium** (2026-07-08, ↓ de high) | Patterns arquiteturais JS (A-01..A-08), fixo |
+| `vhub_guardiao_simplicidade` | **Haiku 4.5** (2026-07-08, ↓ de Sonnet) | medium | Check mais mecânico (L-15 dead code/duplicação) — não precisa de Sonnet |
+
+> Downgrades de 2026-07-08: motivados por auditoria de custo de tokens (subagentes = 83% do
+> uso do mês). Critério aplicado: guardiões com checklist/tabela fixa → `medium`; o mais
+> mecânico (`simplicidade`) → Haiku. **Não** tocado: `persistencia`, `seguranca`, `revisao`,
+> `arquiteto`, `natives` — histórico de risco real (perda de dado, spawn, gate final) não
+> negocia custo. Se algum guardião rebaixado começar a deixar passar problema real, suba de
+> volta primeiro para ele antes de qualquer outro ajuste.
 
 ### Economia de tokens na prática
 

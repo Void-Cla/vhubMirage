@@ -7,24 +7,30 @@
 VHubIpad = VHubIpad or {}
 
 local Registry = VHubIpad.Registry
+local State    = VHubIpad.State
 local E        = VHubIpadE
 
 
 -- ============================================================
--- ANTI-DoS — cap de profundidade/keys do payload (cliente ou resource)
+-- ANTI-DoS — cap de profundidade/keys do payload vindo do CLIENTE
 -- ============================================================
+--
+-- appPush (server → cliente) vem de resource confiável e carrega snapshots
+-- de catálogo (N itens × ~10 campos); não sofre cap de tamanho.
+-- safePayload só é chamado no caminho CLIENTE → server (appRelay).
 
-local MAX_DEPTH, MAX_KEYS = 5, 100
+local CLIENT_MAX_DEPTH = 5
+local CLIENT_MAX_KEYS  = 100
 
--- true se o payload está dentro dos limites (tabela hostil gigante/profunda = false)
+-- true se o payload do cliente está dentro dos limites
 local function safePayload(v, depth)
   if type(v) ~= 'table' then return true end
   depth = depth or 1
-  if depth > MAX_DEPTH then return false end
+  if depth > CLIENT_MAX_DEPTH then return false end
   local n = 0
   for _, val in pairs(v) do
     n = n + 1
-    if n > MAX_KEYS then return false end
+    if n > CLIENT_MAX_KEYS then return false end
     if not safePayload(val, depth + 1) then return false end
   end
   return true
@@ -45,7 +51,12 @@ AddEventHandler(E.APP_RELAY, function(app, action, data)
 
   local relay = Registry:getRelay(app)
   if not relay then IpadLog('appRelay: SEM descritor relay para app='..app); return end
+  if not VHubIpad.openSet[src] then IpadLog('appRelay: tablet fechado src='..src); return end
   if not Registry:permittedFor(src, app) then IpadLog('appRelay: ACL negou src='..src..' app='..app); return end
+  if not Registry:available(app) then IpadLog('appRelay: app indisponível='..app); return end
+  if Registry:isRemovable(app) and not State.isInstalled(src, app) then
+    IpadLog('appRelay: app não instalado src='..src..' app='..app); return
+  end
   if GetResourceState(relay.resource) ~= 'started' then
     IpadLog('appRelay: resource '..relay.resource..' NÃO está started'); return
   end
@@ -69,6 +80,7 @@ end)
 
 -- chamado pelo SERVER do resource dono para empurrar dados ao seu app no iPad.
 -- OWNER-BINDING (fail-closed): só o resource DONO do app pode empurrar para ele.
+-- Sem cap de tamanho: caller é resource confiável (snapshots de catálogo são grandes).
 exports('appPush', function(src, app, action, data)
   IpadLog(('appPush recebido: caller=%s src=%s app=%s action=%s'):format(
     tostring(GetInvokingResource()), tostring(src), tostring(app), tostring(action)))
@@ -76,10 +88,12 @@ exports('appPush', function(src, app, action, data)
   if type(src) ~= 'number' or type(app) ~= 'string' or type(action) ~= 'string' then
     IpadLog('appPush: args inválidos'); return false
   end
-  if data ~= nil and not safePayload(data) then IpadLog('appPush: payload rejeitado (cap)'); return false end
 
   local relay = Registry:getRelay(app)
   if not relay then IpadLog('appPush: app sem relay='..app); return false end
+  if not VHubIpad.openSet[src] then return false end
+  if not Registry:available(app) or not Registry:permittedFor(src, app) then return false end
+  if Registry:isRemovable(app) and not State.isInstalled(src, app) then return false end
 
   -- só o resource dono do app empurra (chamada local do próprio iPad = caller nil, permitida)
   local caller = GetInvokingResource()

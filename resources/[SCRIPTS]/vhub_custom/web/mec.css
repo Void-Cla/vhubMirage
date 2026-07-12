@@ -27,8 +27,9 @@
 
 .mod-mec .mec-card {
   position: relative;
-  width: 380px;
+  width: 420px;
   max-width: 92vw;
+  border-radius: 18px;
   /* liquid glass simulado em camadas — sem backdrop-filter (A-09) */
   background:
     radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 55%),
@@ -47,9 +48,11 @@
 .mod-mec .mec-card::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.65), transparent);
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.85) 30%, rgba(255,213,115,1) 50%, rgba(243,181,58,0.85) 70%, transparent);
+  box-shadow: 0 0 12px rgba(243,181,58,0.55);
   pointer-events: none;
+  z-index: 2;
 }
 
 .mod-mec .mc-hdr {

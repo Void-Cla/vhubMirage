@@ -13,6 +13,8 @@ VHubAdmin.state = {
   god         = false,
   freeze      = false,
   invis       = false,
+  stamina     = false,
+  jump        = false,
   panel_open  = false,
   spec_target = nil,
   jail        = nil,   -- { expires_at, pos }
@@ -97,4 +99,26 @@ AddEventHandler('vhub_player_state:spawned', function()
   if S.god    then S.god    = false; SetPlayerInvincible(PlayerId(), false) end
   if S.freeze then S.freeze = false; FreezeEntityPosition(PlayerPedId(), false) end
   if S.invis  then S.invis  = false; SetEntityVisible(PlayerPedId(), true, false) end
+  S.stamina, S.jump = false, false
+end)
+
+-- ----------------------------------------------------------------------------
+-- Cleanup total no stop do resource (restart em produ  o n o deixa efeito preso)
+-- ----------------------------------------------------------------------------
+AddEventHandler('onResourceStop', function(res)
+  if res ~= GetCurrentResourceName() then return end
+  VHubAdmin.closePanel()
+  S.noclip, S.god, S.freeze, S.invis, S.stamina, S.jump = false, false, false, false, false, false
+  local ped = PlayerPedId()
+  local ent = IsPedInAnyVehicle(ped, false) and GetVehiclePedIsIn(ped, false) or ped
+  SetPlayerInvincible(PlayerId(), false)
+  SetEntityInvincible(ped, false)
+  SetPedCanRagdoll(ped, true)
+  SetEntityProofs(ped, false, false, false, false, false, false, false, false)
+  SetEntityVisible(ped, true, false)
+  ResetEntityAlpha(ped)
+  FreezeEntityPosition(ent, false)
+  SetEntityCollision(ent, true, true)
+  SetEntityHasGravity(ent, true)
+  ResetEntityAlpha(ent)
 end)

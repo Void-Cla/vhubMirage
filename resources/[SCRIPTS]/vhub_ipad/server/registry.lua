@@ -43,6 +43,12 @@ function M:has(id)        return _apps[id] ~= nil end
 function M:isRemovable(id) local m = _apps[id]; return m ~= nil and m.removable == true end
 function M:version()      return _version end
 
+-- retorna true se o app existe e sua dependência está disponível
+function M:available(id)
+  local m = _apps[id]
+  return m ~= nil and ((not m.dependency) or GetResourceState(m.dependency) == 'started')
+end
+
 -- descritor de relay do app embutido (server-only; NUNCA vai no snapshot da NUI)
 function M:getRelay(id)   local m = _apps[id]; return m and m.relay or nil end
 
@@ -90,7 +96,7 @@ function M:snapshotFor(src)
         category   = m.category,
         removable  = m.removable == true,
         api_version= m.version,
-        available  = (not m.dependency) or (GetResourceState(m.dependency) == 'started'),
+        available  = self:available(id),
         mount_kind = m.ui.source or 'local',
         entry      = resolveEntry(m),
       }

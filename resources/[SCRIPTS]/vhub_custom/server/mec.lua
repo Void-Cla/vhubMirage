@@ -75,19 +75,31 @@ AddEventHandler(E.MEC_REPAIR, function(plate, repair_type)
       custo = math.max(1, n_tyres) * prices.pneu
 
     elseif repair_type == 'engine' then
-      -- reparo de motor: restaura engine_health para 1000 (source='repair' eleva)
-      local dmg_pts = math.max(0, 1000 - (st.engine_health or 1000))
+      -- campo ausente no prontuário = veículo nunca registrou saúde; tratar como destruído
+      -- (nil mascarado como 1000 causaria "sem danos" com motor realmente destruído — L-03)
+      local cur_health = st.engine_health
+      if cur_health == nil then
+        Core.notify(src, 'Estado do motor indisponível. Tente entrar/sair do veículo.', 'error')
+        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
+      end
+      local dmg_pts = math.max(0, 1000 - cur_health)
       if dmg_pts < 50 then
-        Core.notify(src, 'Motor sem danos relevantes.', 'info'); return
+        Core.notify(src, 'Motor sem danos relevantes.', 'info')
+        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
       end
       custo = math.ceil(dmg_pts / 100) * prices.motor_parcial
       patch.engine_health = 1000.0
 
     elseif repair_type == 'body' then
-      -- reparo de lataria: restaura body_health para 1000
-      local dmg_pts = math.max(0, 1000 - (st.body_health or 1000))
+      local cur_health = st.body_health
+      if cur_health == nil then
+        Core.notify(src, 'Estado da lataria indisponível. Tente entrar/sair do veículo.', 'error')
+        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
+      end
+      local dmg_pts = math.max(0, 1000 - cur_health)
       if dmg_pts < 50 then
-        Core.notify(src, 'Lataria sem danos relevantes.', 'info'); return
+        Core.notify(src, 'Lataria sem danos relevantes.', 'info')
+        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
       end
       custo = math.ceil(dmg_pts / 100) * prices.lataria_parcial
       patch.body_health = 1000.0

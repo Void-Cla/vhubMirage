@@ -222,6 +222,7 @@
                 el('span', { class: 'grow' }, [
                     String(i.name || '—') + ' ',
                     el('small', {}, '(' + String(i.id) + ')'),
+                    i.published === false ? el('span', { class: 'csa-badge draft' }, 'Rascunho') : null,
                 ]),
                 el('span', { class: 'num' }, fmt(i.price) + ' moedas'),
                 el('button', { class: 'csa-btn mini', 'data-act': 'editItem', 'data-id': i.id }, 'Editar'),
@@ -257,6 +258,7 @@
         itemModalField('tags').value = item && Array.isArray(item.tags) ? item.tags.join(', ') : '';
         itemModalField('images').value = item && Array.isArray(item.images) ? item.images.join(', ') : '';
         itemModalField('trending').checked = !!(item && item.trending);
+        itemModalField('published').checked = !item || item.published !== false;
 
         // categorias custom no select
         var sel = itemModalField('customCategory');
@@ -304,6 +306,7 @@
             tags: itemModalField('tags').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
             images: itemModalField('images').value.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
             trending: itemModalField('trending').checked,
+            published: itemModalField('published').checked,
             customCategory: itemModalField('customCategory').value || '',
         };
         if (!data.name) { toast('Nome do item é obrigatório', 'error'); return; }
@@ -678,7 +681,7 @@
             if (!res || !res.ok) { toast((res && res.err) || 'Erro ao importar', 'error'); return; }
             var d = res.data || {};
             absorbLists({ items: d.items });
-            toast((d.message) || (d.inserted + ' importado(s)'), 'success');
+            toast((d.message) || (d.inserted + ' rascunho(s) importado(s)'), 'success');
             // recarrega pré-visualização para refletir status "Já existe"
             runImportPreview();
         });

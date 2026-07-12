@@ -41,6 +41,21 @@ AddEventHandler(E.ACT_TUNING, function()
   Core:audit(src, 'tuning', src, {})
 end)
 
+RegisterNetEvent(E.ACT_BOOST)
+AddEventHandler(E.ACT_BOOST, function()
+  local src = source; if not reqPerm(src, 'boost') then return end
+  local b = VHubAdmin.cfg.vehicle_boost
+  TriggerClientEvent(E.DO_BOOST, src, b.multiplier, b.duration_ms)
+  Core:audit(src, 'boost', src, { mult = b.multiplier, ms = b.duration_ms })
+end)
+
+RegisterNetEvent(E.ACT_FLIP)
+AddEventHandler(E.ACT_FLIP, function()
+  local src = source; if not reqPerm(src, 'fix') then return end
+  TriggerClientEvent(E.DO_FLIP, src)
+  Core:audit(src, 'flip', src, {})
+end)
+
 RegisterNetEvent(E.ACT_CARCOLOR)
 AddEventHandler(E.ACT_CARCOLOR, function(r, g, b)
   local src = source; if not reqPerm(src, 'carcolor') then return end

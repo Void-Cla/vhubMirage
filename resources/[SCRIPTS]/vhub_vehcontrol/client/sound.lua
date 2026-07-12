@@ -35,8 +35,10 @@ RegisterNUICallback('soundPlay', function(d, cb)
   local url = d and d.url
   if type(url) ~= 'string' or url == '' then cb('ok'); return end
 
+  local title = (type(d.title) == 'string') and d.title or nil
+
   playing = true
-  TriggerServerEvent('vhub_vehcontrol:soundPlay', VehToNet(v), pl, url, tonumber(d.volume) or 0.5)
+  TriggerServerEvent('vhub_vehcontrol:soundPlay', VehToNet(v), pl, url, tonumber(d.volume) or 0.5, title)
   cb('ok')
 end)
 
@@ -71,6 +73,12 @@ RegisterNUICallback('soundVideo', function(d, cb)
   if v ~= 0 and pl then
     TriggerServerEvent('vhub_vehcontrol:soundVideo', VehToNet(v), pl, (d and d.show) == true)
   end
+  cb('ok')
+end)
+
+-- usuario fechou a telinha pelo X (dentro da NUI) — avisa o server p/ limpar exibicao
+RegisterNUICallback('soundVideoOff', function(_, cb)
+  TriggerServerEvent('vhub_vehcontrol:soundVideoOff')
   cb('ok')
 end)
 
@@ -111,4 +119,14 @@ end)
 -- faixa que entrou no ar (radio) → atualiza header da NUI
 RegisterNetEvent('vhub_vehcontrol:soundNow', function(title, artist)
   SendNUIMessage({ type = 'soundNow', title = title, artist = artist })
+end)
+
+-- servidor mandou exibir a telinha DVD (videoId validado) → repassa pra NUI montar o iframe
+RegisterNetEvent(VHubVeh.E.VIDEO_ATTACH, function(videoId, title)
+  SendNUIMessage({ type = 'soundVideoAttach', videoId = videoId, title = title })
+end)
+
+-- servidor mandou esconder a telinha DVD → repassa pra NUI destruir o iframe
+RegisterNetEvent(VHubVeh.E.VIDEO_DETACH, function()
+  SendNUIMessage({ type = 'soundVideoDetach' })
 end)

@@ -54,8 +54,7 @@ function VD:_syncBags()
   local ent = NetworkGetEntityFromNetworkId(self.netid)
   if not ent or ent == 0 then return end
   local bag = Entity(ent).state; local s = self.state
-  -- ADR #38: vh_fuel só quando o CORE for o dono do fuel (FASE 2). Hoje o dono é
-  -- legacyfuel/prontuário — escrever aqui divergiria do tanque real no HUD (vhub_velo).
+  -- ADR #61: vh_fuel é a réplica autoritativa quando o corte do CORE está habilitado.
   if vHub.cfg and vHub.cfg.core_fuel_enabled then
     bagSet(bag, "vh_fuel", s.fuel,        self, "_last_fuel_bag", 0.5)
   end
@@ -142,15 +141,67 @@ function Veh:byKey(key_uid)
   end
 end
 
+-- Vincula uma placa à entidade física validada e replica seu estado autoritativo.
 function Veh:onSpawned(plate, netid)
   plate = normalizePlate(plate)
-  if not plate then return end
+  netid = tonumber(netid)
+  if not plate or not netid or netid <= 0 or netid % 1 ~= 0 then return false end
+
+  local ent = NetworkGetEntityFromNetworkId(netid)
+  if not ent or ent == 0 or not DoesEntityExist(ent) or GetEntityType(ent) ~= 2 then
+    return false
+  end
+  local physicalPlate = normalizePlate((GetVehicleNumberPlateText(ent) or ""):gsub("%s+", " "))
+  if physicalPlate ~= plate then
+    vHub.Logger:warn("vehicle",
+      ("onSpawned rejeitado placa=%s netid=%d placa_fisica=%s"):format(
+        plate, netid, tostring(physicalPlate)))
+    return false
+  end
+
   local vd = self._veh[plate] or self:register(plate, nil)
-  if not vd then return end
-  vd.netid=netid; vd.spawned=true
+  if not vd then return false end
+
+  if vd.spawned and vd.netid == netid then
+    self._byNet[netid] = plate
+    vd._last_fuel_bag = -math.huge
+    vd._last_eng_bag = -math.huge
+    vd._last_body_bag = -math.huge
+    vd._last_odo_bag = -math.huge
+    vd:_syncBags()
+    return true
+  end
+
+  if vd.netid and vd.netid ~= netid and self._byNet[vd.netid] == plate then
+    self._byNet[vd.netid] = nil
+  end
+
+  local collidedPlate = self._byNet[netid]
+  if collidedPlate and collidedPlate ~= plate then
+    local collided = self._veh[collidedPlate]
+    if collided and collided.netid == netid then
+      collided.netid = nil
+      collided.spawned = false
+      collided.driver = nil
+      collided.occupants = {}
+    end
+    vHub.Logger:warn("vehicle",
+      ("netid reciclado=%d placa_antiga=%s placa_nova=%s"):format(
+        netid, collidedPlate, plate))
+  end
+
+  vd.netid = netid
+  vd.spawned = true
+  vd.driver = nil
+  vd.occupants = {}
+  vd._last_fuel_bag = -math.huge
+  vd._last_eng_bag = -math.huge
+  vd._last_body_bag = -math.huge
+  vd._last_odo_bag = -math.huge
   self._byNet[netid] = plate
   vd:_syncBags()   -- saved state pushed to State Bags immediately
   TriggerEvent("vHub:vehicleSpawned", vd)
+  return true
 end
 
 function Veh:onDespawned(plate)
@@ -166,12 +217,14 @@ function Veh:onDespawned(plate)
   TriggerEvent("vHub:vehicleDespawned", vd)
 end
 
+-- Registra ocupante somente após reconciliar o vínculo físico placa↔netid.
 function Veh:onEnter(src, plate, netid, seat)
   plate = normalizePlate(plate)
   if not plate then return end
   local vd = self._veh[plate]
-  if not vd then
-    self:onSpawned(plate, netid); vd = self._veh[plate]
+  if not vd or not vd.spawned or vd.netid ~= netid then
+    if not self:onSpawned(plate, netid) then return end
+    vd = self._veh[plate]
   end
   if not vd then return end
 
@@ -219,8 +272,7 @@ function Veh:onStateUpdate(src, plate, upd)
 
   local rpm = tonumber(upd.rpm)
   if rpm then rpm = math.min(math.max(rpm, 0), 1.0) end
-  -- ADR #38: drain de fuel do CORE desligado até a FASE 2 (dono atual: legacyfuel).
-  -- Ligar os dois = dupla contabilidade de combustível.
+  -- ADR #61: CORE é o escritor único do consumo quando o gate está habilitado.
   if vHub.cfg.core_fuel_enabled and rpm and rpm > 0.05 then
     s.fuel = math.max(0, s.fuel - rpm * (vHub.cfg.fuel_rate or 0.005))
     if bag then bagSet(bag, "vh_fuel", s.fuel, vd, "_last_fuel_bag", 0.5) end

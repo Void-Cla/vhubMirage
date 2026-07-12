@@ -6,6 +6,7 @@
 -- ============================================================
 
 DROP TABLE IF EXISTS `vhub_coinshop_redeems`;
+DROP TABLE IF EXISTS `vhub_coinshop_pix_tx`;
 DROP TABLE IF EXISTS `vhub_coinshop_codes`;
 DROP TABLE IF EXISTS `vhub_coinshop_deals`;
 DROP TABLE IF EXISTS `vhub_coinshop_purchases`;

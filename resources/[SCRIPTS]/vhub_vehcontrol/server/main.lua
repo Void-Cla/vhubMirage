@@ -134,7 +134,6 @@ AddEventHandler(E .. 'stateSync', function(netId, plate, snap)
   end
 
   local patch = {
-    fuel          = finiteNum(snap.fuel, 0.0, 100.0),
     engine_health = finiteNum(snap.engine_health, -4000.0, 1000.0),
     body_health   = finiteNum(snap.body_health, 0.0, 1000.0),
     odometer_add  = odo and math.min(odo, 2.0) or nil,
@@ -162,7 +161,6 @@ AddEventHandler(E .. 'requestState', function(netId, plate)
     local ok, st = pcall(function() return exports.vhub_conce:getVehicleState(p) end)
     if ok and type(st) == 'table' then
       TriggerClientEvent(E .. 'applyState', src, p, {
-        fuel          = st.fuel,
         engine_health = st.engine_health,
         body_health   = st.body_health,
         odometer_km   = st.odometer_km,

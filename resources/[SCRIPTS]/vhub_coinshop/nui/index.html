@@ -164,7 +164,7 @@
               <p class="csa-hint">
                 Importa itens do inventário e veículos do catálogo da concessionária
                 direto para o catálogo do CoinShop. Itens já existentes são ignorados
-                (idempotente por ID). Preços ficam zerados — ajuste pelo Catálogo.
+                 (idempotente por ID). Todo import entra como rascunho: defina o preço e publique pelo Catálogo.
               </p>
               <div class="csa-field-row">
                 <label class="csa-check"><input type="checkbox" data-imp="inventory" checked /> Itens do inventário (vhub_inventory)</label>
@@ -253,8 +253,9 @@
           <label class="csa-field"><span>Categoria custom (aba extra)</span><select class="csa-input" data-f="customCategory"><option value="">Nenhuma</option></select></label>
           <label class="csa-field"><span>Tags (separadas por vírgula)</span><input type="text" class="csa-input" data-f="tags" /></label>
           <label class="csa-field full"><span>Imagens (URLs separadas por vírgula)</span><input type="text" class="csa-input" data-f="images" /></label>
-          <div class="csa-img-preview" data-el="itemImgPreview" hidden></div>
-          <label class="csa-check"><input type="checkbox" data-f="trending" /><span>Destaque (trending)</span></label>
+           <div class="csa-img-preview" data-el="itemImgPreview" hidden></div>
+           <label class="csa-check"><input type="checkbox" data-f="trending" /><span>Destaque (trending)</span></label>
+           <label class="csa-check"><input type="checkbox" data-f="published" checked /><span>Publicado para jogadores</span></label>
         </div>
         <div class="csa-modal-actions">
           <button type="button" class="csa-btn ghost" data-action="modalClose">Cancelar</button>

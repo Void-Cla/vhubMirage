@@ -64,6 +64,14 @@ let _drag      = null;     // {x,y} enquanto arrasta o palco
 let _orbitRAF  = null;
 let _orbitAcc  = { dx: 0, dy: 0 };
 
+// throttle de preview (A-08: coalece chamadas durante drag do color picker — max ~60fps)
+let _previewRAF    = null;
+let _previewDirty  = false;
+
+// referências para cleanup de listeners do palco (A-07)
+let _stageMoveRef = null;
+let _stageUpRef   = null;
+
 
 // ============================================================
 // HELPERS
@@ -441,9 +449,17 @@ function renderFooter() {
   document.getElementById('bn-btn-apply').disabled = (total === 0);
 }
 
-function pushPreview() {
-  post('bennys:preview', _pending);   // preview efêmero no carro vivo
+function flushPreview() {
+  _previewRAF   = null;
+  _previewDirty = false;
+  post('bennys:preview', _pending);
   renderFooter();
+}
+
+// throttle via RAF: coalece chamadas durante drag do picker (A-08 — max ~60fps)
+function pushPreview() {
+  _previewDirty = true;
+  if (!_previewRAF) _previewRAF = requestAnimationFrame(flushPreview);
 }
 
 
@@ -461,14 +477,18 @@ function flushOrbit() {
 function bindStage() {
   const stage = document.getElementById('bn-stage');
   stage.addEventListener('mousedown', (e) => { _drag = { x: e.clientX, y: e.clientY }; });
-  window.addEventListener('mousemove', (e) => {
+
+  _stageMoveRef = (e) => {
     if (!_drag) return;
     _orbitAcc.dx += (e.clientX - _drag.x);
     _orbitAcc.dy += (e.clientY - _drag.y);
     _drag.x = e.clientX; _drag.y = e.clientY;
     if (!_orbitRAF) _orbitRAF = requestAnimationFrame(flushOrbit);
-  });
-  window.addEventListener('mouseup', () => { _drag = null; });
+  };
+  _stageUpRef = () => { _drag = null; };
+
+  window.addEventListener('mousemove', _stageMoveRef);
+  window.addEventListener('mouseup',   _stageUpRef);
   stage.addEventListener('wheel', (e) => { post('bennys:zoom', { delta: e.deltaY < 0 ? 1 : -1 }); }, { passive: true });
 }
 
@@ -499,9 +519,12 @@ function openBennys(data) {
 }
 
 function closeNUI() {
-  // cleanup A-07: cancela RAF, zera arrasto, desanexa listeners dos pickers
-  if (_orbitRAF) { cancelAnimationFrame(_orbitRAF); _orbitRAF = null; }
-  _orbitAcc = { dx: 0, dy: 0 }; _drag = null;
+  // cleanup A-07: cancela RAFs, zera arrasto, remove listeners do palco e dos pickers
+  if (_orbitRAF)   { cancelAnimationFrame(_orbitRAF);   _orbitRAF = null; }
+  if (_previewRAF) { cancelAnimationFrame(_previewRAF); _previewRAF = null; }
+  _orbitAcc = { dx: 0, dy: 0 }; _drag = null; _previewDirty = false;
+  if (_stageMoveRef) { window.removeEventListener('mousemove', _stageMoveRef); _stageMoveRef = null; }
+  if (_stageUpRef)   { window.removeEventListener('mouseup',   _stageUpRef);   _stageUpRef   = null; }
   detachPickers();
   document.getElementById('bennys-overlay').classList.add('hidden');
   _data = null; _pending = {}; _cur = {};

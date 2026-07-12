@@ -14,12 +14,13 @@ local TRUSTED = {
   ['vhub_admin']      = true,
   ['vhub_inventory']  = true,
   ['vhub_vehcontrol'] = true,   -- telemetria física + engine de skill → saveVehicleState (telemetry/handling)
-  ['vhub_legacyfuel'] = true,   -- bomba de combustível → saveVehicleState {fuel}
+  ['vhub_legacyfuel'] = true,   -- migração única ADR #61
   ['vhub_testrunner'] = true,   -- testes server-side (somente ambiente de teste)
   ['vhub_custom']     = true,   -- oficina (bennys/mec/oficina) → saveVehicleState (cosmetic/tune/repair)
   ['vhub_nitro']      = true,   -- nitro → saveVehicleState (customization.nitro, source='nitro')
   ['vhub_vrcs']       = true,   -- Race Cinema: getVehicleState (read-only) p/ preservar aparência no replay
 }
+local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true }
 
 local function _invoker_allowed()
   local caller = GetInvokingResource()
@@ -98,17 +99,53 @@ exports('backfillOwnerKeys',function() if not _invoker_allowed() then return fal
 -- (CORE, nil sem VRAM — cadeia inerte pós-PRONTUÁRIO). Consumidores novos usam ESTE.
 -- ============================================================
 
--- estado físico decodificado da placa (fuel/health/odômetro/customization/damage)
+-- estado físico decodificado; fuel é sobreposto pelo snapshot autoritativo do CORE.
 exports('getVehicleState', function(plate)
   if not _invoker_allowed() then return nil end
-  return VHubConce.VState:get(plate)
+  local state = VHubConce.VState:get(plate)
+  if type(state) ~= 'table' then return nil end
+
+  local copy = {}
+  for key, value in pairs(state) do copy[key] = value end
+  copy.fuel = nil
+  local ok, coreState = pcall(function() return exports.vhub:getVehicleState(plate) end)
+  if ok and type(coreState) == 'table' then copy.fuel = coreState.fuel end
+  return copy
 end)
 
--- aplica patch parcial validado (telemetria/store/bomba/cosmetic/tune/repair); source define as regras
+-- Mantém compatibilidade: fuel é delegado ao CORE; demais campos ficam no prontuário.
 -- customization é mesclada por chave sobre o persistido (não substituída) — ver VState:save
 exports('saveVehicleState', function(plate, patch, source)
   if not _invoker_allowed() then return false end
-  return VHubConce.VState:save(plate, patch, source)
+  if type(patch) ~= 'table' then return false end
+
+  local legacyPatch = {}
+  for key, value in pairs(patch) do
+    if key ~= 'fuel' then legacyPatch[key] = value end
+  end
+
+  local fuelOk = true
+  if patch.fuel ~= nil then
+    local caller = GetInvokingResource()
+    local allowedFuelCaller = caller == 'vhub_garage' or caller == 'vhub_testrunner'
+    if allowedFuelCaller then
+      local ok, accepted = pcall(function()
+        return exports.vhub:commitVehicleState(plate, { fuel = patch.fuel }, 'fuel_compat')
+      end)
+      fuelOk = ok and accepted == true
+    else
+      fuelOk = false
+    end
+  end
+
+  local stateOk = next(legacyPatch) == nil or VHubConce.VState:save(plate, legacyPatch, source)
+  return fuelOk and stateOk
+end)
+
+-- Executa a migração única de fuel legado para o CORE.
+exports('migrateFuelToCore', function()
+  if not _invoker_allowed() then return { total = 0, migrated = 0, failed = 1 } end
+  return VHubConce.VState:migrateFuelToCore()
 end)
 
 -- reparo trusted (manutenção/admin): único caminho que ELEVA health e limpa dano
@@ -145,6 +182,27 @@ exports('stockDecrement', function(model)               if not _invoker_allowed(
 exports('getCatalog', function()
   if not _invoker_allowed() then return {} end
   return VHubConce.catalog
+end)
+
+-- retorna uma cópia enxuta do catálogo para importadores explicitamente autorizados
+exports('getCatalogSnapshot', function()
+  local caller = GetInvokingResource()
+  if caller and caller ~= GetCurrentResourceName() and not CATALOG_SNAPSHOT_TRUSTED[caller] then
+    return {}
+  end
+
+  local out = {}
+  for model, def in pairs(VHubConce.catalog) do
+    if type(model) == 'string' and type(def) == 'table' then
+      out[#out + 1] = {
+        model = model,
+        name  = tostring(def.nome or model):sub(1, 100),
+        type  = tostring(def.tipo or ''),
+      }
+    end
+  end
+  table.sort(out, function(a, b) return a.model < b.model end)
+  return out
 end)
 
 -- transações: retornam { ok, msg, ... }; quem fala com a NUI é o garage

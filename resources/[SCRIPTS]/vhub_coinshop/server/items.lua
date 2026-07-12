@@ -32,6 +32,20 @@ Items.categories  = {}   -- array de categorias (id, name, icon, type)
 Items.deals       = {}   -- array de ofertas ativas (id, name, description, price, image, items[], remainingSeconds)
 Items.settings    = {}   -- mapa key→value (UI customization)
 
+local SETTINGS_KEYS = {
+    accentColor = true, bgColor = true, textColor = true, errorColor = true,
+    cardBorderColor = true, bgImage = true, bgOpacity = true, bgBlur = true,
+    cardBgOpacity = true, cardBorderRadius = true, coinIcon = true,
+}
+
+-- Decodifica somente tabelas; dado SQL/GData corrompido falha fechado.
+local function decodeTable(value)
+    if type(value) == 'table' then return value end
+    if type(value) ~= 'string' or value == '' then return nil end
+    local ok, decoded = pcall(json.decode, value)
+    return ok and type(decoded) == 'table' and decoded or nil
+end
+
 
 -- ============================================================
 -- LOADERS
@@ -39,7 +53,7 @@ Items.settings    = {}   -- mapa key→value (UI customization)
 
 -- carrega todos os itens do DB para o cache (chamado no boot e após admin CRUD)
 function Items.loadAll()
-    local rows = SQL.query('SELECT id, name, description, category, tags, price, images, spawn_name, item_name, item_count, weapon_name, trending, custom_category FROM vhub_coinshop_items ORDER BY created_at ASC')
+    local rows = SQL.query('SELECT id, name, description, category, tags, price, images, spawn_name, item_name, item_count, weapon_name, trending, custom_category, published FROM vhub_coinshop_items ORDER BY created_at ASC')
     local list = {}
     for _, r in ipairs(rows or {}) do
         list[#list + 1] = {
@@ -47,15 +61,16 @@ function Items.loadAll()
             name           = r.name,
             description    = r.description or '',
             category       = r.category,
-            tags           = json.decode(r.tags or '[]') or {},
+            tags           = decodeTable(r.tags) or {},
             price          = tonumber(r.price) or 0,
-            images         = json.decode(r.images or '[]') or {},
+            images         = decodeTable(r.images) or {},
             spawnName      = r.spawn_name,
             itemName       = r.item_name,
             itemCount      = tonumber(r.item_count) or 1,
             weaponName     = r.weapon_name,
-            trending       = r.trending == 1,
+            trending       = tonumber(r.trending) == 1,
             customCategory = r.custom_category,
+            published      = r.published == nil or tonumber(r.published) ~= 0,
         }
     end
     Items.list = list
@@ -80,7 +95,7 @@ function Items.loadDeals()
     )
     local list = {}
     for _, r in ipairs(rows or {}) do
-        local itemIds = json.decode(r.items or '[]') or {}
+        local itemIds = decodeTable(r.items) or {}
         local resolved = {}
         for _, itemId in ipairs(itemIds) do
             local found = Items.find(itemId)
@@ -106,12 +121,17 @@ end
 
 -- carrega settings de UI do GData (blob JSON); fallback para defaults canônicos vHub
 function Items.loadSettings()
-    local ok, blob = pcall(exports.vhub.getGData, 'coinshop_ui_settings')
-    if ok and blob and blob ~= '' then
-        local parsed = json.decode(blob)
-        if type(parsed) == 'table' then Items.settings = parsed return end
+    local ok, blob = pcall(function() return exports.vhub:getGData('coinshop_ui_settings') end)
+    local parsed = ok and decodeTable(blob) or nil
+    local settings = Items.defaultSettings()
+    if parsed then
+        for key, value in pairs(parsed) do
+            if SETTINGS_KEYS[key] and type(value) == 'string' and #value <= 500 then
+                settings[key] = value
+            end
+        end
     end
-    Items.settings = Items.defaultSettings()
+    Items.settings = settings
 end
 
 
@@ -148,10 +168,10 @@ function Items.find(itemId)
     return nil
 end
 
--- retorna uma cópia rasa do item (para enviar ao cliente sem expor internals)
-function Items.publicCopy(item)
+-- retorna uma cópia rasa do item; admin recebe a flag de publicação
+function Items.publicCopy(item, withAdmin)
     if not item then return nil end
-    return {
+    local out = {
         id             = item.id,
         name           = item.name,
         description    = item.description,
@@ -166,6 +186,23 @@ function Items.publicCopy(item)
         trending       = item.trending,
         customCategory = item.customCategory,
     }
+    if withAdmin then out.published = item.published == true end
+    return out
+end
+
+-- retorna ofertas cujos itens permanecem publicáveis para jogadores
+function Items.publicDeals(withAdmin)
+    if withAdmin then return Items.deals end
+    local out = {}
+    for _, deal in ipairs(Items.deals) do
+        local visible = #deal.items > 0
+        for _, dealItem in ipairs(deal.items) do
+            local item = Items.find(dealItem.id)
+            if not item or item.published ~= true then visible = false break end
+        end
+        if visible then out[#out + 1] = deal end
+    end
+    return out
 end
 
 
@@ -182,6 +219,8 @@ function Items.adminCreate(src, data)
     if category ~= 'vehicle' and category ~= 'item' and category ~= 'weapon' and category ~= 'tool' then
         category = 'item'
     end
+    local price = VHubCoin.clamp(tonumber(data.price) or 0, 0, 1000000)
+    if data.published ~= false and price < 1 then return false, T('item_price_required') end
 
     local itemId = VHubCoin.isNonEmptyStr(data.id) and data.id
         or (string.lower(data.name:gsub('%s+', '_'):gsub('[^%w_]', '')) .. '_' .. math.random(1000, 9999))
@@ -194,12 +233,12 @@ function Items.adminCreate(src, data)
 
     SQL.insert(
         'INSERT INTO vhub_coinshop_items ' ..
-        '(id, name, description, category, tags, price, images, spawn_name, item_name, item_count, weapon_name, trending, custom_category) ' ..
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        '(id, name, description, category, tags, price, images, spawn_name, item_name, item_count, weapon_name, trending, custom_category, published) ' ..
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         {
             itemId, data.name, data.description or '', category,
             json.encode(VHubCoin.isStrArray(data.tags, 50, 20) and data.tags or {}),
-            VHubCoin.clamp(tonumber(data.price) or 0, 0, 1000000),
+            price,
             json.encode(VHubCoin.isStrArray(data.images, 500, 10) and data.images or {}),
             VHubCoin.isNonEmptyStr(data.spawnName) and data.spawnName or nil,
             VHubCoin.isNonEmptyStr(data.itemName) and data.itemName or nil,
@@ -207,9 +246,11 @@ function Items.adminCreate(src, data)
             VHubCoin.isNonEmptyStr(data.weaponName) and data.weaponName or nil,
             data.trending and 1 or 0,
             customCat,
+            data.published == false and 0 or 1,
         }
     )
     Items.loadAll()
+    Items.loadDeals()
     Core.log('item criado por admin', src, itemId)
     return true, T('item_created', data.name)
 end
@@ -225,25 +266,28 @@ function Items.adminEdit(src, data)
     if category ~= 'vehicle' and category ~= 'item' and category ~= 'weapon' and category ~= 'tool' then
         category = 'item'
     end
+    local price = VHubCoin.clamp(tonumber(data.price) or 0, 0, 1000000)
+    if data.published ~= false and price < 1 then return false, T('item_price_required') end
     local customCat = VHubCoin.isNonEmptyStr(data.customCategory) and data.customCategory or nil
 
     SQL.execute(
         'UPDATE vhub_coinshop_items SET name=?, description=?, category=?, tags=?, price=?, images=?, ' ..
-        'spawn_name=?, item_name=?, item_count=?, weapon_name=?, trending=?, custom_category=? WHERE id=?',
+        'spawn_name=?, item_name=?, item_count=?, weapon_name=?, trending=?, custom_category=?, published=? WHERE id=?',
         {
             data.name, data.description or '', category,
             json.encode(VHubCoin.isStrArray(data.tags, 50, 20) and data.tags or {}),
-            VHubCoin.clamp(tonumber(data.price) or 0, 0, 1000000),
+            price,
             json.encode(VHubCoin.isStrArray(data.images, 500, 10) and data.images or {}),
             VHubCoin.isNonEmptyStr(data.spawnName) and data.spawnName or nil,
             VHubCoin.isNonEmptyStr(data.itemName) and data.itemName or nil,
             VHubCoin.clamp(tonumber(data.itemCount) or 1, 1, 1000),
             VHubCoin.isNonEmptyStr(data.weaponName) and data.weaponName or nil,
             data.trending and 1 or 0,
-            customCat, data.id,
+            customCat, data.published == false and 0 or 1, data.id,
         }
     )
     Items.loadAll()
+    Items.loadDeals()
     Core.log('item editado por admin', src, data.id)
     return true, T('item_updated', data.name)
 end
@@ -253,6 +297,7 @@ function Items.adminDelete(src, itemId)
     if not VHubCoin.isNonEmptyStr(itemId) then return false, T('item_id_required') end
     SQL.execute('DELETE FROM vhub_coinshop_items WHERE id = ?', { itemId })
     Items.loadAll()
+    Items.loadDeals()
     Core.log('item deletado por admin', src, itemId)
     return true, T('item_deleted')
 end
@@ -335,11 +380,127 @@ function Items.adminCreateDeal(src, data)
     return true, T('deal_created', data.name)
 end
 
+-- edita oferta existente (#59 — não existia nem no FearX original); campos opcionais
+-- mantêm o valor atual; expiresIn (segundos) REDEFINE a expiração a partir de agora
+function Items.adminEditDeal(src, data)
+    if not VHubCoin.isNonEmptyStr(data and data.id) then return false, T('deal_id_required') end
+    local rows = SQL.query('SELECT id, name, description, price, image, items FROM vhub_coinshop_deals WHERE id = ? AND expires_at > NOW()', { data.id })
+    if not rows or #rows == 0 then return false, T('deal_not_found') end
+    local cur = rows[1]
+
+    local itemIds = nil
+    if type(data.items) == 'table' then
+        itemIds = {}
+        for _, id in ipairs(data.items) do
+            if VHubCoin.isNonEmptyStr(id) then itemIds[#itemIds + 1] = id end
+        end
+        if #itemIds == 0 or #itemIds > 10 then return false, T('deal_items_limit') end
+    end
+
+    SQL.execute(
+        'UPDATE vhub_coinshop_deals SET name=?, description=?, price=?, image=?, items=? WHERE id=?',
+        {
+            VHubCoin.isNonEmptyStr(data.name) and data.name or cur.name,
+            data.description ~= nil and tostring(data.description) or cur.description,
+            data.price ~= nil and VHubCoin.clamp(tonumber(data.price) or 0, 0, 1000000) or cur.price,
+            VHubCoin.isNonEmptyStr(data.image) and data.image or (cur.image or ''),
+            itemIds and json.encode(itemIds) or cur.items,
+            data.id,
+        }
+    )
+    if VHubCoin.isInt(data.expiresIn, 1, 86400 * 30) then
+        SQL.execute(
+            'UPDATE vhub_coinshop_deals SET expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND) WHERE id = ?',
+            { tonumber(data.expiresIn), data.id }
+        )
+    end
+    Items.loadDeals()
+    Core.log('oferta editada por admin', src, data.id)
+    return true, T('deal_updated')
+end
+
 function Items.adminDeleteDeal(src, dealId)
     if not VHubCoin.isNonEmptyStr(dealId) then return false, T('deal_id_required') end
     SQL.execute('DELETE FROM vhub_coinshop_deals WHERE id = ?', { dealId })
     Items.loadDeals()
     return true, T('deal_deleted')
+end
+
+
+-- ============================================================
+-- ADMIN — CÓDIGOS DE RESGATE (tabela vhub_coinshop_codes, dona: coinshop)
+-- ============================================================
+
+local KEY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  -- sem 0/O/1/I (legibilidade)
+
+-- gera chave de resgate SERVER-side (24 chars úteis; cliente NUNCA propõe a chave — #59/4.1).
+-- math.random do Lua 5.4 é auto-seedado com entropia no boot; unicidade garantida
+-- pelo UNIQUE(tbx_id) + retry
+local function generateKey()
+    local parts = {}
+    for p = 1, 4 do
+        local seg = {}
+        for i = 1, 6 do
+            local n = math.random(1, #KEY_CHARSET)
+            seg[i] = KEY_CHARSET:sub(n, n)
+        end
+        parts[p] = table.concat(seg)
+    end
+    return 'VHC-' .. table.concat(parts, '-')
+end
+
+-- cria um código de resgate com `coins` moedas; retorna a chave gerada (mostrada 1x ao admin)
+function Items.adminCreateCode(src, coins)
+    coins = tonumber(coins)
+    if not coins or coins <= 0 or coins > 10000000 then return false, T('invalid_data') end
+    coins = math.floor(coins)
+
+    for _ = 1, 5 do
+        local key = generateKey()
+        if not SQL.scalar('SELECT id FROM vhub_coinshop_codes WHERE tbx_id = ?', { key }) then
+            SQL.insert(
+                'INSERT INTO vhub_coinshop_codes (tbx_id, coins, status) VALUES (?, ?, ?)',
+                { key, coins, 'pending' }
+            )
+            Core.log('código criado por admin', src, key)
+            return true, key
+        end
+    end
+    return false, T('invalid_data')  -- 5 colisões seguidas = impossível na prática
+end
+
+-- lista os últimos 20 códigos; chave em claro só nos pending (resgatado é mascarado — #59/4.4)
+function Items.adminListCodes()
+    local rows = SQL.query(
+        'SELECT tbx_id, coins, status, redeemed_by, created_at FROM vhub_coinshop_codes ' ..
+        'ORDER BY created_at DESC LIMIT 20'
+    )
+    local out = {}
+    for _, r in ipairs(rows or {}) do
+        local key = r.tbx_id
+        if r.status ~= 'pending' and type(key) == 'string' and #key > 4 then
+            key = '***-' .. key:sub(-4)
+        end
+        out[#out + 1] = {
+            key        = key,
+            coins      = tonumber(r.coins) or 0,
+            status     = r.status,
+            redeemedBy = r.redeemed_by,
+            date       = r.created_at,
+        }
+    end
+    return out
+end
+
+-- apaga um código AINDA pendente (resgatado é imutável — auditoria; WHERE server-side #59/4.2)
+function Items.adminDeleteCode(src, key)
+    if not VHubCoin.isNonEmptyStr(key) then return false, T('invalid_data') end
+    local affected = SQL.execute(
+        "DELETE FROM vhub_coinshop_codes WHERE tbx_id = ? AND status = 'pending'", { key }
+    )
+    if not affected or affected == 0 then return false, T('order_already_redeemed') end
+    Core.log('código pendente apagado por admin', src, key)
+    return true, T('code_deleted')
 end
 
 
@@ -366,23 +527,28 @@ end
 function Items.adminSaveSettings(src, data)
     if type(data) ~= 'table' then return false, T('invalid_data') end
     -- merge conservador: só aceita keys conhecidas e strings (anti-injection)
-    local allowed = {
-        accentColor = true, bgColor = true, textColor = true, errorColor = true,
-        cardBorderColor = true, bgImage = true, bgOpacity = true, bgBlur = true,
-        cardBgOpacity = true, cardBorderRadius = true, coinIcon = true,
-    }
+    local nextSettings = {}
+    for key, value in pairs(Items.settings) do nextSettings[key] = value end
     for k, v in pairs(data) do
-        if allowed[k] and type(v) == 'string' and #v <= 500 then
-            Items.settings[k] = v
+        if SETTINGS_KEYS[k] and type(v) == 'string' and #v <= 500 then
+            nextSettings[k] = v
         end
     end
-    pcall(exports.vhub.setGData, 'coinshop_ui_settings', json.encode(Items.settings))
+    local ok, res = pcall(function()
+        return exports.vhub:setGData('coinshop_ui_settings', json.encode(nextSettings))
+    end)
+    if not ok or res == false then return false, T('settings_persistence_failed') end
+    Items.settings = nextSettings
     return true, T('settings_saved')
 end
 
 function Items.adminResetSettings(src)
-    Items.settings = Items.defaultSettings()
-    pcall(exports.vhub.setGData, 'coinshop_ui_settings', json.encode(Items.settings))
+    local defaults = Items.defaultSettings()
+    local ok, res = pcall(function()
+        return exports.vhub:setGData('coinshop_ui_settings', json.encode(defaults))
+    end)
+    if not ok or res == false then return false, T('settings_persistence_failed') end
+    Items.settings = defaults
     return true, T('settings_reset')
 end
 

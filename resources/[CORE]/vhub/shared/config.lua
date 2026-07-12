@@ -19,7 +19,7 @@ local _defaults = {
   fuel_rate           = 0.005,    -- alinhado ao valor efetivo em produção (ADR #41)
   max_speed_kmh       = 350,      -- alinhado ao fallback efetivo (ADR #41)
   veh_state_hz        = 4,
-  core_fuel_enabled   = false,    -- ADR #38: fuel do CORE em shadow-mode até FASE 2
+  core_fuel_enabled   = false,    -- default seguro; produção habilita via convar (ADR #61)
   veh_state_apply     = false,    -- ADR #38: vehicleStateLoad gated (vehcontrol é o aplicador hoje)
   db                  = {},
   webhooks = { join="", leave="", ban="", security="" },

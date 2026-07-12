@@ -18,7 +18,7 @@ vhub_coinshop/
 ├── shared/              # config, events, utils (locale PT-BR)
 ├── server/              # 11 módulos: sql, core, init, coins, items, purchases,
 │                        #            discord, webhooks, testdrive, commands, exports
-├── client/              # 4 módulos: init, nui, testdrive, vehicle_spawn
+├── client/              # 3 módulos: init, nui, testdrive
 ├── nui/                 # Liquid Glass: index.html + css/style.css + js/app.js
 ├── sql/                 # schema.sql (idempotente, FK INT UNSIGNED CASCADE)
 └── INSTALL/             # guia + SQL de instalação/drop
@@ -37,7 +37,7 @@ Leia `INSTALL/INSTALL GUIDE.txt` para detalhes completos.
 
 | Comando                          | Descrição                              |
 | -------------------------------- | -------------------------------------- |
-| `/coinshop` (ou F5)              | Abre/fecha a loja                      |
+| `/coinshop`                      | Abre o painel administrativo autorizado |
 | `/givecoins <id> <qtd>`          | Admin dá moedas a jogador online       |
 | `/setcoins <id> <qtd>`           | Admin define saldo absoluto            |
 | `/coinshop_addcode <order> <coins>` | Cria código Tebex (console/agent)   |
@@ -45,11 +45,12 @@ Leia `INSTALL/INSTALL GUIDE.txt` para detalhes completos.
 ## Funcionalidades (100% preservadas)
 
 - Catálogo de itens: veículos, itens, armas, ferramentas
+- Veículos comprados são registrados e retirados pela garagem canônica
 - Categorias padrão + categorias custom (admin)
 - Ofertas promocionais com TTL (countdown em tempo real)
 - Compra de itens/ofertas com débito atômico + reembolso em falha
 - Resgate de códigos Tebex (idempotente, anti-double-redeem)
-- Test-drive de veículos (routing bucket isolado, teleport via owner)
+- Test-drive server-side (veículo, timeout e cleanup autoritativos em bucket exclusivo)
 - Painel admin: stats, transações recentes, top-selling, players online
 - CRUD admin: itens, categorias, ofertas
 - Give/Set coins (admin)
@@ -64,10 +65,12 @@ Leia `INSTALL/INSTALL GUIDE.txt` para detalhes completos.
 | `exports.vhub:getUser(src)`               | Identidade do jogador (char_id)      |
 | `exports.vhub:getCData/setCData(char,k,v)`| Moedas (key `coinshop_coins`)        |
 | `exports.vhub:getGData/setGData(k,v)`     | Settings UI (key `coinshop_ui_settings`) |
-| `exports.vhub:notify(src, msg, kind)`     | Notificações amigáveis               |
+| evento `vHub:notify`                      | Notificações amigáveis               |
 | `exports.vhub_groups:hasPermission(src,p)`| Permissão admin                      |
-| `exports.vhub_inventory:giveItem/giveWeapon` | Entrega de itens/armas            |
-| `exports.vhub_conce:registerVehicle({...})`| Registro de veículo comprado        |
+| `exports.vhub_inventory:giveItem`             | Entrega de itens                  |
+| `exports.vhub_player_state:giveWeapons`       | Entrega de armas de sessão        |
+| `exports.vhub_conce:grantVehicle(src, model)`| Registro de veículo comprado        |
+| `exports.vhub_player_state:begin/attach/endActivity` | Bucket exclusivo do test-drive |
 | `exports.vhub_player_state:teleport(...)` | Teleport do test-drive (owner do ped)|
 
 ## Leis vHub honradas

@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_inventory'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.3.0'
 description 'Inventário server-authoritative: mochila, baús, drops e Player Info HUD. UI otimista com rollback.'
 
 -- Hard deps: core + driver SQL. Identity/Survival sao SOFT (via exports com pcall).

@@ -23,15 +23,15 @@
   --gold-line: rgba(243, 181, 58, 0.45);
 
   /* geometria da tela (overlay sobre o retângulo do SVG, viewBox 1180x820) */
-  --screen-left:   5.085%;   /* 60/1180 */
-  --screen-top:    7.317%;   /* 60/820  */
-  --screen-width:  89.83%;   /* 1060/1180 */
-  --screen-height: 85.366%;  /* 700/820 */
-  --screen-radius: 1.4vw;
+  --screen-left:   3.73%;   /* 44/1180 */
+  --screen-top:    5.37%;   /* 44/820 */
+  --screen-width:  92.54%;  /* 1092/1180 */
+  --screen-height: 89.27%;  /* 732/820 */
+  --screen-radius: 1.1vw;
 
   /* barras */
-  --statusbar-h: 6%;
-  --navbar-h:    9%;
+  --statusbar-h: 5.1%;
+  --navbar-h:    7.8%;
 
   --trans: 0.18s ease;
 }

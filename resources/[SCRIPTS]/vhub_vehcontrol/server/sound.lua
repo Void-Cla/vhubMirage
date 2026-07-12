@@ -21,20 +21,58 @@ local function rejectSound(src)
 end
 
 
-RegisterNetEvent('vhub_vehcontrol:soundPlay', function(netId, plate, url, volume)
+-- ============================================================
+-- ESTADO — url/faixa em reproducao por player (base do "DVD no carro")
+-- ============================================================
+
+local _now = {}   -- [src] = { url=, title=, plate= } do som ativo (nil = nada tocando)
+
+-- extrai o videoId de 11 chars de uma URL do YouTube (inclui nocookie/embed) ou nil.
+-- espelha WOW_Config.parseYouTubeId (o vehcontrol nao carrega o config do wow).
+local function youTubeIdOf(url)
+  if type(url) ~= 'string' then return nil end
+  local host = url:match('^https://([%w%.%-]+)/')
+  if not host then return nil end
+  local isYt = host == 'youtu.be'
+    or host == 'youtube.com' or host == 'www.youtube.com'
+    or host == 'm.youtube.com' or host == 'music.youtube.com'
+    or host == 'www.youtube-nocookie.com' or host == 'youtube-nocookie.com'
+  if not isYt then return nil end
+  local id = url:match('[?&]v=([%w_%-]+)') or url:match('youtu%.be/([%w_%-]+)')
+    or url:match('/shorts/([%w_%-]+)') or url:match('/embed/([%w_%-]+)')
+  if id and #id >= 11 then return id:sub(1, 11) end
+  return nil
+end
+
+-- desliga a telinha de video do player (o audio segue tocando no wow)
+local function detachVideo(src)
+  TriggerClientEvent(VHubVeh.E.VIDEO_DETACH, src)
+end
+
+
+RegisterNetEvent('vhub_vehcontrol:soundPlay', function(netId, plate, url, volume, title)
   local src = source
   if not wowAvailable() then rejectSound(src); return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' or type(url) ~= 'string' then rejectSound(src); return end
   if not VHubVeh.hasVehicleAccess(src, plate) then rejectSound(src); return end
 
+  -- title e cosmetico (rotulo da telinha): sanea tamanho, aceita nil
+  local tt = (type(title) == 'string' and #title <= 120) and title or nil
+
   local ok, accepted = pcall(function()
     return exports.vhub_wow:PlayAtEntity({ src }, soundNameOf(src), url, volume, netId, 10.0, true)
   end)
-  if not ok or accepted ~= true then rejectSound(src) end
+  if ok and accepted == true then
+    _now[src] = { url = url, title = tt, plate = plate }
+  else
+    rejectSound(src)
+  end
 end)
 
 RegisterNetEvent('vhub_vehcontrol:soundStop', function()
   local src = source
+  _now[src] = nil
+  detachVideo(src)                       -- sem som = sem telinha
   if not wowAvailable() then return end
 
   pcall(function()
@@ -51,21 +89,26 @@ RegisterNetEvent('vhub_vehcontrol:soundVolume', function(volume)
   end)
 end)
 
--- liga/desliga a telinha de video "DVD no carro" (so YouTube). O attach so exibe se o
--- vhub_wow confirmar (client) que o player esta a bordo daquele netId — server so propoe.
+-- liga/desliga a telinha de video "DVD no carro" (so YouTube). Server valida acesso ao
+-- veiculo e so exibe se houver um som YouTube tocando; a telinha (video) e do vehcontrol.
 RegisterNetEvent('vhub_vehcontrol:soundVideo', function(netId, plate, show)
   local src = source
-  if not wowAvailable() then return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' then return end
   if not VHubVeh.hasVehicleAccess(src, plate) then return end
 
-  pcall(function()
-    if show == true then
-      exports.vhub_wow:AttachInCarVideo(src, soundNameOf(src), netId)
-    else
-      exports.vhub_wow:DetachInCarVideo(src, soundNameOf(src))
-    end
-  end)
+  if show ~= true then detachVideo(src); return end
+
+  -- so ha video se o som ativo do player for do YouTube
+  local now = _now[src]
+  local vid = now and youTubeIdOf(now.url)
+  if not vid then detachVideo(src); return end
+
+  TriggerClientEvent(VHubVeh.E.VIDEO_ATTACH, src, vid, now.title)
+end)
+
+-- usuario fechou a telinha pelo X (client) — limpa qualquer estado de exibicao
+RegisterNetEvent('vhub_vehcontrol:soundVideoOff', function()
+  detachVideo(source)
 end)
 
 
@@ -109,6 +152,7 @@ RegisterNetEvent('vhub_vehcontrol:soundRadio', function(netId, plate, volume)
     return exports.vhub_wow:PlayAtEntity({ src }, soundNameOf(src), track.url, vol, netId, 10.0, true)
   end)
   if okp and accepted == true then
+    _now[src] = { url = track.url, title = track.title, plate = plate }
     TriggerClientEvent('vhub_vehcontrol:soundNow', src, track.title, track.artist)
   else
     rejectSound(src)
@@ -118,4 +162,5 @@ end)
 AddEventHandler('playerDropped', function()
   local src = source
   _searchAt[src] = nil
+  _now[src] = nil
 end)

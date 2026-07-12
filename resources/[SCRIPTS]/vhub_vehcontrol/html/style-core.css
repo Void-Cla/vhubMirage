@@ -1,10 +1,15 @@
 /*
- * style-core.css — tokens vHub + reset + chrome compartilhado dos asides
- * vhub_vehcontrol — Liquid Glass + Areia + Dourado   (PRIME v2)
+ * style-core.css — tokens vHub PRIME v3 (Remake)
+ * vhub_vehcontrol · Liquid Glass Sólido + Areia + Dourado
  *
- * Layout: 3 asides ancorados (Esquerda · Topo-Centro · Direita) dentro do
- * wrapper #vc-panel. Cada aside é independente, draggable, e usa o mesmo
- * vidro líquido SIMULADO (A-09: sem backdrop-filter sobre o jogo).
+ * MUDANÇAS-CHAVE do remake:
+ *   • Base do aside agora é OPACA (background-color sólido) — acabou o "piscar"
+ *     que acontecia com gradientes translúcidos sobre o frame transparente do FiveM.
+ *   • Camadas decorativas (gradiente âmbar + noise) foram para pseudo-elementos
+ *     e para .vc-noise/.vc-aura → GPU-friendly, sem repaint constante.
+ *   • Bordas mais finas (1px), radius maior (14px), sombras menos pesadas.
+ *   • Tipografia mantida, mas com hierarquia mais respirada.
+ *   • Animação de entrada única (opacity+translate) — sem shimmer perpétuo.
  */
 
 /* ============================================================
@@ -12,7 +17,7 @@
    ============================================================ */
 
 :root {
-  /* Cores */
+  /* Paleta */
   --vh-sand:        #d9c19a;
   --vh-sand-soft:   #ece1c8;
   --vh-sand-dim:    #a89572;
@@ -20,8 +25,10 @@
   --vh-gold:        #f3b53a;
   --vh-gold-soft:   #ffd573;
   --vh-amber:       #ff9a1f;
-  --vh-black:       #0c0a06;
-  --vh-black-2:     #1a1610;
+  --vh-black:       #0a0806;
+  --vh-black-2:     #14100a;
+  --vh-panel:       #100c07;   /* base opaca dos asides — evita flicker */
+  --vh-panel-2:     #1a1510;   /* variação mais clara para gradiente interno */
   --vh-danger:      #e8513f;
   --vh-ok:          #6bbf6b;
 
@@ -29,28 +36,29 @@
   --vh-text-dim:    #c4ad84;
   --vh-text-dim2:   #8a7a5a;
 
-  /* Glass — camadas translúcidas (sem backdrop-filter) */
-  --vh-glass-bg:
-    radial-gradient(120% 60% at 50% 0%, rgba(243,181,58,0.10), rgba(243,181,58,0) 55%),
-    linear-gradient(180deg, rgba(217,193,154,0.12), rgba(12,10,6,0.60));
-  --vh-glass-bg-2:  linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.42));
-  --vh-glass-border: rgba(243,181,58,0.28);
-  --vh-glass-line:  rgba(243,181,58,0.12);
+  /* Camadas de superfície — 100% opacas (fim do flicker) */
+  --vh-surface:     linear-gradient(180deg, #1c1710 0%, #100c07 100%);
+  --vh-surface-2:   linear-gradient(180deg, #16110b, #0d0906);
+  --vh-header-bg:   linear-gradient(180deg, #1e1811, #14100a);
 
-  /* Sombras */
-  --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
-  --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.48), 0 0 22px rgba(243,181,58,0.10);
-  --vh-shadow-3:    0 24px 64px rgba(0,0,0,0.70), 0 0 36px rgba(243,181,58,0.16);
-  --vh-shadow-glow: 0 0 20px rgba(255,213,115,0.55);
+  /* Overlays sutis (decorativos) */
+  --vh-glow-top:    radial-gradient(120% 55% at 50% 0%, rgba(243,181,58,0.14), rgba(243,181,58,0) 60%);
+  --vh-glass-line:  rgba(243,181,58,0.10);
+  --vh-glass-border: rgba(243,181,58,0.22);
+
+  /* Sombras — enxutas */
+  --vh-shadow-1:    0 4px 12px rgba(0,0,0,0.35);
+  --vh-shadow-2:    0 10px 24px rgba(0,0,0,0.50);
+  --vh-shadow-3:    0 18px 40px rgba(0,0,0,0.60);
+  --vh-shadow-glow: 0 0 14px rgba(255,213,115,0.45);
 
   /* Raios */
-  --vh-r-pan:  16px;
-  --vh-r-card: 12px;
-  --vh-r-btn:  10px;
+  --vh-r-pan:  14px;
+  --vh-r-card: 10px;
+  --vh-r-btn:  9px;
   --vh-r-pill: 999px;
 
-  /* Tipografia — fontes de SISTEMA (sem CDN, A-10). Display = condensada nativa;
-     body = stack de UI. Se um dia embarcar Barlow/Inter em .woff2 local, some no início. */
+  /* Tipografia — 100% sistema (offline OK) */
   --vh-font-display: 'Bahnschrift', 'DIN Condensed', 'Oswald', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
   --vh-font-body:    'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --vh-font-mono:    'JetBrains Mono', 'Consolas', 'Courier New', monospace;
@@ -63,8 +71,8 @@
   --vh-gap-xl: 20px;
 
   /* Transições */
-  --vh-t-fast: 0.16s ease;
-  --vh-t-norm: 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+  --vh-t-fast: 0.14s ease;
+  --vh-t-norm: 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
   --vh-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
@@ -89,6 +97,7 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+/* IMPORTANTE: body precisa continuar TRANSPARENTE (FiveM renderiza o jogo atrás) */
 body {
   background: transparent;
   overflow: hidden;
@@ -96,13 +105,7 @@ body {
   -webkit-user-select: none;
 }
 
-button {
-  font-family: inherit;
-  font-size: inherit;
-  cursor: pointer;
-  background: none;
-}
-
+button { font-family: inherit; font-size: inherit; cursor: pointer; background: none; }
 img { display: block; }
 svg { display: block; flex-shrink: 0; }
 
@@ -115,80 +118,101 @@ svg { display: block; flex-shrink: 0; }
 
 
 /* ============================================================
-   WRAPPER GLOBAL (#vc-panel) — palco transparente full screen
-   Toggla .hidden via Lua para mostrar/esconder toda a interface.
-   pointer-events: none aqui; cada aside reativa para si.
+   WRAPPER GLOBAL (#vc-panel)
    ============================================================ */
 
 .vc-panel {
   position: fixed;
   inset: 0;
   z-index: 10;
-  pointer-events: none;
+  pointer-events: none;   /* apenas os asides captam clique */
   color: var(--vh-text);
   font-family: var(--vh-font-body);
+  background: transparent;
+  opacity: 1;
 }
-
-/* painel oculto (.hidden = display:none) já suspende animações; guarda defensiva
-   caso um aside seja ocultado por opacity no futuro — garante idle 0ms (A-07/L-18) */
 .vc-panel.hidden * { animation-play-state: paused !important; }
 
 
 /* ============================================================
-   ASIDE BASE — vidro líquido compartilhado (A-09: sem backdrop-filter)
+   ASIDE BASE — base OPACA (fim do flicker) + acabamentos premium
    ============================================================ */
 
 .vc-aside {
   position: absolute;
   pointer-events: auto;
+  background-color: #100c07 !important;
+  background-image: none !important;
+  border: 1px solid rgba(243,181,58,0.20);
   border-radius: var(--vh-r-pan);
-  /* liquid glass SIMULADO p/ HUD sobre o jogo — piso translúcido em camadas */
-  background:
-    radial-gradient(120% 55% at 50% 0%, rgba(243,181,58,0.14), rgba(243,181,58,0) 60%),
-    linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.87));
-  border: 1px solid var(--vh-glass-border);
   box-shadow:
-    var(--vh-shadow-3),
-    inset 0 1px 0 rgba(255,213,115,0.14),
-    inset 0 0 0 1px rgba(0,0,0,0.35);
+    0 18px 40px rgba(0,0,0,0.72),
+    inset 0 1px 0 rgba(255,213,115,0.10);
   overflow: hidden;
   isolation: isolate;
-  transition: box-shadow var(--vh-t-norm), transform var(--vh-t-norm);
-  animation: vc-aside-in 300ms var(--vh-ease-out);
-}
-@keyframes vc-aside-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+  transition: none;
+  animation: none;
+  will-change: auto;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  opacity: 1 !important;
 }
 
-/* hairline dourada premium no topo — camada extra do vidro líquido */
+/* Overlay dourado no topo (via ::before) — decorativo, NÃO afeta opacidade da base */
 .vc-aside::before {
   content: '';
-  position: absolute; top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.68), transparent);
+  position: absolute;
+  inset: 0;
+  background: var(--vh-glow-top);
   pointer-events: none;
-  z-index: 2;
+  z-index: 0;
+}
+
+/* Fio dourado premium acima */
+.vc-aside::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.85) 30%, rgba(255,213,115,1) 50%, rgba(243,181,58,0.85) 70%, transparent);
+  box-shadow: 0 0 8px rgba(243,181,58,0.45);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Ruído sutil pra dar textura de "vidro" premium (SVG data-uri, sem request) */
+.vc-noise {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  z-index: 1;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.9'/></svg>");
+}
+
+@keyframes vc-aside-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .vc-aside.is-dragging {
   box-shadow:
-    0 32px 84px rgba(0,0,0,0.75),
-    0 0 44px rgba(243,181,58,0.26),
-    inset 0 1px 0 rgba(255,213,115,0.20);
+    0 26px 60px rgba(0,0,0,0.72),
+    0 0 30px rgba(243,181,58,0.20),
+    inset 0 1px 0 rgba(255,213,115,0.18);
   cursor: grabbing;
 }
 
-/* Posicionamento padrão (JS de arraste sobrescreve em runtime) — animações mantêm o transform inicial */
+/* Posicionamentos padrão */
 .vc-aside-controls {
   top: 50%;
   left: 18px;
   transform: translateY(-50%);
-  width: 256px;
-  animation: vc-slide-l 320ms var(--vh-ease-out);
+  width: 284px;
+  animation: vc-slide-l 300ms var(--vh-ease-out);
 }
 @keyframes vc-slide-l {
-  from { opacity: 0; transform: translate(-20px, -50%); }
+  from { opacity: 0; transform: translate(-16px, -50%); }
   to   { opacity: 1; transform: translateY(-50%); }
 }
 
@@ -196,14 +220,14 @@ svg { display: block; flex-shrink: 0; }
   top: 50%;
   right: 18px;
   transform: translateY(-50%);
-  width: 296px;
+  width: 324px;
   max-height: 92vh;
   display: flex;
   flex-direction: column;
-  animation: vc-slide-r 320ms var(--vh-ease-out);
+  animation: vc-slide-r 300ms var(--vh-ease-out);
 }
 @keyframes vc-slide-r {
-  from { opacity: 0; transform: translate(20px, -50%); }
+  from { opacity: 0; transform: translate(16px, -50%); }
   to   { opacity: 1; transform: translateY(-50%); }
 }
 
@@ -212,48 +236,46 @@ svg { display: block; flex-shrink: 0; }
   left: 50%;
   transform: translateX(-50%);
   width: 380px;
-  animation: vc-slide-t 320ms var(--vh-ease-out);
+  animation: vc-slide-t 300ms var(--vh-ease-out);
 }
 @keyframes vc-slide-t {
-  from { opacity: 0; transform: translate(-50%, -12px); }
+  from { opacity: 0; transform: translate(-50%, -10px); }
   to   { opacity: 1; transform: translateX(-50%); }
 }
 
-/* Halo dourado decorativo (reusado) */
+/* Halo dourado no topo interno */
 .vc-aura {
   position: absolute;
-  inset: -40% -20% auto -20%;
-  height: 120px;
-  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.22), rgba(243,181,58,0) 70%);
+  inset: -30% -15% auto -15%;
+  height: 110px;
+  background: radial-gradient(50% 100% at 50% 0%, rgba(243,181,58,0.18), rgba(243,181,58,0) 70%);
   pointer-events: none;
   z-index: 0;
 }
 
 
 /* ============================================================
-   HEADER COMPARTILHADO — grip + marca (área de arraste)
+   HEADER COMPARTILHADO
    ============================================================ */
 
 .vc-header {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 9px 11px;
+  background: var(--vh-header-bg);
   border-bottom: 1px solid var(--vh-glass-line);
-  background: linear-gradient(180deg, rgba(12,10,6,0.55), rgba(12,10,6,0.15));
   cursor: grab;
 }
-/* hairline gold sob o header (separator premium) */
 .vc-header::after {
   content: '';
   position: absolute; left: 0; right: 0; bottom: -1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.32) 20%, rgba(243,181,58,0.32) 80%, transparent);
+  background: linear-gradient(90deg, transparent, rgba(243,181,58,0.28) 20%, rgba(243,181,58,0.28) 80%, transparent);
   pointer-events: none;
 }
-
 .vc-header:active { cursor: grabbing; }
 
 .vc-grip {
@@ -266,8 +288,7 @@ svg { display: block; flex-shrink: 0; }
   transition: opacity var(--vh-t-fast);
 }
 .vc-grip span {
-  width: 3px;
-  height: 3px;
+  width: 3px; height: 3px;
   border-radius: 50%;
   background: var(--vh-sand-dim);
   transition: background var(--vh-t-fast), box-shadow var(--vh-t-fast);
@@ -278,33 +299,33 @@ svg { display: block; flex-shrink: 0; }
 .vc-brand {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 
 .vc-brand-title {
   font-family: var(--vh-font-display);
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 800;
+  font-size: 20px;
   text-transform: uppercase;
-  letter-spacing: 1.6px;
-  color: var(--vh-sand);
-  text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+  letter-spacing: 1.4px;
+  color: var(--vh-sand-soft);
+  text-shadow: 0 0 12px rgba(243,181,58,0.18), 0 1px 0 rgba(0,0,0,0.4);
 }
 
 .vc-brand-sub {
   font-family: var(--vh-font-display);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 1.8px;
+  letter-spacing: 2px;
   color: var(--vh-gold);
-  padding: 2px 7px;
-  border: 1px solid rgba(243,181,58,0.40);
+  padding: 3px 8px;
+  border: 1px solid rgba(243,181,58,0.38);
   border-radius: var(--vh-r-pill);
-  background: rgba(243,181,58,0.10);
-  box-shadow: 0 0 8px rgba(243,181,58,0.14), inset 0 1px 0 rgba(255,213,115,0.12);
+  background: rgba(243,181,58,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,213,115,0.12);
   line-height: 1;
 }
 
@@ -316,7 +337,7 @@ svg { display: block; flex-shrink: 0; }
   align-items: center;
   justify-content: center;
   color: var(--vh-text-dim);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   flex-shrink: 0;
   border: 1px solid transparent;
@@ -324,15 +345,15 @@ svg { display: block; flex-shrink: 0; }
 }
 .vc-close:hover {
   color: #fff;
-  background: rgba(232,81,63,0.26);
+  background: rgba(232,81,63,0.28);
   border-color: rgba(232,81,63,0.55);
-  box-shadow: 0 0 10px rgba(232,81,63,0.30);
+  box-shadow: 0 0 8px rgba(232,81,63,0.28);
 }
 .vc-close:active { transform: scale(0.88); }
 
 
 /* ============================================================
-   SECTION LABEL — divisor compartilhado
+   SECTION LABEL
    ============================================================ */
 
 .vc-section-label {
@@ -347,30 +368,30 @@ svg { display: block; flex-shrink: 0; }
   align-items: center;
   gap: 8px;
   margin-bottom: -2px;
+  position: relative;
+  z-index: 2;
 }
 .vc-section-label::after {
   content: "";
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, rgba(243,181,58,0.22), rgba(243,181,58,0));
+  background: linear-gradient(90deg, rgba(243,181,58,0.20), rgba(243,181,58,0));
 }
 
 
 /* ============================================================
-   ABAS legadas (escondidas no novo layout — switchTab() continua
-   funcional como no-op porque os elementos com data-tab/tab-body
-   ainda existem na arvore).
+   ABAS legadas (escondidas)
    ============================================================ */
 
 .vc-tabs[hidden] { display: none !important; }
 
 
 /* ============================================================
-   RESPONSIVO — 1280x720 (mínimo suportado da NUI)
+   RESPONSIVO — 1280x720
    ============================================================ */
 
 @media (max-width: 1366px) {
-  .vc-aside-controls { width: 232px; }
-  .vc-aside-ficha    { width: 272px; }
-  .vc-aside-sound    { width: 340px; }
+  .vc-aside-controls { width: 236px; }
+  .vc-aside-ficha    { width: 276px; }
+  .vc-aside-sound    { width: 344px; }
 }

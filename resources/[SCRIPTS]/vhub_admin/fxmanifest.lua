@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_admin'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.1.0'
 description 'Painel admin completo: modera  o, teleporte, p layer ops, ve culos, mundo, spec, reports, jail/mute persistentes.'
 
 dependencies {

@@ -48,14 +48,18 @@ local MAP = {
   unmute    = E.ACT_UNMUTE,
   tp        = E.ACT_TP,        tptome    = E.ACT_TPTOME,     tpgo     = E.ACT_TPGO,
   tpcds     = E.ACT_TPCDS,     tpall     = E.ACT_TPALL,      tplast   = E.ACT_TPLAST,
+  tpz       = E.ACT_TPZ,
   heal      = E.ACT_HEAL,      healall   = E.ACT_HEALALL,    god      = E.ACT_GOD,
   freeze    = E.ACT_FREEZE,    revive    = E.ACT_REVIVE,     reviveall= E.ACT_REVIVEALL,
   invis     = E.ACT_INVIS,     skin      = E.ACT_SKIN,       kill     = E.ACT_KILL,
+  stamina   = E.ACT_STAMINA,   jump      = E.ACT_JUMP,       cleanped = E.ACT_CLEANPED,
   spec      = E.ACT_SPEC,
   spawncar  = E.ACT_SPAWNCAR,  delveh    = E.ACT_DELVEH,     fix      = E.ACT_FIX,
   tuning    = E.ACT_TUNING,    carcolor  = E.ACT_CARCOLOR,
+  boost     = E.ACT_BOOST,     flip      = E.ACT_FLIP,
   weather   = E.ACT_WEATHER,   time      = E.ACT_TIME,       blackout = E.ACT_BLACKOUT,
   clearzone = E.ACT_CLEARZONE, announce  = E.ACT_ANNOUNCE,   staffchat= E.ACT_STAFFCHAT,
+  wipeveh   = E.ACT_WIPE,      wipeped   = E.ACT_WIPE,       wipeobj  = E.ACT_WIPE,
   givemoney = E.ACT_GIVEMONEY, setmoney  = E.ACT_SETMONEY,   giveitem = E.ACT_GIVEITEM,
   clearinv  = E.ACT_CLEARINV,  addgroup  = E.ACT_ADDGROUP,   delgroup = E.ACT_DELGROUP,
   reportClaim = E.ACT_REPORT_CLAIM, reportClose = E.ACT_REPORT_CLOSE,
@@ -88,6 +92,10 @@ RegisterNUICallback('act', function(d, cb)
   elseif key == 'time'     then TriggerServerEvent(ev, tonumber(f.hour), tonumber(f.minute))
   elseif key == 'blackout' then TriggerServerEvent(ev, f.on == true)
   elseif key == 'clearzone' then TriggerServerEvent(ev, tonumber(f.radius))
+  elseif key == 'tpz' then TriggerServerEvent(ev, tostring(f.zone or ''):lower())
+  elseif key == 'wipeveh' then TriggerServerEvent(ev, 'vehicles')
+  elseif key == 'wipeped' then TriggerServerEvent(ev, 'peds')
+  elseif key == 'wipeobj' then TriggerServerEvent(ev, 'objects')
   elseif key == 'announce' or key == 'staffchat' or key == 'report' then
     TriggerServerEvent(ev, f.message)
   elseif key == 'givemoney' or key == 'setmoney' then

@@ -47,14 +47,37 @@ local function setBucket(src, b)
   if GetPlayerRoutingBucket(src) ~= b then SetPlayerRoutingBucket(src, b) end
 end
 
--- invocador confiável do export de atividade (default-deny; vazio = só interno).
--- NÃO popular sem o arquiteto registrar ownership de cada membro (L-07).
--- consumidores autorizados do setActivityBucket (decisão #35 — export-first gated)
-local BUCKET_TRUSTED = { ['vhub_coinshop'] = true }
-local function invokerOK()
-  local who = GetInvokingResource()
-  if not who or who == GetCurrentResourceName() then return true end
-  return BUCKET_TRUSTED[who] == true
+-- vhub_coinshop recebe somente um bucket efêmero por sessão de test-drive.
+-- O dono mantém o vínculo src→bucket e é o único escritor dos natives de bucket.
+local ACTIVITY_BUCKET_FIRST, ACTIVITY_BUCKET_LAST = 1000, 65535
+local _activity_by_src, _activity_by_bucket = {}, {}
+local _next_activity_bucket = ACTIVITY_BUCKET_FIRST
+
+local function activityInvokerOK()
+  return GetInvokingResource() == 'vhub_coinshop'
+end
+
+local function allocateActivityBucket()
+  local span = ACTIVITY_BUCKET_LAST - ACTIVITY_BUCKET_FIRST + 1
+  for _ = 1, span do
+    local bucket = _next_activity_bucket
+    _next_activity_bucket = bucket >= ACTIVITY_BUCKET_LAST and ACTIVITY_BUCKET_FIRST or bucket + 1
+    if not _activity_by_bucket[bucket] then
+      SetRoutingBucketPopulationEnabled(bucket, false)
+      SetRoutingBucketEntityLockdownMode(bucket, 'strict')
+      return bucket
+    end
+  end
+  return nil
+end
+
+local function releaseActivity(src, restoreWorld)
+  local bucket = _activity_by_src[src]
+  if not bucket then return false end
+  _activity_by_src[src] = nil
+  _activity_by_bucket[bucket] = nil
+  if restoreWorld ~= false and GetPlayerName(src) then setBucket(src, WORLD_BUCKET) end
+  return true
 end
 
 -- exports de MUTAÇÃO do ped (armas/vida/colete/custom/teleport) — default-deny ESTRITO.
@@ -218,6 +241,14 @@ AddEventHandler("playerDropped", function()
   local src = source
   _spawn_seen[src] = nil
   _pending[src]    = nil
+  releaseActivity(src, false)
+end)
+
+AddEventHandler('onResourceStop', function(res)
+  if res ~= GetCurrentResourceName() then return end
+  local active = {}
+  for src in pairs(_activity_by_src) do active[#active + 1] = src end
+  for _, src in ipairs(active) do releaseActivity(src) end
 end)
 
 -- ── Net event: report do cliente ─────────────────────────────────────────────
@@ -291,16 +322,39 @@ end)
 -- Há hold pendente para este src? (provedores checam antes de abrir UI)
 exports("isPendingSpawn", function(src) return _pending[tonumber(src)] ~= nil end)
 
--- Move o player para a dimensão de atividade isolada (test-drive/arena/replay) e
--- de volta. default-deny (invokerOK) + range {1,2} (NUNCA 999) + alvo online.
-exports("setActivityBucket", function(src, n)
-  if not invokerOK() then return false end
-  src = tonumber(src); n = tonumber(n)
-  if not src or src <= 0 then return false end
-  if n ~= WORLD_BUCKET and n ~= 2 then return false end
-  if not (_pronto and _vHub.Auth:getUser(src)) then return false end
-  setBucket(src, n)
+-- Aloca e aplica bucket estrito exclusivo ao jogador em atividade.
+exports('beginActivity', function(src)
+  if not activityInvokerOK() then return nil end
+  src = tonumber(src)
+  if not src or src <= 0 or not (_pronto and _vHub.Auth:getUser(src)) then return nil end
+  if GetPlayerRoutingBucket(src) ~= WORLD_BUCKET then return nil end
+  if _activity_by_src[src] then return nil end
+
+  local bucket = allocateActivityBucket()
+  if not bucket then return nil end
+  _activity_by_src[src] = bucket
+  _activity_by_bucket[bucket] = src
+  setBucket(src, bucket)
+  return bucket
+end)
+
+-- Anexa veículo server-side ao bucket exclusivo já alocado para o jogador.
+exports('attachActivityVehicle', function(src, entity)
+  if not activityInvokerOK() then return false end
+  src, entity = tonumber(src), tonumber(entity)
+  local bucket = src and _activity_by_src[src] or nil
+  if not bucket or not entity or entity <= 0 then return false end
+  if not (_pronto and _vHub.Auth:getUser(src)) or GetPlayerRoutingBucket(src) ~= bucket then return false end
+  if not DoesEntityExist(entity) or GetEntityType(entity) ~= 2 then return false end
+  SetEntityRoutingBucket(entity, bucket)
   return true
+end)
+
+-- Libera a atividade e devolve o jogador ao mundo. Idempotente para cleanup.
+exports('endActivity', function(src)
+  if not activityInvokerOK() then return false end
+  src = tonumber(src)
+  return src and releaseActivity(src) or false
 end)
 
 -- Dá armas (chamado por vhub_groups no onjoin da polícia, etc.) — gated + alvo online

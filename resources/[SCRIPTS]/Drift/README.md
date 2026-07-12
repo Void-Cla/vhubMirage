@@ -7,10 +7,10 @@ via export. **Não desenha UI** — o HUD e o "banco" da pontuação são do `vh
 
 ## Como pontua
 
-Enquanto driftar (ângulo ≥ 15°, ≥ 30 km/h, sem bater):
+Enquanto driftar (ângulo > 5°, > 30 km/h, sem bater):
 
 ```
-pontos/seg = min(ângulo × velocidade / 40, 150) × combo
+pontos/seg = min(ângulo × velocidade / 65, 100) × combo
 combo = 1.0 → 1.5 (5s) → 2.0 (12s) → 3.0 (25s) de drift contínuo
 ```
 
@@ -43,8 +43,10 @@ local t = exports.Drift:getTelemetry()
 
 ## Controles
 
-- **Acelerador + Freio de mão** com velocidade: entra em drift (handling assistido).
-- Mantendo ângulo ≥ 20°: ativa **boost** (1.2 s, cooldown 4 s).
+- **Acelerador + Freio de mão** só entra em drift com > 30 km/h e > 5°.
+- Fora desse gate, o espaço fica como freio de mão padrão do GTA.
+- Drift ativo liga fumaça nativa de pneu e uma camada extra local nas rodas traseiras.
+- Boost: 1.2 s, cooldown 4 s, sempre preso ao mesmo gate físico.
 
 ## Créditos
 

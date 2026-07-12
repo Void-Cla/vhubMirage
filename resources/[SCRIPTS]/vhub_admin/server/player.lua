@@ -71,6 +71,27 @@ AddEventHandler(E.ACT_INVIS, function()
   Core:audit(src, 'invis', src, {})
 end)
 
+RegisterNetEvent(E.ACT_STAMINA)
+AddEventHandler(E.ACT_STAMINA, function()
+  local src = source; if not reqPerm(src, 'buff') then return end
+  TriggerClientEvent(E.TOGGLE_STAMINA, src)
+  Core:audit(src, 'stamina', src, {})
+end)
+
+RegisterNetEvent(E.ACT_JUMP)
+AddEventHandler(E.ACT_JUMP, function()
+  local src = source; if not reqPerm(src, 'buff') then return end
+  TriggerClientEvent(E.TOGGLE_JUMP, src)
+  Core:audit(src, 'jump', src, {})
+end)
+
+RegisterNetEvent(E.ACT_CLEANPED)
+AddEventHandler(E.ACT_CLEANPED, function()
+  local src = source; if not reqPerm(src, 'heal') then return end
+  TriggerClientEvent(E.DO_CLEANPED, src)
+  Core:audit(src, 'cleanped', src, {})
+end)
+
 RegisterNetEvent(E.ACT_SKIN)
 AddEventHandler(E.ACT_SKIN, function(target, model)
   local src = source; if not reqPerm(src, 'skin') then return end

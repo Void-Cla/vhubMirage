@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_garage'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.0.1'
 description 'Garagem centralizada: garage + concession ria + leil o + p tio + aluguel + IPVA + chave. Fonte de verdade dos ve culos.'
 
 dependencies {

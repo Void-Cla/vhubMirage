@@ -41,6 +41,23 @@ local function coreAtivo()
   return GlobalState.vh_core_active == true
 end
 
+-- Aplica a réplica autoritativa de fuel somente no controlador da entidade.
+local function applyFuelBag(vehicle, value)
+  if not vehicle or vehicle == 0 or not DoesEntityExist(vehicle) then return end
+  if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge then return end
+  if not NetworkHasControlOfEntity(vehicle) then return end
+
+  local fuel = math.max(0.0, math.min(100.0, value)) + 0.0
+  if math.abs(GetVehicleFuelLevel(vehicle) - fuel) >= 0.05 then
+    SetVehicleFuelLevel(vehicle, fuel)
+  end
+  local empty = fuel <= 0.01
+  SetVehicleUndriveable(vehicle, empty)
+  if empty and GetIsVehicleEngineRunning(vehicle) then
+    SetVehicleEngineOn(vehicle, false, true, true)
+  end
+end
+
 
 -- ============================================================
 -- HANDLERS (servidor → cliente)
@@ -68,6 +85,10 @@ end)
 RegisterNetEvent("vHub:passengerMode")
 AddEventHandler("vHub:passengerMode", function(plate, isPassenger)
   TriggerEvent("vHub:localPassengerMode", plate, isPassenger == true)
+end)
+
+AddStateBagChangeHandler("vh_fuel", nil, function(bagName, _, value)
+  applyFuelBag(GetEntityFromStateBagName(bagName), value)
 end)
 
 
@@ -137,6 +158,7 @@ Citizen.CreateThread(function()
       local speed_kmh = speed_ms * 3.6
 
       if atual.veh == veh and atual.assento == -1 then
+        applyFuelBag(veh, Entity(veh).state.vh_fuel)
         TriggerServerEvent("vHub:vState", atual.placa, {
           rpm            = rpm,
           engine_health  = (GetVehicleEngineHealth and GetVehicleEngineHealth(veh)) or 0,

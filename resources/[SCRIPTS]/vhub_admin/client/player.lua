@@ -15,8 +15,35 @@ AddEventHandler(E.DO_HEAL, function()
   SetEntityHealth(ped, 200)
   SetPedArmour(ped, 100)
   ClearPedBloodDamage(ped)
+  ResetPedVisibleDamage(ped)
   VHubAdmin.notify('HP e colete restaurados.')
 end)
+
+-- ----------------------------------------------------------------------------
+-- BUFF THREAD  existe SOMENTE enquanto god/stamina/jump ativo (L-06/L-18)
+-- Budget: super pulo exige tick por frame (native *ThisFrame); sem ele, 4 Hz.
+-- ----------------------------------------------------------------------------
+local _buff_running = false
+local function ensureBuffThread()
+  if _buff_running then return end
+  if not (S.god or S.stamina or S.jump) then return end
+  _buff_running = true
+  Citizen.CreateThread(function()
+    while S.god or S.stamina or S.jump do
+      local pid = PlayerId()
+      if S.stamina then RestorePlayerStamina(pid, 1.0) end
+      if S.jump then SetSuperJumpThisFrame(pid) end
+      if S.god then
+        local ped = PlayerPedId()
+        if GetEntityHealth(ped) < GetEntityMaxHealth(ped) then
+          SetEntityHealth(ped, GetEntityMaxHealth(ped))
+        end
+      end
+      Citizen.Wait(S.jump and 0 or 250)
+    end
+    _buff_running = false
+  end)
+end
 
 -- ----------------------------------------------------------------------------
 -- GOD
@@ -24,10 +51,43 @@ end)
 RegisterNetEvent(E.TOGGLE_GOD)
 AddEventHandler(E.TOGGLE_GOD, function()
   S.god = not S.god
+  local ped = PlayerPedId()
   SetPlayerInvincible(PlayerId(), S.god)
-  SetEntityProofs(PlayerPedId(), S.god, S.god, S.god, S.god, S.god, S.god, S.god, S.god)
+  SetEntityInvincible(ped, S.god)
+  SetPedCanRagdoll(ped, not S.god)
+  SetEntityProofs(ped, S.god, S.god, S.god, S.god, S.god, S.god, S.god, S.god)
+  ensureBuffThread()
   VHubAdmin.notify(S.god and 'God ATIVADO' or 'God DESATIVADO')
   SendNUIMessage({ action = VHubAdmin.UI.STATE_SYNC, data = { god = S.god } })
+end)
+
+-- ----------------------------------------------------------------------------
+-- STAMINA / SUPER PULO / LIMPEZA
+-- ----------------------------------------------------------------------------
+RegisterNetEvent(E.TOGGLE_STAMINA)
+AddEventHandler(E.TOGGLE_STAMINA, function()
+  S.stamina = not S.stamina
+  ensureBuffThread()
+  VHubAdmin.notify(S.stamina and 'Stamina infinita ATIVADA' or 'Stamina infinita DESATIVADA')
+  SendNUIMessage({ action = VHubAdmin.UI.STATE_SYNC, data = { stamina = S.stamina } })
+end)
+
+RegisterNetEvent(E.TOGGLE_JUMP)
+AddEventHandler(E.TOGGLE_JUMP, function()
+  S.jump = not S.jump
+  ensureBuffThread()
+  VHubAdmin.notify(S.jump and 'Super pulo ATIVADO' or 'Super pulo DESATIVADO')
+  SendNUIMessage({ action = VHubAdmin.UI.STATE_SYNC, data = { jump = S.jump } })
+end)
+
+RegisterNetEvent(E.DO_CLEANPED)
+AddEventHandler(E.DO_CLEANPED, function()
+  local ped = PlayerPedId()
+  ClearPedBloodDamage(ped)
+  ResetPedVisibleDamage(ped)
+  ClearPedWetness(ped)
+  ClearPedEnvDirt(ped)
+  VHubAdmin.notify('Personagem limpo.')
 end)
 
 -- ----------------------------------------------------------------------------
@@ -138,6 +198,21 @@ end, false)
 RegisterCommand('invis', function()
   if not isAdm() then return end
   TriggerServerEvent(E.ACT_INVIS)
+end, false)
+
+RegisterCommand('stamina', function()
+  if not isAdm() then return end
+  TriggerServerEvent(E.ACT_STAMINA)
+end, false)
+
+RegisterCommand('superjump', function()
+  if not isAdm() then return end
+  TriggerServerEvent(E.ACT_JUMP)
+end, false)
+
+RegisterCommand('cleanped', function()
+  if not isAdm() then return end
+  TriggerServerEvent(E.ACT_CLEANPED)
 end, false)
 
 RegisterCommand('skin', function(_, args)

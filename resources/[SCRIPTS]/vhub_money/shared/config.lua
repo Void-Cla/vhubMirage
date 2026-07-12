@@ -83,6 +83,7 @@ VHubMoneyCfg = {
     ['vhub_garage']  = true,
     ['vhub_ferinha'] = true,   -- leilao: payout/refund offline por char_id (giveBankChar)
     ['vhub_custom']  = true,   -- oficina: estorno do kit nitro (giveBank) se installKit falhar (#29)
+    ['vhub_legacyfuel'] = true, -- compensação de pagamento quando o commit de fuel falha
   },
 
   -- ─── Comandos ───────────────────────────────────────────────────────────

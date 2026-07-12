@@ -106,7 +106,6 @@ local function applyPhysicalState(veh, st)
   if type(st) ~= 'table' then return end
   -- CRITICO: '+ 0.0' força subtipo FLOAT (Lua 5.4) — inteiro do msgpack passado
   -- a native float é bit-reinterpretado (1000 → 1.4e-42 = motor/fuel zerados)
-  if type(st.fuel)          == 'number' then SetVehicleFuelLevel(veh, st.fuel + 0.0) end
   if type(st.engine_health) == 'number' then SetVehicleEngineHealth(veh, st.engine_health + 0.0) end
   if type(st.body_health)   == 'number' then SetVehicleBodyHealth(veh, st.body_health + 0.0) end
   local d = st.damage
@@ -340,7 +339,6 @@ AddEventHandler('vhub_garage:collectClientState', function(plate, cb)
     customization = collectCustomization(veh),
     locked        = GetVehicleDoorLockStatus(veh) >= 2,
     position      = { x = c.x, y = c.y, z = c.z, h = GetEntityHeading(veh) },
-    fuel          = GetVehicleFuelLevel(veh),
     engine_health = GetVehicleEngineHealth(veh),
     body_health   = GetVehicleBodyHealth(veh),
     damage        = dmg,

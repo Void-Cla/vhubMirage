@@ -30,8 +30,10 @@ end
 -- ============================================================
 
 -- retorna user {char_id, source, name, ...} ou nil
+-- (colon-call OBRIGATÓRIO: o wrapper de export do FiveM é function(self, ...) — dot-call
+--  descarta o 1º argumento; foi a causa-raiz da NUI que "não abria" sem log)
 function Core.getUser(src)
-    local ok, user = pcall(exports.vhub.getUser, src)
+    local ok, user = pcall(function() return exports.vhub:getUser(src) end)
     if ok and user and user.char_id then return user end
     return nil
 end
@@ -60,14 +62,15 @@ function Core.hasPerm(src, perm)
 
     -- owner (uid=1) bypass total
     local u = Core.getUser(src)
-    if u and u.uid == 1 then return true end
+    if u and u.id == 1 then return true end
 
     -- ACE FiveM nativa (server.cfg: add_ace vhub.coinshop.admin allow)
     local acePerm = 'vhub.' .. (perm or VHubCoin.cfg.adminPermission)
     if IsPlayerAceAllowed(src, acePerm) then return true end
 
     -- grupos vHub (exports.vhub_groups)
-    local ok, result = pcall(exports.vhub_groups.hasPermission, src, perm or VHubCoin.cfg.adminPermission)
+    local wanted = perm or VHubCoin.cfg.adminPermission
+    local ok, result = pcall(function() return exports.vhub_groups:hasPermission(src, wanted) end)
     if ok and result == true then return true end
 
     return false
@@ -113,12 +116,56 @@ Core._seenSpawn = {} -- replay-guard L-17: [src] = último user.spawns visto
 
 
 -- ============================================================
--- NOTIFY — wrapper de exports.vhub:notify
+-- SNAPSHOT DA LOJA — builder ÚNICO (NUI fullscreen e app do iPad; L-09)
 -- ============================================================
+
+-- monta o payload de abertura da loja; withAdmin=false omite flag/avatar (superfície iPad)
+function Core.buildShopData(src, char_id, withAdmin)
+    local Items = VHubCoin.Items
+    local itemList = {}
+    for _, item in ipairs(Items.list) do
+        if withAdmin or item.published == true then
+            itemList[#itemList + 1] = Items.publicCopy(item, withAdmin)
+        end
+    end
+
+    local data = {
+        items         = itemList,
+        categories    = Items.categories,
+        deals         = Items.publicDeals(withAdmin),
+        coins         = VHubCoin.Coins.get(char_id),
+        settings      = Items.settings,
+        dealResetHour = VHubCoin.cfg.dealResetHour,
+        locale        = VHubCoin.locale,
+        playerName    = Core.getPlayerName(src),
+        -- slot Pix (#59): pacotes exibidos na aba "Comprar Coins" do iPad; o painel
+        -- admin mostra read-only. Enquanto enabled=false a compra responde stub.
+        pix           = { enabled = VHubCoin.cfg.pix.enabled == true, packages = VHubCoin.cfg.pix.packages },
+    }
+
+    if withAdmin then
+        data.isAdmin = Core.isAdmin(src)
+        data.logo    = VHubCoin.cfg.logo
+        local discordData = VHubCoin.Discord.cached(src)
+        if not discordData and VHubCoin.isNonEmptyStr(VHubCoin.cfg.discordBotToken) then
+            VHubCoin.Discord.fetch(src, function() end) -- fire-and-forget; próxima abertura usa cache
+        end
+        data.playerAvatar = discordData and discordData.avatar or ''
+    end
+
+    return data
+end
+
+
+-- ============================================================
+-- NOTIFY — canal canônico vHub:notify (toast global vhub_notify, decisão #31)
+-- ============================================================
+
+-- mapa kind EN (interno do coinshop) → tipo PT-BR aceito pelo toast
+local KIND_MAP = { success = 'sucesso', error = 'erro', warning = 'aviso', info = 'info' }
 
 -- envia notificação amigável ao jogador (info|success|error|warning)
 function Core.notify(src, message, kind)
-    if not src then return end
-    local ok = pcall(exports.vhub.notify, src, message, kind or 'info')
-    if not ok then Core.log('notify falhou para src=' .. tostring(src)) end
+    if not src or src == 0 then return end
+    TriggerClientEvent('vHub:notify', src, KIND_MAP[kind] or 'info', tostring(message))
 end

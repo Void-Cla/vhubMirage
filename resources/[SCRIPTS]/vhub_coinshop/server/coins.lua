@@ -19,6 +19,9 @@ function Coins.get(char_id)
     if _cache[char_id] ~= nil then return _cache[char_id] end
 
     local ok, value = pcall(function() return exports.vhub:getCData(char_id, 'coinshop_coins') end)
+    if not ok then
+        Core.logErr('getCData coinshop_coins falhou char=' .. tostring(char_id))
+    end
     local cached = ok and tonumber(value) or 0
     _cache[char_id] = cached
     return cached
@@ -27,13 +30,15 @@ end
 
 -- define saldo (escrita por CData — batch do core; cache local sincronizado)
 function Coins.set(char_id, amount)
+    if not char_id then return false end
     amount = math.max(0, math.floor(tonumber(amount) or 0))
-    _cache[char_id] = amount
     local ok, res = pcall(function() return exports.vhub:setCData(char_id, 'coinshop_coins', amount) end)
     if not ok or res == false then
         VHubCoin.Core.logErr('setCData coinshop_coins NEGADO/falhou (trust do CORE?) char=' .. tostring(char_id))
+        return false
     end
-    return amount
+    _cache[char_id] = amount
+    return true
 end
 
 
@@ -52,7 +57,10 @@ function Coins.tryDebit(char_id, amount)
         return false
     end
 
-    Coins.set(char_id, current - amount)
+    if not Coins.set(char_id, current - amount) then
+        _locks[char_id] = nil
+        return false
+    end
     return true   -- lock RETIDO; liberação é responsabilidade do call-site (releaseLock)
 end
 
@@ -61,8 +69,7 @@ end
 function Coins.credit(char_id, amount)
     if not char_id or not amount or amount <= 0 then return false end
     local current = Coins.get(char_id)
-    Coins.set(char_id, current + amount)
-    return true
+    return Coins.set(char_id, current + amount)
 end
 
 
@@ -80,7 +87,7 @@ end
 
 -- notifica o cliente que o saldo mudou — PONTO ÚNICO de sync das 2 superfícies (#59):
 -- NUI admin fullscreen via evento discreto + app do iPad via appPush (pcall — R7;
--- o client do iPad descarta o push com o tablet fechado, no-op seguro).
+-- o broker só entrega com tablet aberto e app autorizado).
 -- Invalida _lastSnap do relay: reabertura do iPad pós-doação nunca serve saldo stale.
 function Coins.notifyChange(src, char_id)
     if not src or not char_id then return end
@@ -92,10 +99,14 @@ end
 
 
 -- limpa cache ao desconectar (evita leak e dado stale de outra sessão)
+function Coins.evict(char_id)
+    if not char_id then return end
+    _cache[char_id] = nil
+    _locks[char_id] = nil
+end
+
+-- libera cache e lock do personagem desconectado
 function Coins.onPlayerDropped(src)
     local sess = Core.sessions[src]
-    if sess and sess.char_id then
-        _cache[sess.char_id] = nil
-        _locks[sess.char_id] = nil
-    end
+    if sess then Coins.evict(sess.char_id) end
 end

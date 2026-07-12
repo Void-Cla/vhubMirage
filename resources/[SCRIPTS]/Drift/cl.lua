@@ -15,6 +15,9 @@ local GetVehicleClass                 = GetVehicleClass
 local GetEntitySpeed                  = GetEntitySpeed
 local IsControlPressed                = IsControlPressed
 local DisableControlAction            = DisableControlAction
+local SetVehicleModKit                = SetVehicleModKit
+local ToggleVehicleMod                = ToggleVehicleMod
+local IsToggleModOn                   = IsToggleModOn
 local SetVehicleHandlingFloat         = SetVehicleHandlingFloat
 local GetVehicleHandlingFloat         = GetVehicleHandlingFloat
 local SetVehicleEnginePowerMultiplier = SetVehicleEnginePowerMultiplier
@@ -24,10 +27,17 @@ local GetEntityVelocity               = GetEntityVelocity
 local GetEntityForwardVector          = GetEntityForwardVector
 local GetVehicleBodyHealth            = GetVehicleBodyHealth
 local GetGameTimer                    = GetGameTimer
+local RequestNamedPtfxAsset           = RequestNamedPtfxAsset
+local HasNamedPtfxAssetLoaded         = HasNamedPtfxAssetLoaded
+local UseParticleFxAssetNextCall      = UseParticleFxAssetNextCall
+local StartParticleFxLoopedOnEntityBone = StartParticleFxLoopedOnEntityBone
+local StopParticleFxLooped            = StopParticleFxLooped
+local GetEntityBoneIndexByName        = GetEntityBoneIndexByName
+local SetParticleFxLoopedAlpha        = SetParticleFxLoopedAlpha
 local CreateThread                    = CreateThread
 local Wait                            = Wait
 local math_sqrt, math_acos, math_deg  = math.sqrt, math.acos, math.deg
-local math_min, math_max              = math.min, math.max
+local math_min                        = math.min
 
 
 -- ============================================================
@@ -52,14 +62,23 @@ local DRIFT_MODS = {
 }
 
 -- Boost controlado (anti-exploit): exige angulo real, cooldown e duracao limitada.
+local DRIFT_MIN_SPEED = 30.0   -- km/h minimos para interceptar o freio de mao
+local DRIFT_MIN_ANGLE = 5.0    -- graus minimos para ativar assistencia de drift
 local BOOST_COOLDOWN  = 4000   -- ms entre boosts
 local BOOST_DURATION  = 1200   -- ms maximo por boost
-local MIN_BOOST_ANGLE = 20.0   -- graus minimos para o boost ativar
+local MIN_BOOST_ANGLE = DRIFT_MIN_ANGLE   -- graus minimos para o boost ativar
+
+-- Fumaca visual: mod 20 nativo + camada extra local nos pneus traseiros.
+local SMOKE_PTFX_ASSET = 'core'
+local SMOKE_PTFX_NAME  = 'wheel_fric_hard'
+local SMOKE_PTFX_SCALE = 1.15
+local SMOKE_PTFX_ALPHA = 0.85
+local SMOKE_BONES      = { 'wheel_lr', 'wheel_rr' }
 
 -- Fabricacao de pontuacao. MANTER alinhado com vhub_racha Cfg.DRIFT — o SERVER
 -- e a autoridade final (faz o cap por segundo). Aqui so geramos a pontuacao bruta.
-local SCORE_MIN_ANGLE   = 15.0          -- graus minimos para pontuar
-local SCORE_MIN_SPEED   = 30.0          -- km/h minimos para pontuar
+local SCORE_MIN_ANGLE   = DRIFT_MIN_ANGLE -- graus minimos para pontuar
+local SCORE_MIN_SPEED   = DRIFT_MIN_SPEED -- km/h minimos para pontuar
 local SCORE_DIVISOR     = 65.0          -- divisor base (angulo*velocidade/divisor)
 local SCORE_CAP_PER_SEC = 100.0         -- teto bruto por segundo (antes do combo)
 local CRASH_HEALTH_DROP = 8.0           -- queda de body health que conta como "bateu"
@@ -81,6 +100,12 @@ local boostStartTime = 0
 local lastBoostEnd   = 0
 local lastHealth     = 0
 local lastTick       = 0
+local smokeVehicle   = 0
+local smokeWasOn     = nil
+local smokeHandles   = {}
+local smokePtfxReady = false
+local smokePtfxRequested = false
+local smokeFxAttempted = false
 
 -- Pontuacao (consumida pelo vhub_racha via getTelemetry)
 local totalEarned    = 0.0     -- monotonico: total bruto fabricado (NUNCA zera)
@@ -138,6 +163,65 @@ local function getDriftAngle(veh)
     return math_deg(math_acos(dot))
 end
 
+local function ensureSmokePtfx()
+    if smokePtfxReady then return true end
+
+    if not smokePtfxRequested then
+        RequestNamedPtfxAsset(SMOKE_PTFX_ASSET)
+        smokePtfxRequested = true
+    end
+
+    smokePtfxReady = HasNamedPtfxAssetLoaded(SMOKE_PTFX_ASSET)
+    return smokePtfxReady
+end
+
+local function stopDriftSmoke()
+    for i = 1, #smokeHandles do
+        StopParticleFxLooped(smokeHandles[i], false)
+    end
+    smokeHandles = {}
+    smokeFxAttempted = false
+
+    if smokeVehicle ~= 0 and DoesEntityExist(smokeVehicle) and smokeWasOn == false then
+        SetVehicleModKit(smokeVehicle, 0)
+        ToggleVehicleMod(smokeVehicle, 20, false)
+    end
+
+    smokeVehicle = 0
+    smokeWasOn   = nil
+end
+
+local function startDriftSmoke(veh)
+    if smokeVehicle ~= veh then
+        stopDriftSmoke()
+        smokeVehicle = veh
+        smokeWasOn   = IsToggleModOn(veh, 20)
+
+        if not smokeWasOn then
+            SetVehicleModKit(veh, 0)
+            ToggleVehicleMod(veh, 20, true)
+        end
+    end
+
+    if smokeFxAttempted or #smokeHandles > 0 or not ensureSmokePtfx() then return end
+    smokeFxAttempted = true
+
+    for i = 1, #SMOKE_BONES do
+        local bone = GetEntityBoneIndexByName(veh, SMOKE_BONES[i])
+        if bone ~= -1 then
+            UseParticleFxAssetNextCall(SMOKE_PTFX_ASSET)
+            local handle = StartParticleFxLoopedOnEntityBone(
+                SMOKE_PTFX_NAME, veh, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                bone, SMOKE_PTFX_SCALE, false, false, false
+            )
+            if handle and handle ~= 0 then
+                SetParticleFxLoopedAlpha(handle, SMOKE_PTFX_ALPHA)
+                smokeHandles[#smokeHandles + 1] = handle
+            end
+        end
+    end
+end
+
 local function setHandling(veh, enable)
     if not DoesEntityExist(veh) then return end
     local m = enable and 1 or -1
@@ -152,6 +236,7 @@ local function revertDrift(veh)
         setHandling(veh, false)
         SetVehicleEnginePowerMultiplier(veh, 1.0)
     end
+    stopDriftSmoke()
     driftActive = false
     boostActive = false   -- cancela boost sem resetar cooldown (lastBoostEnd preservado)
 end
@@ -166,6 +251,7 @@ end)
 local function activateDrift(veh)
     driftActive = true
     setHandling(veh, true)
+    startDriftSmoke(veh)
     local bias = GetVehicleHandlingFloat(veh, "CHandlingData", "fDriveBiasFront")
     powerMult = (bias == 0.0) and 150.0 or 120.0
 end
@@ -225,14 +311,22 @@ CreateThread(function()
                 currentAngle = getDriftAngle(veh)
 
                 -- ── Mecanica: handling + boost ──────────────────────────────
-                if speedKMH > 20.0 and isAccelerating and isHandbraking and IsVehicleOnAllWheels(veh) then
-                    DisableControlAction(0, 76, true)
-                    if not driftActive then activateDrift(veh) end
+                local driftReady = speedKMH > DRIFT_MIN_SPEED and currentAngle > DRIFT_MIN_ANGLE
+                local driftInput = isAccelerating and isHandbraking and IsVehicleOnAllWheels(veh)
 
-                    -- Boost: angulo obrigatorio + cooldown + duracao limitada.
+                if driftInput and driftReady then
+                    DisableControlAction(0, 76, true)
+                    if not driftActive then
+                        activateDrift(veh)
+                    else
+                        startDriftSmoke(veh)
+                    end
+
+                    -- Boost: velocidade + angulo obrigatorios, cooldown e duracao limitada.
                     if not boostActive
                         and (timeNow - lastBoostEnd) > BOOST_COOLDOWN
-                        and currentAngle >= MIN_BOOST_ANGLE then
+                        and speedKMH > DRIFT_MIN_SPEED
+                        and currentAngle > MIN_BOOST_ANGLE then
                         boostActive    = true
                         boostStartTime = timeNow
                     end
@@ -251,21 +345,14 @@ CreateThread(function()
                     end
 
                 else
-                    -- Espaco solto: aborta boost e forca cooldown imediato (anti-spam).
+                    -- Fora do gate: freio de mao volta ao GTA e o torque zera no mesmo tick.
                     if boostActive then
                         boostActive  = false
                         lastBoostEnd = timeNow
                     end
 
                     if driftActive then
-                        if isAccelerating and currentAngle > 5.0 then
-                            -- Potencia proporcional ao angulo: elimina drop abrupto
-                            -- ao entrar em curvas <100km/h. t=0 → piso 12% ; t=1 → 100%.
-                            local t = math_min(currentAngle / 30.0, 1.0)
-                            SetVehicleEnginePowerMultiplier(veh, 1.0 + (powerMult-1.0) * math_max(t, 0.12))
-                        else
-                            revertDrift(veh)
-                        end
+                        revertDrift(veh)
                     end
                 end
 

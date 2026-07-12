@@ -1,560 +1,1281 @@
-// web/app_ipad/coinshop.js — app CoinShop do iPad (superfície do JOGADOR, #58/#59).
-//
-// Roda DENTRO da NUI única do iPad, carregado REMOTO de cfx-nui-vhub_coinshop.
-// A navbar do iPad (◀ ⌂ ×) fecha — o app NÃO tem botão de fechar nem ESC.
-//
-// COMUNICAÇÃO = RELAY do iPad (vhub.app.channel('coinshop')):
-//   • ch.send(action, data) → ipadRelay(src, action, data) no server do coinshop
-//   • ch.on(action, fn)      → push appPush(src, 'coinshop', action, data)
-//
-// O JS só ENVIA intenção e RENDERIZA push (A-01): preço/saldo/entrega são
-// validados no SERVER. SEM setInterval/RAF/polling: render só em push.
-// SEM innerHTML com dado do servidor (textContent/el → anti-XSS).
-// #59: navegação em ASIDE; view "Comprar Coins" (Pix, contrato estável do stub);
-//      render-from-store no mount (rate-limit do open nunca deixa o app vazio).
-
+// coinshop.js — app CoinShop do iPad v2.4.0
+// Anti-XSS: ZERO innerHTML com dado do servidor. Todo texto via textContent/createTextNode.
+// A-09: sem backdrop-filter. A-10: sem CDN externo, sem fetch externo.
+// Estrutura: canal relay → recebe `data` → renderiza → usuário clica → relay envia ação.
+// Padrão iPad: IIFE isolado + vhub.createModule('coinshop', spec) — nunca window.CoinShopApp.
 
 (() => {
-    'use strict';
+'use strict';
 
 
-    // ============================================================
-    // HELPERS LOCAIS — autocontidos (o iPad não expõe window.vhubUtils)
-    // ============================================================
+// ============================================================
+// CANAL DE COMUNICAÇÃO COM O BROKER DO IPAD
+// ============================================================
+// `ch` fornecido pelo runtime do iPad — escopo isolado desta IIFE.
+const ch = vhub.app.channel('coinshop');
 
-    // cria elemento + atrs + filhos; texto vira textNode (anti-XSS)
-    function el(tag, attrs, children) {
-        const node = document.createElement(tag);
 
-        if (attrs && typeof attrs === 'object') {
-            for (const k in attrs) {
-                if (k === 'class')      node.className = attrs[k];
-                else if (k === 'style') Object.assign(node.style, attrs[k]);
-                else                    node.setAttribute(k, attrs[k]);
-            }
+// ============================================================
+// ESTADO LOCAL
+// ============================================================
+
+let _data     = null;   // snapshot recebido do server (data)
+let _busy     = false;  // trava de ação em voo
+let _view     = null;   // aba ativa ('grid', 'deals', 'redeem', 'pix', 'adm-dash', …)
+let _search   = '';     // filtro de busca atual
+let _modal    = null;   // item aberto no modal jogador
+let _admModal = null;   // contexto do modal admin (tipo + callback de ok)
+
+// caches lazy de pickers admin (key → { ts, rows })
+const _pickerCache = {};
+const PICKER_TTL   = 60_000;  // 60 s
+
+// SVG icons por tab id (inline, A-10 — sem arquivo externo)
+const ICONS = {
+    grid: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <rect x="2" y="2" width="6" height="6" rx="1.2" fill="currentColor"/>
+        <rect x="12" y="2" width="6" height="6" rx="1.2" fill="currentColor"/>
+        <rect x="2" y="12" width="6" height="6" rx="1.2" fill="currentColor"/>
+        <rect x="12" y="12" width="6" height="6" rx="1.2" fill="currentColor"/>
+    </svg>`,
+    deals: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="M3 10.5L10 3l7 7.5-7 6.5-7-6.5z" fill="none" stroke="currentColor"
+              stroke-width="1.6" stroke-linejoin="round"/>
+        <circle cx="10" cy="10.2" r="2.2" fill="currentColor"/>
+    </svg>`,
+    redeem: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <rect x="2" y="5" width="16" height="10" rx="2" fill="none"
+              stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6 10h8M12 7.5l2.5 2.5-2.5 2.5" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+    pix: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round"/>
+    </svg>`,
+    'adm-dash': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <rect x="2" y="10" width="4" height="8" rx="1" fill="currentColor"/>
+        <rect x="8" y="6" width="4" height="12" rx="1" fill="currentColor"/>
+        <rect x="14" y="2" width="4" height="16" rx="1" fill="currentColor"/>
+    </svg>`,
+    'adm-catalog': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <rect x="3" y="3" width="14" height="14" rx="2" fill="none"
+              stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6 7h8M6 10h8M6 13h5" stroke="currentColor"
+              stroke-width="1.4" stroke-linecap="round"/>
+    </svg>`,
+    'adm-cats': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="M3 5h14M3 10h9M3 15h11" stroke="currentColor"
+              stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`,
+    'adm-deals': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="M3 3l14 14M17 3l-5 9-9 5" stroke="currentColor"
+              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+    'adm-players': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <circle cx="8" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="none"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M15 8v6M12 11h6" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`,
+    'adm-codes': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <rect x="3" y="5" width="14" height="10" rx="2" fill="none"
+              stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 10l2 2 4-4" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+    'adm-theme': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <circle cx="10" cy="10" r="3" fill="currentColor"/>
+        <path d="M10 2v2M10 16v2M2 10h2M16 10h2
+                 M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4
+                 M14.4 5.6l-1.4 1.4M5.6 14.4l-1.4 1.4"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`,
+    'adm-import': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="M10 3v10M6 9l4 4 4-4" stroke="currentColor"
+              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3 15h14" stroke="currentColor"
+              stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`,
+};
+
+// mapeamento tab → painel HTML (data-el)
+const VIEW_EL = {
+    grid:          'grid',
+    deals:         'deals',
+    redeem:        'redeem',
+    pix:           'pix',
+    'adm-dash':    'admDash',
+    'adm-catalog': 'admCatalog',
+    'adm-cats':    'admCats',
+    'adm-deals':   'admDeals',
+    'adm-players': 'admPlayers',
+    'adm-codes':   'admCodes',
+    'adm-theme':   'admTheme',
+    'adm-import':  'admImport',
+};
+
+const VIEW_TITLE = {
+    grid:          'Destaques',
+    deals:         'Ofertas',
+    redeem:        'Resgatar Código',
+    pix:           'Comprar Coins',
+    'adm-dash':    'Dashboard',
+    'adm-catalog': 'Catálogo',
+    'adm-cats':    'Categorias',
+    'adm-deals':   'Ofertas Admin',
+    'adm-players': 'Jogadores',
+    'adm-codes':   'Códigos Tebex',
+    'adm-theme':   'Aparência',
+    'adm-import':  'Importar',
+};
+
+
+// ============================================================
+// UTIL — CONSTRUTORES DE DOM (zero innerHTML com dado externo)
+// ============================================================
+
+function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    if (attrs) {
+        for (const [k, v] of Object.entries(attrs)) {
+            if (k === 'class')         node.className = v;
+            else if (k === 'dataset')  Object.assign(node.dataset, v);
+            else if (k === 'style')    Object.assign(node.style, v);
+            else                       node.setAttribute(k, v);
         }
-
-        if (children) {
-            const arr = Array.isArray(children) ? children : [children];
-            for (const c of arr) {
-                if (c == null) continue;
-                node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-            }
-        }
-
-        return node;
     }
-
-    // formata moedas com separador PT-BR
-    function fmt(n) {
-        return (Number(n) || 0).toLocaleString('pt-BR');
+    for (const child of children) {
+        if (child == null) continue;
+        node.appendChild(typeof child === 'string'
+            ? document.createTextNode(child)
+            : child);
     }
+    return node;
+}
 
-    // formata preço BRL (pacotes Pix)
-    function fmtBRL(n) {
-        return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+function safeImg(url) {
+    if (!url) return '';
+    if (/^(https?:\/\/|data:image\/|nui:\/\/)/.test(url)) return url;
+    return '';
+}
+
+function cdnUrl(item) {
+    if (!_data || !_data.cdn) return '';
+    const cat = (item.category || '').toLowerCase();
+    const { cdn } = _data;
+    if (item.imageUrl) return safeImg(item.imageUrl);
+    if (cat === 'vehicle'  && item.spawnName)  return safeImg(cdn.vehicles.replace('%s', item.spawnName));
+    if (cat === 'weapon'   && item.weaponName) return safeImg(cdn.weapons.replace('%s', item.weaponName));
+    if ((cat === 'item' || cat === 'consumable') && item.itemName) {
+        return safeImg(cdn.items.replace('%s', item.itemName));
     }
+    return '';
+}
 
-    // só aceita URL de imagem segura (http/https, data:image, cfx-nui) — nunca executável
-    function safeImg(url) {
-        if (typeof url !== 'string') return null;
-        const u = url.trim();
-        if (/^https?:\/\//i.test(u) || /^data:image\//i.test(u) || /^nui:\/\//i.test(u)) return u;
-        return null;
-    }
+function fmtCoins(n) { return Number(n || 0).toLocaleString('pt-BR'); }
 
-    // tempo restante legível a partir de segundos (estático no render — sem timer, A-08)
-    function remainTxt(totalSec) {
-        const s = Math.max(0, Math.floor(totalSec));
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        return h > 0 ? `expira em ${h}h ${m}m` : `expira em ${m}m`;
-    }
+function spinner() { return el('div', { class: 'cs-spinner' }); }
 
-    const CAT_LABEL = { vehicle: 'Veículo', item: 'Item', weapon: 'Arma', tool: 'Ferramenta' };
+function emptyMsg(msg) {
+    const p = el('p', { class: 'cs-empty' });
+    p.textContent = msg || 'Nenhum item encontrado.';
+    return p;
+}
 
-    const VIEW_TITLE = {
-        home:   'Destaques',
-        deals:  'Ofertas',
-        redeem: 'Resgatar código',
-        pix:    'Comprar Coins',
+
+// ============================================================
+// REFS
+// ============================================================
+
+let refs = {};
+
+function cacheRefs() {
+    const q = (sel) => document.querySelector(`.mod-coinshop [data-el="${sel}"]`);
+    refs = {
+        player:          q('player'),
+        coins:           q('coins'),
+        nav:             q('nav'),
+        viewTitle:       q('viewTitle'),
+        search:          q('search'),
+        status:          q('status'),
+        grid:            q('grid'),
+        deals:           q('deals'),
+        redeem:          q('redeem'),
+        redeemKey:       q('redeemKey'),
+        giftToggle:      q('giftToggle'),
+        giftId:          q('giftId'),
+        pix:             q('pix'),
+        pixPacks:        q('pixPacks'),
+        pixCheckout:     q('pixCheckout'),
+        pixQrImg:        q('pixQrImg'),
+        pixQrFallback:   q('pixQrFallback'),
+        pixQrTxt:        q('pixQrTxt'),
+        pixExpire:       q('pixExpire'),
+        pixMsg:          q('pixMsg'),
+        pixCopyRow:      q('pixCopyRow'),
+        pixCopy:         q('pixCopy'),
+        admDash:         q('admDash'),
+        admCatalog:      q('admCatalog'),
+        admCats:         q('admCats'),
+        admDeals:        q('admDeals'),
+        admPlayers:      q('admPlayers'),
+        admCodes:        q('admCodes'),
+        admTheme:        q('admTheme'),
+        admThemeForm:    q('admThemeForm'),
+        admImport:       q('admImport'),
+        admImportJson:   q('admImportJson'),
+        admItemList:     q('admItemList'),
+        admCatList:      q('admCatList'),
+        admDealList:     q('admDealList'),
+        admPlayerList:   q('admPlayerList'),
+        admCodeList:     q('admCodeList'),
+        admImportResult: q('admImportResult'),
+        admRecentTx:     q('admRecentTx'),
+        statItems:       q('statItems'),
+        statSales:       q('statSales'),
+        statCoins24h:    q('statCoins24h'),
+        statOnline:      q('statOnline'),
+        overlay:         q('overlay'),
+        mImg:            q('mImg'),
+        mFallback:       q('mFallback'),
+        mName:           q('mName'),
+        mDesc:           q('mDesc'),
+        mPrice:          q('mPrice'),
+        mBuy:            q('mBuy'),
+        admOverlay:      q('admOverlay'),
+        admModalTitle:   q('admModalTitle'),
+        admModalBody:    q('admModalBody'),
+        admModalOk:      q('admModalOk'),
     };
+}
 
 
-    // ============================================================
-    // STATE — relay channel + slice isolado (A-04)
-    // ============================================================
+// ============================================================
+// BUSY
+// ============================================================
 
-    const ch    = vhub.app.channel('coinshop');
-    const store = vhub.store('coinshop');
-
-    // leitura defensiva do slice (nunca destruturar undefined)
-    function S() { return store.get() || {}; }
-
-    let root = null;      // module root (.mod-coinshop)
-    let refs = {};        // map data-el → node
-    let chOffs = [];      // off() do relay acumulados (A-07)
-
-    let clickHandler  = null;   // delegação de clique (removida no destroy)
-    let searchHandler = null;
-    let giftHandler   = null;
-    let submitHandler = null;
-    let statusTimer   = null;   // timeout do status — limpo em onHide/onDestroy (A-07)
-
-    let modalItem = null;       // item aberto no modal de confirmação
-    let dataAt    = 0;          // timestamp do último push 'data' (base do countdown estático)
-    let pixBusy   = false;      // trava anti duplo-clique do pacote Pix
+function setBusy(on) {
+    _busy = on;
+    if (refs.mBuy)       refs.mBuy.disabled       = on;
+    if (refs.admModalOk) refs.admModalOk.disabled  = on;
+}
 
 
-    // ============================================================
-    // HELPERS DOM
-    // ============================================================
+// ============================================================
+// NAV — sidebar com ícones SVG
+// ============================================================
 
-    function grabRefs() {
-        refs = {};
-        root.querySelectorAll('[data-el]').forEach((n) => { refs[n.getAttribute('data-el')] = n; });
+function buildNav() {
+    if (!refs.nav || !_data) return;
+    refs.nav.innerHTML = '';
+
+    const isAdm = !!_data.isAdmin;
+
+    refs.nav.appendChild(navGroup('Loja'));
+    refs.nav.appendChild(navBtn('grid',   'Itens'));
+    refs.nav.appendChild(navBtn('deals',  'Ofertas'));
+    refs.nav.appendChild(navBtn('redeem', 'Resgatar'));
+    if (_data.pixEnabled !== false) {
+        refs.nav.appendChild(navBtn('pix', 'Comprar Coins'));
     }
 
-    // status inline (ok/err); some sozinho após 5s
-    function setStatus(msg, isOk) {
-        const s = refs.status;
-        if (!s) return;
-        s.textContent = msg;
-        s.className = 'cs-status ' + (isOk ? 'ok' : 'err');
-        s.hidden = false;
-        if (statusTimer) clearTimeout(statusTimer);
-        statusTimer = setTimeout(() => { s.hidden = true; statusTimer = null; }, 5000);
+    if (isAdm) {
+        refs.nav.appendChild(el('div', { class: 'cs-nav-sep' }));
+        refs.nav.appendChild(navGroup('Admin'));
+        refs.nav.appendChild(navBtn('adm-dash',    'Dashboard'));
+        refs.nav.appendChild(navBtn('adm-catalog', 'Catálogo'));
+        refs.nav.appendChild(navBtn('adm-cats',    'Categorias'));
+        refs.nav.appendChild(navBtn('adm-deals',   'Ofertas'));
+        refs.nav.appendChild(navBtn('adm-players', 'Jogadores'));
+        refs.nav.appendChild(navBtn('adm-codes',   'Códigos'));
+        refs.nav.appendChild(navBtn('adm-theme',   'Aparência'));
+        refs.nav.appendChild(navBtn('adm-import',  'Importar'));
     }
-
-    function setBusy(busy) {
-        if (refs.mBuy)  refs.mBuy.disabled  = busy;
-        if (refs.mTest) refs.mTest.disabled = busy;
-    }
-
-
-    // ============================================================
-    // RENDER — navegação do aside
-    // ============================================================
-
-    function navEntries() {
-        const { categories = [], pix = {} } = S();
-        const entries = [{ id: 'home', label: 'Destaques' }];
-        for (const c of categories) entries.push({ id: c.id, label: c.name });
-        entries.push({ id: 'deals',  label: 'Ofertas' });
-        entries.push({ id: 'redeem', label: 'Resgatar' });
-        if (Array.isArray(pix.packages) && pix.packages.length > 0) {
-            entries.push({ id: 'pix', label: 'Comprar Coins' });
-        }
-        return entries;
-    }
-
-    function buildNav() {
-        if (!refs.nav) return;
-        refs.nav.replaceChildren(...navEntries().map((t) => el('button', {
-            type: 'button', class: 'cs-nav-btn', 'data-tab': t.id,
-        }, [el('span', { class: 'cs-nav-dot' }), t.label])));
-        markActiveTab();
-    }
-
-    function markActiveTab() {
-        if (!refs.nav) return;
-        const active = S().tab || 'home';
-        refs.nav.querySelectorAll('.cs-nav-btn').forEach((b) => {
-            b.classList.toggle('active', b.getAttribute('data-tab') === active);
-        });
-    }
-
-    function switchTab(tab) {
-        if (!refs.toolbar) return;   // push antes do mount (protocolo anômalo) → no-op seguro
-        store.set({ tab });
-        markActiveTab();
-
-        const isCatalog = tab !== 'deals' && tab !== 'redeem' && tab !== 'pix';
-        if (refs.viewTitle) {
-            const entry = navEntries().find((t) => t.id === tab);
-            refs.viewTitle.textContent = VIEW_TITLE[tab] || (entry && entry.label) || 'Catálogo';
-        }
-        refs.search.hidden  = !isCatalog;
-        refs.grid.hidden    = !isCatalog;
-        refs.deals.hidden   = tab !== 'deals';
-        refs.redeem.hidden  = tab !== 'redeem';
-        if (refs.pix) refs.pix.hidden = tab !== 'pix';
-
-        if (isCatalog)      renderGrid();
-        if (tab === 'deals') renderDeals();
-        if (tab === 'pix')   renderPix();
-    }
-
-
-    // ============================================================
-    // RENDER — grade de itens
-    // ============================================================
-
-    function itemsForTab() {
-        const { items = [], categories = [], tab = 'home' } = S();
-        if (tab === 'home') {
-            // trending primeiro, resto na ordem do catálogo
-            return [...items].sort((a, b) => (b.trending === true) - (a.trending === true));
-        }
-        const cat = categories.find((c) => c.id === tab);
-        if (!cat) return [];
-        if (cat.type) return items.filter((i) => i.category === cat.type);
-        return items.filter((i) => i.customCategory === cat.id);
-    }
-
-    function renderGrid() {
-        const q = (refs.search.value || '').trim().toLowerCase();
-        let list = itemsForTab();
-        if (q) list = list.filter((i) => (i.name || '').toLowerCase().includes(q));
-
-        if (!list.length) {
-            refs.grid.replaceChildren(el('div', { class: 'cs-empty' }, 'Nenhum item por aqui.'));
-            return;
-        }
-
-        refs.grid.replaceChildren(...list.map((item) => {
-            const media = el('div', { class: 'cs-card-media' });
-            const url = safeImg(Array.isArray(item.images) ? item.images[0] : null);
-            if (url) {
-                const img = el('img', { alt: '' });
-                img.src = url;
-                img.onerror = () => { img.remove(); media.appendChild(el('span', { class: 'cs-card-fallback' }, '◆')); };
-                media.appendChild(img);
-            } else {
-                media.appendChild(el('span', { class: 'cs-card-fallback' }, '◆'));
-            }
-            media.appendChild(el('span', {
-                class: 'cs-card-badge' + (item.trending ? ' hot' : ''),
-            }, item.trending ? 'Destaque' : (CAT_LABEL[item.category] || 'Item')));
-
-            return el('div', { class: 'cs-card', 'data-item': item.id }, [
-                media,
-                el('div', { class: 'cs-card-name' }, item.name || '—'),
-                el('div', { class: 'cs-card-price' }, [
-                    el('strong', {}, fmt(item.price) + ' moedas'),
-                    el('span', {}, 'ver'),
-                ]),
-            ]);
-        }));
-    }
-
-
-    // ============================================================
-    // RENDER — ofertas
-    // ============================================================
-
-    function renderDeals() {
-        const { deals = [] } = S();
-        if (!deals.length) {
-            refs.deals.replaceChildren(el('div', { class: 'cs-empty' }, 'Nenhuma oferta ativa no momento.'));
-            return;
-        }
-
-        const elapsed = Math.floor((Date.now() - dataAt) / 1000);
-        refs.deals.replaceChildren(...deals.map((d) => el('div', { class: 'cs-deal' }, [
-            el('div', { class: 'cs-deal-info' }, [
-                el('h3', {}, d.name || '—'),
-                el('p', {}, d.description || ''),
-                el('p', { class: 'cs-deal-meta' },
-                    `${(d.items || []).length} item(ns) · ${remainTxt((d.remainingSeconds || 0) - elapsed)}`),
-            ]),
-            el('div', { class: 'cs-deal-side' }, [
-                el('strong', {}, fmt(d.price) + ' moedas'),
-                el('button', { type: 'button', class: 'cs-btn primary', 'data-deal': d.id }, 'Comprar'),
-            ]),
-        ])));
-    }
-
-
-    // ============================================================
-    // RENDER — Comprar Coins (Pix, #60)
-    // ============================================================
-
-    const TIER_LABEL = { 1: 'Bronze', 2: 'Prata', 3: 'Ouro', 4: 'Diamante' };
-
-    function renderPix() {
-        if (!refs.pixPacks) return;
-        const { pix = {} } = S();
-        const packs = Array.isArray(pix.packages) ? pix.packages : [];
-
-        if (!packs.length) {
-            refs.pixPacks.replaceChildren(el('div', { class: 'cs-empty' }, 'Nenhum pacote disponível.'));
-            return;
-        }
-
-        const selected = S().pixSelected;
-        refs.pixPacks.replaceChildren(...packs.map((p) => {
-            const tier = Number(p.tier) || 0;
-            const tierLabel = TIER_LABEL[tier] || null;
-            const isPopular = p.popular === true;
-
-            const badges = el('div', { class: 'cs-pack-badges' }, [
-                tierLabel ? el('span', { class: 'cs-pack-tier t' + tier }, tierLabel) : null,
-                isPopular ? el('span', { class: 'cs-pack-popular' }, '★ Popular') : null,
-            ]);
-
-            return el('button', {
-                type: 'button',
-                class: 'cs-pack' + (selected === p.id ? ' selected' : '') + (isPopular ? ' popular' : '') + ' tier' + tier,
-                'data-pack': p.id,
-            }, [
-                badges,
-                el('span', { class: 'cs-pack-name' }, p.name || 'Pacote'),
-                el('span', { class: 'cs-pack-coins' }, fmt(p.coins + (Number(p.bonus) || 0)) + ' moedas'),
-                (Number(p.bonus) > 0)
-                    ? el('span', { class: 'cs-pack-bonus' }, fmt(p.coins) + ' + ' + fmt(p.bonus) + ' bônus')
-                    : null,
-                el('span', { class: 'cs-pack-price' }, fmtBRL(p.priceBRL)),
-            ]);
-        }));
-    }
-
-    // resultado da cobrança Pix — contrato ESTÁVEL (#60)
-    function onPix(res) {
-        res = res || {};
-        pixBusy = false;
-        if (!refs.pixCheckout) return;
-        refs.pixCheckout.hidden = false;
-
-        if (res.ok === true) {
-            const qr = typeof res.qrcode_base64 === 'string' && res.qrcode_base64
-                ? 'data:image/png;base64,' + res.qrcode_base64 : null;
-            refs.pixQrImg.hidden      = !qr;
-            refs.pixQrFallback.hidden = !!qr;
-            if (qr) refs.pixQrImg.src = qr;
-            refs.pixMsg.textContent = 'Escaneie o QR Code ou use o copia-e-cola abaixo.';
-            refs.pixMsg.hidden = false;
-
-            // expiração — expiresAt é unix timestamp (segundos)
-            const expiresAt = Number(res.expiresAt) || 0;
-            if (expiresAt > 0 && refs.pixExpire) {
-                const secLeft = expiresAt - Math.floor(Date.now() / 1000);
-                refs.pixExpire.textContent = remainTxt(secLeft);
-                refs.pixExpire.hidden = false;
-            }
-
-            const copy = typeof res.copiaECola === 'string' ? res.copiaECola : '';
-            if (refs.pixCopyRow) refs.pixCopyRow.hidden = !copy;
-            if (copy && refs.pixCopy) refs.pixCopy.value = copy;
-        } else {
-            refs.pixQrImg.hidden      = true;
-            refs.pixQrFallback.hidden = false;
-            if (refs.pixQrTxt) {
-                refs.pixQrTxt.textContent = res.code === 'pix_disabled'
-                    ? 'Em breve: o QR Code Pix aparecerá aqui'
-                    : 'O QR Code Pix aparecerá aqui';
-            }
-            refs.pixMsg.textContent = res.message || 'Pix indisponível no momento.';
-            refs.pixMsg.hidden = false;
-            if (refs.pixExpire) refs.pixExpire.hidden = true;
-            if (refs.pixCopyRow) refs.pixCopyRow.hidden = true;
-        }
-    }
-
-
-    // ============================================================
-    // MODAL — confirmação de compra / test-drive
-    // ============================================================
-
-    function openModal(item) {
-        modalItem = item;
-        refs.mName.textContent  = item.name || '—';
-        refs.mDesc.textContent  = item.description || '';
-        refs.mPrice.textContent = fmt(item.price) + ' moedas';
-        refs.mTest.hidden = item.category !== 'vehicle';
-
-        const url = safeImg(Array.isArray(item.images) ? item.images[0] : null);
-        refs.mImg.hidden      = !url;
-        refs.mFallback.hidden = !!url;
-        if (url) refs.mImg.src = url;
-
-        setBusy(false);
-        refs.overlay.hidden = false;
-    }
-
-    function closeModal() {
-        modalItem = null;
-        refs.overlay.hidden = true;
-    }
-
-
-    // ============================================================
-    // PUSH HANDLERS — registrados no onInit (A-07)
-    // ============================================================
-
-    // snapshot completo da loja (abertura / refresh)
-    function onData(data) {
-        data = data || {};
-        dataAt = Date.now();
-        store.set({
-            items:      Array.isArray(data.items) ? data.items : [],
-            categories: Array.isArray(data.categories) ? data.categories : [],
-            deals:      Array.isArray(data.deals) ? data.deals : [],
-            coins:      Number(data.coins) || 0,
-            pix:        (data.pix && typeof data.pix === 'object') ? data.pix : { enabled: false, packages: [] },
-            playerName: data.playerName || '—',
-        });
-
-        renderFromStore();
-    }
-
-    // re-renderiza tudo a partir do slice (usado no push 'data' E no mount — #59)
-    function renderFromStore() {
-        if (!root || !refs.nav) return;
-        const s = S();
-        if (refs.player) refs.player.textContent = s.playerName || '—';
-        if (refs.coins)  refs.coins.textContent  = fmt(s.coins);
-        buildNav();
-        switchTab(s.tab || 'home');
-    }
-
-    // resultado de ação (open / buy_item / buy_deal / redeem / testdrive)
-    function onResult(res) {
-        res = res || {};
-        setBusy(false);
-        setStatus(res.message || (res.ok ? 'Feito!' : 'Falhou.'), res.ok === true);
-        if (res.ok && (res.action === 'buy_item' || res.action === 'buy_deal')) closeModal();
-        if (res.action === 'buy_deal' && !refs.deals.hidden) renderDeals();   // reabilita o botão
-        if (res.ok && res.action === 'redeem' && refs.redeemKey) refs.redeemKey.value = '';
-    }
-
-    // saldo atualizado (compra/resgate/admin — ponto único server-side, #59)
-    function onCoins(data) {
-        const coins = Number(data && data.coins) || 0;
-        store.set({ coins });
-        if (refs.coins) refs.coins.textContent = fmt(coins);
-    }
-
-    // sem personagem carregado — o server recusou
-    function onDenied() {
-        setStatus('Personagem não carregado — entre na cidade primeiro.', false);
-    }
-
-
-    // ============================================================
-    // INTERAÇÃO — delegação de clique + formulário de resgate
-    // ============================================================
-
-    function onClick(ev) {
-        const tabBtn = ev.target.closest('[data-tab]');
-        if (tabBtn) { switchTab(tabBtn.getAttribute('data-tab')); return; }
-
-        const card = ev.target.closest('[data-item]');
-        if (card) {
-            const { items = [] } = S();
-            const item = items.find((i) => i.id === card.getAttribute('data-item'));
-            if (item) openModal(item);
-            return;
-        }
-
-        const dealBtn = ev.target.closest('[data-deal]');
-        if (dealBtn) {
-            dealBtn.disabled = true;
-            ch.send('buy_deal', { dealId: dealBtn.getAttribute('data-deal') });
-            return;
-        }
-
-        const packBtn = ev.target.closest('[data-pack]');
-        if (packBtn && !pixBusy) {
-            pixBusy = true;
-            store.set({ pixSelected: packBtn.getAttribute('data-pack') });
-            renderPix();
-            ch.send('pix_create', { packageId: packBtn.getAttribute('data-pack') });
-            return;
-        }
-
-        const action = ev.target.closest('[data-action]');
-        if (!action) return;
-        switch (action.getAttribute('data-action')) {
-            case 'modal-close': closeModal(); break;
-            case 'modal-buy':
-                if (modalItem) { setBusy(true); ch.send('buy_item', { itemId: modalItem.id }); }
-                break;
-            case 'modal-test':
-                if (modalItem) { setBusy(true); ch.send('testdrive', { itemId: modalItem.id }); }
-                break;
-            case 'pix-copy': {
-                const inp = refs.pixCopy;
-                if (!inp || !inp.value) break;
-                try { navigator.clipboard.writeText(inp.value); } catch (_) {
-                    inp.select();
-                    document.execCommand('copy');
-                }
-                const btn = refs.pixCopyBtn;
-                if (btn) { btn.textContent = 'Copiado!'; setTimeout(() => { btn.textContent = 'Copiar'; }, 2000); }
-                break;
-            }
-        }
-    }
-
-    function onRedeemSubmit(ev) {
-        ev.preventDefault();
-        const redeemKey = (refs.redeemKey.value || '').trim();
-        if (!redeemKey) { setStatus('Informe o número do pedido.', false); return; }
-        const gift = refs.giftToggle.checked ? (refs.giftId.value || '').trim() : '';
-        ch.send('redeem', { redeemKey, targetId: gift });
-    }
-
-
-    // ============================================================
-    // LIFECYCLE (A-02)
-    // ============================================================
-
-    vhub.createModule('coinshop', {
-
-        onInit() {
-            chOffs.push(ch.on('data',   onData));
-            chOffs.push(ch.on('result', onResult));
-            chOffs.push(ch.on('coins',  onCoins));
-            chOffs.push(ch.on('pix',    onPix));
-            chOffs.push(ch.on('denied', onDenied));
-        },
-
-        onMount(el0) {
-            root = el0;
-            grabRefs();
-
-            clickHandler = onClick;
-            root.addEventListener('click', clickHandler);
-
-            searchHandler = () => renderGrid();
-            refs.search.addEventListener('input', searchHandler);
-
-            giftHandler = () => { refs.giftId.hidden = !refs.giftToggle.checked; };
-            refs.giftToggle.addEventListener('change', giftHandler);
-
-            submitHandler = onRedeemSubmit;
-            refs.redeem.addEventListener('submit', submitHandler);
-
-            // se o slice já tem dados (reabertura dentro do rate do server), renderiza
-            // na hora — o push 'data' atualiza depois se vier (#59)
-            if (Array.isArray(S().items) && S().items.length) renderFromStore();
-        },
-
-        onShow() {
-            // renderiza imediatamente se já há dados (evita nav vazia durante o round-trip)
-            if (Array.isArray(S().items)) renderFromStore();
-            ch.send('open');   // pede snapshot atualizado ao server
-        },
-
-        onHide() {
-            if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
-        },
-
-        onDestroy() {
-            for (const off of chOffs) { try { off(); } catch (_) {} }
-            chOffs = [];
-            if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
-            if (root && clickHandler) root.removeEventListener('click', clickHandler);
-            if (refs.search && searchHandler)     refs.search.removeEventListener('input', searchHandler);
-            if (refs.giftToggle && giftHandler)   refs.giftToggle.removeEventListener('change', giftHandler);
-            if (refs.redeem && submitHandler)     refs.redeem.removeEventListener('submit', submitHandler);
-            clickHandler = searchHandler = giftHandler = submitHandler = null;
-            modalItem = null;
-            pixBusy = false;
-            refs = {};
-            root = null;
-        },
-
+}
+
+function navGroup(label) {
+    const div = el('div', { class: 'cs-nav-group' });
+    div.textContent = label;
+    return div;
+}
+
+function navBtn(id, label) {
+    const btn = el('button', { type: 'button', class: 'cs-nav-btn', dataset: { view: id } });
+    // SVG injetado via innerHTML no wrapper — dado controlado (string literal, não servidor)
+    const iconWrap = document.createElement('span');
+    iconWrap.innerHTML = ICONS[id] || '';
+    if (iconWrap.firstChild) btn.appendChild(iconWrap.firstChild);
+    btn.appendChild(document.createTextNode(label));
+    btn.addEventListener('click', () => navigate(id));
+    return btn;
+}
+
+function updateNavActive() {
+    document.querySelectorAll('.mod-coinshop .cs-nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === _view);
     });
+    if (refs.viewTitle && VIEW_TITLE[_view]) {
+        refs.viewTitle.textContent = VIEW_TITLE[_view];
+    }
+}
+
+
+// ============================================================
+// NAVEGAÇÃO
+// ============================================================
+
+function navigate(view) {
+    if (!VIEW_EL[view]) return;
+    _view = view;
+    updateNavActive();
+
+    Object.values(VIEW_EL).forEach(elKey => {
+        const panel = refs[elKey];
+        if (panel) panel.hidden = true;
+    });
+
+    const panel = refs[VIEW_EL[view]];
+    if (panel) panel.hidden = false;
+
+    const hasSearch = view === 'grid' || view === 'adm-catalog';
+    if (refs.search) refs.search.style.display = hasSearch ? '' : 'none';
+
+    if (view === 'grid')          renderGrid();
+    if (view === 'deals')         renderDeals();
+    if (view === 'pix')           renderPixPacks();
+    if (view === 'adm-dash')      loadAdmDash();
+    if (view === 'adm-catalog')   renderAdmCatalog();
+    if (view === 'adm-cats')      renderAdmCats();
+    if (view === 'adm-deals')     renderAdmDeals();
+    if (view === 'adm-players')   loadAdmPlayers();
+    if (view === 'adm-codes')     loadAdmCodes();
+    if (view === 'adm-theme')     fillThemeForm();
+}
+
+
+// ============================================================
+// GRADE DE ITENS
+// ============================================================
+
+function renderGrid() {
+    if (!refs.grid || !_data) return;
+    refs.grid.innerHTML = '';
+
+    const q = _search.toLowerCase();
+    const items = (_data.items || []).filter(item => {
+        if (!q) return true;
+        return (item.name || '').toLowerCase().includes(q)
+            || (item.category || '').toLowerCase().includes(q);
+    });
+
+    if (!items.length) { refs.grid.appendChild(emptyMsg('Nenhum item encontrado.')); return; }
+    items.forEach(item => refs.grid.appendChild(cardItem(item)));
+}
+
+function cardItem(item) {
+    const wrap = el('div', { class: 'cs-card', dataset: { id: item.id } });
+
+    const imgUrl = cdnUrl(item);
+    if (imgUrl) {
+        const img = el('img', { class: 'cs-card-img', alt: '' });
+        img.src = imgUrl;
+        img.onerror = () => img.replaceWith(fallbackImgCard(item));
+        wrap.appendChild(img);
+    } else {
+        wrap.appendChild(fallbackImgCard(item));
+    }
+
+    const body = el('div', { class: 'cs-card-body' });
+    const name = el('div', { class: 'cs-card-name' });
+    name.textContent = item.name || item.id;
+
+    const cat = el('div', { class: 'cs-card-cat' });
+    cat.textContent = item.category || '';
+
+    // ícone de moeda: string literal controlada, não dado do servidor
+    const priceRow = el('div', { class: 'cs-card-price' });
+    const coinIco = document.createElement('span');
+    coinIco.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" width="12" height="12">'
+        + '<circle cx="10" cy="10" r="9" fill="#f3b53a"/>'
+        + '<text x="10" y="14.5" text-anchor="middle" font-size="10" font-weight="700"'
+        + ' fill="#0a0906" font-family="\'Barlow Condensed\',system-ui">$</text></svg>';
+    priceRow.appendChild(coinIco);
+    priceRow.appendChild(document.createTextNode(fmtCoins(item.price)));
+
+    body.appendChild(name);
+    body.appendChild(cat);
+    body.appendChild(priceRow);
+    wrap.appendChild(body);
+
+    wrap.addEventListener('click', () => openItemModal(item));
+    return wrap;
+}
+
+function fallbackImgCard(item) {
+    const d = el('div', { class: 'cs-card-img-fallback' });
+    const cat = (item.category || '').toLowerCase();
+    d.textContent = cat === 'vehicle' ? '🚗' : cat === 'weapon' ? '🔫' : '📦';
+    return d;
+}
+
+
+// ============================================================
+// MODAL DE COMPRA (jogador)
+// ============================================================
+
+function openItemModal(item) {
+    _modal = item;
+    const imgUrl = cdnUrl(item);
+
+    refs.mImg.hidden = true;
+    refs.mFallback.hidden = false;
+
+    if (imgUrl) {
+        refs.mImg.src = imgUrl;
+        refs.mImg.hidden = false;
+        refs.mFallback.hidden = true;
+        refs.mImg.onerror = () => {
+            refs.mImg.hidden = true;
+            refs.mFallback.hidden = false;
+        };
+    }
+
+    refs.mName.textContent  = item.name || item.id;
+    refs.mDesc.textContent  = item.description || '';
+    refs.mPrice.textContent = fmtCoins(item.price) + ' moedas';
+    refs.mBuy.disabled = false;
+    refs.overlay.hidden = false;
+}
+
+function closeModal() {
+    refs.overlay.hidden = true;
+    _modal = null;
+    setBusy(false);
+}
+
+function openDealModal(deal) {
+    _modal = { ...deal, _isDeal: true };
+    refs.mImg.hidden = true;
+    refs.mFallback.hidden = false;
+    const imgUrl = safeImg(deal.imageUrl);
+    if (imgUrl) {
+        refs.mImg.src = imgUrl;
+        refs.mImg.hidden = false;
+        refs.mFallback.hidden = true;
+        refs.mImg.onerror = () => { refs.mImg.hidden = true; refs.mFallback.hidden = false; };
+    }
+    refs.mName.textContent  = deal.name || deal.id;
+    refs.mDesc.textContent  = deal.description || '';
+    refs.mPrice.textContent = fmtCoins(deal.price) + ' moedas';
+    refs.mBuy.disabled = false;
+    refs.overlay.hidden = false;
+}
+
+
+// ============================================================
+// DEALS
+// ============================================================
+
+function renderDeals() {
+    if (!refs.deals || !_data) return;
+    refs.deals.innerHTML = '';
+    const deals = _data.deals || [];
+    if (!deals.length) { refs.deals.appendChild(emptyMsg('Nenhuma oferta disponível.')); return; }
+    deals.forEach(deal => refs.deals.appendChild(cardDeal(deal)));
+}
+
+function cardDeal(deal) {
+    const wrap = el('div', { class: 'cs-deal-card', dataset: { id: deal.id } });
+
+    const imgUrl = safeImg(deal.imageUrl);
+    if (imgUrl) {
+        const img = el('img', { class: 'cs-deal-img', alt: '' });
+        img.src = imgUrl;
+        img.onerror = () => img.remove();
+        wrap.appendChild(img);
+    }
+
+    const body = el('div', { class: 'cs-deal-body' });
+    const name = el('div', { class: 'cs-deal-name' });
+    name.textContent = deal.name || deal.id;
+    const desc = el('div', { class: 'cs-deal-desc' });
+    desc.textContent = deal.description || '';
+    const priceRow = el('div', { class: 'cs-deal-price' });
+    priceRow.textContent = fmtCoins(deal.price) + ' moedas';
+    if (deal.originalPrice && deal.originalPrice > deal.price) {
+        const orig = el('span', { class: 'cs-deal-original' });
+        orig.textContent = fmtCoins(deal.originalPrice);
+        priceRow.appendChild(orig);
+    }
+
+    body.appendChild(name);
+    body.appendChild(desc);
+    body.appendChild(priceRow);
+    wrap.appendChild(body);
+    wrap.addEventListener('click', () => openDealModal(deal));
+    return wrap;
+}
+
+
+// ============================================================
+// PIX
+// ============================================================
+
+let _selectedPack = null;
+
+function renderPixPacks() {
+    if (!refs.pixPacks || !_data) return;
+    refs.pixPacks.innerHTML = '';
+    refs.pixCheckout.hidden = true;
+    _selectedPack = null;
+
+    const packs = _data.pixPackages || [];
+    if (!packs.length) { refs.pixPacks.appendChild(emptyMsg('Nenhum pacote configurado.')); return; }
+
+    packs.forEach(pack => {
+        const card = el('div', { class: 'cs-pix-pack', dataset: { id: pack.id } });
+
+        if (pack.popular) {
+            const badge = el('span', { class: 'cs-pix-popular' });
+            badge.textContent = 'Popular';
+            card.appendChild(badge);
+        }
+
+        const name = el('div', { class: 'cs-pix-pack-name' });
+        name.textContent = pack.name || pack.id;
+
+        const coins = el('div', { class: 'cs-pix-pack-coins' });
+        coins.textContent = fmtCoins(pack.coins) + ' moedas';
+
+        card.appendChild(name);
+        card.appendChild(coins);
+
+        if (pack.bonus > 0) {
+            const bonus = el('div', { class: 'cs-pix-pack-bonus' });
+            bonus.textContent = '+' + fmtCoins(pack.bonus) + ' bônus';
+            card.appendChild(bonus);
+        }
+
+        const price = el('div', { class: 'cs-pix-pack-price' });
+        price.textContent = 'R$ ' + Number(pack.priceBRL || 0).toFixed(2).replace('.', ',');
+        card.appendChild(price);
+
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.mod-coinshop .cs-pix-pack')
+                .forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            _selectedPack = pack;
+            refs.pixCheckout.hidden = false;
+            refs.pixQrFallback.hidden = false;
+            refs.pixQrImg.hidden = true;
+            if (refs.pixQrTxt) refs.pixQrTxt.textContent = 'Gerando cobrança Pix…';
+            ch.send('pix_create', { packageId: pack.id });
+        });
+
+        refs.pixPacks.appendChild(card);
+    });
+}
+
+function handlePixResult(pix) {
+    refs.pixCheckout.hidden = false;
+    if (!pix.ok) {
+        refs.pixQrFallback.hidden = false;
+        refs.pixQrImg.hidden = true;
+        if (refs.pixQrTxt) refs.pixQrTxt.textContent = pix.message || 'Pix indisponível.';
+        return;
+    }
+    if (pix.qrcode_base64) {
+        refs.pixQrImg.src = 'data:image/png;base64,' + pix.qrcode_base64;
+        refs.pixQrImg.hidden = false;
+        refs.pixQrFallback.hidden = true;
+    }
+    if (pix.expiresAt && refs.pixExpire) {
+        refs.pixExpire.textContent = 'Expira em: ' + pix.expiresAt;
+        refs.pixExpire.hidden = false;
+    }
+    if (pix.copiaECola && refs.pixCopy) {
+        refs.pixCopy.value = pix.copiaECola;
+        refs.pixCopyRow.hidden = false;
+    }
+}
+
+
+// ============================================================
+// ADMIN — dashboard
+// ============================================================
+
+function loadAdmDash() {
+    if (!refs.admDash) return;
+    if (refs.statItems)    refs.statItems.textContent    = '…';
+    if (refs.statSales)    refs.statSales.textContent    = '…';
+    if (refs.statCoins24h) refs.statCoins24h.textContent = '…';
+    if (refs.statOnline)   refs.statOnline.textContent   = '…';
+    if (refs.admRecentTx)  { refs.admRecentTx.innerHTML = ''; refs.admRecentTx.appendChild(spinner()); }
+    ch.send('admin_stats', {});
+    ch.send('admin_recent_tx', {});
+}
+
+function handleAdmStats(d) {
+    if (!d.ok || !d.data) return;
+    const s = d.data;
+    if (refs.statItems)    refs.statItems.textContent    = s.totalItems ?? '—';
+    if (refs.statSales)    refs.statSales.textContent    = s.totalSales ?? '—';
+    if (refs.statCoins24h) refs.statCoins24h.textContent = fmtCoins(s.coins24h);
+    if (refs.statOnline)   refs.statOnline.textContent   = s.online     ?? '—';
+}
+
+function handleAdmRecentTx(d) {
+    if (!refs.admRecentTx) return;
+    refs.admRecentTx.innerHTML = '';
+    if (!d.ok || !d.data || !d.data.length) {
+        refs.admRecentTx.appendChild(emptyMsg('Nenhuma transação recente.'));
+        return;
+    }
+    d.data.forEach(tx => {
+        const row  = el('div', { class: 'cs-adm-row' });
+        const info = el('div', { class: 'cs-adm-row-info' });
+        const name = el('div', { class: 'cs-adm-row-name' });
+        name.textContent = tx.itemName || tx.item_id || '—';
+        const sub = el('div', { class: 'cs-adm-row-sub' });
+        sub.textContent = (tx.playerName || tx.char_id || '?') + ' · ' + fmtCoins(tx.price) + ' moedas';
+        info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+        refs.admRecentTx.appendChild(row);
+    });
+}
+
+
+// ============================================================
+// ADMIN — catálogo
+// ============================================================
+
+function renderAdmCatalog() {
+    if (!refs.admItemList || !_data) return;
+    refs.admItemList.innerHTML = '';
+    const q = _search.toLowerCase();
+    const items = (_data.items || []).filter(i =>
+        !q || (i.name || '').toLowerCase().includes(q) || (i.id || '').toLowerCase().includes(q)
+    );
+    if (!items.length) { refs.admItemList.appendChild(emptyMsg('Catálogo vazio.')); return; }
+    items.forEach(item => refs.admItemList.appendChild(admItemRow(item)));
+}
+
+function admItemRow(item) {
+    const row  = el('div', { class: 'cs-adm-row' });
+    const info = el('div', { class: 'cs-adm-row-info' });
+    const name = el('div', { class: 'cs-adm-row-name' });
+    name.textContent = item.name || item.id;
+    const sub = el('div', { class: 'cs-adm-row-sub' });
+    sub.textContent = (item.category || '—') + ' · ' + fmtCoins(item.price) + ' moedas';
+    info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+
+    const acts = el('div', { class: 'cs-adm-row-actions' });
+
+    const btnEdit = el('button', { type: 'button', class: 'cs-btn ghost' });
+    btnEdit.textContent = 'Editar';
+    btnEdit.addEventListener('click', () => openAdmItemModal('edit', item));
+
+    const btnDel = el('button', { type: 'button', class: 'cs-btn danger' });
+    btnDel.textContent = 'Remover';
+    btnDel.addEventListener('click', () => confirmAdmAction(
+        'Remover "' + (item.name || item.id) + '"?',
+        () => ch.send('admin_delete_item', { itemId: item.id })
+    ));
+
+    acts.appendChild(btnEdit);
+    acts.appendChild(btnDel);
+    row.appendChild(acts);
+    return row;
+}
+
+function openAdmItemModal(mode, item) {
+    const isEdit = mode === 'edit';
+    if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+
+    const cats = (_data && _data.categories) ? _data.categories.map(c => c.id || c.name) : [];
+    const formEls = {};
+
+    const baseFields = [
+        { key: 'id',          label: 'ID único',         hidden: isEdit, value: item?.id       || '',  placeholder: 'meu_carro' },
+        { key: 'name',        label: 'Nome',                             value: item?.name     || '',  placeholder: 'Meu Carro' },
+        { key: 'price',       label: 'Preço (moedas)',    type: 'number', value: item?.price  ?? 0 },
+        { key: 'category',    label: 'Categoria',         type: 'select', value: item?.category || '',  options: cats },
+        { key: 'description', label: 'Descrição',                         value: item?.description || '', placeholder: 'Descrição opcional' },
+    ];
+
+    baseFields.forEach(f => {
+        if (f.hidden) return;
+        const w = el('div', { class: 'cs-adm-field' });
+        const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
+
+        let input;
+        if (f.type === 'select') {
+            input = el('select', { class: 'cs-select' });
+            (f.options || []).forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt; o.textContent = opt;
+                if (opt === f.value) o.selected = true;
+                input.appendChild(o);
+            });
+        } else if (f.type === 'number') {
+            input = el('input', { type: 'number', class: 'cs-input', min: '0' });
+            input.value = f.value;
+        } else {
+            input = el('input', { type: 'text', class: 'cs-input', placeholder: f.placeholder || '' });
+            input.value = f.value;
+        }
+        w.appendChild(input);
+        formEls[f.key] = input;
+        refs.admModalBody.appendChild(w);
+    });
+
+    // campos condicionais por categoria — injetados quando categoria muda
+    function injectCatFields(cat) {
+        refs.admModalBody.querySelectorAll('[data-cat-field]').forEach(n => n.remove());
+
+        const extra = [];
+        if (cat === 'vehicle') {
+            extra.push({ key: 'spawnName',  label: 'Modelo (spawn_name)', picker: 'conce_vehicles',    vKey: 'spawnName', dKey: 'name'  });
+        } else if (cat === 'weapon') {
+            extra.push({ key: 'weaponName', label: 'Arma (weapon_name)',  picker: 'inventory_items',   vKey: 'name',      dKey: 'label', filter: 'weapon' });
+        } else if (cat === 'item' || cat === 'consumable') {
+            extra.push({ key: 'itemName',   label: 'Item (item_name)',    picker: 'inventory_items',   vKey: 'name',      dKey: 'label' });
+        }
+
+        extra.forEach(f => {
+            const w = el('div', { class: 'cs-adm-field' });
+            w.setAttribute('data-cat-field', '1');
+            const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
+
+            const sel = el('select', { class: 'cs-select' });
+            const loadOpt = document.createElement('option');
+            loadOpt.textContent = 'Carregando…'; sel.appendChild(loadOpt);
+            w.appendChild(sel);
+            formEls[f.key] = sel;
+            refs.admModalBody.appendChild(w);
+
+            fetchPickerData(f.picker, f.filter).then(rows => {
+                sel.innerHTML = '';
+                const blank = document.createElement('option'); blank.value = ''; blank.textContent = '— Selecionar —'; sel.appendChild(blank);
+                rows.forEach(row => {
+                    const o = document.createElement('option');
+                    o.value = row[f.vKey] || '';
+                    o.textContent = row[f.dKey] || row[f.vKey] || '';
+                    if (o.value === (item?.[f.key] || '')) o.selected = true;
+                    sel.appendChild(o);
+                });
+            });
+        });
+    }
+
+    if (formEls.category) {
+        injectCatFields(formEls.category.value);
+        formEls.category.addEventListener('change', () => injectCatFields(formEls.category.value));
+    }
+
+    openAdmModal(isEdit ? 'Editar Item' : 'Novo Item', () => {
+        const payload = {};
+        if (isEdit) payload.itemId = item?.id;
+        for (const [k, node] of Object.entries(formEls)) payload[k] = node.value;
+        if (!isEdit && !payload.id) payload.id = payload.spawnName || payload.itemName || payload.weaponName || '';
+        ch.send(isEdit ? 'admin_edit_item' : 'admin_create_item', payload);
+    });
+}
+
+
+// ============================================================
+// PICKER LAZY (cache 60 s)
+// ============================================================
+
+function fetchPickerData(pickerKey, filterType) {
+    const cached = _pickerCache[pickerKey];
+    if (cached && Date.now() - cached.ts < PICKER_TTL) {
+        return Promise.resolve(filterRows(cached.rows, filterType));
+    }
+
+    return new Promise(resolve => {
+        const action = pickerKey === 'conce_vehicles'
+            ? 'admin_list_conce_vehicles'
+            : 'admin_list_inventory_items';
+
+        const off = ch.on(action, d => {
+            off();
+            const rows = (d && d.data) ? d.data : [];
+            _pickerCache[pickerKey] = { ts: Date.now(), rows };
+            resolve(filterRows(rows, filterType));
+        });
+
+        ch.send(action, {});
+    });
+}
+
+function filterRows(rows, filterType) {
+    if (!filterType) return rows;
+    return rows.filter(r => (r.type || r.category || '').toLowerCase().includes(filterType));
+}
+
+
+// ============================================================
+// ADMIN — categorias
+// ============================================================
+
+function renderAdmCats() {
+    if (!refs.admCatList || !_data) return;
+    refs.admCatList.innerHTML = '';
+    const cats = _data.categories || [];
+    if (!cats.length) { refs.admCatList.appendChild(emptyMsg('Nenhuma categoria.')); return; }
+    cats.forEach(cat => {
+        const row  = el('div', { class: 'cs-adm-row' });
+        const info = el('div', { class: 'cs-adm-row-info' });
+        const name = el('div', { class: 'cs-adm-row-name' }); name.textContent = cat.name || cat.id;
+        info.appendChild(name); row.appendChild(info);
+
+        const acts = el('div', { class: 'cs-adm-row-actions' });
+        const btnEdit = el('button', { type: 'button', class: 'cs-btn ghost' });
+        btnEdit.textContent = 'Editar';
+        btnEdit.addEventListener('click', () => openAdmCatModal('edit', cat));
+        const btnDel = el('button', { type: 'button', class: 'cs-btn danger' });
+        btnDel.textContent = 'Remover';
+        btnDel.addEventListener('click', () => confirmAdmAction(
+            'Remover categoria "' + (cat.name || cat.id) + '"?',
+            () => ch.send('admin_delete_cat', { catId: cat.id })
+        ));
+        acts.appendChild(btnEdit); acts.appendChild(btnDel); row.appendChild(acts);
+        refs.admCatList.appendChild(row);
+    });
+}
+
+function openAdmCatModal(mode, cat) {
+    if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+    const formEls = {};
+    [
+        { key: 'id',    label: 'ID',    hidden: mode === 'edit', value: cat?.id    || '' },
+        { key: 'name',  label: 'Nome',                           value: cat?.name  || '' },
+        { key: 'order', label: 'Ordem', type: 'number',          value: cat?.order ?? 0 },
+    ].forEach(f => {
+        if (f.hidden) return;
+        const w = el('div', { class: 'cs-adm-field' });
+        const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
+        const inp = el('input', { type: f.type || 'text', class: 'cs-input' });
+        inp.value = f.value;
+        w.appendChild(inp); formEls[f.key] = inp; refs.admModalBody.appendChild(w);
+    });
+    openAdmModal(mode === 'edit' ? 'Editar Categoria' : 'Nova Categoria', () => {
+        const payload = {}; if (mode === 'edit') payload.catId = cat?.id;
+        for (const [k, n] of Object.entries(formEls)) payload[k] = n.value;
+        ch.send(mode === 'edit' ? 'admin_edit_cat' : 'admin_create_cat', payload);
+    });
+}
+
+
+// ============================================================
+// ADMIN — deals
+// ============================================================
+
+function renderAdmDeals() {
+    if (!refs.admDealList || !_data) return;
+    refs.admDealList.innerHTML = '';
+    const deals = _data.deals || [];
+    if (!deals.length) { refs.admDealList.appendChild(emptyMsg('Nenhuma oferta.')); return; }
+    deals.forEach(deal => {
+        const row  = el('div', { class: 'cs-adm-row' });
+        const info = el('div', { class: 'cs-adm-row-info' });
+        const name = el('div', { class: 'cs-adm-row-name' }); name.textContent = deal.name || deal.id;
+        const sub  = el('div', { class: 'cs-adm-row-sub' });  sub.textContent = fmtCoins(deal.price) + ' moedas';
+        info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+        const acts = el('div', { class: 'cs-adm-row-actions' });
+        const btnDel = el('button', { type: 'button', class: 'cs-btn danger' });
+        btnDel.textContent = 'Remover';
+        btnDel.addEventListener('click', () => confirmAdmAction(
+            'Remover oferta "' + (deal.name || deal.id) + '"?',
+            () => ch.send('admin_delete_deal', { dealId: deal.id })
+        ));
+        acts.appendChild(btnDel); row.appendChild(acts);
+        refs.admDealList.appendChild(row);
+    });
+}
+
+
+// ============================================================
+// ADMIN — jogadores
+// ============================================================
+
+function loadAdmPlayers() {
+    if (!refs.admPlayerList) return;
+    refs.admPlayerList.innerHTML = '';
+    refs.admPlayerList.appendChild(spinner());
+    ch.send('admin_online_players', {});
+}
+
+function handleAdmPlayers(d) {
+    if (!refs.admPlayerList) return;
+    refs.admPlayerList.innerHTML = '';
+    if (!d.ok || !d.data || !d.data.length) {
+        refs.admPlayerList.appendChild(emptyMsg('Nenhum jogador online.'));
+        return;
+    }
+    d.data.forEach(p => {
+        const row  = el('div', { class: 'cs-adm-row' });
+        const info = el('div', { class: 'cs-adm-row-info' });
+        const name = el('div', { class: 'cs-adm-row-name' }); name.textContent = p.name || ('ID ' + p.src);
+        const sub  = el('div', { class: 'cs-adm-row-sub' });  sub.textContent = fmtCoins(p.coins) + ' moedas · ID ' + p.src;
+        info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+
+        const acts = el('div', { class: 'cs-adm-row-actions' });
+        const btnGive = el('button', { type: 'button', class: 'cs-btn sand' });
+        btnGive.textContent = '+ Moedas';
+        btnGive.addEventListener('click', () => openCoinModal('give', p));
+        const btnSet = el('button', { type: 'button', class: 'cs-btn ghost' });
+        btnSet.textContent = 'Definir';
+        btnSet.addEventListener('click', () => openCoinModal('set', p));
+        acts.appendChild(btnGive); acts.appendChild(btnSet); row.appendChild(acts);
+        refs.admPlayerList.appendChild(row);
+    });
+}
+
+function openCoinModal(mode, player) {
+    if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+    const w = el('div', { class: 'cs-adm-field' });
+    const lbl = el('span'); lbl.textContent = 'Quantidade'; w.appendChild(lbl);
+    const inp = el('input', { type: 'number', class: 'cs-input', min: '0', placeholder: '0' });
+    w.appendChild(inp); refs.admModalBody.appendChild(w);
+    openAdmModal((mode === 'give' ? 'Dar Moedas' : 'Definir Moedas') + ' — ' + (player.name || 'ID ' + player.src), () => {
+        const amount = parseInt(inp.value, 10);
+        if (!amount && mode === 'give') return;
+        ch.send(mode === 'give' ? 'admin_give_coins' : 'admin_set_coins', { targetId: player.src, amount });
+    });
+}
+
+
+// ============================================================
+// ADMIN — códigos
+// ============================================================
+
+function loadAdmCodes() {
+    if (!refs.admCodeList) return;
+    refs.admCodeList.innerHTML = '';
+    refs.admCodeList.appendChild(spinner());
+    ch.send('admin_list_codes', {});
+}
+
+function handleAdmCodes(d) {
+    if (!refs.admCodeList) return;
+    refs.admCodeList.innerHTML = '';
+    if (!d.ok || !d.data || !d.data.length) {
+        refs.admCodeList.appendChild(emptyMsg('Nenhum código cadastrado.')); return;
+    }
+    d.data.forEach(code => {
+        const row  = el('div', { class: 'cs-adm-row' });
+        const info = el('div', { class: 'cs-adm-row-info' });
+        const name = el('div', { class: 'cs-adm-row-name' }); name.textContent = code.order_id || code.id;
+        const sub  = el('div', { class: 'cs-adm-row-sub' });  sub.textContent = fmtCoins(code.coins) + ' moedas · ' + (code.status || '?');
+        info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+        const acts = el('div', { class: 'cs-adm-row-actions' });
+        if (code.status === 'pending') {
+            const btnDel = el('button', { type: 'button', class: 'cs-btn danger' });
+            btnDel.textContent = 'Remover';
+            btnDel.addEventListener('click', () => confirmAdmAction(
+                'Remover código ' + (code.order_id || code.id) + '?',
+                () => ch.send('admin_delete_code', { codeId: code.id })
+            ));
+            acts.appendChild(btnDel);
+        }
+        row.appendChild(acts);
+        refs.admCodeList.appendChild(row);
+    });
+}
+
+
+// ============================================================
+// ADMIN — tema
+// ============================================================
+
+function fillThemeForm() {
+    if (!refs.admThemeForm || !_data) return;
+    const s = _data.settings || {};
+    if (refs.admThemeForm.accentColor) refs.admThemeForm.accentColor.value = s.accentColor || '';
+    if (refs.admThemeForm.bgColor)     refs.admThemeForm.bgColor.value     = s.bgColor     || '';
+    if (refs.admThemeForm.coinIcon)    refs.admThemeForm.coinIcon.value     = s.coinIcon    || '';
+}
+
+
+// ============================================================
+// ADMIN — importar
+// ============================================================
+
+function handleAdmImportResult(d, target) {
+    if (!target) return;
+    target.innerHTML = '';
+    const msg = el('p', { class: 'cs-sub' });
+    msg.textContent = d.ok
+        ? ('Importados: ' + (d.data?.count || 0) + ' itens.')
+        : ('Erro: ' + (d.err || 'falha desconhecida'));
+    target.appendChild(msg);
+}
+
+
+// ============================================================
+// MODAL ADMIN GENÉRICO
+// ============================================================
+
+function openAdmModal(title, onOk) {
+    if (refs.admModalTitle) refs.admModalTitle.textContent = title;
+    _admModal = { onOk };
+    if (refs.admOverlay) refs.admOverlay.hidden = false;
+    setBusy(false);
+}
+
+function closeAdmModal() {
+    if (refs.admOverlay) refs.admOverlay.hidden = true;
+    _admModal = null;
+    setBusy(false);
+}
+
+function confirmAdmAction(label, action) {
+    if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+    const p = el('p', { class: 'cs-sub' }); p.textContent = label;
+    refs.admModalBody.appendChild(p);
+    openAdmModal('Confirmar', () => action());
+}
+
+
+// ============================================================
+// STATUS
+// ============================================================
+
+let _statusTimer = null;
+function showStatus(msg, ms) {
+    if (!refs.status) return;
+    clearTimeout(_statusTimer);
+    refs.status.textContent = msg;
+    refs.status.hidden = false;
+    _statusTimer = setTimeout(() => { if (refs.status) refs.status.hidden = true; }, ms || 3000);
+}
+
+
+// ============================================================
+// EVENTOS DO CANAL (server → UI) — registrados em onInit()
+// ============================================================
+
+// pickers lazy — sem stub permanente; fetchPickerData registra/cancela one-shot por demanda
+// todos os ch.on permanentes vivem em onInit() abaixo
+
+
+// ============================================================
+// DELEGAÇÃO DE CLIQUES (data-action)
+// ============================================================
+
+function onClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+
+    switch (action) {
+        case 'modal-close': closeModal(); break;
+        case 'modal-buy':
+            if (_busy || !_modal) break;
+            setBusy(true);
+            ch.send(_modal._isDeal ? 'buy_deal' : 'buy_item',
+                _modal._isDeal ? { dealId: _modal.id } : { itemId: _modal.id });
+            break;
+
+        case 'adm-modal-close': closeAdmModal(); break;
+        case 'adm-modal-ok':
+            if (_busy || !_admModal?.onOk) break;
+            setBusy(true);
+            _admModal.onOk();
+            break;
+
+        case 'adm-item-new':   openAdmItemModal('new', null); break;
+        case 'adm-cat-new':    openAdmCatModal('new', null);  break;
+
+        case 'adm-deal-new': {
+            if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+            const dealFields = {};
+            [
+                { key: 'id',          label: 'ID único',   placeholder: 'deal_especial' },
+                { key: 'name',        label: 'Nome',        placeholder: 'Oferta Especial' },
+                { key: 'price',       label: 'Preço',       type: 'number' },
+                { key: 'description', label: 'Descrição' },
+            ].forEach(f => {
+                const w = el('div', { class: 'cs-adm-field' });
+                const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
+                const inp = el('input', { type: f.type || 'text', class: 'cs-input', placeholder: f.placeholder || '' });
+                w.appendChild(inp); dealFields[f.key] = inp; refs.admModalBody.appendChild(w);
+            });
+            openAdmModal('Nova Oferta', () => {
+                const payload = {};
+                for (const [k, n] of Object.entries(dealFields)) payload[k] = n.value;
+                ch.send('admin_create_deal', payload);
+            });
+            break;
+        }
+
+        case 'adm-code-new': {
+            if (refs.admModalBody) refs.admModalBody.innerHTML = '';
+            const codeFields = {};
+            [
+                { key: 'orderId', label: 'Número do Pedido', placeholder: 'tbx-xxxxxxxx' },
+                { key: 'coins',   label: 'Moedas',           type: 'number' },
+            ].forEach(f => {
+                const w = el('div', { class: 'cs-adm-field' });
+                const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
+                const inp = el('input', { type: f.type || 'text', class: 'cs-input', placeholder: f.placeholder || '' });
+                w.appendChild(inp); codeFields[f.key] = inp; refs.admModalBody.appendChild(w);
+            });
+            openAdmModal('Novo Código Tebex', () => {
+                const payload = {};
+                for (const [k, n] of Object.entries(codeFields)) payload[k] = n.value;
+                ch.send('admin_create_code', payload);
+            });
+            break;
+        }
+
+        case 'adm-players-refresh': loadAdmPlayers(); break;
+        case 'adm-codes-refresh':   loadAdmCodes();   break;
+
+        case 'adm-clear-all':
+            confirmAdmAction('Isso apagará TODO o catálogo (itens, categorias, ofertas). Confirmar?',
+                () => ch.send('admin_clear_all', {}));
+            break;
+
+        case 'adm-theme-reset': ch.send('admin_reset_settings', {}); break;
+
+        case 'adm-import-preview':
+            if (refs.admImportJson) ch.send('admin_import_preview', { json: refs.admImportJson.value });
+            break;
+
+        case 'adm-import-run':
+            if (refs.admImportJson) ch.send('admin_import_run', { json: refs.admImportJson.value });
+            break;
+
+        case 'pix-copy':
+            if (refs.pixCopy) {
+                navigator.clipboard?.writeText(refs.pixCopy.value).catch(() => {});
+                showStatus('Pix copiado!', 2000);
+            }
+            break;
+    }
+}
+
+
+// ============================================================
+// BUSCA
+// ============================================================
+
+function onSearch(e) {
+    _search = (e.target.value || '').trim();
+    if (_view === 'grid')         renderGrid();
+    if (_view === 'adm-catalog')  renderAdmCatalog();
+}
+
+
+// ============================================================
+// REDEEM
+// ============================================================
+
+function onRedeemSubmit(e) {
+    e.preventDefault();
+    if (_busy) return;
+    const key = refs.redeemKey?.value?.trim();
+    if (!key) return showStatus('Informe o código ou número do pedido.', 3000);
+    const giftId = refs.giftToggle?.checked ? (refs.giftId?.value?.trim() || null) : null;
+    setBusy(true);
+    ch.send('redeem', { redeemKey: key, targetId: giftId });
+}
+
+
+// ============================================================
+// TEMA ADMIN — submit
+// ============================================================
+
+function onThemeSubmit(e) {
+    e.preventDefault();
+    if (!refs.admThemeForm) return;
+    ch.send('admin_save_settings', {
+        accentColor: refs.admThemeForm.accentColor?.value || '',
+        bgColor:     refs.admThemeForm.bgColor?.value     || '',
+        coinIcon:    refs.admThemeForm.coinIcon?.value     || '',
+    });
+}
+
+
+// ============================================================
+// LIFECYCLE — contrato do iPad (vhub.createModule)
+// ============================================================
+
+vhub.createModule('coinshop', {
+
+    onInit() {
+        ch.on('data', d => {
+            _data = d;
+            if (refs.player) refs.player.textContent = d.playerName || d.charName || '—';
+            if (refs.coins)  refs.coins.textContent  = fmtCoins(d.coins);
+            buildNav();
+            navigate(_view || 'grid');
+        });
+
+        ch.on('coins', d => {
+            if (refs.coins) refs.coins.textContent = fmtCoins(d.coins);
+            if (_data) _data.coins = d.coins;
+        });
+
+        ch.on('result', d => {
+            setBusy(false);
+            const ok = d.ok === true;
+            showStatus((ok ? '✓ ' : '✗ ') + (d.message || (ok ? 'OK' : 'Erro')), 4000);
+            if (ok) {
+                closeModal();
+                closeAdmModal();
+            }
+        });
+
+        ch.on('pix',                       handlePixResult);
+        ch.on('admin_stats',               handleAdmStats);
+        ch.on('admin_recent_tx',           handleAdmRecentTx);
+        ch.on('admin_online_players',      handleAdmPlayers);
+        ch.on('admin_list_codes',          handleAdmCodes);
+        ch.on('admin_give_coins',          d => { if (d.ok) loadAdmPlayers(); });
+        ch.on('admin_set_coins',           d => { if (d.ok) loadAdmPlayers(); });
+        ch.on('admin_import_preview',      d => handleAdmImportResult(d, refs.admImportResult));
+        ch.on('admin_import_run',          d => { handleAdmImportResult(d, refs.admImportResult); if (d.ok) ch.send('open', {}); });
+        ch.on('admin_create_item',         d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        ch.on('admin_edit_item',           d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        ch.on('admin_delete_item',         d => { if (d.ok) ch.send('open', {}); });
+        ch.on('admin_create_cat',          d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        ch.on('admin_edit_cat',            d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        ch.on('admin_delete_cat',          d => { if (d.ok) ch.send('open', {}); });
+        ch.on('admin_create_deal',         d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        ch.on('admin_delete_deal',         d => { if (d.ok) ch.send('open', {}); });
+        ch.on('admin_clear_all',           d => { if (d.ok) ch.send('open', {}); });
+        ch.on('admin_save_settings',       d => { if (d.ok) ch.send('open', {}); });
+        ch.on('admin_reset_settings',      d => { if (d.ok) ch.send('open', {}); });
+        ch.on('denied',                    () => showStatus('Acesso negado.', 3000));
+    },
+
+    onMount(el) {
+        cacheRefs();
+
+        el.addEventListener('click', onClick);
+        if (refs.search)       refs.search.addEventListener('input', onSearch);
+        if (refs.giftToggle)   refs.giftToggle.addEventListener('change', () => {
+            if (refs.giftId) refs.giftId.hidden = !refs.giftToggle.checked;
+        });
+        if (refs.redeem)       refs.redeem.addEventListener('submit', onRedeemSubmit);
+        if (refs.admThemeForm) refs.admThemeForm.addEventListener('submit', onThemeSubmit);
+
+        ch.send('open', {});
+    },
+
+    onShow()  {},
+    onHide()  {},
+
+    onDestroy() {
+        clearTimeout(_statusTimer);
+    },
+
+});
+
 })();

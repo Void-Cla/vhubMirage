@@ -3,14 +3,22 @@ game 'gta5'
 lua54 'yes'
 
 name 'vhub_legacyfuel'
-description 'Legacy fuel adapted to vHub (server now uses vHub APIs)'
+author 'vHub Mirage'
+version '2.1.0'
+description 'Abastecimento autoritativo vHub com bomba, carga elétrica, galão e mangueira nativa.'
 
-shared_script 'config.lua'
+dependencies {
+  'vhub',
+  'vhub_conce',
+  'vhub_money',
+  'vhub_inventory',
+  'vhub_target',
+}
+
+shared_scripts {
+  'shared/config.lua',
+  'shared/events.lua',
+}
 
 server_script 'server.lua'
 client_script 'client.lua'
-
-dependencies {
-	'vhub',
-	'vhub_money'
-}

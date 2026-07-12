@@ -8,6 +8,22 @@
 
 Inventory = {}
 
+-- Mutadores cross-resource: default-deny; leitura permanece pública.
+Inventory.TrustedResources = {
+  ['vhub'] = true,
+  ['vhub_admin'] = true,
+  ['vhub_coinshop'] = true,
+  ['vhub_conce'] = true,
+  ['vhub_custom'] = true,
+  ['vhub_ferinha'] = true,
+  ['vhub_garage'] = true,
+  ['vhub_ipad'] = true,
+  ['vhub_legacyfuel'] = true,
+  ['vhub_nitro'] = true,
+  ['vhub_survival'] = true,
+  ['vhub_vehcontrol'] = true,
+}
+
 
 -- ============================================================
 -- AJUSTES GERAIS
@@ -153,6 +169,11 @@ Inventory.Items = {
   },
   ['nitro'] = {
     nome = 'Garrafa de Nitro', peso = 1.50, stack = true, max = 10,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, categoria = 'ferramenta',
+  },
+  ['fuel_can'] = {
+    nome = 'Galão de Combustível', peso = 5.00, stack = false, serial = true,
     legalidade = 'legal', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'ferramenta',
   },

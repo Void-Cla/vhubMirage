@@ -87,6 +87,12 @@ document.addEventListener('DOMContentLoaded', function () {
   el.soundResults     = document.getElementById('sound-results');
   el.soundVideo       = document.getElementById('sound-video');
 
+  // telinha DVD (mini-player de vídeo flutuante)
+  el.dvd        = document.getElementById('vc-dvd');
+  el.dvdFrame   = document.getElementById('vc-dvd-frame');
+  el.dvdTitle   = document.getElementById('vc-dvd-title');
+  el.dvdClose   = document.getElementById('vc-dvd-close');
+
   // Roda inits dos módulos (controls.js, ficha.js, sound.js)
   vhub._inits.forEach(function (fn) {
     try { fn(el); } catch (e) { console.error('[vhub] init falhou:', e); }
@@ -145,6 +151,12 @@ window.addEventListener('message', function (event) {
     case 'soundNow':
       if (typeof onSoundNow === 'function') onSoundNow(d.title || '', d.artist || '');
       break;
+    case 'soundVideoAttach':
+      if (typeof onVideoAttach === 'function') onVideoAttach(d.videoId || '', d.title || '');
+      break;
+    case 'soundVideoDetach':
+      if (typeof onVideoDetach === 'function') onVideoDetach();
+      break;
   }
 });
 
@@ -164,6 +176,8 @@ function showPanel(editTab) {
 function hidePanel() {
   _visible = false;
   el.panel.classList.add('hidden');
+  // pausa animacao do visualizador (A-09: idle 0 quando NUI fechada)
+  if (el.soundViz) el.soundViz.classList.add('is-paused');
   if (typeof exitEditMode === 'function') exitEditMode(false);
 }
 

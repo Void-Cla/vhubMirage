@@ -1,23 +1,22 @@
 /*
- * style-controls.css — aside esquerda: combustível + grade de botões
- * vhub_vehcontrol   (PRIME v2)
+ * style-controls.css — aside esquerda (Remake PRIME v3)
+ * Combustível + grade de botões · base sólida, botões mais leves e vivos.
  */
 
 
 /* ============================================================
-   COMBUSTIVEL — barra dedicada, full width (topo do aside)
-   Gradiente premium: âmbar → dourado → creme; glow proporcional.
+   COMBUSTIVEL
    ============================================================ */
 
 .vc-fuel {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
+  background: linear-gradient(180deg, #17120b, #100c07);
   border-bottom: 1px solid var(--vh-glass-line);
-  background: linear-gradient(180deg, rgba(12,10,6,0.42), rgba(12,10,6,0.20));
 }
 
 .vc-fuel-icon {
@@ -25,16 +24,16 @@
   height: 14px;
   color: var(--vh-gold);
   flex-shrink: 0;
-  filter: drop-shadow(0 0 5px rgba(243,181,58,0.45));
+  filter: drop-shadow(0 0 4px rgba(243,181,58,0.42));
 }
 
 .vc-fuel-bar-bg {
   flex: 1;
-  height: 7px;
+  height: 10px;
   border-radius: var(--vh-r-pill);
-  background: rgba(0,0,0,0.62);
-  border: 1px solid rgba(243,181,58,0.22);
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.68);
+  background: #05040a;
+  border: 1px solid rgba(243,181,58,0.28);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.7);
   overflow: hidden;
   position: relative;
 }
@@ -43,11 +42,10 @@
   height: 100%;
   width: 100%;
   border-radius: var(--vh-r-pill);
-  /* gradiente premium — âmbar→ouro→creme para faixa cheia */
   background: linear-gradient(90deg, var(--vh-amber) 0%, var(--vh-gold) 45%, var(--vh-gold-soft) 100%);
   box-shadow:
-    0 0 12px rgba(243,181,58,0.60),
-    inset 0 1px 0 rgba(255,255,255,0.32);
+    0 0 10px rgba(243,181,58,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.30);
   transform-origin: left;
   transform: scaleX(1);
   transition: transform 0.5s var(--vh-ease-out);
@@ -74,16 +72,28 @@
 
 .vc-controls {
   position: relative;
-  z-index: 1;
-  padding: 11px 10px 12px;
+  z-index: 3;
+  padding: 12px 11px 13px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 8px;
+  border-radius: var(--vh-r-card);
+  background-color: #140f09 !important;
+  background-image: none !important;
+  border: 1px solid rgba(243,181,58,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,213,115,0.06),
+    inset 0 -1px 0 rgba(0,0,0,0.55);
+  opacity: 1 !important;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 
 /* ============================================================
-   GRADE DE BOTÕES
+   GRADE
    ============================================================ */
 
 .vc-btn-grid     { display: grid; gap: 6px; }
@@ -102,15 +112,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 4px 7px;
+  gap: 5px;
+  padding: 11px 4px 9px;
   border-radius: var(--vh-r-btn);
   border: 1px solid rgba(243,181,58,0.16);
-  background: linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.50));
+  /* base opaca — mais escura que a superfície do aside, cria contraste sólido */
+  background: linear-gradient(180deg, #1f1810 0%, #120d08 100%);
   color: var(--vh-text-dim);
   font-family: var(--vh-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 700;
   letter-spacing: 0.4px;
   line-height: 1;
   text-transform: uppercase;
@@ -123,63 +134,62 @@
     transform var(--vh-t-fast);
 }
 
-/* specular highlight — hairline no topo */
 .vc-btn::before {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255,213,115,0), rgba(255,213,115,0.42), rgba(255,213,115,0));
-  opacity: 0.6;
+  background: linear-gradient(90deg, rgba(255,213,115,0), rgba(255,213,115,0.35), rgba(255,213,115,0));
+  opacity: 0.7;
   pointer-events: none;
 }
 
 .vc-btn svg {
-  width: 17px;
-  height: 17px;
+  width: 21px;
+  height: 21px;
   color: var(--vh-gold);
   transition: color var(--vh-t-norm), transform var(--vh-t-norm), filter var(--vh-t-norm);
-  filter: drop-shadow(0 0 3px rgba(243,181,58,0.30));
+  filter: drop-shadow(0 0 3px rgba(243,181,58,0.35));
 }
 
 .vc-btn span { text-align: center; white-space: nowrap; }
 
 .vc-btn:hover {
-  background: linear-gradient(180deg, rgba(243,181,58,0.18), rgba(243,181,58,0.06));
+  background: linear-gradient(180deg, #2a2013 0%, #17110a 100%);
   border-color: rgba(243,181,58,0.55);
   color: var(--vh-text);
   box-shadow:
-    0 6px 16px rgba(243,181,58,0.18),
-    inset 0 0 0 1px rgba(255,213,115,0.10);
+    0 4px 12px rgba(0,0,0,0.35),
+    0 0 12px rgba(243,181,58,0.18),
+    inset 0 0 0 1px rgba(255,213,115,0.08);
   transform: translateY(-1px);
 }
 .vc-btn:hover svg {
   color: var(--vh-gold-soft);
   transform: scale(1.10);
-  filter: drop-shadow(0 0 8px rgba(255,213,115,0.65));
+  filter: drop-shadow(0 0 7px rgba(255,213,115,0.60));
 }
 .vc-btn:active {
   transform: translateY(0) scale(0.94);
-  background: rgba(243,181,58,0.22);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
 }
 
 
 /* ============================================================
-   ESTADO ATIVO (toggle ligado)
+   TOGGLE LIGADO
    ============================================================ */
 
 .vc-btn-toggle.is-on {
-  background: linear-gradient(180deg, rgba(243,181,58,0.26), rgba(243,181,58,0.10));
+  background: linear-gradient(180deg, #4a3213 0%, #2a1c0a 100%);
   border-color: var(--vh-gold);
   color: var(--vh-gold-soft);
   box-shadow:
-    0 0 16px rgba(243,181,58,0.36),
-    inset 0 0 0 1px rgba(255,213,115,0.22);
+    0 0 14px rgba(243,181,58,0.34),
+    inset 0 0 0 1px rgba(255,213,115,0.20);
 }
 .vc-btn-toggle.is-on svg {
   color: var(--vh-gold-soft);
-  filter: drop-shadow(0 0 8px rgba(255,213,115,0.80));
+  filter: drop-shadow(0 0 7px rgba(255,213,115,0.75));
 }
 
 
@@ -190,17 +200,17 @@
 .vc-btn-emergency-cell svg { color: var(--vh-amber); }
 
 .vc-btn-emergency-cell.is-on {
-  background: linear-gradient(180deg, rgba(255,154,31,0.26), rgba(255,154,31,0.10));
+  background: linear-gradient(180deg, #4a2810 0%, #2a1608 100%);
   border-color: var(--vh-amber);
   color: var(--vh-amber);
   box-shadow:
-    0 0 16px rgba(255,154,31,0.44),
-    inset 0 0 0 1px rgba(255,154,31,0.24);
+    0 0 14px rgba(255,154,31,0.42),
+    inset 0 0 0 1px rgba(255,154,31,0.22);
 }
 .vc-btn-emergency-cell.is-on svg {
   color: var(--vh-amber);
   animation: vc-blink 1s var(--vh-ease-out) infinite;
-  filter: drop-shadow(0 0 10px rgba(255,154,31,0.85));
+  filter: drop-shadow(0 0 9px rgba(255,154,31,0.80));
 }
 
 @keyframes vc-blink {
@@ -210,19 +220,26 @@
 
 
 /* ============================================================
-   VARIANTE PRIMARY (usada também na ficha — nitro/save)
+   VARIANTE PRIMARY
    ============================================================ */
 
 .vc-btn-primary {
-  background: linear-gradient(180deg, rgba(243,181,58,0.36), rgba(243,181,58,0.12));
+  background: linear-gradient(180deg, #6a4515 0%, #3a2810 100%);
   border-color: var(--vh-gold);
   color: var(--vh-gold-soft);
-  box-shadow: 0 0 0 1px rgba(243,181,58,0.14), 0 8px 20px rgba(243,181,58,0.22), inset 0 1px 0 rgba(255,213,115,0.24);
+  box-shadow:
+    0 0 0 1px rgba(243,181,58,0.14),
+    0 6px 16px rgba(0,0,0,0.40),
+    0 0 12px rgba(243,181,58,0.20),
+    inset 0 1px 0 rgba(255,213,115,0.24);
 }
 .vc-btn-primary:hover {
-  background: linear-gradient(180deg, rgba(255,213,115,0.44), rgba(243,181,58,0.18));
+  background: linear-gradient(180deg, #8a5b1c 0%, #4a3214 100%);
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(243,181,58,0.32), 0 10px 26px rgba(243,181,58,0.40);
+  box-shadow:
+    0 0 0 1px rgba(243,181,58,0.32),
+    0 8px 20px rgba(0,0,0,0.45),
+    0 0 16px rgba(243,181,58,0.35);
 }
 .vc-btn-primary:disabled {
   opacity: 0.42;

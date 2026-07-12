@@ -28,9 +28,11 @@ AddEventHandler(E.DO_SPAWNCAR, function(model)
     local hash = loadModel(model)
     if not hash then VHubAdmin.notify('Modelo inv lido.'); return end
     local ped = PlayerPedId()
-    local c = GetEntityCoords(ped)
-    local veh = CreateVehicle(hash, c.x, c.y + 4.0, c.z, GetEntityHeading(ped), true, false)
+    -- spawna   frente do ped (forward vector), n o em offset fixo de mundo
+    local spawn = GetEntityCoords(ped) + GetEntityForwardVector(ped) * 3.0
+    local veh = CreateVehicle(hash, spawn.x, spawn.y, spawn.z, GetEntityHeading(ped), true, false)
     SetVehicleOnGroundProperly(veh)
+    SetVehicleHasBeenOwnedByPlayer(veh, true)
     SetPedIntoVehicle(ped, veh, -1)
     SetModelAsNoLongerNeeded(hash)
     VHubAdmin.notify('Ve culo ' .. model .. ' spawnado.')
@@ -57,11 +59,58 @@ AddEventHandler(E.DO_FIX, function()
   if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
   SetVehicleFixed(veh)
   SetVehicleDeformationFixed(veh)
+  SetVehicleUndriveable(veh, false)
   SetVehicleEngineHealth(veh, 1000.0)
   SetVehicleBodyHealth(veh, 1000.0)
   SetVehiclePetrolTankHealth(veh, 1000.0)
   SetVehicleDirtLevel(veh, 0.0)
+  if GetVehiclePedIsIn(PlayerPedId(), false) == veh then
+    SetVehicleEngineOn(veh, true, true, false)
+  end
   VHubAdmin.notify('Ve culo reparado.')
+end)
+
+-- ----------------------------------------------------------------------------
+-- BOOST tempor rio (par metros v m do server; auto-restaura ao expirar)
+-- ----------------------------------------------------------------------------
+local _boost_active = false
+
+RegisterNetEvent(E.DO_BOOST)
+AddEventHandler(E.DO_BOOST, function(mult, duration_ms)
+  local ped = PlayerPedId()
+  local veh = IsPedInAnyVehicle(ped, false) and GetVehiclePedIsIn(ped, false) or 0
+  if veh == 0 then VHubAdmin.notify('Voc  n o est  em um ve culo.'); return end
+  if _boost_active then VHubAdmin.notify('Boost j  ativo.'); return end
+
+  _boost_active = true
+  ModifyVehicleTopSpeed(veh, mult)
+  SetVehicleEnginePowerMultiplier(veh, mult * 15.0)
+  SetVehicleEngineTorqueMultiplier(veh, mult)
+  VHubAdmin.notify(('Boost %.1fx por %ds.'):format(mult, math.floor(duration_ms / 1000)))
+
+  SetTimeout(duration_ms, function()
+    if DoesEntityExist(veh) then
+      ModifyVehicleTopSpeed(veh, 1.0)
+      SetVehicleEnginePowerMultiplier(veh, 1.0)
+      SetVehicleEngineTorqueMultiplier(veh, 1.0)
+    end
+    _boost_active = false
+    VHubAdmin.notify('Boost encerrado.')
+  end)
+end)
+
+-- ----------------------------------------------------------------------------
+-- FLIP  desvira o ve culo mais pr ximo (ou o atual)
+-- ----------------------------------------------------------------------------
+RegisterNetEvent(E.DO_FLIP)
+AddEventHandler(E.DO_FLIP, function()
+  local veh = nearestVehicle(8.0)
+  if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
+  local c = GetEntityCoords(veh)
+  SetEntityRotation(veh, 0.0, 0.0, GetEntityHeading(veh), 2, true)
+  SetEntityCoords(veh, c.x, c.y, c.z + 0.6, false, false, false, false)
+  SetVehicleOnGroundProperly(veh)
+  VHubAdmin.notify('Ve culo desvirado.')
 end)
 
 RegisterNetEvent(E.DO_TUNING)
@@ -96,6 +145,8 @@ end, false)
 RegisterCommand('dv', function() if isAdm() then TriggerServerEvent(E.ACT_DELVEH) end end, false)
 RegisterCommand('fix', function() if isAdm() then TriggerServerEvent(E.ACT_FIX) end end, false)
 RegisterCommand('tuning', function() if isAdm() then TriggerServerEvent(E.ACT_TUNING) end end, false)
+RegisterCommand('boost', function() if isAdm() then TriggerServerEvent(E.ACT_BOOST) end end, false)
+RegisterCommand('flip', function() if isAdm() then TriggerServerEvent(E.ACT_FLIP) end end, false)
 
 RegisterCommand('carcolor', function(_, args)
   if not isAdm() then return end
