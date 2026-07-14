@@ -20,7 +20,7 @@ local TRUSTED = {
   ['vhub_nitro']      = true,   -- nitro → saveVehicleState (customization.nitro, source='nitro')
   ['vhub_vrcs']       = true,   -- Race Cinema: getVehicleState (read-only) p/ preservar aparência no replay
 }
-local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true }
+local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true, ['vhub_admin'] = true }
 
 local function _invoker_allowed()
   local caller = GetInvokingResource()

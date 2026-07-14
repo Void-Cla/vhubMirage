@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>vHub Pagamentos</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <div id="df-root" class="hidden">
+        <div class="df-card" role="dialog" aria-label="Pagamento Pix">
+
+            <header class="df-head">
+                <div class="df-brand">
+                    <svg class="df-pix-ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2 L22 12 L12 22 L2 12 Z" fill="none"
+                              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M8.5 12 L12 8.5 L15.5 12 L12 15.5 Z" fill="currentColor"/>
+                    </svg>
+                    <div class="df-brand-txt">
+                        <h1>Pagamento Pix</h1>
+                        <span>MercadoPago · vHub</span>
+                    </div>
+                </div>
+                <button id="df-close" class="df-x" title="Fechar (ESC)">×</button>
+            </header>
+
+            <div class="df-amount">
+                <span class="df-amount-label">Valor a pagar</span>
+                <span id="df-amount" class="df-amount-value">R$ 0,00</span>
+            </div>
+
+            <div class="df-qr-wrap">
+                <img id="df-qr" alt="QR Code Pix" draggable="false">
+                <div id="df-overlay" class="df-overlay hidden">
+                    <span id="df-overlay-ico">✓</span>
+                    <span id="df-overlay-txt">Pagamento aprovado!</span>
+                </div>
+            </div>
+
+            <div class="df-status">
+                <span id="df-dot" class="df-dot"></span>
+                <span id="df-status-text">Aguardando pagamento…</span>
+            </div>
+
+            <div class="df-copy">
+                <input id="df-code" readonly value="" spellcheck="false">
+                <button id="df-copy-btn">Copiar</button>
+            </div>
+
+            <footer class="df-foot">
+                <span id="df-timer">Expira em --:--</span>
+                <button id="df-cancel">Cancelar cobrança</button>
+            </footer>
+
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

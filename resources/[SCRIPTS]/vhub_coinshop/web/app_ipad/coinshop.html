@@ -1,8 +1,14 @@
-<!-- web/app_ipad/coinshop.html — app CoinShop do iPad v2.4.0
+<!-- web/app_ipad/coinshop.html — app CoinShop do iPad v2.4.1
      Fragmento injetado em .mod-coinshop pelo shell do iPad.
      Sem <html>/<head>/<body>, sem botão fechar (navbar do iPad fecha).
      Sem CSS/JS inline. Escopo: .mod-coinshop .cs-* -->
 <section class="cs-shell">
+
+  <!-- partículas de areia (decorativas; transform-only, pausam com o app oculto) -->
+  <div class="cs-dust" aria-hidden="true">
+    <i></i><i></i><i></i><i></i><i></i><i></i>
+    <i></i><i></i><i></i><i></i><i></i><i></i>
+  </div>
 
   <!-- ============================================================
        ASIDE — marca + saldo + navegação vertical com ícones SVG
@@ -44,9 +50,18 @@
 
     <!-- Topbar: título da view à esquerda, busca à direita -->
     <div class="cs-topbar" data-el="toolbar">
-      <h2 class="cs-view-title" data-el="viewTitle">Destaques</h2>
-      <input class="cs-search" data-el="search" type="text"
-             placeholder="Pesquisar..." maxlength="40" />
+      <div class="cs-top-copy">
+        <span class="cs-kicker" data-el="viewContext">Catálogo</span>
+        <h2 class="cs-view-title" data-el="viewTitle">Destaques</h2>
+      </div>
+      <div class="cs-top-actions">
+        <div class="cs-topnav" data-el="topnav" aria-label="Filtros do catálogo"></div>
+        <label class="cs-search-wrap" aria-label="Pesquisar catálogo">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="4.7"/><path d="m12 12 4 4"/></svg>
+          <input class="cs-search" data-el="search" type="text"
+                 placeholder="Buscar" maxlength="40" />
+        </label>
+      </div>
     </div>
 
     <p class="cs-status" data-el="status" hidden></p>
@@ -54,6 +69,9 @@
     <div class="cs-body">
 
       <!-- ── JOGADOR ─────────────────────────────────────── -->
+
+      <!-- faixa de pacotes de coins na home (só quando pix habilitado) -->
+      <div class="cs-home-pix" data-el="homePix" hidden></div>
 
       <div class="cs-grid" data-el="grid"></div>
 
@@ -63,7 +81,7 @@
         <h2>Resgatar código</h2>
         <p class="cs-sub">Cole o número do pedido ou código recebido para ganhar suas moedas.</p>
         <input class="cs-input" data-el="redeemKey" type="text"
-               placeholder="VHC-XXXXXX-... ou tbx-xxxxxxxx" maxlength="100" autocomplete="off" />
+               placeholder="MG7-XXXX-XXXX-XXXX" maxlength="100" autocomplete="off" />
         <label class="cs-gift-row">
           <input type="checkbox" data-el="giftToggle" />
           <span>Presentear alguém (ID do jogador online)</span>
@@ -77,16 +95,35 @@
       <div class="cs-pix" data-el="pix" hidden>
         <p class="cs-sub">Escolha um pacote, pague com Pix e receba as moedas na hora.</p>
         <div class="cs-pix-packs" data-el="pixPacks"></div>
+
         <div class="cs-pix-checkout" data-el="pixCheckout" hidden>
+
+          <div class="cs-pix-summary" data-el="pixSummary" hidden>
+            <span class="cs-pix-summary-coins" data-el="pixSumCoins">—</span>
+            <span class="cs-pix-summary-sep"></span>
+            <span class="cs-pix-summary-price" data-el="pixSumPrice">—</span>
+          </div>
+
           <div class="cs-pix-qr">
             <img data-el="pixQrImg" alt="QR Code Pix" hidden />
             <div class="cs-pix-qr-fallback" data-el="pixQrFallback">
               <span class="cs-pix-qr-ico">▦</span>
               <span data-el="pixQrTxt">O QR Code Pix aparecerá aqui</span>
             </div>
+            <div class="cs-pix-done" data-el="pixDone" hidden>
+              <span class="cs-pix-done-ico">✓</span>
+              <strong data-el="pixDoneTxt">Pagamento aprovado!</strong>
+            </div>
           </div>
+
+          <div class="cs-pix-status" data-el="pixStatus" hidden>
+            <span class="cs-pix-dot" data-el="pixDot"></span>
+            <span data-el="pixStatusTxt">Aguardando pagamento…</span>
+          </div>
+
           <p class="cs-pix-expire" data-el="pixExpire" hidden></p>
           <p class="cs-pix-msg" data-el="pixMsg" hidden></p>
+
           <div class="cs-pix-copy-row" data-el="pixCopyRow" hidden>
             <input class="cs-input cs-pix-copy-input" data-el="pixCopy" type="text" readonly
                    title="Pix copia-e-cola" />
@@ -153,12 +190,21 @@
         <div class="cs-adm-list" data-el="admPlayerList"></div>
       </div>
 
-      <!-- ── ADMIN: CÓDIGOS TEBEX ───────────────────────── -->
+      <!-- ── ADMIN: CUPONS MG7 ──────────────────────────── -->
       <div class="cs-adm" data-el="admCodes" hidden>
         <div class="cs-adm-toolbar">
-          <button type="button" class="cs-btn primary" data-action="adm-code-new">+ Criar Código</button>
+          <button type="button" class="cs-btn primary" data-action="adm-code-new">✦ Gerar Cupom</button>
           <button type="button" class="cs-btn sand" data-action="adm-codes-refresh">↻ Atualizar</button>
         </div>
+
+        <!-- vitrine do cupom recém-gerado (chave em claro é mostrada aqui e na lista pending) -->
+        <div class="cs-coupon-new" data-el="admCouponNew" hidden>
+          <span class="cs-coupon-new-lbl">Cupom gerado</span>
+          <strong class="cs-coupon-new-key" data-el="admCouponKey">MG7-…</strong>
+          <span class="cs-coupon-new-sub" data-el="admCouponSub">— moedas</span>
+          <button type="button" class="cs-btn primary" data-action="adm-coupon-copy">Copiar cupom</button>
+        </div>
+
         <div class="cs-adm-list" data-el="admCodeList"></div>
       </div>
 
@@ -206,8 +252,7 @@
   <div class="cs-overlay" data-el="overlay" hidden>
     <div class="cs-modal">
       <div class="cs-modal-media">
-        <img data-el="mImg" alt="" hidden />
-        <span class="cs-modal-fallback" data-el="mFallback">◆</span>
+        <span class="cs-modal-icon" data-el="mIcon" aria-hidden="true"></span>
       </div>
       <h3 data-el="mName"></h3>
       <p class="cs-modal-desc" data-el="mDesc"></p>

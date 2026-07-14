@@ -298,6 +298,39 @@ AddEventHandler("vhub_player_state:set_health", function(amount)
     math.max(100, math.min(200, math.floor(tonumber(amount) or 200))))
 end)
 
+RegisterNetEvent("vhub_player_state:revive")
+AddEventHandler("vhub_player_state:revive", function()
+  Citizen.CreateThread(function()
+    local ped = PlayerPedId()
+    local pos = GetEntityCoords(ped)
+    NetworkResurrectLocalPlayer(pos.x, pos.y, pos.z, GetEntityHeading(ped), true, false)
+    SetEntityHealth(PlayerPedId(), 200)
+    SetPedArmour(PlayerPedId(), 100)
+    ClearPedBloodDamage(PlayerPedId())
+    ResetPedVisibleDamage(PlayerPedId())
+  end)
+end)
+
+RegisterNetEvent("vhub_player_state:set_ped_model")
+AddEventHandler("vhub_player_state:set_ped_model", function(model)
+  if type(model) ~= 'string' or #model < 1 or #model > 64 then return end
+  Citizen.CreateThread(function()
+    local hash = GetHashKey(model)
+    if not IsModelInCdimage(hash) or not IsModelValid(hash) or not IsModelAPed(hash) then return end
+    RequestModel(hash)
+    local deadline = GetGameTimer() + 5000
+    while not HasModelLoaded(hash) and GetGameTimer() < deadline do Citizen.Wait(50) end
+    if not HasModelLoaded(hash) then return end
+    SetPlayerModel(PlayerId(), hash)
+    SetModelAsNoLongerNeeded(hash)
+  end)
+end)
+
+RegisterNetEvent("vhub_player_state:kill")
+AddEventHandler("vhub_player_state:kill", function()
+  SetEntityHealth(PlayerPedId(), 0)
+end)
+
 RegisterNetEvent("vhub_player_state:set_customization")
 AddEventHandler("vhub_player_state:set_customization", function(custom)
   Citizen.CreateThread(function()

@@ -1,4 +1,6 @@
 # vHub Mirage — Memória Institucional
+_HEAD 2026-07-13: **#67 — Admin ações + NUI premium**; corrigido drift de permissões (`vhub.admin.panel`/`player.*`/`admin.*`), ACE `vhub.admin.full`, dependência de startup em `vhub_player_state`, seletores/payloads NUI, catálogo veicular e contratos gated `setPedModel`/`kill` no owner. Vidro fosco simulado sem `backdrop-filter`, superfícies auxiliares opacas, areia CSS estática; `sand.js` morto removido. `vhub_admin` 3.0.1, `vhub_player_state` 1.1.1. Lua/JS/eventos/assets validados; smoke in-game pendente. **Próximo livre: #68.**_
+_HEAD 2026-07-13: **#66 — Wall administrativo vHub**; `/wall` e `/rg` sem ID alternam cards NUI de personagens próximos; `/rg <id>` preservado. Snapshot server-authoritative com `admin.rg`, bucket, raio e rate-limit; posição/vida client-side a 10 Hz, dados estáticos a 0,5 Hz. **Próximo livre: #67.**_
 _HEAD 2026-07-10: **#65 — Fuel v2.1 runtime completo**; vínculo netid/State Bag reparado, mangueira nativa em duas pontas, progresso autoritativo e galão persistente. **Próximo livre: #66.**_
 _HEAD 2026-07-10: **#64 — hardening JSON coinshop**; GData/SQL hostil não derruba loaders. **Próximo livre: #65.**_
 _HEAD 2026-07-10: **#63 — fix DDL Pix coinshop**; TTL/auditoria em `DATETIME`, schema alinhado. **Próximo livre: #64.**_

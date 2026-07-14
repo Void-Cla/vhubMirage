@@ -1,4 +1,4 @@
-// coinshop.js — app CoinShop do iPad v2.4.0
+// coinshop.js — app CoinShop do iPad v2.4.1
 // Anti-XSS: ZERO innerHTML com dado do servidor. Todo texto via textContent/createTextNode.
 // A-09: sem backdrop-filter. A-10: sem CDN externo, sem fetch externo.
 // Estrutura: canal relay → recebe `data` → renderiza → usuário clica → relay envia ação.
@@ -23,8 +23,14 @@ let _data     = null;   // snapshot recebido do server (data)
 let _busy     = false;  // trava de ação em voo
 let _view     = null;   // aba ativa ('grid', 'deals', 'redeem', 'pix', 'adm-dash', …)
 let _search   = '';     // filtro de busca atual
+let _category = 'all';  // categoria local; catálogo continua autoritativo no servidor
+let _sort     = 'featured';
 let _modal    = null;   // item aberto no modal jogador
 let _admModal = null;   // contexto do modal admin (tipo + callback de ok)
+let _root     = null;
+
+const _channelOffs = [];
+const _pickerOffs  = new Set();
 
 // caches lazy de pickers admin (key → { ts, rows })
 const _pickerCache = {};
@@ -53,6 +59,23 @@ const ICONS = {
         <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>
         <path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round"/>
+    </svg>`,
+    vehicle: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="M3 12.5 5.3 8h9.4l2.3 4.5v3H3v-3Z" fill="none" stroke="currentColor"
+              stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="6" cy="15.5" r="1.4" fill="currentColor"/><circle cx="14" cy="15.5" r="1.4" fill="currentColor"/>
+    </svg>`,
+    item: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="m3 6 7-3 7 3v8l-7 3-7-3V6Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="m3 6 7 3 7-3M10 9v8" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>`,
+    weapon: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="10" cy="10" r="2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" stroke="currentColor" stroke-width="1.5"/>
+    </svg>`,
+    tool: `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
+        <path d="m12.8 4.1 3.1 3.1-7.8 7.8a2.2 2.2 0 0 1-3.1-3.1l7.8-7.8Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="m12.6 3.2 1.1-1.1 3.2 3.2-1.1 1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`,
     'adm-dash': `<svg viewBox="0 0 20 20" class="cs-nav-ico" aria-hidden="true">
         <rect x="2" y="10" width="4" height="8" rx="1" fill="currentColor"/>
@@ -127,9 +150,16 @@ const VIEW_TITLE = {
     'adm-cats':    'Categorias',
     'adm-deals':   'Ofertas Admin',
     'adm-players': 'Jogadores',
-    'adm-codes':   'Códigos Tebex',
+    'adm-codes':   'Cupons MG7',
     'adm-theme':   'Aparência',
     'adm-import':  'Importar',
+};
+
+const CATEGORY_META = {
+    vehicle: { icon: 'vehicle', description: 'Garagens e carros' },
+    item:    { icon: 'item',    description: 'Itens e consumíveis' },
+    weapon:  { icon: 'weapon',  description: 'Armas e munição' },
+    tool:    { icon: 'tool',    description: 'Ferramentas úteis' },
 };
 
 
@@ -156,23 +186,28 @@ function el(tag, attrs, ...children) {
     return node;
 }
 
-function safeImg(url) {
-    if (!url) return '';
-    if (/^(https?:\/\/|data:image\/|nui:\/\/)/.test(url)) return url;
-    return '';
+function iconIdFor(category) {
+    const type = String(category || '').toLowerCase();
+    return CATEGORY_META[type]?.icon || 'grid';
 }
 
-function cdnUrl(item) {
-    if (!_data || !_data.cdn) return '';
-    const cat = (item.category || '').toLowerCase();
-    const { cdn } = _data;
-    if (item.imageUrl) return safeImg(item.imageUrl);
-    if (cat === 'vehicle'  && item.spawnName)  return safeImg(cdn.vehicles.replace('%s', item.spawnName));
-    if (cat === 'weapon'   && item.weaponName) return safeImg(cdn.weapons.replace('%s', item.weaponName));
-    if ((cat === 'item' || cat === 'consumable') && item.itemName) {
-        return safeImg(cdn.items.replace('%s', item.itemName));
-    }
-    return '';
+function iconNode(iconId, className) {
+    const wrap = document.createElement('span');
+    wrap.innerHTML = ICONS[iconId] || ICONS.grid;
+    const icon = wrap.firstElementChild;
+    if (icon && className) icon.classList.add(className);
+    return icon || document.createElement('span');
+}
+
+function setIcon(target, iconId) {
+    if (!target) return;
+    target.replaceChildren(iconNode(iconId));
+}
+
+function categoryMeta(category) {
+    return CATEGORY_META[String(category?.type || category || '').toLowerCase()] || {
+        icon: 'grid', description: 'Seleção especial',
+    };
 }
 
 function fmtCoins(n) { return Number(n || 0).toLocaleString('pt-BR'); }
@@ -198,10 +233,13 @@ function cacheRefs() {
         player:          q('player'),
         coins:           q('coins'),
         nav:             q('nav'),
+        topnav:          q('topnav'),
+        viewContext:     q('viewContext'),
         viewTitle:       q('viewTitle'),
         search:          q('search'),
         status:          q('status'),
         grid:            q('grid'),
+        homePix:         q('homePix'),
         deals:           q('deals'),
         redeem:          q('redeem'),
         redeemKey:       q('redeemKey'),
@@ -210,13 +248,24 @@ function cacheRefs() {
         pix:             q('pix'),
         pixPacks:        q('pixPacks'),
         pixCheckout:     q('pixCheckout'),
+        pixSummary:      q('pixSummary'),
+        pixSumCoins:     q('pixSumCoins'),
+        pixSumPrice:     q('pixSumPrice'),
         pixQrImg:        q('pixQrImg'),
         pixQrFallback:   q('pixQrFallback'),
         pixQrTxt:        q('pixQrTxt'),
+        pixDone:         q('pixDone'),
+        pixDoneTxt:      q('pixDoneTxt'),
+        pixStatus:       q('pixStatus'),
+        pixDot:          q('pixDot'),
+        pixStatusTxt:    q('pixStatusTxt'),
         pixExpire:       q('pixExpire'),
         pixMsg:          q('pixMsg'),
         pixCopyRow:      q('pixCopyRow'),
         pixCopy:         q('pixCopy'),
+        admCouponNew:    q('admCouponNew'),
+        admCouponKey:    q('admCouponKey'),
+        admCouponSub:    q('admCouponSub'),
         admDash:         q('admDash'),
         admCatalog:      q('admCatalog'),
         admCats:         q('admCats'),
@@ -239,8 +288,7 @@ function cacheRefs() {
         statCoins24h:    q('statCoins24h'),
         statOnline:      q('statOnline'),
         overlay:         q('overlay'),
-        mImg:            q('mImg'),
-        mFallback:       q('mFallback'),
+        mIcon:           q('mIcon'),
         mName:           q('mName'),
         mDesc:           q('mDesc'),
         mPrice:          q('mPrice'),
@@ -268,58 +316,109 @@ function setBusy(on) {
 // NAV — sidebar com ícones SVG
 // ============================================================
 
+// rail minimalista: só ícones circulares com tooltip; categorias viraram chips na topbar
 function buildNav() {
     if (!refs.nav || !_data) return;
-    refs.nav.innerHTML = '';
+    refs.nav.replaceChildren();
 
     const isAdm = !!_data.isAdmin;
 
-    refs.nav.appendChild(navGroup('Loja'));
-    refs.nav.appendChild(navBtn('grid',   'Itens'));
-    refs.nav.appendChild(navBtn('deals',  'Ofertas'));
-    refs.nav.appendChild(navBtn('redeem', 'Resgatar'));
-    if (_data.pixEnabled !== false) {
-        refs.nav.appendChild(navBtn('pix', 'Comprar Coins'));
+    refs.nav.appendChild(navBtn('grid',   'Início — catálogo e coins'));
+    refs.nav.appendChild(navBtn('deals',  'Ofertas especiais'));
+    refs.nav.appendChild(navBtn('redeem', 'Resgatar cupom'));
+    if (_data.pix?.enabled === true) {
+        refs.nav.appendChild(navBtn('pix', 'Comprar coins (Pix)'));
     }
 
     if (isAdm) {
         refs.nav.appendChild(el('div', { class: 'cs-nav-sep' }));
-        refs.nav.appendChild(navGroup('Admin'));
-        refs.nav.appendChild(navBtn('adm-dash',    'Dashboard'));
-        refs.nav.appendChild(navBtn('adm-catalog', 'Catálogo'));
-        refs.nav.appendChild(navBtn('adm-cats',    'Categorias'));
-        refs.nav.appendChild(navBtn('adm-deals',   'Ofertas'));
-        refs.nav.appendChild(navBtn('adm-players', 'Jogadores'));
-        refs.nav.appendChild(navBtn('adm-codes',   'Códigos'));
-        refs.nav.appendChild(navBtn('adm-theme',   'Aparência'));
-        refs.nav.appendChild(navBtn('adm-import',  'Importar'));
+        refs.nav.appendChild(navBtn('adm-dash',    'Admin — Dashboard'));
+        refs.nav.appendChild(navBtn('adm-catalog', 'Admin — Catálogo'));
+        refs.nav.appendChild(navBtn('adm-cats',    'Admin — Categorias'));
+        refs.nav.appendChild(navBtn('adm-deals',   'Admin — Ofertas'));
+        refs.nav.appendChild(navBtn('adm-players', 'Admin — Jogadores'));
+        refs.nav.appendChild(navBtn('adm-codes',   'Admin — Cupons MG7'));
+        refs.nav.appendChild(navBtn('adm-theme',   'Admin — Aparência'));
+        refs.nav.appendChild(navBtn('adm-import',  'Admin — Importar'));
     }
 }
 
-function navGroup(label) {
-    const div = el('div', { class: 'cs-nav-group' });
-    div.textContent = label;
-    return div;
-}
-
-function navBtn(id, label) {
-    const btn = el('button', { type: 'button', class: 'cs-nav-btn', dataset: { view: id } });
-    // SVG injetado via innerHTML no wrapper — dado controlado (string literal, não servidor)
-    const iconWrap = document.createElement('span');
-    iconWrap.innerHTML = ICONS[id] || '';
-    if (iconWrap.firstChild) btn.appendChild(iconWrap.firstChild);
-    btn.appendChild(document.createTextNode(label));
-    btn.addEventListener('click', () => navigate(id));
+function navBtn(id, tooltip) {
+    const btn = el('button', {
+        type: 'button', class: 'cs-nav-btn', title: tooltip,
+        dataset: { action: 'view', view: id },
+    });
+    btn.appendChild(iconNode(id));
     return btn;
 }
 
 function updateNavActive() {
     document.querySelectorAll('.mod-coinshop .cs-nav-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === _view);
+        const viewActive = btn.dataset.view === _view;
+        const catActive = btn.dataset.categoryId && btn.dataset.categoryId === _category;
+        btn.classList.toggle('active', viewActive || catActive);
     });
     if (refs.viewTitle && VIEW_TITLE[_view]) {
         refs.viewTitle.textContent = VIEW_TITLE[_view];
     }
+    if (refs.viewContext) {
+        const category = selectedCategory();
+        refs.viewContext.textContent = _view === 'grid' && category
+            ? (category.name || 'Categoria')
+            : (_view === 'grid' ? 'Catálogo' : 'CoinShop');
+    }
+    buildTopNav();
+}
+
+function selectedCategory() {
+    if (!_data || _category === 'all') return null;
+    return (_data.categories || []).find(category => String(category.id || '') === _category) || null;
+}
+
+function buildTopNav() {
+    if (!refs.topnav) return;
+    refs.topnav.replaceChildren();
+    refs.topnav.hidden = _view !== 'grid';
+    if (_view !== 'grid') return;
+
+    // categorias (saíram do rail — aqui como chips)
+    const categories = Array.isArray(_data?.categories) ? _data.categories : [];
+    if (categories.length) {
+        const all = el('button', {
+            type: 'button', class: 'cs-top-chip',
+            dataset: { action: 'category', categoryId: '' },
+        });
+        all.textContent = 'Tudo';
+        all.classList.toggle('active', _category === 'all');
+        refs.topnav.appendChild(all);
+
+        categories.forEach(category => {
+            const chip = el('button', {
+                type: 'button', class: 'cs-top-chip',
+                dataset: { action: 'category', categoryId: String(category.id || '') },
+            });
+            chip.textContent = category.name || category.id || '?';
+            chip.classList.toggle('active', String(category.id || '') === _category);
+            refs.topnav.appendChild(chip);
+        });
+
+        refs.topnav.appendChild(el('span', { class: 'cs-chip-sep' }));
+    }
+
+    const filters = [
+        ['featured', 'Destaques'],
+        ['price', 'Menor preço'],
+        ['available', 'No saldo'],
+    ];
+    filters.forEach(([id, label]) => {
+        const btn = el('button', {
+            type: 'button', class: 'cs-top-chip',
+            dataset: { action: 'sort', sort: id },
+        });
+        btn.textContent = label;
+        btn.classList.toggle('active', _sort === id);
+        refs.topnav.appendChild(btn);
+    });
 }
 
 
@@ -340,8 +439,15 @@ function navigate(view) {
     const panel = refs[VIEW_EL[view]];
     if (panel) panel.hidden = false;
 
+    // faixa "Comprar Coins" mora na página principal, junto do catálogo
+    if (refs.homePix) {
+        const showHome = view === 'grid' && _data?.pix?.enabled === true;
+        refs.homePix.hidden = !showHome;
+        if (showHome) renderHomePix();
+    }
+
     const hasSearch = view === 'grid' || view === 'adm-catalog';
-    if (refs.search) refs.search.style.display = hasSearch ? '' : 'none';
+    if (refs.search?.parentElement) refs.search.parentElement.hidden = !hasSearch;
 
     if (view === 'grid')          renderGrid();
     if (view === 'deals')         renderDeals();
@@ -362,13 +468,29 @@ function navigate(view) {
 
 function renderGrid() {
     if (!refs.grid || !_data) return;
-    refs.grid.innerHTML = '';
+    refs.grid.replaceChildren();
 
     const q = _search.toLowerCase();
-    const items = (_data.items || []).filter(item => {
+    const category = selectedCategory();
+    let items = (_data.items || []).filter(item => {
+        const matchesCategory = !category || (category.type
+            ? item.category === category.type
+            : item.customCategory === category.id);
+        if (!matchesCategory) return false;
         if (!q) return true;
         return (item.name || '').toLowerCase().includes(q)
+            || (item.description || '').toLowerCase().includes(q)
             || (item.category || '').toLowerCase().includes(q);
+    });
+
+    if (_sort === 'available') {
+        items = items.filter(item => Number(item.price || 0) <= Number(_data.coins || 0));
+    }
+    items = items.slice().sort((a, b) => {
+        if (_sort === 'price') return Number(a.price || 0) - Number(b.price || 0);
+        if (_sort === 'featured') return Number(b.trending === true) - Number(a.trending === true)
+            || String(a.name || a.id).localeCompare(String(b.name || b.id), 'pt-BR');
+        return String(a.name || a.id).localeCompare(String(b.name || b.id), 'pt-BR');
     });
 
     if (!items.length) { refs.grid.appendChild(emptyMsg('Nenhum item encontrado.')); return; }
@@ -376,49 +498,28 @@ function renderGrid() {
 }
 
 function cardItem(item) {
-    const wrap = el('div', { class: 'cs-card', dataset: { id: item.id } });
+    const wrap = el('button', {
+        type: 'button', class: 'cs-card', dataset: { action: 'open-item', itemId: item.id },
+    });
+    const head = el('div', { class: 'cs-card-head' });
+    head.appendChild(iconNode(iconIdFor(item.category), 'cs-card-icon'));
 
-    const imgUrl = cdnUrl(item);
-    if (imgUrl) {
-        const img = el('img', { class: 'cs-card-img', alt: '' });
-        img.src = imgUrl;
-        img.onerror = () => img.replaceWith(fallbackImgCard(item));
-        wrap.appendChild(img);
-    } else {
-        wrap.appendChild(fallbackImgCard(item));
-    }
-
-    const body = el('div', { class: 'cs-card-body' });
+    const body = el('div', { class: 'cs-card-copy' });
     const name = el('div', { class: 'cs-card-name' });
     name.textContent = item.name || item.id;
+    const desc = el('p', { class: 'cs-card-desc' });
+    desc.textContent = item.description || categoryMeta(item.category).description;
+    body.append(name, desc);
+    head.appendChild(body);
 
-    const cat = el('div', { class: 'cs-card-cat' });
-    cat.textContent = item.category || '';
-
-    // ícone de moeda: string literal controlada, não dado do servidor
-    const priceRow = el('div', { class: 'cs-card-price' });
-    const coinIco = document.createElement('span');
-    coinIco.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" width="12" height="12">'
-        + '<circle cx="10" cy="10" r="9" fill="#f3b53a"/>'
-        + '<text x="10" y="14.5" text-anchor="middle" font-size="10" font-weight="700"'
-        + ' fill="#0a0906" font-family="\'Barlow Condensed\',system-ui">$</text></svg>';
-    priceRow.appendChild(coinIco);
-    priceRow.appendChild(document.createTextNode(fmtCoins(item.price)));
-
-    body.appendChild(name);
-    body.appendChild(cat);
-    body.appendChild(priceRow);
-    wrap.appendChild(body);
-
-    wrap.addEventListener('click', () => openItemModal(item));
+    const foot = el('div', { class: 'cs-card-foot' });
+    const cat = el('span', { class: 'cs-card-cat' });
+    cat.textContent = item.category || 'item';
+    const price = el('strong', { class: 'cs-card-price' });
+    price.textContent = fmtCoins(item.price);
+    foot.append(cat, price);
+    wrap.append(head, foot);
     return wrap;
-}
-
-function fallbackImgCard(item) {
-    const d = el('div', { class: 'cs-card-img-fallback' });
-    const cat = (item.category || '').toLowerCase();
-    d.textContent = cat === 'vehicle' ? '🚗' : cat === 'weapon' ? '🔫' : '📦';
-    return d;
 }
 
 
@@ -428,20 +529,7 @@ function fallbackImgCard(item) {
 
 function openItemModal(item) {
     _modal = item;
-    const imgUrl = cdnUrl(item);
-
-    refs.mImg.hidden = true;
-    refs.mFallback.hidden = false;
-
-    if (imgUrl) {
-        refs.mImg.src = imgUrl;
-        refs.mImg.hidden = false;
-        refs.mFallback.hidden = true;
-        refs.mImg.onerror = () => {
-            refs.mImg.hidden = true;
-            refs.mFallback.hidden = false;
-        };
-    }
+    setIcon(refs.mIcon, iconIdFor(item.category));
 
     refs.mName.textContent  = item.name || item.id;
     refs.mDesc.textContent  = item.description || '';
@@ -458,15 +546,7 @@ function closeModal() {
 
 function openDealModal(deal) {
     _modal = { ...deal, _isDeal: true };
-    refs.mImg.hidden = true;
-    refs.mFallback.hidden = false;
-    const imgUrl = safeImg(deal.imageUrl);
-    if (imgUrl) {
-        refs.mImg.src = imgUrl;
-        refs.mImg.hidden = false;
-        refs.mFallback.hidden = true;
-        refs.mImg.onerror = () => { refs.mImg.hidden = true; refs.mFallback.hidden = false; };
-    }
+    setIcon(refs.mIcon, 'deals');
     refs.mName.textContent  = deal.name || deal.id;
     refs.mDesc.textContent  = deal.description || '';
     refs.mPrice.textContent = fmtCoins(deal.price) + ' moedas';
@@ -488,22 +568,17 @@ function renderDeals() {
 }
 
 function cardDeal(deal) {
-    const wrap = el('div', { class: 'cs-deal-card', dataset: { id: deal.id } });
-
-    const imgUrl = safeImg(deal.imageUrl);
-    if (imgUrl) {
-        const img = el('img', { class: 'cs-deal-img', alt: '' });
-        img.src = imgUrl;
-        img.onerror = () => img.remove();
-        wrap.appendChild(img);
-    }
-
-    const body = el('div', { class: 'cs-deal-body' });
-    const name = el('div', { class: 'cs-deal-name' });
+    const wrap = el('button', {
+        type: 'button', class: 'cs-deal', dataset: { action: 'open-deal', dealId: deal.id },
+    });
+    const icon = iconNode('deals', 'cs-deal-icon');
+    const body = el('div', { class: 'cs-deal-info' });
+    const name = el('h3');
     name.textContent = deal.name || deal.id;
-    const desc = el('div', { class: 'cs-deal-desc' });
+    const desc = el('p');
     desc.textContent = deal.description || '';
-    const priceRow = el('div', { class: 'cs-deal-price' });
+    const side = el('div', { class: 'cs-deal-side' });
+    const priceRow = el('strong');
     priceRow.textContent = fmtCoins(deal.price) + ' moedas';
     if (deal.originalPrice && deal.originalPrice > deal.price) {
         const orig = el('span', { class: 'cs-deal-original' });
@@ -513,9 +588,8 @@ function cardDeal(deal) {
 
     body.appendChild(name);
     body.appendChild(desc);
-    body.appendChild(priceRow);
-    wrap.appendChild(body);
-    wrap.addEventListener('click', () => openDealModal(deal));
+    side.appendChild(priceRow);
+    wrap.append(icon, body, side);
     return wrap;
 }
 
@@ -525,58 +599,121 @@ function cardDeal(deal) {
 // ============================================================
 
 let _selectedPack = null;
+let _pixTimer     = null;   // countdown 1 Hz — sempre limpo (A-07)
+let _pixExpiresAt = 0;      // unix seconds
+
+// para o countdown do checkout (A-07 — nunca deixar interval órfão)
+function stopPixTimer() {
+    if (_pixTimer) { clearInterval(_pixTimer); _pixTimer = null; }
+}
+
+// faixa compacta de pacotes na página principal (clique → checkout na aba Pix)
+function renderHomePix() {
+    if (!refs.homePix || !_data) return;
+    refs.homePix.replaceChildren();
+
+    const packs = Array.isArray(_data.pix?.packages) ? _data.pix.packages : [];
+    if (!packs.length) { refs.homePix.hidden = true; return; }
+
+    const lbl = el('span', { class: 'cs-home-pix-lbl' });
+    lbl.textContent = 'Comprar coins';
+    refs.homePix.appendChild(lbl);
+
+    packs.forEach(pack => {
+        const pill = el('button', {
+            type: 'button',
+            class: 'cs-home-pack' + (pack.popular ? ' popular' : ''),
+            title: (pack.name || pack.id) + ' — pagamento via Pix',
+            dataset: { action: 'home-pix', packageId: pack.id },
+        });
+        const coins = el('strong');
+        coins.textContent = fmtCoins(pack.coins);
+        const unit = el('span', { class: 'cs-home-pack-unit' });
+        unit.textContent = Number(pack.coins) === 1 ? 'coin' : 'coins';
+        const price = el('span', { class: 'cs-home-pack-price' });
+        price.textContent = 'R$ ' + Number(pack.priceBRL || 0).toFixed(2).replace('.', ',');
+        pill.append(coins, unit, price);
+        refs.homePix.appendChild(pill);
+    });
+}
+
+// estado visual da linha de status (dot pulsante / ok / erro)
+function setPixStatus(text, kind) {
+    if (!refs.pixStatus) return;
+    refs.pixStatus.hidden = false;
+    refs.pixStatusTxt.textContent = text;
+    refs.pixDot.classList.remove('ok', 'err');
+    if (kind) refs.pixDot.classList.add(kind);
+}
 
 function renderPixPacks() {
     if (!refs.pixPacks || !_data) return;
     refs.pixPacks.innerHTML = '';
     refs.pixCheckout.hidden = true;
     _selectedPack = null;
+    stopPixTimer();
 
-    const packs = _data.pixPackages || [];
+    const packs = Array.isArray(_data.pix?.packages) ? _data.pix.packages : [];
     if (!packs.length) { refs.pixPacks.appendChild(emptyMsg('Nenhum pacote configurado.')); return; }
 
     packs.forEach(pack => {
-        const card = el('div', { class: 'cs-pix-pack', dataset: { id: pack.id } });
-
+        const card = el('button', {
+            type: 'button', class: 'cs-pack tier' + Number(pack.tier || 1)
+                + (pack.popular ? ' popular' : ''),
+            dataset: { action: 'pix-create', packageId: pack.id },
+        });
+        const badges = el('div', { class: 'cs-pack-badges' });
+        const tier = el('span', { class: 'cs-pack-tier t' + Number(pack.tier || 1) });
+        tier.textContent = 'R$1 = 1';
+        badges.appendChild(tier);
         if (pack.popular) {
-            const badge = el('span', { class: 'cs-pix-popular' });
+            const badge = el('span', { class: 'cs-pack-popular' });
             badge.textContent = 'Popular';
-            card.appendChild(badge);
+            badges.appendChild(badge);
         }
 
-        const name = el('div', { class: 'cs-pix-pack-name' });
+        const name = el('div', { class: 'cs-pack-name' });
         name.textContent = pack.name || pack.id;
 
-        const coins = el('div', { class: 'cs-pix-pack-coins' });
-        coins.textContent = fmtCoins(pack.coins) + ' moedas';
+        const coins = el('div', { class: 'cs-pack-coins' });
+        coins.textContent = fmtCoins(pack.coins) + (Number(pack.coins) === 1 ? ' moeda' : ' moedas');
 
-        card.appendChild(name);
-        card.appendChild(coins);
-
-        if (pack.bonus > 0) {
-            const bonus = el('div', { class: 'cs-pix-pack-bonus' });
-            bonus.textContent = '+' + fmtCoins(pack.bonus) + ' bônus';
-            card.appendChild(bonus);
-        }
-
-        const price = el('div', { class: 'cs-pix-pack-price' });
+        const price = el('div', { class: 'cs-pack-price' });
         price.textContent = 'R$ ' + Number(pack.priceBRL || 0).toFixed(2).replace('.', ',');
-        card.appendChild(price);
-
-        card.addEventListener('click', () => {
-            document.querySelectorAll('.mod-coinshop .cs-pix-pack')
-                .forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            _selectedPack = pack;
-            refs.pixCheckout.hidden = false;
-            refs.pixQrFallback.hidden = false;
-            refs.pixQrImg.hidden = true;
-            if (refs.pixQrTxt) refs.pixQrTxt.textContent = 'Gerando cobrança Pix…';
-            ch.send('pix_create', { packageId: pack.id });
-        });
-
+        card.append(badges, name, coins, price);
         refs.pixPacks.appendChild(card);
     });
+}
+
+function createPix(packageId) {
+    const packs = Array.isArray(_data?.pix?.packages) ? _data.pix.packages : [];
+    const pack = packs.find(entry => entry.id === packageId);
+    if (!pack || _busy) return;
+
+    document.querySelectorAll('.mod-coinshop .cs-pack').forEach(card => {
+        card.classList.toggle('selected', card.dataset.packageId === packageId);
+    });
+    _selectedPack = pack;
+    stopPixTimer();
+
+    refs.pixCheckout.hidden = false;
+    refs.pixQrFallback.hidden = false;
+    refs.pixQrImg.hidden = true;
+    if (refs.pixDone)    refs.pixDone.hidden    = true;
+    if (refs.pixStatus)  refs.pixStatus.hidden  = true;
+    if (refs.pixExpire)  refs.pixExpire.hidden  = true;
+    if (refs.pixMsg)     refs.pixMsg.hidden     = true;
+    if (refs.pixCopyRow) refs.pixCopyRow.hidden = true;
+    if (refs.pixQrTxt)   refs.pixQrTxt.textContent = 'Gerando cobrança Pix…';
+
+    if (refs.pixSummary) {
+        refs.pixSummary.hidden = false;
+        refs.pixSumCoins.textContent = fmtCoins(pack.coins)
+            + (Number(pack.coins) === 1 ? ' moeda' : ' moedas');
+        refs.pixSumPrice.textContent = 'R$ ' + Number(pack.priceBRL || 0).toFixed(2).replace('.', ',');
+    }
+
+    ch.send('pix_create', { packageId });
 }
 
 function handlePixResult(pix) {
@@ -585,21 +722,67 @@ function handlePixResult(pix) {
         refs.pixQrFallback.hidden = false;
         refs.pixQrImg.hidden = true;
         if (refs.pixQrTxt) refs.pixQrTxt.textContent = pix.message || 'Pix indisponível.';
+        setPixStatus(pix.message || 'Pix indisponível no momento.', 'err');
         return;
     }
-    if (pix.qrcode_base64) {
-        refs.pixQrImg.src = 'data:image/png;base64,' + pix.qrcode_base64;
+
+    const qr = typeof pix.qrcode_base64 === 'string' && pix.qrcode_base64.length <= 400000
+        && /^[A-Za-z0-9+/=]+$/.test(pix.qrcode_base64) ? pix.qrcode_base64 : '';
+    if (qr) {
+        refs.pixQrImg.src = 'data:image/png;base64,' + qr;
         refs.pixQrImg.hidden = false;
         refs.pixQrFallback.hidden = true;
     }
-    if (pix.expiresAt && refs.pixExpire) {
-        refs.pixExpire.textContent = 'Expira em: ' + pix.expiresAt;
-        refs.pixExpire.hidden = false;
-    }
+
     if (pix.copiaECola && refs.pixCopy) {
         refs.pixCopy.value = pix.copiaECola;
         refs.pixCopyRow.hidden = false;
     }
+
+    setPixStatus('Aguardando pagamento…', null);
+
+    // countdown vivo (mm:ss) até a expiração da cobrança
+    _pixExpiresAt = Number(pix.expiresAt) || 0;
+    if (_pixExpiresAt > 0 && refs.pixExpire) {
+        refs.pixExpire.hidden = false;
+        stopPixTimer();
+        _pixTimer = setInterval(tickPixCountdown, 1000);
+        tickPixCountdown();
+    }
+}
+
+function tickPixCountdown() {
+    const left = Math.max(0, _pixExpiresAt - Math.floor(Date.now() / 1000));
+    const mm = String(Math.floor(left / 60)).padStart(2, '0');
+    const ss = String(left % 60).padStart(2, '0');
+    if (refs.pixExpire) {
+        refs.pixExpire.textContent = 'Expira em ' + mm + ':' + ss;
+        refs.pixExpire.classList.toggle('urgent', left > 0 && left < 120);
+    }
+    if (left === 0) {
+        stopPixTimer();
+        setPixStatus('Cobrança expirada — escolha o pacote novamente.', 'err');
+        if (refs.pixCopyRow) refs.pixCopyRow.hidden = true;
+    }
+}
+
+// push do servidor após entrega confirmada (handler 'coins' do vhub_df)
+function handlePixPaid(d) {
+    stopPixTimer();
+    if (refs.coins && d.newBalance != null) refs.coins.textContent = fmtCoins(d.newBalance);
+    if (_data && d.newBalance != null) _data.coins = d.newBalance;
+
+    if (_view !== 'pix' || refs.pixCheckout?.hidden) {
+        showStatus('✓ Pix aprovado! +' + fmtCoins(d.coins) + ' moedas.', 5000);
+        return;
+    }
+    if (refs.pixDone) {
+        refs.pixDone.hidden = false;
+        refs.pixDoneTxt.textContent = '+' + fmtCoins(d.coins) + ' moedas creditadas!';
+    }
+    setPixStatus('Pagamento confirmado!', 'ok');
+    if (refs.pixExpire)  refs.pixExpire.hidden  = true;
+    if (refs.pixCopyRow) refs.pixCopyRow.hidden = true;
 }
 
 
@@ -802,10 +985,12 @@ function fetchPickerData(pickerKey, filterType) {
 
         const off = ch.on(action, d => {
             off();
+            _pickerOffs.delete(off);
             const rows = (d && d.data) ? d.data : [];
             _pickerCache[pickerKey] = { ts: Date.now(), rows };
             resolve(filterRows(rows, filterType));
         });
+        if (typeof off === 'function') _pickerOffs.add(off);
 
         ch.send(action, {});
     });
@@ -950,11 +1135,42 @@ function openCoinModal(mode, player) {
 
 
 // ============================================================
-// ADMIN — códigos
+// ADMIN — cupons MG7 (chave nasce no servidor; admin só informa moedas)
 // ============================================================
 
-function loadAdmCodes() {
+let _lastCoupon = null;   // última chave gerada (para o botão copiar da vitrine)
+
+// copia texto com fallback execCommand (clipboard API pode falhar no CEF)
+function copyText(text) {
+    if (!text) return false;
+    let ok = false;
+    const tmp = document.createElement('textarea');
+    tmp.value = text;
+    tmp.style.position = 'fixed';
+    tmp.style.opacity = '0';
+    document.body.appendChild(tmp);
+    tmp.select();
+    try { ok = document.execCommand('copy'); } catch (_) { /* CEF antigo */ }
+    document.body.removeChild(tmp);
+    if (!ok && navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => {});
+        ok = true;
+    }
+    return ok;
+}
+
+// exibe a vitrine do cupom recém-gerado (chave em claro; some ao reabrir a aba)
+function showGeneratedCoupon(key, coins) {
+    _lastCoupon = key;
+    if (!refs.admCouponNew) return;
+    refs.admCouponNew.hidden = false;
+    refs.admCouponKey.textContent = key;
+    refs.admCouponSub.textContent = fmtCoins(coins) + (Number(coins) === 1 ? ' moeda' : ' moedas');
+}
+
+function loadAdmCodes(keepCoupon) {
     if (!refs.admCodeList) return;
+    if (!keepCoupon && refs.admCouponNew) refs.admCouponNew.hidden = true;
     refs.admCodeList.innerHTML = '';
     refs.admCodeList.appendChild(spinner());
     ch.send('admin_list_codes', {});
@@ -964,22 +1180,39 @@ function handleAdmCodes(d) {
     if (!refs.admCodeList) return;
     refs.admCodeList.innerHTML = '';
     if (!d.ok || !d.data || !d.data.length) {
-        refs.admCodeList.appendChild(emptyMsg('Nenhum código cadastrado.')); return;
+        refs.admCodeList.appendChild(emptyMsg('Nenhum cupom gerado ainda.')); return;
     }
     d.data.forEach(code => {
         const row  = el('div', { class: 'cs-adm-row' });
         const info = el('div', { class: 'cs-adm-row-info' });
-        const name = el('div', { class: 'cs-adm-row-name' }); name.textContent = code.order_id || code.id;
-        const sub  = el('div', { class: 'cs-adm-row-sub' });  sub.textContent = fmtCoins(code.coins) + ' moedas · ' + (code.status || '?');
+        const name = el('div', { class: 'cs-adm-row-name cs-coupon-key' });
+        name.textContent = code.key || '—';
+
+        const sub = el('div', { class: 'cs-adm-row-sub' });
+        sub.textContent = fmtCoins(code.coins) + ' moedas';
+        const badge = el('span', {
+            class: 'cs-badge ' + (code.status === 'pending' ? 'pending' : 'redeemed'),
+        });
+        badge.textContent = code.status === 'pending' ? 'Disponível' : 'Resgatado';
+        sub.appendChild(document.createTextNode(' · '));
+        sub.appendChild(badge);
+
         info.appendChild(name); info.appendChild(sub); row.appendChild(info);
+
         const acts = el('div', { class: 'cs-adm-row-actions' });
         if (code.status === 'pending') {
-            const btnDel = el('button', { type: 'button', class: 'cs-btn danger' });
+            const btnCopy = el('button', { type: 'button', class: 'cs-btn sand sm' });
+            btnCopy.textContent = 'Copiar';
+            btnCopy.addEventListener('click', () => {
+                if (copyText(code.key)) showStatus('Cupom copiado!', 2000);
+            });
+            const btnDel = el('button', { type: 'button', class: 'cs-btn danger sm' });
             btnDel.textContent = 'Remover';
             btnDel.addEventListener('click', () => confirmAdmAction(
-                'Remover código ' + (code.order_id || code.id) + '?',
-                () => ch.send('admin_delete_code', { codeId: code.id })
+                'Remover o cupom ' + code.key + '?',
+                () => ch.send('admin_delete_code', { key: code.key })
             ));
+            acts.appendChild(btnCopy);
             acts.appendChild(btnDel);
         }
         row.appendChild(acts);
@@ -1062,6 +1295,12 @@ function showStatus(msg, ms) {
 // pickers lazy — sem stub permanente; fetchPickerData registra/cancela one-shot por demanda
 // todos os ch.on permanentes vivem em onInit() abaixo
 
+function listenChannel(event, handler) {
+    const off = ch.on(event, handler);
+    if (typeof off === 'function') _channelOffs.push(off);
+    return off;
+}
+
 
 // ============================================================
 // DELEGAÇÃO DE CLIQUES (data-action)
@@ -1073,6 +1312,42 @@ function onClick(e) {
     const action = btn.dataset.action;
 
     switch (action) {
+        case 'view':
+            _category = 'all';
+            navigate(btn.dataset.view);
+            break;
+
+        case 'category':
+            _category = btn.dataset.categoryId || 'all';
+            navigate('grid');
+            break;
+
+        case 'sort':
+            _sort = btn.dataset.sort || 'featured';
+            renderGrid();
+            buildTopNav();
+            break;
+
+        case 'open-item': {
+            const item = (_data?.items || []).find(entry => entry.id === btn.dataset.itemId);
+            if (item) openItemModal(item);
+            break;
+        }
+
+        case 'open-deal': {
+            const deal = (_data?.deals || []).find(entry => entry.id === btn.dataset.dealId);
+            if (deal) openDealModal(deal);
+            break;
+        }
+
+        case 'pix-create': createPix(btn.dataset.packageId); break;
+
+        // pacote clicado na página principal → abre a aba Pix já com o checkout
+        case 'home-pix':
+            navigate('pix');
+            createPix(btn.dataset.packageId);
+            break;
+
         case 'modal-close': closeModal(); break;
         case 'modal-buy':
             if (_busy || !_modal) break;
@@ -1115,23 +1390,27 @@ function onClick(e) {
 
         case 'adm-code-new': {
             if (refs.admModalBody) refs.admModalBody.innerHTML = '';
-            const codeFields = {};
-            [
-                { key: 'orderId', label: 'Número do Pedido', placeholder: 'tbx-xxxxxxxx' },
-                { key: 'coins',   label: 'Moedas',           type: 'number' },
-            ].forEach(f => {
-                const w = el('div', { class: 'cs-adm-field' });
-                const lbl = el('span'); lbl.textContent = f.label; w.appendChild(lbl);
-                const inp = el('input', { type: f.type || 'text', class: 'cs-input', placeholder: f.placeholder || '' });
-                w.appendChild(inp); codeFields[f.key] = inp; refs.admModalBody.appendChild(w);
+            const w = el('div', { class: 'cs-adm-field' });
+            const lbl = el('span'); lbl.textContent = 'Valor do cupom (moedas)'; w.appendChild(lbl);
+            const inp = el('input', {
+                type: 'number', class: 'cs-input', min: '1', placeholder: 'ex: 100',
             });
-            openAdmModal('Novo Código Tebex', () => {
-                const payload = {};
-                for (const [k, n] of Object.entries(codeFields)) payload[k] = n.value;
-                ch.send('admin_create_code', payload);
+            w.appendChild(inp);
+            const hint = el('p', { class: 'cs-sub' });
+            hint.textContent = 'O código MG7 é gerado automaticamente pelo servidor.';
+            refs.admModalBody.appendChild(w);
+            refs.admModalBody.appendChild(hint);
+            openAdmModal('Gerar Cupom MG7', () => {
+                const coins = parseInt(inp.value, 10);
+                if (!coins || coins <= 0) { setBusy(false); return; }
+                ch.send('admin_create_code', { coins });
             });
             break;
         }
+
+        case 'adm-coupon-copy':
+            if (_lastCoupon && copyText(_lastCoupon)) showStatus('Cupom copiado!', 2000);
+            break;
 
         case 'adm-players-refresh': loadAdmPlayers(); break;
         case 'adm-codes-refresh':   loadAdmCodes();   break;
@@ -1152,9 +1431,8 @@ function onClick(e) {
             break;
 
         case 'pix-copy':
-            if (refs.pixCopy) {
-                navigator.clipboard?.writeText(refs.pixCopy.value).catch(() => {});
-                showStatus('Pix copiado!', 2000);
+            if (refs.pixCopy && copyText(refs.pixCopy.value)) {
+                showStatus('Pix copia-e-cola copiado!', 2000);
             }
             break;
     }
@@ -1186,6 +1464,10 @@ function onRedeemSubmit(e) {
     ch.send('redeem', { redeemKey: key, targetId: giftId });
 }
 
+function onGiftToggle() {
+    if (refs.giftId) refs.giftId.hidden = !refs.giftToggle?.checked;
+}
+
 
 // ============================================================
 // TEMA ADMIN — submit
@@ -1209,20 +1491,24 @@ function onThemeSubmit(e) {
 vhub.createModule('coinshop', {
 
     onInit() {
-        ch.on('data', d => {
+        listenChannel('data', d => {
             _data = d;
+            if (_category !== 'all' && !(d.categories || []).some(category =>
+                String(category.id || '') === _category)) {
+                _category = 'all';
+            }
             if (refs.player) refs.player.textContent = d.playerName || d.charName || '—';
             if (refs.coins)  refs.coins.textContent  = fmtCoins(d.coins);
             buildNav();
             navigate(_view || 'grid');
         });
 
-        ch.on('coins', d => {
+        listenChannel('coins', d => {
             if (refs.coins) refs.coins.textContent = fmtCoins(d.coins);
             if (_data) _data.coins = d.coins;
         });
 
-        ch.on('result', d => {
+        listenChannel('result', d => {
             setBusy(false);
             const ok = d.ok === true;
             showStatus((ok ? '✓ ' : '✗ ') + (d.message || (ok ? 'OK' : 'Erro')), 4000);
@@ -1232,48 +1518,78 @@ vhub.createModule('coinshop', {
             }
         });
 
-        ch.on('pix',                       handlePixResult);
-        ch.on('admin_stats',               handleAdmStats);
-        ch.on('admin_recent_tx',           handleAdmRecentTx);
-        ch.on('admin_online_players',      handleAdmPlayers);
-        ch.on('admin_list_codes',          handleAdmCodes);
-        ch.on('admin_give_coins',          d => { if (d.ok) loadAdmPlayers(); });
-        ch.on('admin_set_coins',           d => { if (d.ok) loadAdmPlayers(); });
-        ch.on('admin_import_preview',      d => handleAdmImportResult(d, refs.admImportResult));
-        ch.on('admin_import_run',          d => { handleAdmImportResult(d, refs.admImportResult); if (d.ok) ch.send('open', {}); });
-        ch.on('admin_create_item',         d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
-        ch.on('admin_edit_item',           d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
-        ch.on('admin_delete_item',         d => { if (d.ok) ch.send('open', {}); });
-        ch.on('admin_create_cat',          d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
-        ch.on('admin_edit_cat',            d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
-        ch.on('admin_delete_cat',          d => { if (d.ok) ch.send('open', {}); });
-        ch.on('admin_create_deal',         d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
-        ch.on('admin_delete_deal',         d => { if (d.ok) ch.send('open', {}); });
-        ch.on('admin_clear_all',           d => { if (d.ok) ch.send('open', {}); });
-        ch.on('admin_save_settings',       d => { if (d.ok) ch.send('open', {}); });
-        ch.on('admin_reset_settings',      d => { if (d.ok) ch.send('open', {}); });
-        ch.on('denied',                    () => showStatus('Acesso negado.', 3000));
+        listenChannel('pix',                  handlePixResult);
+        listenChannel('pix_paid',             handlePixPaid);
+        listenChannel('admin_create_code', d => {
+            setBusy(false);
+            if (d.ok && d.key) {
+                closeAdmModal();
+                showGeneratedCoupon(d.key, d.coins);
+                loadAdmCodes(true);
+                showStatus('✓ Cupom gerado!', 3000);
+            } else {
+                showStatus('✗ Falha ao gerar cupom: ' + (d.err || 'erro'), 4000);
+            }
+        });
+        listenChannel('admin_delete_code', d => {
+            if (d.ok) loadAdmCodes(true);
+            else showStatus('✗ ' + (d.err || 'Falha ao remover cupom.'), 3500);
+        });
+        listenChannel('admin_stats',          handleAdmStats);
+        listenChannel('admin_recent_tx',      handleAdmRecentTx);
+        listenChannel('admin_online_players', handleAdmPlayers);
+        listenChannel('admin_list_codes',     handleAdmCodes);
+        listenChannel('admin_give_coins',     d => { if (d.ok) loadAdmPlayers(); });
+        listenChannel('admin_set_coins',      d => { if (d.ok) loadAdmPlayers(); });
+        listenChannel('admin_import_preview', d => handleAdmImportResult(d, refs.admImportResult));
+        listenChannel('admin_import_run',     d => { handleAdmImportResult(d, refs.admImportResult); if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_create_item',    d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        listenChannel('admin_edit_item',      d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        listenChannel('admin_delete_item',    d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_create_cat',     d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        listenChannel('admin_edit_cat',       d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        listenChannel('admin_delete_cat',     d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_create_deal',    d => { if (d.ok) { closeAdmModal(); ch.send('open', {}); } });
+        listenChannel('admin_delete_deal',    d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_clear_all',      d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_save_settings',  d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('admin_reset_settings', d => { if (d.ok) ch.send('open', {}); });
+        listenChannel('denied',               () => showStatus('Acesso negado.', 3000));
     },
 
     onMount(el) {
+        _root = el;
         cacheRefs();
 
         el.addEventListener('click', onClick);
         if (refs.search)       refs.search.addEventListener('input', onSearch);
-        if (refs.giftToggle)   refs.giftToggle.addEventListener('change', () => {
-            if (refs.giftId) refs.giftId.hidden = !refs.giftToggle.checked;
-        });
+        if (refs.giftToggle)   refs.giftToggle.addEventListener('change', onGiftToggle);
         if (refs.redeem)       refs.redeem.addEventListener('submit', onRedeemSubmit);
         if (refs.admThemeForm) refs.admThemeForm.addEventListener('submit', onThemeSubmit);
-
-        ch.send('open', {});
     },
 
-    onShow()  {},
-    onHide()  {},
+    onShow() {
+        ch.send('open', {});
+    },
+    onHide()  {
+        stopPixTimer();   // não deixa countdown rodando com o app oculto (A-07)
+    },
 
     onDestroy() {
         clearTimeout(_statusTimer);
+        stopPixTimer();
+        _channelOffs.splice(0).forEach(off => off());
+        _pickerOffs.forEach(off => off());
+        _pickerOffs.clear();
+
+        if (_root) _root.removeEventListener('click', onClick);
+        if (refs.search)       refs.search.removeEventListener('input', onSearch);
+        if (refs.giftToggle)   refs.giftToggle.removeEventListener('change', onGiftToggle);
+        if (refs.redeem)       refs.redeem.removeEventListener('submit', onRedeemSubmit);
+        if (refs.admThemeForm) refs.admThemeForm.removeEventListener('submit', onThemeSubmit);
+
+        _root = null;
+        refs = {};
     },
 
 });

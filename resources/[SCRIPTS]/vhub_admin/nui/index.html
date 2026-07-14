@@ -2,172 +2,125 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>vHub Admin</title>
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://kit.fontawesome.com/095ee9bcd2.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <div id="bg" class="hidden"></div>
-  <canvas id="vhub-sand"></canvas>
 
-  <!-- Toast / announce -->
-  <div id="toast" class="toast hidden"></div>
-  <div id="announce" class="announce hidden"><div></div></div>
+  <!-- Toast (notificações rápidas, visíveis com painel fechado) -->
+  <div id="toast" class="hidden"></div>
 
-  <!-- Main panel -->
-  <section id="panel" class="panel hidden">
-    <header class="hdr">
-      <div class="brand">
-        <img src="assets/logo.png" alt="vHub"
-             onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-shield-halved'}))">
-        <span>vHub <strong>Admin</strong></span>
-        <small id="me-info"></small>
-      </div>
-      <div class="hdr-actions">
-        <div class="flags">
-          <span class="flag" id="f-noclip" title="Modo livre" data-act="god"><i class="fa-solid fa-feather"></i></span>
-          <span class="flag" id="f-god"    title="Invenc&iacute;vel" data-act="god"><i class="fa-solid fa-shield"></i></span>
-          <span class="flag" id="f-invis"  title="Invis&iacute;vel" data-act="invis"><i class="fa-solid fa-eye-slash"></i></span>
-        </div>
-        <button class="btn ghost" id="btn-refresh" title="Atualizar"><i class="fa-solid fa-rotate"></i></button>
-        <button class="btn danger" data-close title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+  <!-- Announce (mensagem global full-width) -->
+  <div id="announce" class="hidden"><div></div></div>
+
+  <!-- Spec HUD -->
+  <div id="spec-hud" class="hidden">Espectando <span id="spec-id"></span></div>
+
+  <!-- ============================================================
+       ASIDE: barra lateral estreita, sempre visível quando admin logado
+  ============================================================ -->
+  <aside id="aside" class="hidden">
+    <nav id="aside-nav"><!-- botões gerados por app.js --></nav>
+
+    <div id="aside-foot">
+      <button class="aflag" id="f-god"    title="Invencível"></button>
+      <button class="aflag" id="f-invis"  title="Invisível"></button>
+      <button class="aflag" id="f-noclip" title="Noclip"></button>
+    </div>
+  </aside>
+
+  <!-- ============================================================
+       POPOVER: painel de conteúdo ao lado do aside (abre ao clicar seção)
+  ============================================================ -->
+  <div id="popover" class="hidden">
+    <header id="pop-header">
+      <span id="pop-title"></span>
+      <nav id="subtabs"><!-- subcategorias --></nav>
+      <div id="pop-actions">
+        <input id="tb-search" placeholder="Buscar…" class="hidden" />
+        <button id="btn-refresh" title="Atualizar"></button>
+        <button id="btn-close"   title="Fechar"></button>
       </div>
     </header>
 
-    <nav class="tabs">
-      <button class="tab active" data-view="dashboard"><i class="fa-solid fa-gauge-high"></i> Painel</button>
-      <button class="tab" data-view="players"><i class="fa-solid fa-users"></i> Jogadores</button>
-      <button class="tab" data-view="moderation"><i class="fa-solid fa-gavel"></i> Modera&ccedil;&atilde;o</button>
-      <button class="tab" data-view="teleport"><i class="fa-solid fa-location-crosshairs"></i> Teleporte</button>
-      <button class="tab" data-view="vehicle"><i class="fa-solid fa-car-side"></i> Ve&iacute;culos</button>
-      <button class="tab" data-view="world"><i class="fa-solid fa-cloud-sun"></i> Mundo</button>
-      <button class="tab" data-view="economy"><i class="fa-solid fa-coins"></i> Economia</button>
-      <button class="tab" data-view="reports"><i class="fa-solid fa-flag"></i> Den&uacute;ncias <span id="r-badge" class="badge hidden">0</span></button>
-      <button class="tab" data-view="logs"><i class="fa-solid fa-clipboard-list"></i> Hist&oacute;rico</button>
-    </nav>
-
-    <main class="body">
-      <!-- Painel -->
-      <section class="view" id="view-dashboard">
-        <div class="cards">
-          <div class="card stat">
-            <i class="fa-solid fa-users"></i>
-            <div><div class="k">Jogadores online</div><div class="v" id="s-online">0</div></div>
-          </div>
-          <div class="card stat">
-            <i class="fa-solid fa-gavel"></i>
-            <div><div class="k">Den&uacute;ncias abertas</div><div class="v" id="s-reports">0</div></div>
-          </div>
-          <div class="card stat">
-            <i class="fa-solid fa-clock"></i>
-            <div><div class="k">Uptime</div><div class="v" id="s-uptime">&mdash;</div></div>
-          </div>
-        </div>
-        <h3>A&ccedil;&otilde;es r&aacute;pidas</h3>
-        <div class="quick">
-          <button class="btn" data-quick="god"><i class="fa-solid fa-shield"></i> Invenc&iacute;vel</button>
-          <button class="btn" data-quick="invis"><i class="fa-solid fa-eye-slash"></i> Invis&iacute;vel</button>
-          <button class="btn" data-quick="tpgo"><i class="fa-solid fa-location-arrow"></i> Ir ao Marcador</button>
-          <button class="btn" data-quick="tplast"><i class="fa-solid fa-rotate-left"></i> Voltar</button>
-          <button class="btn" data-quick="healall"><i class="fa-solid fa-heart-pulse"></i> Curar Todos</button>
-          <button class="btn warn" data-quick="announce"><i class="fa-solid fa-bullhorn"></i> Anunciar</button>
-        </div>
+    <div id="pop-body">
+      <!-- Painel · Visão geral -->
+      <section class="view" id="view-dash-geral">
+        <div class="cards" id="dash-cards"></div>
+        <h3>Ações rápidas</h3>
+        <div class="quick" id="quick-actions"></div>
         <h3>Equipe online</h3>
         <div id="staff-list" class="list-flat"></div>
       </section>
 
+      <!-- Painel · Economia -->
+      <section class="view hidden" id="view-dash-economia">
+        <div class="cards" id="eco-cards"></div>
+        <h3>Maiores saldos (online)</h3>
+        <div id="eco-top" class="list-flat"></div>
+        <p class="hint">Totais cobrem apenas jogadores online — verdade é o vhub_money.</p>
+      </section>
+
       <!-- Jogadores -->
       <section class="view hidden" id="view-players">
-        <div class="search-row">
-          <input id="p-search" placeholder="Buscar por nome, ID ou UID">
-          <button class="btn ghost" id="p-refresh"><i class="fa-solid fa-rotate"></i></button>
-        </div>
         <div class="split">
           <div id="players-list" class="list-cards"></div>
           <div id="player-detail" class="detail empty">
-            <div class="empty-msg"><i class="fa-solid fa-id-card"></i><br />Selecione um jogador</div>
+            <div class="empty-msg" id="player-empty">Selecione um jogador</div>
           </div>
         </div>
       </section>
 
-      <!-- Modera&ccedil;&atilde;o -->
-      <section class="view hidden" id="view-moderation">
-        <h3>A&ccedil;&otilde;es de modera&ccedil;&atilde;o</h3>
-        <div class="action-grid" data-cat="moderation"></div>
+      <!-- Ações -->
+      <section class="view hidden" id="view-actions">
+        <div class="action-grid" id="action-grid"></div>
       </section>
 
-      <!-- Teleporte -->
-      <section class="view hidden" id="view-teleport">
-        <h3>Teleporte</h3>
-        <div class="action-grid" data-cat="teleport"></div>
-      </section>
-
-      <!-- Ve&iacute;culo -->
-      <section class="view hidden" id="view-vehicle">
-        <h3>Ve&iacute;culo</h3>
-        <div class="action-grid" data-cat="vehicle"></div>
-      </section>
-
-      <!-- Mundo -->
-      <section class="view hidden" id="view-world">
-        <h3>Mundo</h3>
-        <div class="action-grid" data-cat="world"></div>
-      </section>
-
-      <!-- Economia / Invent&aacute;rio / Grupos -->
-      <section class="view hidden" id="view-economy">
-        <h3>Economia / Invent&aacute;rio / Grupos</h3>
-        <div class="action-grid" data-cat="economy"></div>
-        <div class="action-grid" data-cat="inventory"></div>
-        <div class="action-grid" data-cat="groups"></div>
-      </section>
-
-      <!-- Den&uacute;ncias -->
-      <section class="view hidden" id="view-reports">
-        <div class="search-row">
-          <h3 style="margin:0; flex:1">Den&uacute;ncias</h3>
-          <button class="btn ghost" id="r-refresh"><i class="fa-solid fa-rotate"></i></button>
+      <!-- Frota -->
+      <section class="view hidden" id="view-fleet">
+        <div class="fleet-toolbar" id="fleet-toolbar"></div>
+        <div id="fleet-list" class="list-flat"></div>
+        <div id="fleet-detail" class="detail empty" style="margin-top:8px">
+          <div class="empty-msg">Selecione um veículo</div>
         </div>
+      </section>
+
+      <!-- Denúncias -->
+      <section class="view hidden" id="view-reports">
         <div id="reports-list" class="list-flat"></div>
       </section>
 
-      <!-- Hist&oacute;rico -->
+      <!-- Histórico -->
       <section class="view hidden" id="view-logs">
-        <div class="search-row">
-          <input id="l-search" placeholder="Filtrar (ex.: banir, expulsar, prender)">
-          <button class="btn ghost" id="l-refresh"><i class="fa-solid fa-rotate"></i></button>
-        </div>
         <div id="logs-list" class="list-flat"></div>
       </section>
-    </main>
-  </section>
+    </div>
+  </div>
 
-  <!-- Modal universal -->
-  <div id="modal-bg" class="modal-bg hidden">
-    <div class="modal">
-      <h3 id="modal-title">Confirmar</h3>
+  <!-- ============================================================
+       MODAL: confirmações e formulários (sobre tudo)
+  ============================================================ -->
+  <div id="modal-bg" class="hidden">
+    <div id="modal">
+      <h3 id="modal-title"></h3>
       <div id="modal-body"></div>
-      <div class="modal-actions">
+      <div id="modal-actions">
         <button class="btn ghost" id="modal-cancel">Cancelar</button>
         <button class="btn primary" id="modal-ok">Confirmar</button>
       </div>
     </div>
   </div>
 
-  <!-- Spec HUD -->
-  <div id="spec-hud" class="spec-hud hidden">
-    <i class="fa-solid fa-video"></i> Espectando ID <span id="spec-id"></span>
-  </div>
+  <!-- Overlay 3D: cards flutuantes sobre jogadores próximos (client/overlay.lua → NUI) -->
+  <div id="overlay-container"></div>
 
   <script src="js/app.js"></script>
-  <script src="js/sand.js"></script>
+  <script src="js/dashboard.js"></script>
   <script src="js/players.js"></script>
   <script src="js/actions.js"></script>
   <script src="js/reports.js"></script>
   <script src="js/logs.js"></script>
+  <script src="js/fleet.js"></script>
+  <script src="js/overlay.js"></script>
 </body>
 </html>

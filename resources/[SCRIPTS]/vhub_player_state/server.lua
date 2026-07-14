@@ -292,6 +292,7 @@ end)
 --   pos = {x,y,z,heading?} valida server-side | nil = usar salva/padrão.
 --   Retorna false se não havia hold pendente para o src (anti-spoof/duplo-clique).
 exports("spawnAt", function(src, pos)
+  if not pedInvokerOK() then return false end
   src = tonumber(src)
   if not src or not _pending[src] then return false end
   local user = _pronto and _vHub.Auth:getUser(src)
@@ -379,6 +380,34 @@ exports("setHealth", function(src, amount)
   src = tonumber(src)
   if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
   TriggerClientEvent("vhub_player_state:set_health", src, tonumber(amount) or 200)
+  return true
+end)
+
+-- Revive o ped pelo dono canônico do estado do jogador.
+exports("revive", function(src)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
+  TriggerClientEvent("vhub_player_state:revive", src)
+  return true
+end)
+
+-- Altera o modelo pelo owner canônico do ped.
+exports("setPedModel", function(src, model)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or type(model) ~= 'string' or #model < 1 or #model > 64 then return false end
+  if not (_pronto and _vHub.Auth:getUser(src)) then return false end
+  TriggerClientEvent("vhub_player_state:set_ped_model", src, model)
+  return true
+end)
+
+-- Elimina o ped pelo owner canônico do estado do jogador.
+exports("kill", function(src)
+  if not pedInvokerOK() then return false end
+  src = tonumber(src)
+  if not src or not (_pronto and _vHub.Auth:getUser(src)) then return false end
+  TriggerClientEvent("vhub_player_state:kill", src)
   return true
 end)
 

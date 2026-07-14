@@ -7,7 +7,7 @@ lua54      'yes'
 
 name        'vhub_coinshop'
 author      'vHub Mirage'
-version     '2.4.0'
+version     '2.4.1'
 description 'Loja de moedas, itens, veículos e ofertas — server-authoritative, integrada ao core vHub.'
 
 -- Dependências do core vHub Mirage (exports.vhub:* são a única fronteira)
@@ -17,6 +17,7 @@ dependencies {
     'vhub_groups',    -- checagem de permissão (coinshop.admin)
     'vhub_inventory', -- dar itens/armas ao comprar
     'vhub_conce',     -- registrar veículo comprado (contrato de commit)
+    'vhub_df',        -- gateway Pix central (provider 'vhub_df' — server/pix_df.lua)
 }
 
 shared_scripts {
@@ -37,7 +38,8 @@ server_scripts {
     'server/webhooks.lua',
     'server/commands.lua',
     'server/exports.lua',
-    'server/pix_mp.lua',       -- integração MercadoPago Pix (provider real; cfg.pix.provider='mercadopago')
+    'server/pix_mp.lua',       -- integração MercadoPago direta (provider legado 'mercadopago'; dono do catálogo de pacotes)
+    'server/pix_df.lua',       -- ponte para o gateway central vhub_df (provider padrão 'vhub_df')
     'server/import.lua',       -- importação em massa: inventário + catálogo de veículos → coinshop_items
     'server/ipad_relay.lua',   -- app CoinShop do iPad (broker vhub_ipad; depois de tudo carregado)
 }

@@ -1,4 +1,4 @@
--- client/jail.lua  aplica  o local do jail (teleporte fixo + bloqueio de a  es)
+-- client/jail.lua  aplicação local do jail (teleporte fixo + bloqueio de a  es)
 ---@diagnostic disable: undefined-global
 
 local E = VHubAdmin.E
@@ -14,13 +14,13 @@ AddEventHandler(E.JAIL_APPLY, function(data)
     SetEntityCoords(ped, p.x, p.y, p.z, false, false, false, false)
     SetEntityHeading(ped, p.h or 0.0)
   end
-  VHubAdmin.notify('Voc  foi preso. ' .. (data.reason or ''))
+  VHubAdmin.notify('Você foi preso. ' .. (data.reason or ''))
 end)
 
 RegisterNetEvent(E.JAIL_RELEASE)
 AddEventHandler(E.JAIL_RELEASE, function()
   S.jail = nil
-  VHubAdmin.notify('Voc  foi liberado.')
+  VHubAdmin.notify('Você foi liberado.')
 end)
 
 -- thread: mant m no per metro do jail e bloqueia armas (1Hz)
@@ -35,7 +35,7 @@ Citizen.CreateThread(function()
         local p   = S.jail.pos
         if p and #(c - vector3(p.x, p.y, p.z)) > 30.0 then
           SetEntityCoords(ped, p.x, p.y, p.z, false, false, false, false)
-          VHubAdmin.notify('Voc  ainda est  preso.')
+          VHubAdmin.notify('Você ainda está preso.')
         end
         DisablePlayerFiring(PlayerId(), true)
       end

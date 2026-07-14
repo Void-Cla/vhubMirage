@@ -93,35 +93,29 @@ VHubCoin.cfg = {
 
 
     -- ============================================================
-    -- PIX — compra de moedas com MercadoPago (decisão #59 + #60)
+    -- PIX — compra de moedas (decisão #59 + #60; gateway central via vhub_df)
     -- ============================================================
     --
-    -- ATIVAÇÃO (dois passos):
-    --   1. No server.cfg (NUNCA versionar a chave):
-    --        setr coinshop_mp_key "APP_USR-SEU_ACCESS_TOKEN_AQUI"
-    --        setr coinshop_mp_webhook_secret "SUA_CHAVE_SECRETA_WEBHOOK"
-    --   2. Altere enabled=true e provider='mercadopago' aqui.
+    -- provider = 'vhub_df': a cobrança nasce no gateway central (exports.vhub_df),
+    -- que re-verifica status E valor na API do MP antes de creditar (server/pix_df.lua).
+    -- Credenciais: convar df_mp_key em config/local.cfg (do vhub_df — NUNCA versionar).
+    -- 'mercadopago' mantém o caminho legado do pix_mp.lua (webhook /webhook/mp-pix).
     --
-    -- Enquanto enabled=false → resposta stub {ok=false, code='pix_disabled'}.
-    -- O frontend já consome o contrato real — a aba aparece mesmo no stub.
-    --
-    -- Endpoint de webhook para configurar no painel MP:
-    --   http://SEU_IP_OU_DOMINIO:SEU_PORT/webhook/mp-pix
+    -- O gate real de disponibilidade vive no vhub_df (enabled + token); com o gateway
+    -- desligado o jogador vê mensagem amigável no lugar do QR.
     pix = {
-        enabled  = false,           -- true quando o MP estiver configurado
-        provider = 'mercadopago',   -- 'mercadopago' | nil (stub)
+        enabled  = true,            -- aba visível no app; indisponibilidade vem do gateway
+        provider = 'vhub_df',       -- 'vhub_df' (central) | 'mercadopago' (legado) | nil (stub)
 
         -- expiração da cobrança Pix em minutos (MP aceita até 1440 = 24h)
         expiresInMinutes = 30,
 
-        -- pacotes de moedas exibidos na aba "Comprar Coins" do iPad.
-        -- Personalize valores/bônus à vontade; priceBRL é o que o jogador paga.
-        -- Adicione o tier para destaque visual (1=bronze, 2=prata, 3=ouro, 4=diamante).
+        -- Regra comercial imutável: R$ 1,00 = 1 coin; sem bônus.
+        -- Tier para destaque visual (1=bronze, 2=prata, 3=ouro).
         packages = {
-            { id = 'pix_1k',  tier = 1, name = 'Pacote Bronze',   coins = 1000,  bonus = 0,    priceBRL = 10.00,  popular = false },
-            { id = 'pix_3k',  tier = 2, name = 'Pacote Prata',    coins = 3000,  bonus = 300,  priceBRL = 25.00,  popular = true  },
-            { id = 'pix_7k',  tier = 3, name = 'Pacote Ouro',     coins = 7000,  bonus = 1000, priceBRL = 50.00,  popular = false },
-            { id = 'pix_15k', tier = 4, name = 'Pacote Diamante', coins = 15000, bonus = 3000, priceBRL = 100.00, popular = false },
+            { id = 'pix_1',   tier = 1, name = 'Pacote Start',  coins = 1,   bonus = 0, priceBRL = 1.00,   popular = false },
+            { id = 'pix_10',  tier = 2, name = 'Pacote Prata',  coins = 10,  bonus = 0, priceBRL = 10.00,  popular = true  },
+            { id = 'pix_100', tier = 3, name = 'Pacote Ouro',   coins = 100, bonus = 0, priceBRL = 100.00, popular = false },
         },
     },
 

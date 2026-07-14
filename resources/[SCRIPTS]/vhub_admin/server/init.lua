@@ -1,95 +1,90 @@
--- server/init.lua  bootstrap do vhub_admin
+-- server/init.lua — ciclo de vida replay-safe do vhub_admin
 ---@diagnostic disable: undefined-global
 
-local SQL  = VHubAdmin.SQL
+local SQL = VHubAdmin.SQL
 local Core = VHubAdmin.Core
-local CFG  = VHubAdmin.cfg
-local E    = VHubAdmin.E
+local CFG = VHubAdmin.cfg
+local E = VHubAdmin.E
 
-local _pronto = false
+VHubAdmin.ready = false
 
-AddEventHandler('onResourceStart', function(res)
-  if res ~= GetCurrentResourceName() then return end
+local seenSpawn = {}
+
+-- Envia somente capacidades e seletores que o servidor autorizou.
+local function sendSetup(src, open)
+  Core:syncAdminBag(src)
+  TriggerClientEvent(E.SETUP, src, {
+    hotkey = CFG.hotkey_open,
+    is_admin = Core.hasPerm(src, 'panel'),
+    open = open == true,
+    actions = Core:allowedActions(src),
+    selectors = Core:selectors(),
+  })
+end
+
+-- Reidrata uma sessão existente quando o resource reinicia.
+local function recoverSession(src)
+  local ok, user = pcall(function() return exports.vhub:getUser(src) end)
+  if ok and type(user) == 'table' and user.char_id then
+    Core:setSession(src, user)
+    if VHubAdmin.Moderation then VHubAdmin.Moderation:hydrate(src, user) end
+    sendSetup(src, false)
+  end
+end
+
+AddEventHandler('onResourceStart', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+
   Citizen.CreateThread(function()
-    SQL:initSchema()
-    -- aguarda core vHub
+    if not SQL:initSchema() then return end
+
     for _ = 1, 50 do
-      if Core:vHub() then _pronto = true; break end
+      local ok, status = pcall(function() return exports.vhub:Status() end)
+      if ok and type(status) == 'table' then
+        VHubAdmin.ready = true
+        break
+      end
       Citizen.Wait(200)
     end
-    if not _pronto then
-      print('[vhub_admin][ERRO] vHub n o dispon vel ap s 10s')
-      return
-    end
-    -- envia setup p/ jogadores online (restart em produ  o)
-    for _, s in ipairs(GetPlayers()) do
-      local src = tonumber(s)
-      Core:syncAdminBag(src)
-      TriggerClientEvent(E.SETUP, src, {
-        hotkey  = CFG.hotkey_open,
-        actions = VHubAdmin.ACTIONS,
-      })
-    end
-    print('[vhub_admin] pronto')
+    if not VHubAdmin.ready then return end
+
+    if VHubAdmin.Moderation then VHubAdmin.Moderation:hydrateActive() end
+    for _, raw in ipairs(GetPlayers()) do recoverSession(tonumber(raw)) end
   end)
 end)
 
--- sess es vivas
+-- Mantém a sessão atualizada; a operação é idempotente em replay institucional.
 AddEventHandler('vHub:characterLoad', function(user)
+  if type(user) ~= 'table' or not user.source then return end
   Core:setSession(user.source, user)
-  Core:syncAdminBag(user.source)
+  if VHubAdmin.Moderation then VHubAdmin.Moderation:hydrate(user.source, user) end
+  if VHubAdmin.ready then sendSetup(user.source, false) end
 end)
 
+-- Envia setup somente em spawn novo; restart já passa por recoverSession.
 AddEventHandler('vHub:playerSpawn', function(user)
-  Core:setSession(user.source, user)
-  Core:syncAdminBag(user.source)
-  TriggerClientEvent(E.SETUP, user.source, {
-    hotkey  = CFG.hotkey_open,
-    actions = VHubAdmin.ACTIONS,
-  })
-  -- aplica jail se char ainda preso
-  Citizen.CreateThread(function()
-    if not user.char_id then return end
-    local j = SQL:jailGet(user.char_id)
-    if j and tonumber(j.expires_at) > os.time() then
-      TriggerClientEvent(E.JAIL_APPLY, user.source,
-        { expires_at = j.expires_at, pos = CFG.jail_pos })
-    end
-  end)
+  if type(user) ~= 'table' or not user.source then return end
+  local src = tonumber(user.source)
+  local spawn = tonumber(user.spawns) or 0
+  Core:setSession(src, user)
+
+  if seenSpawn[src] == spawn then return end
+  seenSpawn[src] = spawn
+
+  if VHubAdmin.Moderation then VHubAdmin.Moderation:hydrate(src, user) end
+  if VHubAdmin.ready then sendSetup(src, false) end
 end)
 
 AddEventHandler('playerDropped', function()
-  Core:dropSession(source)
+  local src = source
+  seenSpawn[src] = nil
+  if VHubAdmin.Moderation then VHubAdmin.Moderation:drop(src) end
+  Core:dropSession(src)
 end)
 
--- evento "abrir painel"
 RegisterNetEvent(E.OPEN_PANEL)
 AddEventHandler(E.OPEN_PANEL, function()
   local src = source
-  if not _pronto then return end
-  if not Core.hasPerm(src, 'panel') then
-    Core.notify(src, 'Sem permiss o de administrador.'); return
-  end
-  TriggerClientEvent(E.IS_ADMIN, src, true)
-end)
-
--- cron: libera jail/mute expirados (60s)
-Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(60 * 1000)
-    Citizen.CreateThread(function()
-      local rows = SQL:jailListExpired() or {}
-      for _, r in ipairs(rows) do
-        SQL:jailRemove(r.char_id)
-        -- se online, libera no client
-        for src, u in pairs(Core.sessions) do
-          if u.char_id == r.char_id then
-            TriggerClientEvent(E.JAIL_RELEASE, src); break
-          end
-        end
-      end
-      local m = SQL:muteListExpired() or {}
-      for _, r in ipairs(m) do SQL:muteRemove(r.char_id) end
-    end)
-  end
+  if not VHubAdmin.ready or not Core:guard(src, 'panel', 'panel') then return end
+  sendSetup(src, true)
 end)

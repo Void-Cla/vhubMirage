@@ -138,9 +138,11 @@ function Core.buildShopData(src, char_id, withAdmin)
         dealResetHour = VHubCoin.cfg.dealResetHour,
         locale        = VHubCoin.locale,
         playerName    = Core.getPlayerName(src),
-        -- slot Pix (#59): pacotes exibidos na aba "Comprar Coins" do iPad; o painel
-        -- admin mostra read-only. Enquanto enabled=false a compra responde stub.
-        pix           = { enabled = VHubCoin.cfg.pix.enabled == true, packages = VHubCoin.cfg.pix.packages },
+        -- Pacotes Pix são normalizados pelo dono da cobrança: R$1 = 1 coin, sem bônus.
+        pix           = {
+            enabled = VHubCoin.cfg.pix.enabled == true,
+            packages = VHubCoin.Pix and VHubCoin.Pix.publicPackages and VHubCoin.Pix.publicPackages() or {},
+        },
     }
 
     if withAdmin then

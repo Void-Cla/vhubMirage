@@ -1,78 +1,87 @@
--- client/init.lua  bootstrap, state global, NUI focus, notifica  o
+-- client/init.lua - estado efemero, foco NUI e capacidade administrativa
 ---@diagnostic disable: undefined-global
 
-local E  = VHubAdmin.E
+local E = VHubAdmin.E
 local UI = VHubAdmin.UI
 
 VHubAdmin.state = {
-  pronto      = false,
-  is_admin    = false,
-  hotkey      = 'F6',
-  actions     = {},
-  noclip      = false,
-  god         = false,
-  freeze      = false,
-  invis       = false,
-  stamina     = false,
-  jump        = false,
-  panel_open  = false,
+  ready = false,
+  is_admin = false,
+  hotkey = 'F6',
+  actions = {},
+  selectors = {},
+  panel_open = false,
+  wall_enabled = false,
+  noclip = false,
+  god = false,
+  freeze = false,
+  invis = false,
+  stamina = false,
+  jump = false,
   spec_target = nil,
-  jail        = nil,   -- { expires_at, pos }
+  jail = nil,
 }
 local S = VHubAdmin.state
 
--- ----------------------------------------------------------------------------
--- Notifica  o
--- ----------------------------------------------------------------------------
-function VHubAdmin.notify(msg)
+-- Exibe notificacao local sem usar a NUI como fonte de verdade.
+function VHubAdmin.notify(message)
   BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(tostring(msg or ''))
+  AddTextComponentSubstringPlayerName(tostring(message or ''))
   EndTextCommandThefeedPostTicker(false, true)
 end
 
+-- Envia estado visual apenas quando o painel esta aberto.
+function VHubAdmin.syncUi(data)
+  if S.panel_open then SendNUIMessage({ action = UI.STATE_SYNC, data = data or {} }) end
+end
+
 RegisterNetEvent(E.NOTIFY)
-AddEventHandler(E.NOTIFY, function(msg) VHubAdmin.notify(msg) end)
+AddEventHandler(E.NOTIFY, function(message, kind)
+  VHubAdmin.notify(message)
+  if S.panel_open then SendNUIMessage({ action = UI.TOAST, data = { text = message, kind = kind } }) end
+end)
 
 RegisterNetEvent(E.SETUP)
 AddEventHandler(E.SETUP, function(setup)
   if type(setup) ~= 'table' then return end
-  S.hotkey  = setup.hotkey  or 'F6'
-  S.actions = setup.actions or {}
-  S.pronto  = true
-  TriggerEvent('vhub_admin:setupReady')
+  S.hotkey = type(setup.hotkey) == 'string' and setup.hotkey or 'F6'
+  S.actions = type(setup.actions) == 'table' and setup.actions or {}
+  S.selectors = type(setup.selectors) == 'table' and setup.selectors or {}
+  S.is_admin = setup.is_admin == true
+  S.ready = true
+  if setup.open == true and S.is_admin then VHubAdmin.openPanel() end
 end)
 
-RegisterNetEvent(E.IS_ADMIN)
-AddEventHandler(E.IS_ADMIN, function(v)
-  S.is_admin = v == true
-  if S.is_admin then VHubAdmin.openPanel() end
-end)
-
--- atalho 'admin' + hotkey via RegisterKeyMapping
+-- Atalho fixo registrado pelo FiveM; o servidor continua sendo a fronteira de permissao.
 RegisterCommand('admin', function()
-  if S.panel_open then VHubAdmin.closePanel()
-  else TriggerServerEvent(E.OPEN_PANEL) end
+  if S.panel_open then return VHubAdmin.closePanel() end
+  TriggerServerEvent(E.OPEN_PANEL)
 end, false)
-RegisterKeyMapping('admin', 'Abrir painel admin (vHub)', 'keyboard', 'F6')
+RegisterKeyMapping('admin', 'Abrir painel administrativo vHub', 'keyboard', 'F6')
 
--- ----------------------------------------------------------------------------
--- NUI open/close (centralizado)
--- ----------------------------------------------------------------------------
-function VHubAdmin.openPanel(view)
+-- Abre a NUI somente apos receber capacidade do servidor.
+function VHubAdmin.openPanel()
+  if not S.is_admin then return end
   S.panel_open = true
   SetNuiFocus(true, true)
   SendNUIMessage({
     action = UI.OPEN,
     data = {
-      view    = view or 'dashboard',
       actions = S.actions,
-      flags   = {
-        noclip = S.noclip, god = S.god, freeze = S.freeze, invis = S.invis,
+      selectors = S.selectors,
+      flags = {
+        noclip = S.noclip,
+        god = S.god,
+        freeze = S.freeze,
+        invis = S.invis,
+        stamina = S.stamina,
+        jump = S.jump,
       },
     },
   })
 end
 
+-- Fecha foco e libera o runtime visual.
 function VHubAdmin.closePanel()
   if not S.panel_open then return end
   S.panel_open = false
@@ -81,44 +90,28 @@ function VHubAdmin.closePanel()
 end
 
 RegisterNUICallback('close', function(_, cb)
-  VHubAdmin.closePanel(); cb({ ok = true })
-end)
-
--- ----------------------------------------------------------------------------
--- State Bag bridge: admin acordou
--- ----------------------------------------------------------------------------
-AddStateBagChangeHandler('vhub_is_admin', ('player:%s'):format(GetPlayerServerId(PlayerId())),
-  function(_, _, value)
-    S.is_admin = value == true
-  end)
-
--- aliases  sync flags ap s respawn
-AddEventHandler('vhub_player_state:spawned', function()
-  -- limpa efeitos client-side perigosos para n o ficar travado
-  if S.noclip then S.noclip = false end
-  if S.god    then S.god    = false; SetPlayerInvincible(PlayerId(), false) end
-  if S.freeze then S.freeze = false; FreezeEntityPosition(PlayerPedId(), false) end
-  if S.invis  then S.invis  = false; SetEntityVisible(PlayerPedId(), true, false) end
-  S.stamina, S.jump = false, false
-end)
-
--- ----------------------------------------------------------------------------
--- Cleanup total no stop do resource (restart em produ  o n o deixa efeito preso)
--- ----------------------------------------------------------------------------
-AddEventHandler('onResourceStop', function(res)
-  if res ~= GetCurrentResourceName() then return end
   VHubAdmin.closePanel()
-  S.noclip, S.god, S.freeze, S.invis, S.stamina, S.jump = false, false, false, false, false, false
-  local ped = PlayerPedId()
-  local ent = IsPedInAnyVehicle(ped, false) and GetVehiclePedIsIn(ped, false) or ped
-  SetPlayerInvincible(PlayerId(), false)
-  SetEntityInvincible(ped, false)
-  SetPedCanRagdoll(ped, true)
-  SetEntityProofs(ped, false, false, false, false, false, false, false, false)
-  SetEntityVisible(ped, true, false)
-  ResetEntityAlpha(ped)
-  FreezeEntityPosition(ent, false)
-  SetEntityCollision(ent, true, true)
-  SetEntityHasGravity(ent, true)
-  ResetEntityAlpha(ent)
+  cb({ ok = true })
+end)
+
+-- State Bag replica apenas a capacidade; toda acao continua validada no servidor.
+AddStateBagChangeHandler('vhub_is_admin', nil, function(bagName, _, value)
+  if bagName ~= ('player:%s'):format(GetPlayerServerId(PlayerId())) then return end
+  S.is_admin = value == true
+  if not S.is_admin then VHubAdmin.closePanel() end
+end)
+
+Citizen.CreateThread(function()
+  Citizen.Wait(0)
+  S.is_admin = LocalPlayer.state.vhub_is_admin == true
+end)
+
+AddEventHandler('vhub_player_state:spawned', function()
+  TriggerEvent('vhub_admin:cleanupEffects')
+end)
+
+AddEventHandler('onResourceStop', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+  VHubAdmin.closePanel()
+  TriggerEvent('vhub_admin:cleanupEffects')
 end)

@@ -140,10 +140,7 @@ actions.pix_create = function(src, char_id, data)
     end
 
     local packageId = str(data.packageId)
-    local pack = nil
-    for _, p in ipairs(VHubCoin.cfg.pix.packages) do
-        if p.id == packageId then pack = p break end
-    end
+    local pack = VHubCoin.Pix and VHubCoin.Pix.findPackage and VHubCoin.Pix.findPackage(packageId)
     if not pack then
         return push(src, 'pix', { ok = false, code = 'pacote_invalido', message = 'Pacote não encontrado.' })
     end
@@ -153,6 +150,12 @@ actions.pix_create = function(src, char_id, data)
             ok = false, code = 'pix_disabled',
             message = 'Pagamento Pix ainda não está habilitado nesta cidade. Fale com a staff.',
         })
+    end
+
+    -- gateway central: cobrança nasce no vhub_df (re-verificação + valor conferido lá)
+    if VHubCoin.cfg.pix.provider == 'vhub_df' and VHubCoin.PixDF and VHubCoin.PixDF.handleCreate then
+        VHubCoin.PixDF.handleCreate(src, char_id, pack, push)
+        return
     end
 
     if VHubCoin.cfg.pix.provider == 'mercadopago' and VHubCoin.Pix and VHubCoin.Pix.handleCreate then
@@ -340,16 +343,20 @@ actions.admin_delete_deal = function(src, _, data)
     if ok then VHubCoin.IpadRelay_PushCatalog() end
 end
 
--- cria código Tebex
+-- gera cupom MG7 (chave nasce SERVER-side; admin só informa as moedas — mostrada 1x)
 actions.admin_create_code = function(src, _, data)
     if not requireAdmin(src) then return end
-    local coins  = tonumber(data.coins)
-    local orderId = str(data.orderId, 100)
-    if not coins or coins <= 0 or not orderId then
+    local coins = tonumber(data.coins)
+    if not coins or coins <= 0 then
         return push(src, 'admin_create_code', { ok = false, err = 'args_invalidos' })
     end
-    local ok, msg = Items.adminCreateCode(src, { coins = coins, orderId = orderId })
-    push(src, 'admin_create_code', { ok = ok, err = not ok and msg or nil })
+    local ok, keyOrMsg = Items.adminCreateCode(src, coins)
+    push(src, 'admin_create_code', {
+        ok    = ok,
+        key   = ok and keyOrMsg or nil,
+        coins = ok and math.floor(coins) or nil,
+        err   = not ok and keyOrMsg or nil,
+    })
 end
 
 -- lista todos os códigos Tebex
@@ -359,12 +366,12 @@ actions.admin_list_codes = function(src, _, _)
     push(src, 'admin_list_codes', { ok = true, data = codes })
 end
 
--- remove código Tebex (somente pending)
+-- remove cupom (somente pending; Items.adminDeleteCode espera a KEY string)
 actions.admin_delete_code = function(src, _, data)
     if not requireAdmin(src) then return end
-    local codeId = tonumber(data.codeId)
-    if not codeId then return push(src, 'admin_delete_code', { ok = false, err = 'id_invalido' }) end
-    local ok, msg = Items.adminDeleteCode(src, { id = codeId })
+    local key = str(data.key, 40)
+    if not key then return push(src, 'admin_delete_code', { ok = false, err = 'key_invalida' }) end
+    local ok, msg = Items.adminDeleteCode(src, key)
     push(src, 'admin_delete_code', { ok = ok, err = not ok and msg or nil })
 end
 

@@ -1,0 +1,253 @@
+/* style.css — NUI do vhub_df (Liquid Glass · Areia · Dourado)
+   A-09: html/body transparentes; vidro SIMULADO em camadas (sem backdrop-filter
+   sobre o jogo); piso do painel com opacidade ≈0.82. */
+
+
+/* ============================================================
+   RESET / BASE
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    background: transparent;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+    user-select: none;
+}
+
+.hidden { display: none !important; }
+
+:root {
+    --areia:       #E8DCC3;
+    --areia-dim:   #B9AD93;
+    --dourado:     #D8B460;
+    --dourado-viv: #F0CF8A;
+    --piso:        rgba(20, 17, 12, 0.82);   /* vidro simulado (A-09) */
+    --piso-2:      rgba(34, 29, 20, 0.72);
+    --borda:       rgba(216, 180, 96, 0.28);
+    --ok:          #7FD98B;
+    --erro:        #E4756B;
+}
+
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+
+#df-root {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.df-card {
+    width: 340px;
+    border-radius: 18px;
+    border: 1px solid var(--borda);
+    background: linear-gradient(160deg, var(--piso-2) 0%, var(--piso) 42%);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55),
+                inset 0 1px 0 rgba(240, 207, 138, 0.14);
+    padding: 18px 18px 14px;
+    color: var(--areia);
+    animation: df-in 220ms ease-out;
+}
+
+@keyframes df-in {
+    from { opacity: 0; transform: translateY(14px) scale(0.97); }
+    to   { opacity: 1; transform: none; }
+}
+
+
+/* ============================================================
+   CABEÇALHO
+   ============================================================ */
+
+.df-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.df-brand { display: flex; align-items: center; gap: 10px; }
+
+.df-pix-ico { width: 30px; height: 30px; color: var(--dourado); }
+
+.df-brand-txt h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+.df-brand-txt span { font-size: 11px; color: var(--areia-dim); }
+
+.df-x {
+    width: 28px; height: 28px;
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    background: rgba(216, 180, 96, 0.08);
+    color: var(--areia);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 120ms;
+}
+.df-x:hover { background: rgba(216, 180, 96, 0.22); }
+
+
+/* ============================================================
+   VALOR
+   ============================================================ */
+
+.df-amount {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    background: rgba(216, 180, 96, 0.07);
+    margin-bottom: 14px;
+}
+
+.df-amount-label { font-size: 11px; color: var(--areia-dim); }
+.df-amount-value { font-size: 20px; font-weight: 700; color: var(--dourado-viv); }
+
+
+/* ============================================================
+   QR CODE — piso branco obrigatório (contraste para escanear)
+   ============================================================ */
+
+.df-qr-wrap {
+    position: relative;
+    width: 210px;
+    height: 210px;
+    margin: 0 auto 12px;
+    border-radius: 14px;
+    background: #FFFFFF;
+    padding: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+#df-qr {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+}
+
+.df-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(20, 17, 12, 0.88);
+    color: var(--ok);
+    animation: df-in 180ms ease-out;
+}
+
+.df-overlay.err { color: var(--erro); }
+
+#df-overlay-ico { font-size: 44px; line-height: 1; }
+#df-overlay-txt { font-size: 13px; font-weight: 600; color: var(--areia); }
+
+
+/* ============================================================
+   STATUS
+   ============================================================ */
+
+.df-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--areia-dim);
+}
+
+.df-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--dourado);
+    animation: df-pulse 1.4s ease-in-out infinite;
+}
+
+.df-dot.ok   { background: var(--ok);   animation: none; }
+.df-dot.err  { background: var(--erro); animation: none; }
+
+@keyframes df-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+
+/* ============================================================
+   COPIA E COLA
+   ============================================================ */
+
+.df-copy {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#df-code {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.32);
+    color: var(--areia-dim);
+    font-size: 11px;
+    font-family: Consolas, monospace;
+    text-overflow: ellipsis;
+    outline: none;
+}
+
+#df-copy-btn {
+    padding: 0 16px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--dourado-viv), var(--dourado));
+    color: #2A2213;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 120ms;
+}
+#df-copy-btn:hover  { filter: brightness(1.08); }
+#df-copy-btn.copied { background: var(--ok); color: #10240F; }
+
+
+/* ============================================================
+   RODAPÉ
+   ============================================================ */
+
+.df-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(216, 180, 96, 0.14);
+    padding-top: 10px;
+}
+
+#df-timer { font-size: 11px; color: var(--areia-dim); }
+#df-timer.urgent { color: var(--erro); font-weight: 600; }
+
+#df-cancel {
+    border: 1px solid rgba(228, 117, 107, 0.4);
+    border-radius: 9px;
+    background: rgba(228, 117, 107, 0.10);
+    color: var(--erro);
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 120ms;
+}
+#df-cancel:hover { background: rgba(228, 117, 107, 0.22); }

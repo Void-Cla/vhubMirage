@@ -21,6 +21,15 @@ end
 
 function U.clamp(v, mn, mx) return math.max(mn, math.min(mx, v)) end
 
+-- Retorna número finito dentro da faixa ou nil.
+function U.number(v, mn, mx)
+  local n = tonumber(v)
+  if not n or n ~= n or n == math.huge or n == -math.huge then return nil end
+  if mn and n < mn then return nil end
+  if mx and n > mx then return nil end
+  return n
+end
+
 function U.trim(s)
   if type(s) ~= 'string' then return '' end
   return (s:gsub('^%s+', ''):gsub('%s+$', ''))
@@ -34,6 +43,24 @@ function U.safeText(s, maxlen)
   return s
 end
 
+-- Normaliza identificador técnico sem aceitar espaços ou caracteres de controle.
+function U.identifier(value, maxlen)
+  if type(value) ~= 'string' and type(value) ~= 'number' then return nil end
+  local id = U.trim(tostring(value):lower())
+  if id == '' or (maxlen and #id > maxlen) then return nil end
+  if not id:match('^[a-z0-9_%-]+$') then return nil end
+  return id
+end
+
+-- Normaliza uma placa sem aceitar caracteres fora do alfabeto veicular.
+function U.plate(value)
+  if type(value) ~= 'string' and type(value) ~= 'number' then return nil end
+  local plate = U.trim(tostring(value):upper()):gsub('%s+', ' ')
+  if plate == '' or #plate > 16 then return nil end
+  if not plate:match('^[A-Z0-9 ]+$') then return nil end
+  return plate
+end
+
 -- valida ID server (1..1024 t pico FXServer)
 function U.toSrc(v)
   local n = tonumber(v); if not n then return nil end
@@ -44,7 +71,7 @@ end
 -- valida coords
 function U.validCoords(p)
   if type(p) ~= 'table' then return false end
-  local x, y, z = tonumber(p.x), tonumber(p.y), tonumber(p.z)
+  local x, y, z = U.number(p.x), U.number(p.y), U.number(p.z)
   if not (x and y and z) then return false end
   if math.abs(x) > 9000 or math.abs(y) > 9000 then return false end
   if z < -300 or z > 3500 then return false end

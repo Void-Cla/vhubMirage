@@ -1,135 +1,204 @@
--- server/world.lua  weather / time / blackout / clearzone / announce / staffchat
+-- server/world.lua - estado mundial e manutencao administrativa server-side
 ---@diagnostic disable: undefined-global
 
 local Core = VHubAdmin.Core
-local CFG  = VHubAdmin.cfg
-local E    = VHubAdmin.E
-local U    = VHubAdmin.U
+local CFG = VHubAdmin.cfg
+local E = VHubAdmin.E
+local U = VHubAdmin.U
 
-local function reqPerm(src, k)
-  if not Core.hasPerm(src, k) then Core.notify(src, 'Sem permiss o.'); return false end
-  return true
-end
+local weatherAllowed = {}
+for weather in pairs(CFG.world.weathers) do weatherAllowed[weather] = true end
 
-local WEATHERS = {
-  EXTRASUNNY=true, CLEAR=true, CLOUDS=true, OVERCAST=true,
-  RAIN=true, CLEARING=true, THUNDER=true, SMOG=true,
-  FOGGY=true, XMAS=true, SNOWLIGHT=true, BLIZZARD=true,
+local world = {
+  weather = 'CLEAR',
+  hour = 12,
+  minute = 0,
+  blackout = false,
+  revision = 0,
 }
 
+local wiping = false
+
+
+-- ============================================================
+-- ESTADO CONTINUO
+-- ============================================================
+
+-- Replica o snapshot mundial pelo State Bag global.
+local function syncWorld()
+  world.revision = world.revision + 1
+  GlobalState.vhub_admin_world = {
+    weather = world.weather,
+    hour = world.hour,
+    minute = world.minute,
+    blackout = world.blackout,
+    revision = world.revision,
+  }
+end
+
 RegisterNetEvent(E.ACT_WEATHER)
-AddEventHandler(E.ACT_WEATHER, function(wx)
-  local src = source; if not reqPerm(src, 'weather') then return end
-  wx = tostring(wx or ''):upper()
-  if not WEATHERS[wx] then Core.notify(src, 'Clima inv lido.'); return end
-  TriggerClientEvent(E.DO_WEATHER, -1, wx)
-  Core:audit(src, 'weather', nil, { wx = wx })
+AddEventHandler(E.ACT_WEATHER, function(rawWeather)
+  local src = source
+  if not Core:guard(src, 'weather', 'world') then return end
+
+  local weather = U.safeText(rawWeather, 24):upper()
+  if not weatherAllowed[weather] then return Core:notify(src, 'Clima invalido.', 'erro') end
+
+  world.weather = weather
+  syncWorld()
+  Core:audit(src, 'weather', nil, { weather = weather })
 end)
 
 RegisterNetEvent(E.ACT_TIME)
-AddEventHandler(E.ACT_TIME, function(hour, minute)
-  local src = source; if not reqPerm(src, 'time') then return end
-  local h = U.clamp(tonumber(hour) or 0, 0, 23)
-  local m = U.clamp(tonumber(minute) or 0, 0, 59)
-  TriggerClientEvent(E.DO_TIME, -1, h, m)
-  Core:audit(src, 'time', nil, { h = h, m = m })
+AddEventHandler(E.ACT_TIME, function(rawHour, rawMinute)
+  local src = source
+  if not Core:guard(src, 'time', 'world') then return end
+
+  local hour = U.number(rawHour, 0, 23)
+  local minute = U.number(rawMinute, 0, 59)
+  if not hour or not minute or hour % 1 ~= 0 or minute % 1 ~= 0 then
+    return Core:notify(src, 'Horario invalido.', 'erro')
+  end
+
+  world.hour = math.floor(hour)
+  world.minute = math.floor(minute)
+  syncWorld()
+  Core:audit(src, 'time', nil, { hour = world.hour, minute = world.minute })
 end)
 
 RegisterNetEvent(E.ACT_BLACKOUT)
-AddEventHandler(E.ACT_BLACKOUT, function(on)
-  local src = source; if not reqPerm(src, 'blackout') then return end
-  TriggerClientEvent(E.DO_BLACKOUT, -1, on == true)
-  Core:audit(src, 'blackout', nil, { on = on })
+AddEventHandler(E.ACT_BLACKOUT, function(value)
+  local src = source
+  if not Core:guard(src, 'blackout', 'world') then return end
+  if value ~= nil and type(value) ~= 'boolean' then
+    return Core:notify(src, 'Estado de apagao invalido.', 'erro')
+  end
+
+  if value == nil then world.blackout = not world.blackout
+  else world.blackout = value end
+  syncWorld()
+  Core:notify(src, world.blackout and 'Apagao ativado.' or 'Apagao desativado.', 'sucesso')
+  Core:audit(src, 'blackout', nil, { on = world.blackout })
 end)
 
+AddEventHandler('onResourceStart', function(resource)
+  if resource == GetCurrentResourceName() then syncWorld() end
+end)
+
+
+-- ============================================================
+-- LIMPEZA E COMUNICACAO
+-- ============================================================
+
+-- Limpa somente efeitos locais nao persistentes no cliente do administrador.
 RegisterNetEvent(E.ACT_CLEARZONE)
-AddEventHandler(E.ACT_CLEARZONE, function(radius)
-  local src = source; if not reqPerm(src, 'clearzone') then return end
-  local r = U.clamp(tonumber(radius) or 200, 50, 3000)
-  local c = Core.coordsOf(src); if not c then return end
-  TriggerClientEvent(E.DO_CLEARZONE, -1, c.x, c.y, c.z, r)
-  Core:audit(src, 'clearzone', nil, { r = r })
+AddEventHandler(E.ACT_CLEARZONE, function(rawRadius)
+  local src = source
+  if not Core:guard(src, 'clearzone', 'world') then return end
+
+  local radius = U.number(rawRadius, 25, 500)
+  local pos = Core:coordsOf(src)
+  if not radius or not pos then return Core:notify(src, 'Area invalida.', 'erro') end
+
+  TriggerClientEvent(E.DO_CLEARZONE, src, { x = pos.x, y = pos.y, z = pos.z, radius = radius })
+  Core:audit(src, 'clearzone', nil, { radius = radius })
 end)
 
--- ----------------------------------------------------------------------------
--- WIPE global server-side (R1: zero broadcast; entidade some via replica  o)
--- Prote  es: ve culo com jogador dentro e ped de jogador NUNCA s o deletados.
--- Custo: O(entidades) one-shot, sem thread residente.
--- ----------------------------------------------------------------------------
-local function playerVehicleSet()
-  local set = {}
-  for _, s in ipairs(GetPlayers()) do
-    local ped = GetPlayerPed(s)
+local function playerPeds()
+  local out = {}
+  for _, raw in ipairs(GetPlayers()) do
+    local ped = GetPlayerPed(raw)
+    if ped and ped ~= 0 then out[ped] = true end
+  end
+  return out
+end
+
+local function occupiedVehicles()
+  local out = {}
+  for _, raw in ipairs(GetPlayers()) do
+    local ped = GetPlayerPed(raw)
     if ped and ped ~= 0 then
-      local veh = GetVehiclePedIsIn(ped, false)
-      if veh and veh ~= 0 then set[veh] = true end
+      local vehicle = GetVehiclePedIsIn(ped, false)
+      if vehicle and vehicle ~= 0 then out[vehicle] = true end
     end
   end
-  return set
+  return out
 end
 
-local function playerPedSet()
-  local set = {}
-  for _, s in ipairs(GetPlayers()) do
-    local ped = GetPlayerPed(s)
-    if ped and ped ~= 0 then set[ped] = true end
+-- Remove entidades sem jogador, limitada para manter o tick previsivel.
+local function wipe(kind)
+  local entities
+  local protected = nil
+  if kind == 'vehicles' then
+    entities = GetAllVehicles()
+    protected = occupiedVehicles()
+  elseif kind == 'peds' then
+    entities = GetAllPeds()
+    protected = playerPeds()
+  elseif kind == 'objects' then
+    entities = GetAllObjects()
+  else
+    return nil
   end
-  return set
+
+  local removed = 0
+  local inspected = 0
+  for _, entity in ipairs(entities) do
+    inspected = inspected + 1
+    if removed >= CFG.limits.wipe_cap then break end
+    if DoesEntityExist(entity) and (not protected or not protected[entity]) then
+      DeleteEntity(entity)
+      removed = removed + 1
+    end
+    if inspected % 50 == 0 then Citizen.Wait(0) end
+  end
+  return removed
 end
 
-local WIPE_KINDS = { vehicles = true, peds = true, objects = true }
+local wipeKinds = { vehicles = true, peds = true, objects = true }
 
 RegisterNetEvent(E.ACT_WIPE)
 AddEventHandler(E.ACT_WIPE, function(kind)
-  local src = source; if not reqPerm(src, 'wipe') then return end
-  kind = tostring(kind or '')
-  if not WIPE_KINDS[kind] then return end
-
-  local removed = 0
-  if kind == 'vehicles' then
-    local occupied = playerVehicleSet()
-    for _, veh in ipairs(GetAllVehicles()) do
-      if not occupied[veh] and DoesEntityExist(veh) then
-        DeleteEntity(veh); removed = removed + 1
-      end
-    end
-  elseif kind == 'peds' then
-    local players = playerPedSet()
-    for _, ped in ipairs(GetAllPeds()) do
-      if not players[ped] and DoesEntityExist(ped) then
-        DeleteEntity(ped); removed = removed + 1
-      end
-    end
-  else
-    for _, obj in ipairs(GetAllObjects()) do
-      if DoesEntityExist(obj) then
-        DeleteEntity(obj); removed = removed + 1
-      end
-    end
+  local src = source
+  if not Core:guard(src, 'wipe', 'wipe') then return end
+  if type(kind) ~= 'string' or not wipeKinds[kind] then
+    return Core:notify(src, 'Tipo de limpeza invalido.', 'erro')
   end
+  if wiping then return Core:notify(src, 'Limpeza global em andamento.', 'info') end
 
-  Core.notify(src, ('Wipe %s: %d removidos.'):format(kind, removed))
-  Core:audit(src, 'wipe', nil, { kind = kind, removed = removed })
+  wiping = true
+  Citizen.CreateThread(function()
+    local removed = wipe(kind) or 0
+    wiping = false
+    Core:notify(src, ('Limpeza de %s: %d removidos.'):format(kind, removed), 'sucesso')
+    Core:audit(src, 'wipe', nil, { kind = kind, removed = removed })
+  end)
 end)
 
 RegisterNetEvent(E.ACT_ANNOUNCE)
 AddEventHandler(E.ACT_ANNOUNCE, function(message)
-  local src = source; if not reqPerm(src, 'announce') then return end
-  local msg = U.safeText(message, CFG.limits.announce_chars)
-  if msg == '' then Core.notify(src, 'Mensagem vazia.'); return end
-  TriggerClientEvent(E.ANNOUNCE, -1, msg)
-  Core:audit(src, 'announce', nil, { message = msg })
+  local src = source
+  if not Core:guard(src, 'announce', 'world') then return end
+
+  local text = U.safeText(message, CFG.limits.announce_chars)
+  if text == '' then return Core:notify(src, 'Mensagem vazia.', 'erro') end
+
+  TriggerClientEvent(E.ANNOUNCE, -1, text)
+  Core:audit(src, 'announce', nil, { message = text })
 end)
 
 RegisterNetEvent(E.ACT_STAFFCHAT)
 AddEventHandler(E.ACT_STAFFCHAT, function(message)
-  local src = source; if not reqPerm(src, 'staffchat') then return end
-  local msg = U.safeText(message, 220)
-  if msg == '' then return end
-  local actor = Core:getSession(src)
-  local who = actor and actor.name or '?'
-  Core:eachAdmin(function(s)
-    TriggerClientEvent(E.STAFF_MSG, s, who, msg)
+  local src = source
+  if not Core:guard(src, 'staffchat', 'world') then return end
+
+  local text = U.safeText(message, 220)
+  if text == '' then return Core:notify(src, 'Mensagem vazia.', 'erro') end
+
+  local session = Core:getSession(src)
+  local name = U.safeText((session and session.name) or GetPlayerName(src) or '?', 64)
+  Core:eachAdmin(function(adminSrc)
+    TriggerClientEvent(E.STAFF_MSG, adminSrc, name, text)
   end)
-  Core:audit(src, 'staffchat', nil, { message = msg })
+  Core:audit(src, 'staffchat', nil, { message = text })
 end)

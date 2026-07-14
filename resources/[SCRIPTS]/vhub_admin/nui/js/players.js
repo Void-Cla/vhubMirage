@@ -1,15 +1,20 @@
-// nui/js/players.js  lista de jogadores + detalhe (RG)
+// players.js — lista de jogadores + ficha (RG) com transações
+// Anti-XSS: nome de jogador e identidade são dados de USUÁRIO → textContent sempre.
 (() => {
   const App = window.vhubAdmin;
   const $list   = document.getElementById('players-list');
   const $detail = document.getElementById('player-detail');
-  const $search = document.getElementById('p-search');
 
   let all = [];
   let selected = null;
+  let query = '';
+
+  // ============================================================
+  // LISTA
+  // ============================================================
 
   function applyFilter() {
-    const q = ($search.value || '').toLowerCase();
+    const q = query.toLowerCase();
     return all.filter(p =>
       !q ||
       String(p.src).includes(q) ||
@@ -18,91 +23,160 @@
   }
 
   function render() {
-    $list.innerHTML = '';
+    $list.textContent = '';
     applyFilter().forEach(p => {
-      const el = document.createElement('div');
-      el.className = 'pcard' + (selected === p.src ? ' selected' : '');
-      el.innerHTML = `
-        <h4>[${p.src}] ${p.name}</h4>
-        <div class="sub">uid ${p.uid}   char ${p.char}   ping ${p.ping}ms</div>
-        <div class="tags">${(p.groups || []).slice(0,4).map(g => `<span class="tag">${g}</span>`).join('')}</div>`;
-      el.onclick = () => { selected = p.src; render(); App.post('reqRG', { target: p.src }); };
-      $list.appendChild(el);
+      const card = App.el('div', 'pcard' + (selected === p.src ? ' selected' : ''));
+      card.appendChild(App.el('h4', null, `[${p.src}] ${p.name}`));
+      card.appendChild(App.el('div', 'sub', `uid ${p.uid} · char ${p.char} · ping ${p.ping}ms`));
+      const tags = App.el('div', 'tags');
+      (p.groups || []).slice(0, 4).forEach(g => tags.appendChild(App.el('span', 'tag', g)));
+      card.appendChild(tags);
+      card.onclick = () => { selected = p.src; render(); App.post('reqRG', { target: p.src }); };
+      $list.appendChild(card);
     });
-    document.getElementById('s-online').textContent = all.length;
+    if (!$list.children.length) {
+      $list.appendChild(App.el('div', 'empty-row', 'Nenhum jogador encontrado.'));
+    }
   }
-
-  $search.addEventListener('input', render);
-  document.getElementById('p-refresh').onclick = () => App.post('reqPlayers');
 
   App.renderPlayers = (rows) => {
     all = Array.isArray(rows) ? rows : [];
+    App.state.players = all;   // alimenta o seletor de alvo dos modais
     if (!all.some(p => p.src === selected)) selected = null;
-    render();
+    if (App.state.section === 'players') render();
   };
+
+  App.sectionHooks.players = () => { query = ''; render(); };
+  App.searchHooks.players  = (q) => { query = q; render(); };
+
+  // ============================================================
+  // FICHA (RG)
+  // ============================================================
+
+  // linha rótulo→valor da ficha
+  function row(k, v, color) {
+    const r = App.el('div', 'row');
+    r.appendChild(App.el('span', 'k', k));
+    const val = App.el('span', 'val', v);
+    if (color) val.style.color = color;
+    r.appendChild(val);
+    return r;
+  }
 
   App.renderRG = (info) => {
     if (!info) { $detail.classList.add('empty'); return; }
     $detail.classList.remove('empty');
+    $detail.textContent = '';
+
     const id = info.identity || {};
-    $detail.innerHTML = `
-      <h2>${info.name}</h2>
-      <div class="row"><span class="k">ID</span><span>${info.src}</span></div>
-      <div class="row"><span class="k">uid</span><span>${info.uid}</span></div>
-      <div class="row"><span class="k">char</span><span>${info.char_id}</span></div>
-      <div class="row"><span class="k">Identidade</span><span>${(id.name||'?')+' '+(id.firstname||'')}</span></div>
-      <div class="row"><span class="k">Registro</span><span>${id.registration || '?'}</span></div>
-      <div class="row"><span class="k">Telefone</span><span>${id.phone || '?'}</span></div>
-      <div class="row"><span class="k">Idade</span><span>${id.age || '?'}</span></div>
-      <div class="row"><span class="k">Carteira</span><span>${App.fmtMoney(info.wallet)}</span></div>
-      <div class="row"><span class="k">Banco</span><span>${App.fmtMoney(info.bank)}</span></div>
-      <div class="row"><span class="k">Grupos</span><span>${(info.groups||[]).join(', ') || '-'}</span></div>
-      <div class="row"><span class="k">Veículos</span><span>${(info.vehicles||[]).map(v=>v.plate).join(', ') || '—'}</span></div>
-      ${info.jail_until ? `<div class="row"><span class="k">Preso até</span><span style="color:var(--vh-danger)">${App.fmtDate(info.jail_until)}</span></div>` : ''}
-      ${info.mute_until ? `<div class="row"><span class="k">Silenciado até</span><span style="color:var(--vh-amber)">${App.fmtDate(info.mute_until)}</span></div>` : ''}
-      <div class="row"><span class="k">Ping</span><span>${info.ping}ms</span></div>
-      <div class="actions">
-        <button class="btn primary" data-a="tp">Ir até</button>
-        <button class="btn" data-a="tptome">Trazer</button>
-        <button class="btn" data-a="spec">Espectar</button>
-        <button class="btn" data-a="heal">Curar</button>
-        <button class="btn" data-a="revive">Reviver</button>
-        <button class="btn" data-a="freeze">Congelar</button>
-        <button class="btn warn" data-a="warn">Avisar</button>
-        <button class="btn warn" data-a="jail">Prender</button>
-        <button class="btn warn" data-a="mute">Silenciar</button>
-        <button class="btn danger" data-a="kick">Expulsar</button>
-        <button class="btn danger" data-a="ban">Banir</button>
-        <button class="btn danger" data-a="kill">Matar</button>
-      </div>`;
+    const fullName = [id.firstname, id.lastname].filter(Boolean).join(' ') || '?';
+    $detail.appendChild(App.el('h2', null, info.name));
+    $detail.appendChild(row('ID', String(info.src)));
+    $detail.appendChild(row('uid', String(info.uid)));
+    $detail.appendChild(row('char', String(info.char_id)));
+    $detail.appendChild(row('Identidade', fullName));
+    $detail.appendChild(row('Registro', id.registration || '?'));
+    if (id.age) $detail.appendChild(row('Idade', String(id.age)));
+    if (id.phone) $detail.appendChild(row('Telefone', id.phone));
+    if (info.coords) {
+      const c = info.coords;
+      $detail.appendChild(row('Coords', `${c.x.toFixed(1)}, ${c.y.toFixed(1)}, ${c.z.toFixed(1)}`));
+    }
+    // economia: carteira + banco lado a lado em pills
+    const ecoRow = App.el('div', 'eco-row');
+    const mkPill = (label, val) => {
+      const p = App.el('div', 'eco-pill');
+      p.appendChild(App.el('div', 'ep-label', label));
+      p.appendChild(App.el('div', 'ep-val', App.fmtMoney(val)));
+      return p;
+    };
+    ecoRow.appendChild(mkPill('Carteira', info.wallet));
+    ecoRow.appendChild(mkPill('Banco', info.bank));
+    $detail.appendChild(ecoRow);
 
-    $detail.querySelectorAll('[data-a]').forEach(b => b.onclick = () => quickAct(b.dataset.a, info));
-  };
+    const groupStr = (info.groups || []).map(g =>
+      typeof g === 'object' ? `${g.id} (${g.level})` : String(g)
+    ).join(', ') || '—';
+    $detail.appendChild(row('Grupos', groupStr));
+    $detail.appendChild(row('Veículos', (info.vehicles || []).map(v => v.plate).join(', ') || '—'));
+    if (info.jail_until) $detail.appendChild(row('Preso até', App.fmtDate(info.jail_until), 'var(--vh-danger)'));
+    if (info.mute_until) $detail.appendChild(row('Silenciado', App.fmtDate(info.mute_until), 'var(--vh-amber)'));
+    $detail.appendChild(row('Ping', `${info.ping}ms`));
 
-  const ACT_LBL = {
-    warn: 'Avisar', kick: 'Expulsar', ban: 'Banir',
-    jail: 'Prender', mute: 'Silenciar',
-  };
+    // últimas movimentações financeiras (max 5, compacto)
+    const txs = (info.transactions || []).slice(0, 5);
+    if (txs.length) {
+      const block = App.el('div', 'tx-block');
+      block.appendChild(App.el('div', 'tx-block-title', 'Movimentações recentes'));
+      txs.forEach(tx => {
+        const r = App.el('div', 'txrow');
+        const desc = App.el('span', 'tx-desc');
+        desc.textContent = tx.kind + (tx.reason ? ' · ' + tx.reason : '');
+        r.appendChild(desc);
+        const amt = App.el('span', 'amt ' + (tx.amount >= 0 ? 'pos' : 'neg'));
+        amt.textContent = App.fmtMoney(Math.abs(tx.amount));
+        r.appendChild(amt);
+        block.appendChild(r);
+      });
+      $detail.appendChild(block);
+    }
 
-  async function quickAct(a, info) {
+    // ações rápidas sobre o alvo
+    const actions = App.el('div', 'actions');
+    const mk = (label, cls, fn) => {
+      const b = App.el('button', 'btn ' + cls, label);
+      b.onclick = fn;
+      actions.appendChild(b);
+    };
     const t = info.src;
-    if (a === 'warn' || a === 'kick' || a === 'ban') {
+    const simple = (a) => () => App.post('act', { action: a, fields: { target: t } });
+
+    mk('Ir até', 'primary', simple('tp'));
+    mk('Trazer', '', simple('tptome'));
+    mk('Espectar', '', simple('spec'));
+    mk('Curar', '', simple('heal'));
+    mk('Reviver', '', simple('revive'));
+    mk('Congelar', '', simple('freeze'));
+    mk('Avisar', 'warn', () => withReason('warn', t, 'Avisar'));
+    mk('Prender', 'warn', () => withMinutes('jail', t, 'Prender', 4320));
+    mk('Silenciar', 'warn', () => withMinutes('mute', t, 'Silenciar', 1440));
+    mk('Expulsar', 'danger', () => withReason('kick', t, 'Expulsar'));
+    mk('Banir', 'danger', () => withReason('ban', t, 'Banir'));
+    mk('Matar', 'danger', simple('kill'));
+    mk('Skin', '', async () => {
       const r = await App.modal({
-        title: `${ACT_LBL[a]} — jogador ${t}`,
-        html: `<label>Motivo</label><input data-field="reason" maxlength="180">`,
+        title: `Skin — jogador ${t}`,
+        fields: [ { k: 'model', label: 'PedHash / Model', type: 'text', maxlen: 64 } ],
+        okText: 'Aplicar',
       });
-      if (r.ok) App.post('act', { action: a, fields: { target: t, message: r.fields.reason, reason: r.fields.reason } });
-      return;
-    }
-    if (a === 'jail' || a === 'mute') {
-      const r = await App.modal({
-        title: `${ACT_LBL[a]} — jogador ${t}`,
-        html: `<label>Minutos</label><input type="number" data-field="minutes" value="10" min="5" max="4320">
-               <label>Motivo</label><input data-field="reason" maxlength="180">`,
-      });
-      if (r.ok) App.post('act', { action: a, fields: { target: t, minutes: r.fields.minutes, reason: r.fields.reason } });
-      return;
-    }
-    App.post('act', { action: a, fields: { target: t } });
+      if (!r.ok) return;
+      App.post('act', { action: 'skin', fields: { target: t, model: r.fields.model } });
+    });
+    $detail.appendChild(actions);
+  };
+
+  // modal de motivo (warn/kick/ban)
+  async function withReason(action, t, label) {
+    const r = await App.modal({
+      title: `${label} — jogador ${t}`,
+      fields: [ { k: 'reason', label: 'Motivo', type: 'text', maxlen: 180 } ],
+      okText: 'Confirmar ação',
+    });
+    if (!r.ok) return;
+    App.post('act', { action, fields: { target: t, reason: r.fields.reason, message: r.fields.reason } });
+  }
+
+  // modal de minutos + motivo (jail/mute)
+  async function withMinutes(action, t, label, max) {
+    const r = await App.modal({
+      title: `${label} — jogador ${t}`,
+      fields: [
+        { k: 'minutes', label: `Minutos (5–${max})`, type: 'number', min: 5, max, value: 10 },
+        { k: 'reason',  label: 'Motivo', type: 'text', maxlen: 180 },
+      ],
+      okText: 'Confirmar ação',
+    });
+    if (!r.ok) return;
+    App.post('act', { action, fields: { target: t, minutes: r.fields.minutes, reason: r.fields.reason } });
   }
 })();

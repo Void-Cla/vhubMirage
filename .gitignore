@@ -27,3 +27,6 @@ dist/
 # Variáveis de ambiente
 .env
 *.env
+
+# Segredos locais do FXServer
+config/local.cfg

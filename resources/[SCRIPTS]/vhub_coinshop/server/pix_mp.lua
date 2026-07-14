@@ -1,9 +1,7 @@
 -- server/pix_mp.lua — integração MercadoPago Pix (gateway real para compra de moedas)
 --
 -- CONFIGURAÇÃO:
---   Adicione ao server.cfg (NÃO versionar a chave):
---     setr coinshop_mp_key "APP_USR-0000000000000000-000000-...seu_access_token..."
---     setr coinshop_mp_webhook_secret "sua_chave_secreta_do_webhook_mp"
+--   Configure `set coinshop_mp_*` apenas em config/local.cfg (ignorado pelo Git).
 --
 -- FLUXO:
 --   1. Jogador escolhe pacote → ch.send('pix_create', {packageId})
@@ -33,6 +31,7 @@ VHubCoin.Pix = Pix
 local _accessToken     = nil  -- APP_USR-... do MercadoPago (lido do convar)
 local _webhookSecret   = nil  -- segredo para validar X-Signature do webhook MP
 local _initialized     = false
+local MAX_PACK_BRL     = 10000
 
 -- idempotência: inicializa uma vez no boot
 local function ensureInit()
@@ -42,10 +41,50 @@ local function ensureInit()
     _webhookSecret = GetConvar('coinshop_mp_webhook_secret', '')
 
     if _accessToken == '' then
-        Core.logErr('pix_mp: convar coinshop_mp_key está vazio — Pix desabilitado')
+        -- só é erro quando este provider está selecionado; com 'vhub_df' é ruído esperado
+        if VHubCoin.cfg.pix.provider == 'mercadopago' then
+            Core.logErr('pix_mp: convar coinshop_mp_key está vazio — Pix desabilitado')
+        end
     else
         Core.log('pix_mp: Access Token carregado (' .. #_accessToken .. ' chars)')
     end
+end
+
+-- normaliza pacote para a regra comercial fixa R$1 = 1 coin.
+local function normalizedPack(raw)
+    if type(raw) ~= 'table' or type(raw.id) ~= 'string' or raw.id == '' then return nil end
+    local amount = tonumber(raw.priceBRL)
+    if not amount or amount < 1 or amount > MAX_PACK_BRL or amount % 1 ~= 0 then return nil end
+    amount = math.floor(amount)
+
+    return {
+        id       = raw.id:sub(1, 50),
+        tier     = math.max(1, math.min(4, math.floor(tonumber(raw.tier) or 1))),
+        name     = tostring(raw.name or raw.id):sub(1, 48),
+        coins    = amount,
+        bonus    = 0,
+        priceBRL = amount,
+        popular  = raw.popular == true,
+    }
+end
+
+-- retorna cópias públicas dos pacotes Pix normalizados.
+function Pix.publicPackages()
+    local packs = {}
+    for _, raw in ipairs(VHubCoin.cfg.pix.packages or {}) do
+        local pack = normalizedPack(raw)
+        if pack then packs[#packs + 1] = pack end
+    end
+    return packs
+end
+
+-- retorna pacote Pix validado pelo identificador estável.
+function Pix.findPackage(packageId)
+    if type(packageId) ~= 'string' or #packageId > 50 then return nil end
+    for _, pack in ipairs(Pix.publicPackages()) do
+        if pack.id == packageId then return pack end
+    end
+    return nil
 end
 
 AddEventHandler('onResourceStart', function(res)
@@ -105,12 +144,13 @@ function Pix.create(src, char_id, pack, callback)
         return
     end
 
-    -- total com bônus (o jogador paga pelo priceBRL; o pack já inclui bônus de coins)
-    local amount = tonumber(pack.priceBRL)
-    if not amount or amount <= 0 then
+    pack = normalizedPack(pack)
+    if not pack then
         callback(false, { code = 'pack_invalido', message = 'Pacote inválido.' })
         return
     end
+    local amount = pack.priceBRL
+    local coins  = pack.coins
 
     local playerName = Core.getPlayerName(src)
     local minutes = math.max(1, math.min(1440, tonumber(VHubCoin.cfg.pix.expiresInMinutes) or 30))
@@ -118,9 +158,9 @@ function Pix.create(src, char_id, pack, callback)
 
     local body = {
         transaction_amount = amount,
-        description        = ('[vHub] ' .. pack.name .. ' — ' .. tostring(pack.coins + (pack.bonus or 0)) .. ' moedas'):sub(1, 60),
+        description        = ('[vHub] ' .. pack.name .. ' — ' .. tostring(coins) .. ' moedas'):sub(1, 60),
         payment_method_id  = 'pix',
-        date_of_expiration = os.date('!%Y-%m-%dT%H:%M:%S.000-03:00', expiresAt),
+        date_of_expiration = os.date('!%Y-%m-%dT%H:%M:%S.000Z', expiresAt),
         payer = {
             email     = 'jogador_' .. tostring(char_id) .. '@vhubmirage.gta',
             first_name = playerName:sub(1, 30),
@@ -129,7 +169,7 @@ function Pix.create(src, char_id, pack, callback)
             char_id    = tostring(char_id),
             src        = tostring(src),
             package_id = pack.id,
-            coins      = tostring(pack.coins + (pack.bonus or 0)),
+            coins      = tostring(coins),
         },
     }
 
@@ -159,7 +199,7 @@ function Pix.create(src, char_id, pack, callback)
             'VALUES (?, ?, ?, ?, ?, ?, "pending", ?)',
             {
                 txid, char_id, src, pack.id,
-                pack.coins + (pack.bonus or 0),
+                coins,
                 amount,
                 os.date('%Y-%m-%d %H:%M:%S', expiresAt),
             }
@@ -179,7 +219,7 @@ function Pix.create(src, char_id, pack, callback)
             copiaECola     = copiaECola,
             expiresAt      = expiresAt,     -- unix timestamp (o front calcula o timer)
             amount         = amount,
-            coins          = pack.coins + (pack.bonus or 0),
+            coins          = coins,
         })
     end)
 end
@@ -206,6 +246,10 @@ end
 -- Chamado pelo endpoint HTTP registrado abaixo.
 -- Retorna (ok, mensagem) — usado apenas para log.
 local function handleWebhook(body, signatureHeader)
+    if VHubCoin.cfg.pix.enabled ~= true or VHubCoin.cfg.pix.provider ~= 'mercadopago' then
+        return false, 'pix_desabilitado'
+    end
+
     -- validação mínima da assinatura (X-Signature: ts=...;v1=...)
     -- O MP envia: X-Signature: ts=<timestamp>;v1=<hash>
     -- Como PerformHttpRequest não expõe cabeçalhos de entrada (FiveM), usamos o

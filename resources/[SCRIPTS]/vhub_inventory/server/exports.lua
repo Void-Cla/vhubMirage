@@ -7,7 +7,7 @@
 local Backpack = Inventory.Bag
 local ItemUse  = Inventory.ItemUse
 local Cat      = Inventory.Catalog
-local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true }
+local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true, ['vhub_admin'] = true }
 
 
 -- ============================================================

@@ -6,6 +6,83 @@ local S = VHubAdmin.state
 
 local function isAdm() return S.is_admin end
 
+local function formatGroups(groups)
+  local formatted = {}
+  for _, group in ipairs(type(groups) == 'table' and groups or {}) do
+    if type(group) == 'table' then
+      formatted[#formatted + 1] = ('%s L%d'):format(group.id or '?', tonumber(group.level) or 1)
+    else
+      formatted[#formatted + 1] = tostring(group)
+    end
+  end
+  return #formatted > 0 and table.concat(formatted, ', ') or 'Nenhum'
+end
+
+
+-- ============================================================
+-- KEYBINDS (ações rápidas sem abrir painel)
+-- ============================================================
+
+-- N — toggle noclip
+RegisterKeyMapping('noclip', 'Admin: Noclip', 'keyboard', 'n')
+
+-- G — toggle god mode
+RegisterCommand('admgod', function()
+  if not isAdm() then return end
+  TriggerServerEvent(E.ACT_GOD)
+end, false)
+RegisterKeyMapping('admgod', 'Admin: God mode', 'keyboard', 'g')
+
+-- H — prender/segurar player mais próximo (TP to me)
+RegisterCommand('admgrabholdnearest', function()
+  if not isAdm() then return end
+  local me = PlayerPedId()
+  local mc = GetEntityCoords(me)
+  local best, bd = nil, 9999
+  for _, pid in ipairs(GetActivePlayers()) do
+    local ped = GetPlayerPed(pid)
+    if ped ~= me and ped ~= 0 then
+      local d = #(mc - GetEntityCoords(ped))
+      if d < bd then bd = d; best = pid end
+    end
+  end
+  if best then
+    TriggerServerEvent(E.ACT_TPTOME, GetPlayerServerId(best))
+    VHubAdmin.notify(('Trouxe player %d'):format(GetPlayerServerId(best)))
+  end
+end, false)
+RegisterKeyMapping('admgrabholdnearest', 'Admin: Trazer player mais próximo', 'keyboard', 'h')
+
+-- DEL — deletar veículo mais próximo (raio 20m, client-side via controle de entidade)
+RegisterCommand('admdelvehnearest', function()
+  if not isAdm() then return end
+  local ped = PlayerPedId()
+  local pc = GetEntityCoords(ped)
+  local nearest, nd = 0, 20.0
+  local veh = GetVehiclePedIsIn(ped, false)
+  -- encontra veículo mais próximo fora do que o admin está dirigindo
+  for _, v in ipairs(GetGamePool('CVehicle')) do
+    if v ~= veh and DoesEntityExist(v) then
+      local d = #(pc - GetEntityCoords(v))
+      if d < nd then nd = d; nearest = v end
+    end
+  end
+  if nearest == 0 then VHubAdmin.notify('Nenhum veículo próximo.'); return end
+  -- pede controle para deletar (server authoritative delete via clearzone ~0 raio alternativo)
+  NetworkRequestControlOfEntity(nearest)
+  local deadline = GetGameTimer() + 1000
+  Citizen.CreateThread(function()
+    while not NetworkHasControlOfEntity(nearest) and GetGameTimer() < deadline do
+      Citizen.Wait(50)
+    end
+    if DoesEntityExist(nearest) then
+      DeleteEntity(nearest)
+      VHubAdmin.notify('Veículo deletado.')
+    end
+  end)
+end, false)
+RegisterKeyMapping('admdelvehnearest', 'Admin: Deletar veículo próximo', 'keyboard', 'DELETE')
+
 -- ----------------------------------------------------------------------------
 -- /cds  imprime a posicao atual em TODOS os formatos de uma vez (copia/cola)
 -- ----------------------------------------------------------------------------
@@ -28,7 +105,7 @@ RegisterCommand('cds', function()
 end, false)
 
 -- ----------------------------------------------------------------------------
--- /id  mostra player mais pr ximo
+-- /id  mostra player mais próximo
 -- ----------------------------------------------------------------------------
 RegisterCommand('id', function()
   local me = PlayerPedId()
@@ -42,20 +119,19 @@ RegisterCommand('id', function()
     end
   end
   if best then
-    VHubAdmin.notify(('Player pr ximo: ID %d  %.1fm'):format(
+    VHubAdmin.notify(('Player próximo: ID %d  %.1fm'):format(
       GetPlayerServerId(best), bd))
-  else VHubAdmin.notify('Nenhum player pr ximo.') end
+  else VHubAdmin.notify('Nenhum player próximo.') end
 end, false)
 
 -- ----------------------------------------------------------------------------
--- /rg  ficha completa
+-- /rg <id> exibe a ficha; /rg sem ID e /wall alternam o overlay.
 -- ----------------------------------------------------------------------------
-RegisterNetEvent(E.RG_INFO)
-AddEventHandler(E.RG_INFO, function(info)
+RegisterNetEvent(E.PROFILE)
+AddEventHandler(E.PROFILE, function(info)
   if S.panel_open then
-    SendNUIMessage({ action = VHubAdmin.UI.RG_INFO, data = info })
+    SendNUIMessage({ action = VHubAdmin.UI.PROFILE, data = info })
   else
-    -- print compacto no chat para fallback
     local lines = {
       ('   FICHA [%d]'):format(info.src),
       ('uid=%d char=%d ping=%dms'):format(info.uid, info.char_id, info.ping or 0),
@@ -63,19 +139,18 @@ AddEventHandler(E.RG_INFO, function(info)
     }
     if info.identity then
       lines[#lines+1] = ('Identidade: %s %s (%s)'):format(
-        info.identity.name or '?', info.identity.firstname or '',
+        info.identity.firstname or '?', info.identity.lastname or '',
         info.identity.registration or '?')
     end
     lines[#lines+1] = ('Carteira: R$ %d   Banco: R$ %d'):format(
       info.wallet or 0, info.bank or 0)
-    lines[#lines+1] = ('Grupos: %s'):format(
-      type(info.groups) == 'table' and table.concat(info.groups, ', ') or '?')
+    lines[#lines+1] = ('Grupos: %s'):format(formatGroups(info.groups))
     if info.vehicles and #info.vehicles > 0 then
       local vs = {}
       for _, v in ipairs(info.vehicles) do
         vs[#vs+1] = ('%s(%s)'):format(v.plate, v.status)
       end
-      lines[#lines+1] = ('Ve culos: %s'):format(table.concat(vs, ', '))
+      lines[#lines+1] = ('Veículos: %s'):format(table.concat(vs, ', '))
     end
     for _, l in ipairs(lines) do
       TriggerEvent('chat:addMessage', { color = { 76, 200, 255 }, args = { '[RG]', l } })
@@ -86,8 +161,14 @@ end)
 RegisterCommand('rg', function(_, args)
   if not isAdm() then return end
   local t = tonumber(args[1])
-  if t then TriggerServerEvent(E.REQ_RG, t)
-  else VHubAdmin.notify('Uso: /rg <id>') end
+  if args[1] and not t then return VHubAdmin.notify('Uso: /rg [id]') end
+  if t then return TriggerServerEvent(E.REQ_PROFILE, t) end
+  TriggerServerEvent(E.REQ_WALL_TOGGLE)
+end, false)
+
+RegisterCommand('wall', function()
+  if not isAdm() then return end
+  TriggerServerEvent(E.REQ_WALL_TOGGLE)
 end, false)
 
 -- ----------------------------------------------------------------------------
@@ -135,18 +216,6 @@ RegisterCommand('unban', function(_, args)
   if not isAdm() then return end
   local uid = tonumber(args[1])
   if uid then TriggerServerEvent(E.ACT_UNBAN, uid) end
-end, false)
-
-RegisterCommand('wl', function(_, args)
-  if not isAdm() then return end
-  local t = tonumber(args[1])
-  if t then TriggerServerEvent(E.ACT_WL, t) end
-end, false)
-
-RegisterCommand('unwl', function(_, args)
-  if not isAdm() then return end
-  local t = tonumber(args[1])
-  if t then TriggerServerEvent(E.ACT_UNWL, t) end
 end, false)
 
 RegisterCommand('warn', function(_, args)
@@ -205,6 +274,18 @@ RegisterCommand('setmoney', function(_, args)
   if t and v then TriggerServerEvent(E.ACT_SETMONEY, t, math.floor(v), rota) end
 end, false)
 
+RegisterCommand('removemoney', function(_, args)
+  if not isAdm() then return end
+  local t, v, rota
+  if args[2] then
+    t = tonumber(args[1]); v = tonumber(args[2]); rota = args[3] or 'banco'
+  else
+    t = GetPlayerServerId(PlayerId()); v = tonumber(args[1]); rota = 'banco'
+  end
+  if t and v then TriggerServerEvent(E.ACT_REMOVEMONEY, t, math.floor(v), rota)
+  else VHubAdmin.notify('Uso: /removemoney <valor>  ou  /removemoney <id> <valor> [wallet|banco]') end
+end, false)
+
 RegisterCommand('giveitem', function(_, args)
   if not isAdm() then return end
   local t, item, q
@@ -214,11 +295,6 @@ RegisterCommand('giveitem', function(_, args)
     t = GetPlayerServerId(PlayerId()); item = args[1]; q = tonumber(args[2]) or 1
   end
   if t and item then TriggerServerEvent(E.ACT_GIVEITEM, t, item, math.floor(q)) end
-end, false)
-
-RegisterCommand('clearinv', function(_, args)
-  if not isAdm() then return end
-  local t = tonumber(args[1]); if t then TriggerServerEvent(E.ACT_CLEARINV, t) end
 end, false)
 
 RegisterCommand('addgroup', function(_, args)

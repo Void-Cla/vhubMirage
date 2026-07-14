@@ -433,20 +433,20 @@ end
 
 local KEY_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  -- sem 0/O/1/I (legibilidade)
 
--- gera chave de resgate SERVER-side (24 chars úteis; cliente NUNCA propõe a chave — #59/4.1).
--- math.random do Lua 5.4 é auto-seedado com entropia no boot; unicidade garantida
--- pelo UNIQUE(tbx_id) + retry
+-- gera cupom SERVER-side no formato MG7-XXXX-XXXX-XXXX (cliente NUNCA propõe a chave — #59/4.1).
+-- 12 chars úteis de charset 32 = 32^12 combinações; math.random do Lua 5.4 é auto-seedado
+-- com entropia no boot; unicidade garantida pelo UNIQUE(tbx_id) + retry
 local function generateKey()
     local parts = {}
-    for p = 1, 4 do
+    for p = 1, 3 do
         local seg = {}
-        for i = 1, 6 do
+        for i = 1, 4 do
             local n = math.random(1, #KEY_CHARSET)
             seg[i] = KEY_CHARSET:sub(n, n)
         end
         parts[p] = table.concat(seg)
     end
-    return 'VHC-' .. table.concat(parts, '-')
+    return 'MG7-' .. table.concat(parts, '-')
 end
 
 -- cria um código de resgate com `coins` moedas; retorna a chave gerada (mostrada 1x ao admin)

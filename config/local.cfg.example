@@ -1,0 +1,10 @@
+## Configuração local. Copie para config/local.cfg; nunca versione credenciais.
+## Use chaves NOVAS do Mercado Pago. `setr` replica segredo para clientes: proibido.
+
+set coinshop_mp_key "APP_USR-COLE_AQUI_O_ACCESS_TOKEN_ROTACIONADO"
+set coinshop_mp_webhook_secret "COLE_AQUI_A_ASSINATURA_SECRETA_ROTACIONADA"
+
+## vhub_df — gateway Pix MercadoPago
+set df_mp_key "APP_USR-COLE_AQUI_O_ACCESS_TOKEN"
+set df_mp_webhook_secret "COLE_AQUI_A_ASSINATURA_SECRETA_DO_WEBHOOK"
+set df_discord_webhook ""

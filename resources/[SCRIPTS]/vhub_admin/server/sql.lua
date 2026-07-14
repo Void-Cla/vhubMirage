@@ -46,7 +46,7 @@ end
 
 function M:listLogs(filter, limit)
   filter = filter or {}
-  limit  = math.min(tonumber(limit) or 100, 500)
+  limit = math.max(1, math.min(math.floor(tonumber(limit) or 100), 500))
   local where, args = {}, {}
   if filter.actor_id  then where[#where+1] = 'actor_id = ?';  args[#args+1] = filter.actor_id end
   if filter.target_id then where[#where+1] = 'target_id = ?'; args[#args+1] = filter.target_id end
@@ -85,6 +85,12 @@ function M:jailListExpired()
     'SELECT char_id FROM vhub_admin_jail WHERE expires_at <= ?', { os.time() })
 end
 
+-- Retorna prisões ainda vigentes para hidratar o runtime após restart.
+function M:jailListActive()
+  return pquery(
+    'SELECT * FROM vhub_admin_jail WHERE expires_at > ?', { os.time() })
+end
+
 -- ----------------------------------------------------------------------------
 -- Mute
 -- ----------------------------------------------------------------------------
@@ -113,6 +119,12 @@ function M:muteListExpired()
     'SELECT char_id FROM vhub_admin_mute WHERE expires_at <= ?', { os.time() })
 end
 
+-- Retorna mutes ainda vigentes para hidratar o runtime após restart.
+function M:muteListActive()
+  return pquery(
+    'SELECT * FROM vhub_admin_mute WHERE expires_at > ?', { os.time() })
+end
+
 -- ----------------------------------------------------------------------------
 -- Reports
 -- ----------------------------------------------------------------------------
@@ -133,6 +145,17 @@ function M:reportList(status)
   return pquery(sql, args)
 end
 
+-- Conta tickets por status para o resumo sem transferir a lista inteira.
+function M:reportCounts()
+  local out = { open = 0, claimed = 0, closed = 0 }
+  local rows = pquery([[SELECT status, COUNT(*) AS total
+    FROM vhub_admin_reports GROUP BY status]]) or {}
+  for _, row in ipairs(rows) do
+    if out[row.status] ~= nil then out[row.status] = tonumber(row.total) or 0 end
+  end
+  return out
+end
+
 function M:reportClaim(id, admin_id)
   return pexec([[
     UPDATE vhub_admin_reports
@@ -145,7 +168,7 @@ function M:reportClose(id, admin_id, notes)
   return pexec([[
     UPDATE vhub_admin_reports
        SET status='closed', closed_by=?, closed_at=?, notes=?
-     WHERE id=?
+     WHERE id=? AND status <> 'closed'
   ]], { admin_id, os.time(), notes, id })
 end
 

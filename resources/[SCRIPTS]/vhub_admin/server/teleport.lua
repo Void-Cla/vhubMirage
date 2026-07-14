@@ -1,103 +1,143 @@
--- server/teleport.lua  tp / tptome / tpgo / tpcds / tpall / tplast
+-- server/teleport.lua — teleporte autorizado pelo owner vhub_player_state
 ---@diagnostic disable: undefined-global
 
 local Core = VHubAdmin.Core
-local CFG  = VHubAdmin.cfg
-local E    = VHubAdmin.E
-local U    = VHubAdmin.U
+local CFG = VHubAdmin.cfg
+local E = VHubAdmin.E
+local U = VHubAdmin.U
 
--- hist rico de tp [src] = stack {x,y,z,h}
-local Hist = {}
-local function push(src, c)
-  Hist[src] = Hist[src] or {}
-  table.insert(Hist[src], { x = c.x, y = c.y, z = c.z, h = c.h or 0.0 })
-  if #Hist[src] > CFG.limits.tp_history then table.remove(Hist[src], 1) end
+local history = {}
+local waypointPending = {}
+
+-- Guarda a posição atual antes de uma movimentação administrativa.
+local function pushHistory(src)
+  local pos = Core:coordsOf(src)
+  if not pos then return end
+  local stack = history[src] or {}
+  stack[#stack + 1] = pos
+  if #stack > CFG.limits.tp_history then table.remove(stack, 1) end
+  history[src] = stack
 end
 
--- TP at  jogador
+-- Executa o teleporte e informa falha sem expor detalhes de implementação.
+local function move(src, target, pos, action, payload)
+  if not Core:teleport(target, pos) then
+    Core:notify(src, 'Teleporte recusado pelo owner do jogador.', 'erro')
+    return false
+  end
+  Core:audit(src, action, target ~= src and target or nil, payload or {})
+  return true
+end
+
 RegisterNetEvent(E.ACT_TP)
 AddEventHandler(E.ACT_TP, function(target)
-  local src = source; if not Core.hasPerm(src, 'tp') then return end
-  local t = U.toSrc(target); if not t then return end
-  local c = Core.coordsOf(t); if not c then
-    Core.notify(src, 'Alvo n o encontrado.'); return end
-  local mine = Core.coordsOf(src)
-  if mine then push(src, { x = mine.x, y = mine.y, z = mine.z }) end
-  TriggerClientEvent(E.DO_TP, src, c.x, c.y + 1.5, c.z)
-  Core:audit(src, 'tp', t, {})
+  local src = source
+  if not Core:guard(src, 'tp', 'teleport') then return end
+  local targetSrc = Core:onlineTarget(target)
+  local pos = targetSrc and Core:coordsOf(targetSrc) or nil
+  if not targetSrc or not pos then return Core:notify(src, 'Alvo indisponível.', 'erro') end
+
+  pushHistory(src)
+  pos.y = pos.y + 1.5
+  move(src, src, pos, 'tp', { target = targetSrc })
 end)
 
--- Trazer jogador
 RegisterNetEvent(E.ACT_TPTOME)
 AddEventHandler(E.ACT_TPTOME, function(target)
-  local src = source; if not Core.hasPerm(src, 'bring') then return end
-  local t = U.toSrc(target); if not t then return end
-  local c = Core.coordsOf(src); if not c then return end
-  TriggerClientEvent(E.DO_TP, t, c.x, c.y + 1.5, c.z)
-  Core.notify(t, 'Voc  foi teleportado por um admin.')
-  Core:audit(src, 'tptome', t, {})
+  local src = source
+  if not Core:guard(src, 'bring', 'teleport') then return end
+  local targetSrc = Core:onlineTarget(target)
+  local pos = Core:coordsOf(src)
+  if not targetSrc or not pos then return Core:notify(src, 'Alvo indisponível.', 'erro') end
+
+  pushHistory(targetSrc)
+  pos.y = pos.y + 1.5
+  if move(src, targetSrc, pos, 'bring', { target = targetSrc }) then
+    Core:notify(targetSrc, 'Você foi trazido pela equipe.', 'info')
+  end
 end)
 
--- TP para waypoint (cliente resolve coords + colis o)
 RegisterNetEvent(E.ACT_TPGO)
 AddEventHandler(E.ACT_TPGO, function()
-  local src = source; if not Core.hasPerm(src, 'tpgo') then return end
-  local c = Core.coordsOf(src)
-  if c then push(src, { x = c.x, y = c.y, z = c.z }) end
-  TriggerClientEvent(E.DO_TP, src, nil, nil, nil, 'waypoint')
-  Core:audit(src, 'tpgo', nil, {})
+  local src = source
+  if not Core:guard(src, 'tpgo', 'teleport') then return end
+  waypointPending[src] = GetGameTimer() + 15000
+  TriggerClientEvent(E.REQUEST_WAYPOINT, src)
 end)
 
--- TP para coordenadas
-RegisterNetEvent(E.ACT_TPCDS)
-AddEventHandler(E.ACT_TPCDS, function(x, y, z, h)
-  local src = source; if not Core.hasPerm(src, 'tpcds') then return end
-  if not U.validCoords({ x = x, y = y, z = z }) then
-    Core.notify(src, 'Coordenadas inv lidas.'); return
+RegisterNetEvent(E.ACT_TPWAYPOINT)
+AddEventHandler(E.ACT_TPWAYPOINT, function(pos)
+  local src = source
+  local expires = waypointPending[src]
+  waypointPending[src] = nil
+  if not expires or expires < GetGameTimer() or not Core.hasPerm(src, 'tpgo') then return end
+  if not Core:rate(src, 'waypoint') or not U.validCoords(pos) then
+    return Core:notify(src, 'Marcador inválido.', 'erro')
   end
-  local c = Core.coordsOf(src)
-  if c then push(src, { x = c.x, y = c.y, z = c.z }) end
-  TriggerClientEvent(E.DO_TP, src, tonumber(x), tonumber(y), tonumber(z), nil, tonumber(h) or 0.0)
-  Core:audit(src, 'tpcds', nil, { x = x, y = y, z = z })
+
+  local heading = U.number(pos.h, -3600, 3600) or 0.0
+  pushHistory(src)
+  move(src, src, { x = pos.x, y = pos.y, z = pos.z, h = heading }, 'tpgo', {})
 end)
 
--- Trazer todos a mim
+RegisterNetEvent(E.ACT_TPCDS)
+AddEventHandler(E.ACT_TPCDS, function(x, y, z, heading)
+  local src = source
+  if not Core:guard(src, 'tpcds', 'teleport') then return end
+  local pos = { x = x, y = y, z = z, h = U.number(heading, -3600, 3600) or 0.0 }
+  if not U.validCoords(pos) then return Core:notify(src, 'Coordenadas inválidas.', 'erro') end
+
+  pushHistory(src)
+  move(src, src, pos, 'tpcds', { x = pos.x, y = pos.y, z = pos.z })
+end)
+
 RegisterNetEvent(E.ACT_TPALL)
 AddEventHandler(E.ACT_TPALL, function()
-  local src = source; if not Core.hasPerm(src, 'tpall') then return end
-  local c = Core.coordsOf(src); if not c then return end
-  for _, s in ipairs(GetPlayers()) do
-    s = tonumber(s)
-    if s and s ~= src then
-      TriggerClientEvent(E.DO_TP, s, c.x, c.y + 1.5, c.z)
+  local src = source
+  if not Core:guard(src, 'tpall', 'tpall') then return end
+  local pos = Core:coordsOf(src)
+  if not pos then return end
+
+  Citizen.CreateThread(function()
+    local moved = 0
+    for _, raw in ipairs(GetPlayers()) do
+      local target = tonumber(raw)
+      if target and target ~= src and Core:getCharId(target) then
+        pushHistory(target)
+        Core:teleport(target, { x = pos.x, y = pos.y + 1.5, z = pos.z, h = pos.h })
+        moved = moved + 1
+        if moved % 25 == 0 then Citizen.Wait(0) end
+      end
     end
-  end
-  Core:audit(src, 'tpall', nil, {})
+    Core:audit(src, 'tpall', nil, { moved = moved })
+    Core:notify(src, ('%d jogadores movidos.'):format(moved), 'sucesso')
+  end)
 end)
 
--- TP para zona nomeada (server valida a zona; hist rico preservado)
 RegisterNetEvent(E.ACT_TPZ)
-AddEventHandler(E.ACT_TPZ, function(zone)
-  local src = source; if not Core.hasPerm(src, 'tp') then return end
-  local z = CFG.teleport_zones[tostring(zone or ''):lower()]
-  if not z then Core.notify(src, 'Zona desconhecida.'); return end
-  local c = Core.coordsOf(src)
-  if c then push(src, { x = c.x, y = c.y, z = c.z }) end
-  TriggerClientEvent(E.DO_TP, src, z.x, z.y, z.z, nil, z.h)
-  Core:audit(src, 'tpz', nil, { zone = zone })
+AddEventHandler(E.ACT_TPZ, function(zoneId)
+  local src = source
+  if not Core:guard(src, 'tp', 'teleport') then return end
+  local id = U.identifier(zoneId, 32)
+  local zone = id and CFG.teleport_zones[id] or nil
+  if not zone then return Core:notify(src, 'Destino desconhecido.', 'erro') end
+
+  pushHistory(src)
+  move(src, src, zone, 'tpz', { zone = id })
 end)
 
--- Voltar  posi  o anterior
 RegisterNetEvent(E.ACT_TPLAST)
 AddEventHandler(E.ACT_TPLAST, function()
-  local src = source; if not Core.hasPerm(src, 'tp') then return end
-  local stack = Hist[src]
-  if not stack or #stack == 0 then
-    Core.notify(src, 'Sem hist rico de teleporte.'); return
-  end
-  local prev = table.remove(stack)
-  TriggerClientEvent(E.DO_TP, src, prev.x, prev.y, prev.z, nil, prev.h)
-  Core:audit(src, 'tplast', nil, {})
+  local src = source
+  if not Core:guard(src, 'tp', 'teleport') then return end
+  local stack = history[src]
+  local previous = stack and table.remove(stack) or nil
+  if not previous then return Core:notify(src, 'Sem histórico de teleporte.', 'info') end
+
+  move(src, src, previous, 'tplast', {})
 end)
 
-AddEventHandler('playerDropped', function() Hist[source] = nil end)
+AddEventHandler('playerDropped', function()
+  history[source] = nil
+  waypointPending[source] = nil
+end)

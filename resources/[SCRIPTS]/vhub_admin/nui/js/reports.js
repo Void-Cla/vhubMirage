@@ -1,55 +1,81 @@
-// nui/js/reports.js  tickets
+// reports.js — denúncias com filtro por status (subtabs do topbar)
+// Anti-XSS: mensagem de denúncia é dado de USUÁRIO → textContent sempre.
 (() => {
   const App = window.vhubAdmin;
   const $list = document.getElementById('reports-list');
-  document.getElementById('r-refresh').onclick = () => App.post('reqReports');
 
-  App.renderReports = (rows) => {
-    rows = Array.isArray(rows) ? rows : [];
-    $list.innerHTML = '';
-    const open = rows.filter(r => r.status !== 'closed').length;
-    document.getElementById('s-reports').textContent = open;
-    const badge = document.getElementById('r-badge');
-    if (open > 0) { badge.textContent = open; badge.classList.remove('hidden'); }
-    else badge.classList.add('hidden');
+  let all = [];
+
+  const ST_LABEL = { open: 'Aberta', claimed: 'Em atendimento', closed: 'Fechada' };
+  const ST_COLOR = {
+    open:    'var(--vh-ok)',
+    claimed: 'var(--vh-amber)',
+    closed:  'var(--vh-text-dim2)',
+  };
+
+  function render() {
+    const sub = (App.state.section === 'reports' && App.state.sub) || 'open';
+    $list.textContent = '';
+
+    const rows = all.filter(r => sub === 'all' || r.status === sub);
+    if (!rows.length) {
+      $list.appendChild(App.el('div', 'empty-row', 'Nenhuma denúncia aqui.'));
+    }
 
     rows.forEach(r => {
-      const el = document.createElement('div');
-      el.className = 'item';
-      const stLbl = { open: 'Aberta', claimed: 'Em atendimento', closed: 'Fechada' }[r.status] || r.status;
-      const stCol = r.status === 'open'    ? 'var(--vh-ok)'
-                  : r.status === 'claimed' ? 'var(--vh-amber)'
-                                           : 'var(--vh-text-dim2)';
-      el.innerHTML = `
-        <div>
-          <strong>#${r.id}</strong>
-          <span style="color:var(--vh-text-dim)">personagem ${r.reporter_id}</span>
-          <span style="color:${stCol}"> · ${stLbl}</span>
-          <div class="meta">${r.message}</div>
-          <div class="meta">${App.fmtDate(r.created_at)}${r.claimed_by ? ' · atendida por '+r.claimed_by : ''}</div>
-        </div>
-        <div class="right">
-          ${r.status==='open'   ? `<button class="btn primary" data-claim="${r.id}">Atender</button>` : ''}
-          ${r.status!=='closed' ? `<button class="btn danger"  data-close="${r.id}">Fechar</button>`  : ''}
-        </div>`;
-      $list.appendChild(el);
-    });
+      const item = App.el('div', 'item');
 
-    $list.querySelectorAll('[data-claim]').forEach(b => b.onclick = (e) => {
-      e.stopPropagation();
-      App.post('act', { action: 'reportClaim', fields: { id: +b.dataset.claim } });
-      setTimeout(() => App.post('reqReports'), 500);
-    });
-    $list.querySelectorAll('[data-close]').forEach(b => b.onclick = async (e) => {
-      e.stopPropagation();
-      const r = await App.modal({
-        title: 'Fechar report #' + b.dataset.close,
-        html: `<label>Notas (opcional)</label><textarea data-field="notes" maxlength="220"></textarea>`,
-      });
-      if (r.ok) {
-        App.post('act', { action: 'reportClose', fields: { id: +b.dataset.close, notes: r.fields.notes } });
-        setTimeout(() => App.post('reqReports'), 500);
+      const left = App.el('div');
+      const head = App.el('div');
+      head.appendChild(App.el('strong', null, `#${r.id}`));
+      head.appendChild(App.el('span', 'meta', ` personagem ${r.reporter_id} · `));
+      const st = App.el('span', null, ST_LABEL[r.status] || r.status);
+      st.style.color = ST_COLOR[r.status] || 'var(--vh-text-dim)';
+      head.appendChild(st);
+      left.appendChild(head);
+      left.appendChild(App.el('div', 'meta', r.message || ''));
+      left.appendChild(App.el('div', 'meta',
+        App.fmtDate(r.created_at) + (r.claimed_by ? ` · atendida por ${r.claimed_by}` : '')));
+      item.appendChild(left);
+
+      const right = App.el('div', 'right');
+      if (r.status === 'open') {
+        const b = App.el('button', 'btn primary', 'Atender');
+        b.onclick = () => {
+          App.post('act', { action: 'reportClaim', fields: { id: r.id } });
+          setTimeout(() => App.post('reqReports'), 500);
+        };
+        right.appendChild(b);
       }
+      if (r.status !== 'closed') {
+        const b = App.el('button', 'btn danger', 'Fechar');
+        b.onclick = async () => {
+          const res = await App.modal({
+            title: `Fechar denúncia #${r.id}`,
+            fields: [ { k: 'notes', label: 'Notas (opcional)', type: 'textarea', max: 220 } ],
+          });
+          if (!res.ok) return;
+          App.post('act', { action: 'reportClose', fields: { id: r.id, notes: res.fields.notes } });
+          setTimeout(() => App.post('reqReports'), 500);
+        };
+        right.appendChild(b);
+      }
+      item.appendChild(right);
+      $list.appendChild(item);
     });
+  }
+
+  App.renderReports = (rows) => {
+    all = Array.isArray(rows) ? rows : [];
+    // badge do aside sempre reflete abertas
+    const open = all.filter(r => r.status !== 'closed').length;
+    const badge = document.getElementById('r-badge');
+    if (badge) {
+      badge.textContent = open;
+      badge.classList.toggle('hidden', open === 0);
+    }
+    if (App.state.section === 'reports') render();
   };
+
+  App.sectionHooks.reports = () => render();
 })();

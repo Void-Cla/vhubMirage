@@ -5,11 +5,12 @@ lua54      'yes'
 
 name        'vhub_admin'
 author      'vHub Mirage'
-version     '2.1.0'
-description 'Painel admin completo: modera  o, teleporte, p layer ops, ve culos, mundo, spec, reports, jail/mute persistentes.'
+version     '3.0.1'
+description 'Painel admin completo: moderação, teleporte, player ops, veículos, mundo, economia, spec, reports, jail/mute persistentes.'
 
 dependencies {
   'vhub',
+  'vhub_player_state',
   'vhub_inventory',
   'vhub_money',
   'vhub_identity',
@@ -51,6 +52,7 @@ client_scripts {
   'client/jail.lua',
   'client/commands.lua',
   'client/ui.lua',
+  'client/overlay.lua',
 }
 
 ui_page 'nui/index.html'
@@ -59,11 +61,13 @@ files {
   'nui/index.html',
   'nui/css/style.css',
   'nui/js/app.js',
-  'nui/js/sand.js',
+  'nui/js/dashboard.js',
   'nui/js/players.js',
   'nui/js/actions.js',
   'nui/js/reports.js',
   'nui/js/logs.js',
+  'nui/js/fleet.js',
+  'nui/js/overlay.js',
   'nui/assets/bg.png',
   'nui/assets/logo.png',
 }

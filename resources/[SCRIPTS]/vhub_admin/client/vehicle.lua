@@ -28,14 +28,14 @@ AddEventHandler(E.DO_SPAWNCAR, function(model)
     local hash = loadModel(model)
     if not hash then VHubAdmin.notify('Modelo inv lido.'); return end
     local ped = PlayerPedId()
-    -- spawna   frente do ped (forward vector), n o em offset fixo de mundo
+    -- spawna à frente do ped (forward vector), não em offset fixo de mundo
     local spawn = GetEntityCoords(ped) + GetEntityForwardVector(ped) * 3.0
     local veh = CreateVehicle(hash, spawn.x, spawn.y, spawn.z, GetEntityHeading(ped), true, false)
     SetVehicleOnGroundProperly(veh)
     SetVehicleHasBeenOwnedByPlayer(veh, true)
     SetPedIntoVehicle(ped, veh, -1)
     SetModelAsNoLongerNeeded(hash)
-    VHubAdmin.notify('Ve culo ' .. model .. ' spawnado.')
+    VHubAdmin.notify('Veículo ' .. model .. ' spawnado.')
   end)
 end)
 
@@ -49,14 +49,14 @@ AddEventHandler(E.DO_DELVEH, function()
     end
     SetEntityAsMissionEntity(veh, false, true)
     DeleteVehicle(veh)
-    VHubAdmin.notify('Ve culo deletado.')
-  else VHubAdmin.notify('Nenhum ve culo pr ximo.') end
+    VHubAdmin.notify('Veículo deletado.')
+  else VHubAdmin.notify('Nenhum veículo próximo.') end
 end)
 
 RegisterNetEvent(E.DO_FIX)
 AddEventHandler(E.DO_FIX, function()
   local veh = nearestVehicle(8.0)
-  if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
+  if not veh or veh == 0 then VHubAdmin.notify('Sem veículo.'); return end
   SetVehicleFixed(veh)
   SetVehicleDeformationFixed(veh)
   SetVehicleUndriveable(veh, false)
@@ -67,7 +67,7 @@ AddEventHandler(E.DO_FIX, function()
   if GetVehiclePedIsIn(PlayerPedId(), false) == veh then
     SetVehicleEngineOn(veh, true, true, false)
   end
-  VHubAdmin.notify('Ve culo reparado.')
+  VHubAdmin.notify('Veículo reparado.')
 end)
 
 -- ----------------------------------------------------------------------------
@@ -79,7 +79,7 @@ RegisterNetEvent(E.DO_BOOST)
 AddEventHandler(E.DO_BOOST, function(mult, duration_ms)
   local ped = PlayerPedId()
   local veh = IsPedInAnyVehicle(ped, false) and GetVehiclePedIsIn(ped, false) or 0
-  if veh == 0 then VHubAdmin.notify('Voc  n o est  em um ve culo.'); return end
+  if veh == 0 then VHubAdmin.notify('Você não está em um veículo.'); return end
   if _boost_active then VHubAdmin.notify('Boost j  ativo.'); return end
 
   _boost_active = true
@@ -100,23 +100,23 @@ AddEventHandler(E.DO_BOOST, function(mult, duration_ms)
 end)
 
 -- ----------------------------------------------------------------------------
--- FLIP  desvira o ve culo mais pr ximo (ou o atual)
+-- FLIP  desvira o veículo mais próximo (ou o atual)
 -- ----------------------------------------------------------------------------
 RegisterNetEvent(E.DO_FLIP)
 AddEventHandler(E.DO_FLIP, function()
   local veh = nearestVehicle(8.0)
-  if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
+  if not veh or veh == 0 then VHubAdmin.notify('Sem veículo.'); return end
   local c = GetEntityCoords(veh)
   SetEntityRotation(veh, 0.0, 0.0, GetEntityHeading(veh), 2, true)
   SetEntityCoords(veh, c.x, c.y, c.z + 0.6, false, false, false, false)
   SetVehicleOnGroundProperly(veh)
-  VHubAdmin.notify('Ve culo desvirado.')
+  VHubAdmin.notify('Veículo desvirado.')
 end)
 
 RegisterNetEvent(E.DO_TUNING)
 AddEventHandler(E.DO_TUNING, function()
   local veh = nearestVehicle(8.0)
-  if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
+  if not veh or veh == 0 then VHubAdmin.notify('Sem veículo.'); return end
   SetVehicleModKit(veh, 0)
   for i = 0, 49 do
     local n = GetNumVehicleMods(veh, i)
@@ -130,7 +130,7 @@ end)
 RegisterNetEvent(E.DO_CARCOLOR)
 AddEventHandler(E.DO_CARCOLOR, function(r, g, b)
   local veh = nearestVehicle(8.0)
-  if not veh or veh == 0 then VHubAdmin.notify('Sem ve culo.'); return end
+  if not veh or veh == 0 then VHubAdmin.notify('Sem veículo.'); return end
   SetVehicleCustomPrimaryColour(veh, r, g, b)
   SetVehicleCustomSecondaryColour(veh, r, g, b)
   VHubAdmin.notify(('Cor RGB %d,%d,%d.'):format(r, g, b))
@@ -142,7 +142,7 @@ RegisterCommand('car', function(_, args)
   TriggerServerEvent(E.ACT_SPAWNCAR, (args[1] or 'adder'):lower())
 end, false)
 
-RegisterCommand('dv', function() if isAdm() then TriggerServerEvent(E.ACT_DELVEH) end end, false)
+RegisterCommand('dv', function() if isAdm() then TriggerServerEvent(E.ACT_DELVEH) end  end, false)
 RegisterCommand('fix', function() if isAdm() then TriggerServerEvent(E.ACT_FIX) end end, false)
 RegisterCommand('tuning', function() if isAdm() then TriggerServerEvent(E.ACT_TUNING) end end, false)
 RegisterCommand('boost', function() if isAdm() then TriggerServerEvent(E.ACT_BOOST) end end, false)
