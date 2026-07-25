@@ -1,81 +1,103 @@
-# vhub_coinshop — Loja de Moedas vHub Mirage
+# vhub_coinshop — Loja de Moedas
 
-> Recurso FiveM GTARP para o framework **vHub Mirage** (Lua 5.4, server-authoritative).
-> Convertido do FearX-Coinshop para o padrão vHub: alta performance, paleta areia/dourado, PT-BR único.
+**Versão:** 2.4.2 | **Owner:** vhub_coinshop
 
-## Identidade
+Loja de moedas, itens, veículos e ofertas server-authoritative. Moedas virtuais (coins) compradas via Pix (`vhub_df`) ou creditadas por admin. UI de jogador no iPad (app remoto); painel admin via `/coinshop`. Integra com inventário, concessionária e vhub_df para checkout.
 
-- **Framework:** vHub Mirage (exports.vhub:*)
-- **Paleta:** Liquid Glass + Areia + Dourado (sem lime, sem Tailwind, sem CDN)
-- **Idioma:** PT-BR único (locale embutido em `shared/utils.lua`)
-- **Performance:** Custo por player O(1); idle 0.00ms; NUI fechada 0.00ms
-- **Segurança:** Server-authoritative, exports gated, replay-safe, rate-limited
+---
 
-## Estrutura
+## O que faz
+
+- Catálogo de itens: veículos, itens, armas, ofertas com TTL (countdown)
+- Compra com moedas: débito atômico + entrega server-side + reembolso em falha
+- Checkout Pix via `vhub_df` (QR + copia-e-cola, polling + webhook) — pacotes 1/10/100
+- Resgate de códigos promocionais (idempotente, anti-double-redeem)
+- Painel admin: stats, transações, top-selling, CRUD de itens/categorias/ofertas
+- Webhooks Discord para auditoria (purchases, redeems, admin actions)
+
+> Test-drive foi **removido** na v2.4.0. A UI de jogador migrou para o iPad (app remoto
+> `web/app_ipad/`); a NUI própria `nui/` não existe mais.
+
+---
+
+## Dependências
 
 ```
-vhub_coinshop/
-├── shared/              # config, events, utils (locale PT-BR)
-├── server/              # 11 módulos: sql, core, init, coins, items, purchases,
-│                        #            discord, webhooks, testdrive, commands, exports
-├── client/              # 3 módulos: init, nui, testdrive
-├── nui/                 # Liquid Glass: index.html + css/style.css + js/app.js
-├── sql/                 # schema.sql (idempotente, FK INT UNSIGNED CASCADE)
-└── INSTALL/             # guia + SQL de instalação/drop
+vhub, oxmysql, vhub_groups, vhub_inventory, vhub_conce, vhub_df
 ```
 
-## Instalação rápida
-
-1. Copie para `resources/[SCRIPTS]/vhub_coinshop/`
-2. Aplique `INSTALL/SQL/install.sql` no MySQL
-3. Adicione `ensure vhub_coinshop` ao `server.cfg`
-4. Configure admins via ACE: `add_ace vhub.coinshop.admin allow`
-
-Leia `INSTALL/INSTALL GUIDE.txt` para detalhes completos.
+---
 
 ## Comandos
 
-| Comando                          | Descrição                              |
-| -------------------------------- | -------------------------------------- |
-| `/coinshop`                      | Abre o painel administrativo autorizado |
-| `/givecoins <id> <qtd>`          | Admin dá moedas a jogador online       |
-| `/setcoins <id> <qtd>`           | Admin define saldo absoluto            |
-| `/coinshop_addcode <order> <coins>` | Cria código Tebex (console/agent)   |
+| Comando | Descrição |
+|---------|-----------|
+| `/coinshop` | Abre o painel administrativo (permissão `coinshop.admin`) |
+| `/givecoins <id> <qtd>` | Admin dá moedas a jogador online |
+| `/setcoins <id> <qtd>` | Admin define saldo absoluto |
+| `/coinshop_addcode <order> <coins>` | Cria código de resgate (console) |
 
-## Funcionalidades (100% preservadas)
+Jogador comum abre a loja pelo **iPad** (app CoinShop no catálogo).
 
-- Catálogo de itens: veículos, itens, armas, ferramentas
-- Veículos comprados são registrados e retirados pela garagem canônica
-- Categorias padrão + categorias custom (admin)
-- Ofertas promocionais com TTL (countdown em tempo real)
-- Compra de itens/ofertas com débito atômico + reembolso em falha
-- Resgate de códigos Tebex (idempotente, anti-double-redeem)
-- Test-drive server-side (veículo, timeout e cleanup autoritativos em bucket exclusivo)
-- Painel admin: stats, transações recentes, top-selling, players online
-- CRUD admin: itens, categorias, ofertas
-- Give/Set coins (admin)
-- Customização de UI (cores, opacidade, blur, ícone da moeda)
-- Webhooks Discord para auditoria (purchases, redeems, admin actions)
-- Avatar Discord opcional (requer bot token)
+---
+
+## Exports disponíveis (server-side)
+
+```lua
+-- saldo de moedas do char_id (VRAM-first, key coinshop_coins via CData)
+local coins = exports.vhub_coinshop:getCoins(char_id)
+
+-- credita moedas ao char_id (delivery Pix/admin/promo); retorna true/false
+local ok = exports.vhub_coinshop:creditCoins(char_id, 500)
+
+-- lista itens do catálogo ativo (para UI externa)
+local itens = exports.vhub_coinshop:getItems()
+
+-- lista ofertas (deals) ativas
+local deals = exports.vhub_coinshop:getDeals()
+
+-- cria código de resgate com valor em moedas
+local code = exports.vhub_coinshop:createRedeemCode(200)
+
+-- relay opaco do app do iPad (chamado APENAS pelo broker vhub_ipad)
+exports.vhub_coinshop:ipadRelay(src, action, data)
+```
+
+---
+
+## Fluxo de compra com Pix
+
+```
+1. Player abre a CoinShop no iPad → escolhe pacote de moedas
+2. coinshop chama vhub_df:createPayment (productKey='coins:<pack>')
+3. vhub_df abre NUI de checkout com QR + copia-e-cola + countdown
+4. Pix pago → vhub_df confirma → chama handler registrado no prefixo 'coins'
+5. Handler (server/pix_df.lua) credita moedas + webhook Discord
+```
+
+O provider legado `mercadopago` direto (`server/pix_mp.lua`) permanece como dono do catálogo de pacotes; o provider padrão é `vhub_df`.
+
+---
 
 ## Contratos do core usados
 
-| Contrato                                  | Uso                                  |
-| ----------------------------------------- | ------------------------------------ |
-| `exports.vhub:getUser(src)`               | Identidade do jogador (char_id)      |
-| `exports.vhub:getCData/setCData(char,k,v)`| Moedas (key `coinshop_coins`)        |
-| `exports.vhub:getGData/setGData(k,v)`     | Settings UI (key `coinshop_ui_settings`) |
-| evento `vHub:notify`                      | Notificações amigáveis               |
-| `exports.vhub_groups:hasPermission(src,p)`| Permissão admin                      |
-| `exports.vhub_inventory:giveItem`             | Entrega de itens                  |
-| `exports.vhub_player_state:giveWeapons`       | Entrega de armas de sessão        |
-| `exports.vhub_conce:grantVehicle(src, model)`| Registro de veículo comprado        |
-| `exports.vhub_player_state:begin/attach/endActivity` | Bucket exclusivo do test-drive |
-| `exports.vhub_player_state:teleport(...)` | Teleport do test-drive (owner do ped)|
+| Contrato | Uso |
+|----------|-----|
+| `exports.vhub:getUser(src)` | Identidade do jogador (char_id) |
+| `exports.vhub:getCData/setCData` | Moedas (key `coinshop_coins`) — via trust do core |
+| `exports.vhub_groups:hasPermission` | Permissão admin (`coinshop.admin`) |
+| `exports.vhub_inventory:giveItem` | Entrega de itens |
+| `exports.vhub_conce:createVehicle` | Registro de veículo comprado (retirado na garagem) |
+| evento `vHub:notify` | Notificações |
 
-## Leis vHub honradas
+---
 
-L-01..L-19 (server-authoritative, single-writer, replay-safe, vector types, budgets)
-A-01..A-10 (separação de camada, lifecycle, eventbus, lazy load, native bridge, cleanup, delta sync, transparent CEF, assets declarados)
+## Regras aplicáveis (manual_dev_vhub.md)
 
-— vHub Mirage • 2026
+| Lei | Aplicação aqui |
+|-----|---------------|
+| L-01 | Entrega de itens/moedas 100% server-side; UI só apresenta |
+| L-04 | Moedas = dado do coinshop (escritor único via CData `coinshop_coins`) |
+| §3.7 | Exports gated default-deny; `ipadRelay` aceita só o broker vhub_ipad |
+| A-10 | Assets do app remoto do iPad declarados em `files{}` (servidos via `cfx-nui-vhub_coinshop`) |
+| L-12 | Débito/reembolso de compra em transação atômica |

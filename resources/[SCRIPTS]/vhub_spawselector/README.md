@@ -1,14 +1,77 @@
-<img alt="Logo" src="https://cdn.discordapp.com/attachments/681822863967256633/1078563983688216696/FiveStar-Center2.png?ex=673ade7c&is=67398cfc&hm=ab60ea57749e1111e8d8a53c56fcf6a3aca8c5d5958e3ccb252ae34ff879ff01&" />
+# vhub_spawselector — Seletor de Spawn (UI Pura)
 
- 
-# Resource Name: FiveStar-SpawnSelector
+**Versão:** 2.1.1 | **Owner:** vhub_spawselector
 
-FiveStar-SpawnSelector has a responsive interface and a Rasmon value of 0.0.
+Provedor de coordenada de spawn do `vhub_hss`. UI pura: o jogador escolhe onde nascer (último local, motel, pontos da cidade); a coordenada escolhida é **devolvida ao owner do ped** — este resource **nunca toca o ped** (L-16). Adaptado do FiveStar-SpawnSelector para o padrão vHub.
 
-<img alt="Logo" src="https://cdn.discordapp.com/attachments/681822863967256633/1187112998716833844/Sk0Wgfu.png?ex=673aeb62&is=673999e2&hm=c485e871f53125a0f7631ea90ca0a431c721592ee05438c2da18f1c26ddf1bab&" />
+---
 
-[![Watch the video](https://i.imgur.com/vKb2F1B.png)](https://www.youtube.com/watch?v=HQi55zswb_A)
+## O que faz
 
-- [Document](https://fivestar-development.gitbook.io)
-- [Discord](https://discord.gg/PK6g3CMe5z)
-- [Tebex](https://5star.tebex.io)
+- Intercepta o fluxo `chooseSpawn` do `vhub_hss` (provider pattern)
+- UI com pontos de spawn configuráveis (motel, LSPD, mecânica, estacionamento, Sandy...)
+- Opção "último local" (posição persistida pelo core)
+- Pontos restritos por grupo (ex.: spawn LSPD só para policiais, via `vhub_groups`)
+- Devolve a coordenada escolhida por export/callback ao `vhub_hss`, que executa o spawn
+
+---
+
+## Dependências
+
+```
+vhub, vhub_groups, vhub_hss
+```
+
+---
+
+## Exports disponíveis
+
+```lua
+-- client: abre a UI do seletor manualmente (o fluxo normal é automático no characterLoad)
+exports.vhub_spawselector:Open()
+
+-- server: remove um ponto de spawn dinâmico por id (admin)
+exports.vhub_spawselector:adminDeleteThing(id)
+```
+
+---
+
+## Como adicionar um ponto de spawn
+
+Em `shared/config.lua`:
+
+```lua
+Config.Spawns[#Config.Spawns + 1] = {
+  id    = 'mecanica',
+  label = 'Oficina Mecânica',
+  img   = 'images/mechanic.png',        -- deve constar no files{} (A-10)
+  coord = { x = -347.0, y = -133.0, z = 39.0, h = 250.0 },  -- flat (L-19)
+  perm  = nil,                          -- ou 'lspd.spawn' para restringir por grupo
+}
+```
+
+A coordenada é armazenada **flat** (`{x,y,z,h}`) porque cruza a fronteira NUI/evento (L-19).
+
+---
+
+## Fluxo (provider pattern do player_state)
+
+```
+1. vHub:characterLoad → vhub_hss pergunta ao provider registrado
+2. spawselector abre a UI (client) → player escolhe ponto
+3. escolha validada server-side (perm do grupo, ponto existe)
+4. coordenada devolvida ao vhub_hss → spawnAt(src, coord)
+```
+
+**Nunca** chame `SetEntityCoords`/`NetworkResurrectLocalPlayer` daqui — o único escritor de spawn é o `vhub_hss` (L-16).
+
+---
+
+## Regras aplicáveis (manual_dev_vhub.md)
+
+| Lei | Aplicação aqui |
+|-----|---------------|
+| L-16 | UI devolve coordenada; quem move o ped é o owner (`vhub_hss`) |
+| L-01 | Escolha validada server-side (perm + ponto válido) antes do spawn |
+| L-19 | Coordenadas flat `{x,y,z,h}` no config e nos eventos |
+| A-10 | Imagens da UI declaradas em `files{}` — sem CDN externo |

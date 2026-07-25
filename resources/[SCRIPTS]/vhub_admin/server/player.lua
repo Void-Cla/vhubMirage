@@ -41,6 +41,8 @@ RegisterNetEvent(E.ACT_GOD)
 AddEventHandler(E.ACT_GOD, function()
   local src = source
   if not Core:guard(src, 'god', 'moderation') then return end
+  -- cura GTA + HSS ao ativar god (idempotente: curar quando já curado é inofensivo)
+  Core:heal(src)
   TriggerClientEvent(E.TOGGLE_GOD, src)
   Core:audit(src, 'god', src, {})
 end)
@@ -51,6 +53,18 @@ AddEventHandler(E.ACT_NOCLIP, function()
   if not Core:guard(src, 'noclip', 'moderation') then return end
   TriggerClientEvent(E.TOGGLE_NOCLIP, src)
   Core:audit(src, 'noclip', src, {})
+end)
+
+RegisterNetEvent(E.NOCLIP_LEASE)
+AddEventHandler(E.NOCLIP_LEASE, function(active)
+  local src = source
+  if type(active) ~= 'boolean' then return end
+  if active == true and (
+    not GetPlayerName(src)
+    or not Core.hasPerm(src, 'noclip')
+    or not Core:rate(src, 'noclip_lease', 500)
+  ) then return end
+  pcall(function() exports.vhub_hss:setMovementOverride(src, active == true) end)
 end)
 
 RegisterNetEvent(E.ACT_FREEZE)
@@ -132,7 +146,7 @@ AddEventHandler(E.ACT_SKIN, function(rawTarget, rawModel)
   if not model then return Core:notify(src, 'Modelo inválido.', 'erro') end
 
   local ok = false
-  pcall(function() ok = exports.vhub_player_state:setPedModel(targetSrc, model) end)
+  pcall(function() ok = exports.vhub_hss:setPedModel(targetSrc, model) end)
   if not ok then return Core:notify(src, 'Skin recusada pelo owner de ped.', 'erro') end
   Core:notify(src, ('[%d] skin %s aplicada.'):format(targetSrc, model), 'sucesso')
   Core:audit(src, 'skin', targetSrc, { model = model })
@@ -146,7 +160,7 @@ AddEventHandler(E.ACT_KILL, function(target)
   if not targetSrc then return Core:notify(src, 'Alvo inválido.', 'erro') end
   TriggerClientEvent(E.TOGGLE_FREEZE, targetSrc, false)
   local ok = false
-  pcall(function() ok = exports.vhub_player_state:kill(targetSrc) end)
+  pcall(function() ok = exports.vhub_hss:kill(targetSrc) end)
   if not ok then return Core:notify(src, 'Ped indisponível.', 'erro') end
   Core:audit(src, 'kill', targetSrc, {})
   Core:notify(src, ('[%d] eliminado.'):format(targetSrc), 'sucesso')

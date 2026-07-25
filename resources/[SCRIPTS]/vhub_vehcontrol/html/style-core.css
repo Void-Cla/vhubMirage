@@ -3,8 +3,7 @@
  * vhub_vehcontrol · Liquid Glass Sólido + Areia + Dourado
  *
  * MUDANÇAS-CHAVE do remake:
- *   • Base do aside agora é OPACA (background-color sólido) — acabou o "piscar"
- *     que acontecia com gradientes translúcidos sobre o frame transparente do FiveM.
+ *   • Base do aside usa vidro simulado em camadas, sem backdrop-filter no CEF.
  *   • Camadas decorativas (gradiente âmbar + noise) foram para pseudo-elementos
  *     e para .vc-noise/.vc-aura → GPU-friendly, sem repaint constante.
  *   • Bordas mais finas (1px), radius maior (14px), sombras menos pesadas.
@@ -25,9 +24,9 @@
   --vh-gold:        #f3b53a;
   --vh-gold-soft:   #ffd573;
   --vh-amber:       #ff9a1f;
-  --vh-black:       #0a0806;
-  --vh-black-2:     #14100a;
-  --vh-panel:       #100c07;   /* base opaca dos asides — evita flicker */
+  --vh-black:       #0c0a06;
+  --vh-black-2:     #1a1610;
+  --vh-panel:       #100c07;
   --vh-panel-2:     #1a1510;   /* variação mais clara para gradiente interno */
   --vh-danger:      #e8513f;
   --vh-ok:          #6bbf6b;
@@ -36,7 +35,7 @@
   --vh-text-dim:    #c4ad84;
   --vh-text-dim2:   #8a7a5a;
 
-  /* Camadas de superfície — 100% opacas (fim do flicker) */
+  /* Camadas auxiliares */
   --vh-surface:     linear-gradient(180deg, #1c1710 0%, #100c07 100%);
   --vh-surface-2:   linear-gradient(180deg, #16110b, #0d0906);
   --vh-header-bg:   linear-gradient(180deg, #1e1811, #14100a);
@@ -89,6 +88,7 @@
 }
 
 html {
+  background: transparent !important;
   font-family: var(--vh-font-body);
   font-size: 13px;
   line-height: 1.4;
@@ -99,7 +99,7 @@ html {
 
 /* IMPORTANTE: body precisa continuar TRANSPARENTE (FiveM renderiza o jogo atrás) */
 body {
-  background: transparent;
+  background: transparent !important;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -135,19 +135,20 @@ svg { display: block; flex-shrink: 0; }
 
 
 /* ============================================================
-   ASIDE BASE — base OPACA (fim do flicker) + acabamentos premium
+   ASIDE BASE — vidro simulado sem backdrop-filter
    ============================================================ */
 
 .vc-aside {
   position: absolute;
   pointer-events: auto;
-  background-color: #100c07 !important;
-  background-image: none !important;
-  border: 1px solid rgba(243,181,58,0.20);
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(243,181,58,0.12), rgba(243,181,58,0) 60%),
+    linear-gradient(180deg, rgba(217,193,154,0.16), rgba(12,10,6,0.85));
+  border: 1px solid rgba(243,181,58,0.18);
   border-radius: var(--vh-r-pan);
   box-shadow:
-    0 18px 40px rgba(0,0,0,0.72),
-    inset 0 1px 0 rgba(255,213,115,0.10);
+    0 18px 48px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,213,115,0.12);
   overflow: hidden;
   isolation: isolate;
   transition: none;

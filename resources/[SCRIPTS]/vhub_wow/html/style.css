@@ -1,0 +1,128 @@
+:root {
+  --vh-sand: #d9c19a;
+  --vh-sand-dim: #a89572;
+  --vh-sand-deep: #5a4a30;
+  --vh-gold: #f3b53a;
+  --vh-gold-soft: #ffd573;
+  --vh-black: #0c0a06;
+  --vh-black-2: #1a1610;
+  --vh-text: var(--vh-sand);
+  --vh-text-dim: var(--vh-sand-dim);
+  --vh-focus: var(--vh-gold-soft);
+  --vh-font-title: 'Barlow Condensed', 'Bahnschrift', 'Segoe UI Semibold', sans-serif;
+  --vh-font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: transparent; overflow: hidden; }
+body { color: var(--vh-text); font-family: var(--vh-font-body); font-size: 13px; }
+
+#wow-players {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#wow-settings-root:empty { display: none; }
+#wow-settings-root {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.wow-settings {
+  width: min(390px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid rgba(243, 181, 58, 0.28);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(243, 181, 58, 0.12), rgba(243, 181, 58, 0) 60%),
+    linear-gradient(180deg, rgba(217, 193, 154, 0.16), rgba(12, 10, 6, 0.85));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 213, 115, 0.12) inset;
+  pointer-events: auto;
+}
+
+.wow-settings__header { display: flex; align-items: center; gap: 11px; margin-bottom: 17px; }
+.wow-settings__header img { flex: 0 0 auto; }
+.wow-settings__header div { flex: 1; min-width: 0; }
+.wow-settings__header h1 {
+  margin: 0;
+  font: 700 19px/1 var(--vh-font-title);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wow-settings__header p {
+  margin: 4px 0 0;
+  color: var(--vh-gold);
+  font: 700 11px/1 var(--vh-font-title);
+  letter-spacing: 0.18em;
+}
+
+.wow-settings__close {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--vh-text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.wow-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  padding: 11px 12px;
+  border: 1px solid rgba(217, 193, 154, 0.14);
+  border-radius: 12px;
+  background: rgba(12, 10, 6, 0.62);
+  cursor: pointer;
+}
+.wow-toggle span { display: grid; gap: 4px; }
+.wow-toggle strong { font: 700 14px/1.1 var(--vh-font-title); text-transform: uppercase; }
+.wow-toggle small { color: var(--vh-text-dim); font-size: 11.5px; }
+.wow-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.wow-toggle i {
+  position: relative;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.wow-toggle i::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--vh-sand);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+.wow-toggle input:checked + i { background: var(--vh-gold); }
+.wow-toggle input:checked + i::after { transform: translateX(20px); background: var(--vh-black); }
+
+.wow-settings__close:focus-visible,
+.wow-toggle input:focus-visible + i {
+  outline: 2px solid var(--vh-focus);
+  outline-offset: 3px;
+}
+
+.wow-settings__status { min-height: 17px; margin: 11px 2px 0; color: var(--vh-text-dim); font-size: 11.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wow-toggle i::after { transition: none; }
+}

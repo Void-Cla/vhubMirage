@@ -66,9 +66,81 @@ S:prepare("vh/create_char",
 S:prepare("vh/get_chars",
   "SELECT id FROM vh_characters WHERE user_id = @user_id ORDER BY id")
 
+-- Lista no máximo os três IDs públicos do usuário.
+S:prepare("vh/get_char_ids",
+  "SELECT id FROM vh_characters WHERE user_id = @user_id ORDER BY id LIMIT 3")
+
+-- Recupera a criação idempotente de personagem pelo request_id.
+S:prepare("vh/get_character_request",
+  "SELECT char_id FROM vh_character_requests " ..
+  "WHERE user_id = @user_id AND request_id = @request_id LIMIT 1")
+
+-- Conta personagens para distinguir limite de falha de persistência.
+S:prepare("vh/count_chars",
+  "SELECT COUNT(*) AS total FROM vh_characters WHERE user_id = @user_id")
+
 -- Deleta personagem (valida ownership)
 S:prepare("vh/delete_char",
   "DELETE FROM vh_characters WHERE id = @id AND user_id = @user_id")
+
+-- Lê a conclusão do criador pertencente ao personagem.
+S:prepare("vh/get_sims_creation",
+  "SELECT request_id, apv FROM vh_sims_creation WHERE char_id = @char_id LIMIT 1")
+
+-- Detecta reutilização global de request_id por outro personagem.
+S:prepare("vh/get_sims_creation_by_request",
+  "SELECT char_id, apv FROM vh_sims_creation WHERE request_id = @request_id LIMIT 1")
+
+-- Grava a conclusão uma única vez; o chamador relê antes do ACK.
+S:prepare("vh/commit_sims_creation",
+  "INSERT IGNORE INTO vh_sims_creation(char_id, request_id, apv, created_at) " ..
+  "VALUES(@char_id, @request_id, @apv, NOW())")
+
+local SQL_LOCK_USER =
+  "SELECT id FROM vh_users WHERE id = @user_id FOR UPDATE"
+local SQL_CREATE_CHAR_CAPPED =
+  "INSERT INTO vh_characters(id, user_id, created_at) " ..
+  "SELECT @char_id, @user_id, NOW() FROM DUAL " ..
+  "WHERE (SELECT COUNT(*) FROM vh_characters WHERE user_id = @user_id) < 3 " ..
+  "AND NOT EXISTS (SELECT 1 FROM vh_character_requests " ..
+  "WHERE user_id = @user_id AND request_id = @request_id)"
+local SQL_RECORD_CHAR_REQUEST =
+  "INSERT IGNORE INTO vh_character_requests(user_id, request_id, char_id, created_at) " ..
+  "SELECT @user_id, @request_id, @char_id, NOW() FROM vh_characters " ..
+  "WHERE id = @char_id AND user_id = @user_id"
+
+local function awaitTransaction(operations)
+  local pending = promise.new()
+  local resolved = false
+
+  local function resolve(result)
+    if resolved then return end
+    resolved = true
+    pending:resolve(result == true)
+  end
+
+  Citizen.SetTimeout(15000, function() resolve(false) end)
+  local dispatched = pcall(function()
+    exports.oxmysql:transaction(operations, nil, resolve)
+  end)
+  if not dispatched then resolve(false) end
+  return Citizen.Await(pending)
+end
+
+-- Cria personagem e request na mesma transação após serializar pelo usuário.
+function vHub.SQL.createCharacterAtomic(user_id, char_id, request_id)
+  vHub.assertThread()
+  local parameters = {
+    user_id = user_id,
+    char_id = char_id,
+    request_id = request_id,
+  }
+  return awaitTransaction({
+    { SQL_LOCK_USER, parameters },
+    { SQL_CREATE_CHAR_CAPPED, parameters },
+    { SQL_RECORD_CHAR_REQUEST, parameters },
+  })
+end
 
 -- ── Dados KV (user / char / global) ──────────────────────────────────
 

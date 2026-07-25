@@ -44,9 +44,11 @@ body.velo-active {
     display: flex;
     align-items: flex-end;
     justify-content: flex-end;
-    /* Defaults aplicáveis pelo host via --velo-accent / --velo-bg */
-    --velo-accent: #ff2a2a;
-    --velo-bg: none;
+    /* Personalização via :root (--velo-bg/--velo-accent/--velo-zoom setados pelo host/velo-core).
+       NÃO redefinir as vars aqui: definição local sombrearia o :root e mataria a personalização
+       (bug corrigido 2026-07-15) — os fallbacks de var() já cobrem o padrão. */
+    transform: scale(var(--velo-zoom, 1));
+    transform-origin: bottom right;
 }
 
 /* Base do PNG: mantenha 430x215 e proporcao 4/2 para trocar o fundo. */
@@ -175,11 +177,11 @@ body.velo-active {
     text-align: center;
 }
 
-/* Numeros da velocidade: tamanho deve caber em tres digitos. */
+/* Numeros da velocidade: tamanho deve caber em tres digitos (28px: um pouco menor que o original 32). */
 .velo {
     color: #ff2a2a;
     font-family: 'Orbitron', 'Bahnschrift', sans-serif;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 700;
     line-height: 0.86;
     letter-spacing: 2px;
@@ -190,7 +192,7 @@ body.velo-active {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    min-width: 126px;
+    min-width: 112px;
 }
 
 .defaultVelo {
@@ -268,7 +270,8 @@ body.velo-active {
     top: 174.42px;
     transform: translateY(-50%);
     width: 47.3px;
-    height: 9.56px;
+    /* 11px = ODO_H do velo-core: célula e passo da rolagem alinhados (e odômetro um pouco maior) */
+    height: 11px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -278,7 +281,7 @@ body.velo-active {
 
 .odoDigit {
     width: 6.69px;
-    height: 9.56px;
+    height: 11px;
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -292,7 +295,7 @@ body.velo-active {
     align-items: center;
     color: #ff7733;
     font-family: 'Courier New', 'Bahnschrift', monospace;
-    font-size: 8.5px;
+    font-size: 9.5px;
     letter-spacing: 0;
     text-align: center;
     text-shadow: 0 0 3px rgba(255, 90, 0, 0.55);
@@ -304,9 +307,62 @@ body.velo-active {
 .odoColumn span {
     display: block;
     width: 100%;
-    height: 9.56px;
-    line-height: 9.56px;
+    height: 11px;
+    line-height: 11px;
     transition: none;
+}
+
+/* === Pod MOTOR + NITRO (canto superior esquerdo do painel; IDs padrao do velo-core) === */
+.nitroCol {
+    position: absolute;
+    left: 6px;
+    top: 26px;
+    width: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 4px 8px;
+    background: rgba(4, 4, 6, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 8;
+}
+
+.podLbl {
+    font: 700 6.5px 'Bahnschrift', 'Segoe UI', sans-serif;
+    letter-spacing: 1.2px;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+/* LED tricolor de saude do motor (ok=verde, warn=ambar, crit=vermelho pulsando) */
+#engine-health-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #333;
+    margin-bottom: 2px;
+}
+
+#engine-health-dot[data-health="ok"]   { background: #22dd6a; box-shadow: 0 0 6px rgba(34, 221, 106, 0.75); }
+#engine-health-dot[data-health="warn"] { background: #ffaa00; box-shadow: 0 0 6px rgba(255, 170, 0, 0.75); }
+#engine-health-dot[data-health="crit"] {
+    background: #ff2a2a;
+    box-shadow: 0 0 8px rgba(255, 42, 42, 0.85);
+    animation: engineCrit 1s ease-in-out infinite;
+}
+
+@keyframes engineCrit {
+    50% { box-shadow: 0 0 16px rgba(255, 42, 42, 1); }
+}
+
+.nitroArc { display: block; }
+
+.nitroVal {
+    font: 700 9px 'Courier New', monospace;
+    color: #00b4ff;
+    text-shadow: 0 0 5px rgba(0, 180, 255, 0.55);
 }
 
 /* Escala responsiva: manter igual ao HUD canonico para nao deslocar. */

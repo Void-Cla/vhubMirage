@@ -1,33 +1,43 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>vHub Wow</title>
-  <style>
-    /* CEF headless: motor de AUDIO apenas. body/html invisiveis (A-09). A telinha
-       de VIDEO ("DVD no carro") vive no vhub_vehcontrol (decisao #53 — fronteira por
-       modalidade: audio=wow, video=vehcontrol). */
-    html, body { background: transparent; margin: 0; padding: 0; }
-
-    /* container OCULTO dos players de audio (audio direto + iframes YT/SC em mute headless) */
-    #wow-players {
-      position: absolute;
-      width: 0; height: 0;
-      overflow: hidden;
-      opacity: 0;
-      pointer-events: none;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vHub WOW</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- backends de embed (excecao A-10: scripts oficiais remotos; nao vao em files{}) -->
-  <!-- IFrame API SO e servida por www.youtube.com; o player em si aponta p/ nocookie
-       via host no construtor (audio.js) — sem anuncio. NAO trocar por nocookie aqui
-       (o endpoint iframe_api nao existe la → YT nunca carrega → som nao toca). -->
-  <div id="wow-players"></div>
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="https://w.soundcloud.com/player/api.js"></script>
+  <div id="wow-players" aria-hidden="true"></div>
+  <main id="wow-settings-root"></main>
 
+  <template id="wow-settings-template">
+    <section class="wow-settings" role="dialog" aria-modal="true"
+      aria-labelledby="wow-settings-title" aria-describedby="wow-settings-help">
+      <header class="wow-settings__header">
+        <img src="../assets/logo.png" width="34" height="34" alt="vHub Mirage">
+        <div>
+          <h1 id="wow-settings-title">Preferências de áudio</h1>
+          <p>WOW</p>
+        </div>
+        <button class="wow-settings__close" type="button" aria-label="Fechar">×</button>
+      </header>
+
+      <label class="wow-toggle" for="wow-streamer-mode">
+        <span>
+          <strong>Modo streamer</strong>
+          <small id="wow-settings-help">Silencia todo áudio do WOW. A voz continua ativa.</small>
+        </span>
+        <input id="wow-streamer-mode" type="checkbox" role="switch">
+        <i aria-hidden="true"></i>
+      </label>
+
+      <p class="wow-settings__status" role="status" aria-live="polite"></p>
+    </section>
+  </template>
+
+  <script src="runtime.js"></script>
+  <script src="native.js"></script>
   <script src="audio.js"></script>
+  <script src="settings.js"></script>
 </body>
 </html>

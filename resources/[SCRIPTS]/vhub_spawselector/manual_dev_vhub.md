@@ -541,7 +541,7 @@ Ou enfileira no batch do core via `vHub.setCData` se for dado de personagem.
 | FK `char_id INT` (signed) ao core | `errno 150` na criação | Sempre `INT UNSIGNED` em FK para `vh_users.id`/`vh_characters.id` |
 | `dvalue MEDIUMBLOB` em tabela KV nova | desperdiça buffer InnoDB | `BLOB` (64 KB) basta para 99%; só usar MEDIUMBLOB se realmente passa de 64 KB |
 | Chamar `_G.vRP`/`_G.Proxy`/`_G.Tunnel` | shim foi removido — `nil` em runtime | Usar `exports.vhub:*` direto |
-| Listener de `vHub:doSpawn`/`vHub:savePos` | eventos aposentados na decisão #7 | Usar `vhub_player_state:apply` (resource externo) |
+| Listener de `vHub:doSpawn`/`vHub:savePos` | eventos aposentados na decisão #7 | Prover `vhub_hss:chooseSpawn` e concluir por `spawnAt` |
 | Bloquear thread principal por > 5 ms | autosave atrasa, replicação trava | `Citizen.Wait(0)` a cada N iterações (padrão 50) |
 
 ---

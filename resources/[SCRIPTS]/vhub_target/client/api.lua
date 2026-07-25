@@ -10,6 +10,21 @@ local zonesApi = VHubTarget.zones
 local Zones = VHubTarget.Zones
 local E = VHubTarget.E
 
+local function payloadVec3(value, positive)
+  if value == nil then return nil end
+  local kind = type(value)
+  if kind ~= 'table' and kind ~= 'vector3' and kind ~= 'vector4' then return nil end
+  local x = tonumber(value.x)
+  local y = tonumber(value.y)
+  local z = tonumber(value.z)
+  if not x or not y or not z or x ~= x or y ~= y or z ~= z
+    or math.abs(x) == math.huge or math.abs(y) == math.huge or math.abs(z) == math.huge then
+    return nil
+  end
+  if positive and (x <= 0 or y <= 0 or z <= 0) then return nil end
+  return vec3(x, y, z)
+end
+
 local api = setmetatable({}, {
   __newindex = function(self, index, value)
     rawset(self, index, value)
@@ -62,6 +77,10 @@ end
 
 -- cria zona caixa de interação; retorna o id
 function api.addBoxZone(data)
+  if type(data) ~= 'table' then typeError('data', 'table', type(data)) end
+  data.coords = payloadVec3(data.coords)
+  data.size = payloadVec3(data.size or { x = 2.0, y = 2.0, z = 2.0 }, true)
+  if not data.coords or not data.size then typeError('coords/size', 'vec3 payload', 'invalid') end
   data.resource = GetInvokingResource() or 'vhub_target'
   data.options = checkOptions(data.options)
   return zonesApi.addBox(data).id

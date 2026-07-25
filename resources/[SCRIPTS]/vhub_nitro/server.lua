@@ -95,6 +95,14 @@ end
 -- EXPORTS (read derivado + escrita DELEGADA: kit/carga/liga/nível)
 -- ============================================================
 
+-- empurra o estado fresco da placa ao client do ator após escrita (HUD e gate do boost
+-- sincronizam na hora — antes só sincronizava ao re-entrar no veículo, estado stale)
+local function pushState(src, p)
+  if src and tonumber(src) and tonumber(src) > 0 then
+    TriggerClientEvent('vhub_nitro:state', src, p, readNitro(p))
+  end
+end
+
 -- só estes resources podem CHAMAR os exports de escrita (export sensível → invoker check)
 local TRUSTED = { ['vhub_custom'] = true, ['vhub_vehcontrol'] = true, ['vhub_nitro'] = true }
 
@@ -112,7 +120,9 @@ exports('installKit', function(src, plate)
   if not canOperate(src, p) then return false end
   local cur = readNitro(p)
   if cur.kit then return true end                                 -- idempotente
-  return writeNitro(p, true, cur.qty, cur.enabled, cur.level)     -- liga o kit, preserva o resto
+  local ok = writeNitro(p, true, cur.qty, cur.enabled, cur.level) -- liga o kit, preserva o resto
+  if ok then pushState(src, p) end
+  return ok
 end)
 
 -- liga/desliga o nitro (FICHA do vehcontrol). Gate: precisa de kit. Patch completo.
@@ -124,7 +134,9 @@ exports('setEnabled', function(src, plate, on)
   if not canOperate(src, p) then return false end
   local cur = readNitro(p)
   if not cur.kit then return false end                            -- sem kit não liga
-  return writeNitro(p, cur.kit, cur.qty, on == true, cur.level)
+  local ok = writeNitro(p, cur.kit, cur.qty, on == true, cur.level)
+  if ok then pushState(src, p) end
+  return ok
 end)
 
 -- ajusta o nível 1..10 (FICHA do vehcontrol). Gate: precisa de kit. Clamp server-side.
@@ -136,7 +148,9 @@ exports('setLevel', function(src, plate, level)
   if not canOperate(src, p) then return false end
   local cur = readNitro(p)
   if not cur.kit then return false end
-  return writeNitro(p, cur.kit, cur.qty, cur.enabled, lvl10(level))
+  local ok = writeNitro(p, cur.kit, cur.qty, cur.enabled, lvl10(level))
+  if ok then pushState(src, p) end
+  return ok
 end)
 
 -- recarrega a carga consumindo 1 garrafa (FICHA do vehcontrol). Ordem anti-perda:
@@ -159,6 +173,7 @@ exports('chargeFromItem', function(src, plate)
     pcall(function() exports.vhub_inventory:giveItem(src, ITEM, 1) end)   -- estorno
     return false
   end
+  pushState(src, p)
   return true
 end)
 
@@ -217,6 +232,12 @@ AddEventHandler('vhub_nitro:drain', function(netId, plate, reportedQty)
   local newQty = math.max(0, math.min(math.floor(rq), cur.qty))
   if newQty >= cur.qty then return end
   writeNitro(p, cur.kit, newQty, cur.enabled, cur.level)
+
+  -- HSS: boost de nitro gera adrenalina proporcional ao gasto (soft-dep, pcall)
+  local spent = cur.qty - newQty
+  if spent > 0 then
+    pcall(function() exports.vhub_hss:addAdrenaline(src, math.min(spent * 0.6, 30)) end)
+  end
 end)
 
 AddEventHandler('playerDropped', function()

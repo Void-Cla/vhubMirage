@@ -3,6 +3,67 @@
 --   dentro do handler de "vHub:ready". playerConnecting não autentica.
 
 local _RES = GetCurrentResourceName()
+local _awaiting_respawn = {}
+
+vHub.Boot = vHub.Boot or {}
+
+
+-- ============================================================
+-- CICLO FÍSICO AUTORITATIVO
+-- ============================================================
+
+local function physical_health(src)
+  local ped = GetPlayerPed(src)
+  if not ped or ped == 0 or not DoesEntityExist(ped) then return nil end
+  return tonumber(GetEntityHealth(ped))
+end
+
+-- Arma morte somente após validação da réplica server-side.
+function vHub.Boot.reportPhysicalDeath(src)
+  src = tonumber(src)
+  local user = src and vHub.Auth:getUser(src) or nil
+  local char_id = user and tonumber(user.char_id) or nil
+  if not user or not char_id then return false end
+
+  local awaiting = _awaiting_respawn[src]
+  if awaiting and awaiting.char_id == char_id then return true end
+  local health = physical_health(src)
+  if not health or health > 0 then return false end
+
+  _awaiting_respawn[src] = { char_id = char_id, at = GetGameTimer() }
+  user.data.last_position = nil
+  user.data.last_health = nil
+  vHub.audit("vhub_hss", "physicalDeath", tostring(char_id), tostring(src), nil, { health = 0 })
+  TriggerEvent("vHub:playerDeath", user)
+  return true
+end
+
+-- Conclui respawn somente após a réplica server-side confirmar o ped vivo.
+function vHub.Boot.reportPhysicalRespawn(src)
+  src = tonumber(src)
+  local user = src and vHub.Auth:getUser(src) or nil
+  local awaiting = src and _awaiting_respawn[src] or nil
+  if not user or not awaiting then return false end
+  if awaiting.char_id ~= tonumber(user.char_id) then
+    _awaiting_respawn[src] = nil
+    return false
+  end
+  local health = physical_health(src)
+  if not health or health <= 0 then return false end
+
+  _awaiting_respawn[src] = nil
+  user.spawns = math.max(0, tonumber(user.spawns) or 0) + 1
+  vHub.audit(
+    "vhub_hss",
+    "physicalRespawn",
+    tostring(awaiting.char_id),
+    tostring(src),
+    { dead_at = awaiting.at },
+    { health = health, spawns = user.spawns }
+  )
+  TriggerEvent("vHub:playerSpawn", user, false)
+  return true
+end
 
 function vHub:init(cfg, db_driver)
   -- Normaliza log_level: aceita número (GetConvarInt) ou string
@@ -19,7 +80,7 @@ function vHub:init(cfg, db_driver)
     vHub.Logger:warn("boot",
       "trusted_resources VAZIO — exports sensíveis serão NEGADOS. " ..
       'Configure: setr vhub_trusted_resources "vhub_conce,vhub_garage,vhub_custom,' ..
-      'vhub_vehcontrol,vhub_nitro,vhub_racha,vhub_admin,vhub_ferinha"')
+      'vhub_vehcontrol,vhub_nitro,vhub_racha,vhub_admin,vhub_ferinha,vhub_hss"')
   end
 
   -- ── onResourceStop — flush de emergência (chunked: yield a cada 50) ──
@@ -56,6 +117,7 @@ function vHub:init(cfg, db_driver)
   AddEventHandler("playerDropped", function(reason)
     local src = source
     if src and src > 0 then
+      _awaiting_respawn[src] = nil
       vHub.Auth:disconnect(src, reason)
       -- GC do rate-limit do source: chaves no padrão "src:action"
       local prefix = tostring(src) .. ":"
@@ -88,16 +150,10 @@ function vHub:init(cfg, db_driver)
   vHub.Kernel:net("vHub:ready", function(src)
     vHub.Logger:debug("boot", ("ready recebido src=%s"):format(tostring(src)))
 
-    -- Se já tem sessão: é um respawn (morte, reconexão rápida)
+    -- Ready repetido apenas confirma a sessão; nunca conclui respawn.
     local existing = vHub.Auth:getUser(src)
     if existing then
-      existing.spawns = existing.spawns + 1
-      -- Pequeno delay antes de emitir spawn para o cliente estar pronto
-      SetTimeout(500, function()
-        TriggerEvent("vHub:playerSpawn", existing, false)
-        vHub.Kernel:emit(src, "vHub:initDone",
-          existing.id, existing.char_id, false)
-      end)
+      vHub.Kernel:emit(src, "vHub:initDone", existing.id, existing.char_id, false)
       return
     end
 
@@ -119,36 +175,67 @@ function vHub:init(cfg, db_driver)
       Player(src).state:set("vhub_is_admin", true, true)
     end
 
-    -- Garante personagem padrão se não tem nenhum
+    -- Decisão de entrada. Com o gate de login ATIVO, o vhub_login é a autoridade única:
+    -- conduz criação E seleção de personagem (0 ou N chars). O CORE NUNCA auto-carrega char
+    -- sob o gate — só segura no bucket 999 e dispara chooseSpawn para o login interceptar.
+    -- (ADR #76: antes, só o ramo #chars==0 respeitava o gate; contas COM char persistido
+    --  caíam no auto-load e o SPAWN_CHOOSE nunca disparava → lockout permanente no 999.)
     if not user.char_id then
-      local chars = vHub.Auth:getCharacters(user.id)
-      if #chars == 0 then
-        -- Cria personagem padrão automaticamente no primeiro acesso
-        local new_cid = vHub.Auth:createCharacter(user.id)
-        if new_cid then
-          user.char_id             = new_cid
-          user.data.last_character = new_cid
-          vHub.Logger:info("boot",
-            ("uid=%d primeiro personagem criado: char_id=%d"):format(
-              user.id, new_cid))
-          TriggerEvent("vHub:characterLoad", user)
-        else
-          vHub.Logger:error("boot",
-            ("uid=%d falha ao criar personagem padrão"):format(user.id))
-        end
+      -- Fronteira de credencial: fail-CLOSED. Login "started" com isGateActive() indefinido
+      -- (pcall falhou) conta como gate ATIVO (hold), não gate off. Fail-open só quando o
+      -- recurso de login NÃO está started.
+      local loginGateAtivo = false
+      if GetResourceState("vhub_login") == "started" then
+        local gateOk, gateResult = pcall(function()
+          return exports.vhub_login:isGateActive()
+        end)
+        loginGateAtivo = (not gateOk) or (gateResult == true)
+      end
+
+      if loginGateAtivo then
+        -- INVARIANTE (segurança): NÃO setar user.char_id aqui. O guard do SetTimeout(500)
+        -- abaixo (`if user.char_id`) é o que impede playerSpawn; sob o gate o char_id nasce
+        -- SÓ de vhub_login:selectCharacter. Player fica isolado no 999 até o login concluir.
+        SetPlayerRoutingBucket(src, 999)
+        vHub.Logger:info("boot",
+          ("uid=%d gate de login ativo — hold no bucket 999 (login conduz seleção/criação)"):format(user.id))
+        SetTimeout(600, function()
+          if GetPlayerName(src) == nil then return end
+          TriggerEvent('vhub_hss:chooseSpawn', src)
+        end)
       else
-        -- Carrega último personagem usado ou o primeiro da lista
-        local cid_load = user.data.last_character or tonumber(chars[1].id)
-        if cid_load then
-          user.char_id = tonumber(cid_load)
-          TriggerEvent("vHub:characterLoad", user)
+        -- Gate OFF: comportamento legado. #chars==0 cria padrão; senão auto-load do último.
+        local chars = vHub.Auth:getCharacters(user.id)
+        if #chars == 0 then
+          local new_cid = vHub.Auth:createCharacter(user.id)
+          if new_cid then
+            user.char_id             = new_cid
+            user.data.last_character = new_cid
+            vHub.Logger:info("boot",
+              ("uid=%d primeiro personagem criado: char_id=%d"):format(user.id, new_cid))
+            TriggerEvent("vHub:characterLoad", user)
+          else
+            vHub.Logger:error("boot",
+              ("uid=%d falha ao criar personagem padrão"):format(user.id))
+          end
+        else
+          local cid_load = user.data.last_character or tonumber(chars[1].id)
+          if cid_load then
+            user.char_id = tonumber(cid_load)
+            TriggerEvent("vHub:characterLoad", user)
+          end
         end
       end
     end
 
-    -- Delay antes do spawn para garantir que o cliente recebeu initDone
+    -- Delay antes do spawn para garantir que o cliente recebeu initDone.
+    -- Sem char_id (primeiro acesso com gate ativo) não dispara playerSpawn — o HSS
+    -- rejeitaria (char_id nil) e outros listeners poderiam reagir indevidamente.
+    -- O chooseSpawn já foi agendado acima para disparar após o hold no bucket 999.
     SetTimeout(500, function()
-      TriggerEvent("vHub:playerSpawn", user, true)
+      if user.char_id then
+        TriggerEvent("vHub:playerSpawn", user, true)
+      end
       vHub.Kernel:emit(src, "vHub:initDone",
         user.id, user.char_id, true)
     end)
@@ -157,12 +244,7 @@ function vHub:init(cfg, db_driver)
 
   -- ── vHub:died ─────────────────────────────────────────────────────────
   vHub.Kernel:net("vHub:died", function(src)
-    local user = vHub.Auth:getUser(src)
-    if user then
-      user.data.last_position = nil   -- reseta posição na morte
-      user.data.last_health   = nil
-      TriggerEvent("vHub:playerDeath", user)
-    end
+    vHub.Boot.reportPhysicalDeath(src)
   end, { rate = { 5, 20000, 30000 } })
 
   -- ── vHub:selectChar ───────────────────────────────────────────────────
@@ -174,8 +256,7 @@ function vHub:init(cfg, db_driver)
     end
   end, { rate = { 3, 10000, 30000 } })
 
-  -- vHub:savePos removido — vhub_player_state é o dono da persistência de posição
-  -- via evento vhub_player_state:update (resource externo).
+  -- vHub:savePos removido — vhub_hss persiste posição pela réplica server-side.
 
   -- ── Veículos — REANIMAÇÃO GATED (ADR #37, 2026-07-02 — descongelamento FASE 1) ──
   -- Vetor original (ADR #24): forjar vEnter com netid da VÍTIMA → onEnter concedia

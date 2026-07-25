@@ -1,0 +1,146 @@
+/* ============================================================
+   MOD-CHECKOUT — painel de revisão final
+   Ocupa o mesmo espaço que o painel direito do studio:
+   top 56px (topbar) → bottom 52px (bottombar), lado direito.
+   Montado em #route-layer (z-index 20) → sobrepõe o painel.
+   ============================================================ */
+
+.mod-checkout {
+  position: absolute;
+  top: 56px;
+  right: 0;
+  bottom: 52px;
+  width: 314px;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 217, 120, 0.10), transparent 46%),
+    rgba(14, 12, 8, 0.96);
+  border-left: 1px solid var(--vh-line);
+  pointer-events: auto;
+  overflow: hidden;
+  animation: checkout-enter 200ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+@keyframes checkout-enter {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+
+/* ============================================================
+   CARD — scrollable content fill
+   ============================================================ */
+
+.mod-checkout__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 16px 13px 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 181, 58, 0.18) transparent;
+}
+
+.mod-checkout__head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vh-line);
+}
+
+.mod-checkout__head small {
+  display: block;
+  color: var(--vh-gold-soft);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 9px;
+  margin-bottom: 3px;
+}
+
+.mod-checkout__head h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: .02em;
+}
+
+.mod-checkout__card > p:not(.sims-status) {
+  margin: 0;
+  color: var(--vh-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+
+/* ============================================================
+   ITENS + TOTAL
+   ============================================================ */
+
+.mod-checkout__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mod-checkout__item,
+.mod-checkout__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 8px 0;
+  font-size: 12.5px;
+}
+
+.mod-checkout__total {
+  border-bottom: none;
+  padding-top: 10px;
+  border-top: 1px solid var(--vh-line);
+  margin-top: 2px;
+}
+
+.mod-checkout__total span {
+  color: var(--vh-muted);
+  font-size: 11px;
+}
+
+.mod-checkout__total strong {
+  color: var(--vh-gold-soft);
+  font-size: 18px;
+}
+
+.sims-status[data-checkout-status] {
+  font-size: 10.5px;
+  min-height: 16px;
+}
+
+
+/* ============================================================
+   RODAPÉ — âncora na base do painel
+   ============================================================ */
+
+.mod-checkout__footer {
+  display: flex;
+  gap: 7px;
+  padding: 10px 13px;
+  border-top: 1px solid var(--vh-line);
+  background: rgba(10, 8, 5, 0.5);
+  flex-shrink: 0;
+}
+
+.mod-checkout__footer .sims-button {
+  flex: 1;
+}
+
+
+/* ============================================================
+   RESPONSIVO — acompanha a largura da nav em telas menores
+   ============================================================ */
+
+@media (max-width: 1080px) {
+  .mod-checkout { width: 290px; }
+}
+
+@media (max-width: 860px) {
+  .mod-checkout { width: 260px; top: 50px; bottom: 48px; }
+}

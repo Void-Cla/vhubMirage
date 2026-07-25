@@ -50,6 +50,12 @@ end
 local searchCache  = {}     -- [queryKey] = { at = ms, items = {...} }
 local searchCacheN = 0
 local SEARCH_CACHE_MAX = 64  -- teto: alem disso, zera (anti-leak; L-18)
+local SEARCH_CONCURRENCY_MAX = 2
+local SEARCH_QUEUE_MAX = 32
+local SEARCH_WAITERS_MAX = 64
+local searchInflight = {}
+local searchQueue = {}
+local searchActive = 0
 
 -- chave de cache da busca (minusculo + espacos colapsados + trim)
 local function cacheKey(query)
@@ -65,6 +71,32 @@ local function cacheStore(key, items)
   searchCache[key] = { at = GetGameTimer(), items = items }
 end
 
+local pumpSearchQueue
+
+-- Executa egress com concorrencia fixa, deduplicacao e fila limitada.
+pumpSearchQueue = function()
+  while searchActive < SEARCH_CONCURRENCY_MAX and #searchQueue > 0 do
+    local key = table.remove(searchQueue, 1)
+    local entry = searchInflight[key]
+    if entry then
+      searchActive = searchActive + 1
+      local completed = false
+      runProviders(entry.query, function(items)
+        if completed then return end
+        completed = true
+        searchActive = math.max(0, searchActive - 1)
+        items = type(items) == 'table' and items or {}
+        if #items > 0 then cacheStore(key, items) end
+
+        local callbacks = entry.callbacks
+        searchInflight[key] = nil
+        for index = 1, #callbacks do pcall(callbacks[index], items) end
+        SetTimeout(0, pumpSearchQueue)
+      end)
+    end
+  end
+end
+
 -- busca faixas por texto livre (faixa/artista). cb(items) sempre chamado.
 function WOW_Music.searchTracks(query, cb)
   if type(cb) ~= 'function' then return end
@@ -76,11 +108,17 @@ function WOW_Music.searchTracks(query, cb)
     return cb(hit.items)
   end
 
-  runProviders(query, function(items)
-    items = items or {}
-    if #items > 0 then cacheStore(key, items) end   -- so cacheia resposta util (permite retry)
-    cb(items)
-  end)
+  local pending = searchInflight[key]
+  if pending then
+    if #pending.callbacks >= SEARCH_WAITERS_MAX then return cb({}) end
+    pending.callbacks[#pending.callbacks + 1] = cb
+    return
+  end
+  if #searchQueue >= SEARCH_QUEUE_MAX then return cb({}) end
+
+  searchInflight[key] = { query = query, callbacks = { cb } }
+  searchQueue[#searchQueue + 1] = key
+  pumpSearchQueue()
 end
 
 

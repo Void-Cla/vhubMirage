@@ -9,13 +9,6 @@
   line-height: 1.15;
 }
 
-.mod-hud .hud-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--vh-sand);
-  letter-spacing: 0.3px;
-}
-
 .mod-hud .hud-line {
   display: flex;
   gap: 12px;

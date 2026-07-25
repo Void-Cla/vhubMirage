@@ -8,25 +8,24 @@ local _weather = nil       -- override global
 local _time    = nil       -- { h, m }
 local _blackout = false
 
-RegisterNetEvent(E.DO_WEATHER)
-AddEventHandler(E.DO_WEATHER, function(wx)
-  _weather = wx
-  ClearOverrideWeather()
-  SetOverrideWeather(wx)
-  SetWeatherTypeNow(wx)
-  SetWeatherTypeNowPersist(wx)
-end)
-
-RegisterNetEvent(E.DO_TIME)
-AddEventHandler(E.DO_TIME, function(h, m)
-  _time = { h = h, m = m }
-  NetworkOverrideClockTime(h, m, 0)
-end)
-
-RegisterNetEvent(E.DO_BLACKOUT)
-AddEventHandler(E.DO_BLACKOUT, function(on)
-  _blackout = on == true
-  SetArtificialLightsState(_blackout)
+-- aplica snapshot de mundo quando o servidor atualiza o GlobalState (inclui late-joiners)
+AddStateBagChangeHandler('vhub_admin_world', nil, function(bagName, _, data)
+  if bagName ~= 'global' or type(data) ~= 'table' then return end
+  if data.weather then
+    _weather = data.weather
+    ClearOverrideWeather()
+    SetOverrideWeather(data.weather)
+    SetWeatherTypeNow(data.weather)
+    SetWeatherTypeNowPersist(data.weather)
+  end
+  if data.hour ~= nil and data.minute ~= nil then
+    _time = { h = data.hour, m = data.minute }
+    NetworkOverrideClockTime(data.hour, data.minute, 0)
+  end
+  if data.blackout ~= nil then
+    _blackout = data.blackout == true
+    SetArtificialLightsState(_blackout)
+  end
 end)
 
 -- thread leve para reaplicar (alguns scripts resetam time/weather)
@@ -40,7 +39,8 @@ Citizen.CreateThread(function()
 end)
 
 RegisterNetEvent(E.DO_CLEARZONE)
-AddEventHandler(E.DO_CLEARZONE, function(x, y, z, r)
+AddEventHandler(E.DO_CLEARZONE, function(data)
+  local x, y, z, r = data.x, data.y, data.z, data.radius
   ClearAreaOfVehicles(x, y, z, r, false, false, false, false, false)
   ClearAreaOfPeds(x, y, z, r, 1)
   ClearAreaOfObjects(x, y, z, r, 0)
@@ -66,7 +66,7 @@ AddEventHandler(E.ANNOUNCE, function(msg)
       DrawText(0.5, 0.06)
     end
   end)
-  -- feed tamb m
+  -- feed também
   VHubAdmin.notify('[ADV] ' .. msg)
 end)
 

@@ -9,7 +9,6 @@ local U = VHubAdmin.U
 local trusted = {
   vhub = true,
   vhub_garage = true,
-  vhub_player_state = true,
 }
 
 local function invokerAllowed()

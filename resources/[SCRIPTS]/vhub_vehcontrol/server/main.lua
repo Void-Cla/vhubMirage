@@ -2,16 +2,14 @@
 
 -- server/main.lua — autoridade do controle de veiculo (vHub, server-authoritative).
 --
--- PRINCIPIO: o servidor NAO toca a entidade do veiculo. Nativas de veiculo sao
--- instaveis/ausentes server-side (ex: NetworkGetEntityFromNetworkId nil). Entao o
--- servidor apenas AUTORIZA (chave do inventario / dono no garage), mantem o ESTADO
--- autoritativo (trava/motor — fonte unica p/ evitar desync) e BROADCASTA; o CLIENTE
--- aplica o native localmente. Portas/janelas/luzes/banco/camera sao locais (cosmeticos).
+-- PRINCIPIO: o servidor valida entidade, placa, bucket, distância e acesso; mantém o
+-- estado autoritativo de trava/motor e envia somente aos clientes próximos. O cliente
+-- aplica a física local. Portas/janelas/luzes/banco/câmera são cosméticos locais.
 
-local E = 'vhub_vehcontrol:'
+local E = VHubVeh.E
+local B = VHubVeh.B
 
-local _lock   = {}   -- [plate] = 1 (destravado) | 2 (travado)
-local _engine = {}   -- [plate] = bool (ligado)
+local _controlAt = {}
 
 -- normaliza placa p/ comparacao (GTA devolve padding de espacos; espelha o CORE)
 local function normPlate(p)
@@ -34,10 +32,11 @@ local function hasAccess(src, plate)
   if ok and hasKey then return true end
 
   -- 2) dono do veiculo no garage (vhub_garage)
-  local oku, user = pcall(function() return exports.vhub:getUser(src) end)
-  if oku and user and user.char_id then
+  local oku, charId = pcall(function() return exports.vhub:getCharacterId(src) end)
+  charId = oku and tonumber(charId) or nil
+  if charId then
     local okv, veh = pcall(function() return exports.vhub_garage:getVehicle(plate) end)
-    if okv and veh and tonumber(veh.char_id) == user.char_id then return true end
+    if okv and veh and tonumber(veh.char_id) == charId then return true end
   end
 
   return false
@@ -46,6 +45,32 @@ end
 -- exposto p/ outros arquivos server do resource (ex: sound.lua) — mesma checagem, fonte única (L-04/L-09)
 VHubVeh = VHubVeh or {}
 VHubVeh.hasVehicleAccess = hasAccess
+
+local function resolveAccessibleVehicle(src, netId, plate, maxDistance)
+  src, netId = tonumber(src), tonumber(netId)
+  if not src or not netId or netId % 1 ~= 0 or netId < 1 then return nil end
+  local normalized = normPlate(plate)
+  if normalized == '' or not hasAccess(src, normalized) then return nil end
+  local entity = NetworkGetEntityFromNetworkId(netId)
+  local ped = GetPlayerPed(src)
+  if not entity or entity == 0 or not DoesEntityExist(entity) or GetEntityType(entity) ~= 2
+      or not ped or ped == 0 or not DoesEntityExist(ped) then return nil end
+  if GetPlayerRoutingBucket(src) ~= GetEntityRoutingBucket(entity) then return nil end
+  if normPlate(GetVehicleNumberPlateText(entity) or '') ~= normalized then return nil end
+  if #(GetEntityCoords(ped) - GetEntityCoords(entity)) > (tonumber(maxDistance) or 12.0) then return nil end
+  return entity, normalized
+end
+
+VHubVeh.resolveAccessibleVehicle = resolveAccessibleVehicle
+
+local function controlRateOk(src, action)
+  local now = GetGameTimer()
+  local bucket = _controlAt[src] or {}
+  _controlAt[src] = bucket
+  if bucket[action] and now - bucket[action] < 300 then return false end
+  bucket[action] = now
+  return true
+end
 
 
 -- ============================================================
@@ -56,23 +81,36 @@ VHubVeh.hasVehicleAccess = hasAccess
 -- placa do veiculo do netId bater (plateOf e confiavel client-side). Assim, mesmo
 -- que o cliente forje um netId de outro carro, o broadcast e descartado nos clientes.
 
-RegisterNetEvent(E .. 'requestLock')
-AddEventHandler(E .. 'requestLock', function(netId, plate)
+RegisterNetEvent(E.REQUEST_LOCK)
+AddEventHandler(E.REQUEST_LOCK, function(netId, plate)
   local src = source
-  if type(plate) ~= 'string' or not hasAccess(src, plate) then return end   -- silencioso (L-01)
-  local newState = (_lock[plate] == 2) and 1 or 2                            -- alterna travado/destravado
-  _lock[plate] = newState
-  TriggerClientEvent(E .. 'applyLock', -1, tonumber(netId), plate, newState)
-  TriggerClientEvent(E .. 'lockNotify', src, newState)                       -- so o requester ve a msg
+  if not controlRateOk(src, 'lock') then return end
+  local entity = resolveAccessibleVehicle(src, netId, plate, 12.0)
+  if not entity then return end
+  local state = Entity(entity).state
+  local current = tonumber(state[B.LOCK])
+  if current ~= 1 and current ~= 2 then
+    local ok, physical = pcall(GetVehicleDoorLockStatus, entity)
+    current = ok and tonumber(physical) == 2 and 2 or 1
+  end
+  local next_state = current == 2 and 1 or 2
+  state:set(B.LOCK, next_state, true)
+  TriggerClientEvent(E.LOCK_NOTIFY, src, next_state)
 end)
 
-RegisterNetEvent(E .. 'requestEngine')
-AddEventHandler(E .. 'requestEngine', function(netId, plate)
+RegisterNetEvent(E.REQUEST_ENGINE)
+AddEventHandler(E.REQUEST_ENGINE, function(netId, plate)
   local src = source
-  if type(plate) ~= 'string' or not hasAccess(src, plate) then return end
-  local newState = not (_engine[plate] or false)
-  _engine[plate] = newState
-  TriggerClientEvent(E .. 'applyEngine', -1, tonumber(netId), plate, newState)
+  if not controlRateOk(src, 'engine') then return end
+  local entity = resolveAccessibleVehicle(src, netId, plate, 12.0)
+  if not entity then return end
+  local state = Entity(entity).state
+  local current = state[B.ENGINE]
+  if type(current) ~= 'boolean' then
+    local ok, physical = pcall(GetIsVehicleEngineRunning, entity)
+    current = ok and physical == true or false
+  end
+  state:set(B.ENGINE, not current, true)
 end)
 
 
@@ -109,8 +147,8 @@ local function finiteNum(v, lo, hi)
   return v
 end
 
-RegisterNetEvent(E .. 'stateSync')
-AddEventHandler(E .. 'stateSync', function(netId, plate, snap)
+RegisterNetEvent(E.STATE_SYNC)
+AddEventHandler(E.STATE_SYNC, function(netId, plate, snap)
   local src = source
   if type(snap) ~= 'table' then return end
 
@@ -149,8 +187,8 @@ end)
 
 -- entrada como motorista: devolve o estado salvo p/ o client aplicar nos natives
 -- (substitui o vHub:vehicleStateLoad do CORE)
-RegisterNetEvent(E .. 'requestState')
-AddEventHandler(E .. 'requestState', function(netId, plate)
+RegisterNetEvent(E.REQUEST_STATE)
+AddEventHandler(E.REQUEST_STATE, function(netId, plate)
   local src = source
   local now = GetGameTimer()
   if now - (_reqAt[src] or -2000) < 2000 then return end
@@ -160,7 +198,7 @@ AddEventHandler(E .. 'requestState', function(netId, plate)
   Citizen.CreateThread(function()
     local ok, st = pcall(function() return exports.vhub_conce:getVehicleState(p) end)
     if ok and type(st) == 'table' then
-      TriggerClientEvent(E .. 'applyState', src, p, {
+      TriggerClientEvent(E.APPLY_STATE, src, p, {
         engine_health = st.engine_health,
         body_health   = st.body_health,
         odometer_km   = st.odometer_km,
@@ -180,10 +218,10 @@ end)
 -- (sem buffer server-side) — garantia mais forte que flush-em-stop.
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
-  _lock, _engine, _syncAt, _finalAt, _reqAt = {}, {}, {}, {}, {}
+  _controlAt, _syncAt, _finalAt, _reqAt = {}, {}, {}, {}
 end)
 
 -- evita crescimento dos mapas de rate-limit quando o jogador sai
 AddEventHandler('playerDropped', function()
-  _syncAt[source], _finalAt[source], _reqAt[source] = nil, nil, nil
+  _controlAt[source], _syncAt[source], _finalAt[source], _reqAt[source] = nil, nil, nil, nil
 end)

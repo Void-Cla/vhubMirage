@@ -75,13 +75,13 @@ fi
 
 # ── L-16: escrita de spawn fora do owner (aviso com allowlist) ───────────────
 case "$FILE" in
-  *vhub_player_state/client.lua|*"[CORE]/vhub/client/bootstrap.lua"|*vhub_admin/*) : ;;
+  *vhub_hss/client/native_bridge.lua|*vhub_hss/server/ped.lua) : ;;
   *)
     if grep -qE "SetPlayerModel\s*\(|NetworkResurrectLocalPlayer\s*\(" "$FILE"; then
-      add_warn "L-16: escrita de ped (model/resurrect) fora do owner vhub_player_state — UI devolve coordenada via spawnAt"
+      add_warn "L-16: escrita de ped (model/resurrect) fora do owner vhub_hss — UI devolve coordenada via spawnAt"
     fi
     if grep -qE "SetEntityCoords(NoOffset)?\s*\(\s*PlayerPedId" "$FILE"; then
-      add_warn "L-16: SetEntityCoords no próprio ped fora do owner — use exports.vhub_player_state:teleport/spawnAt"
+      add_warn "L-16: SetEntityCoords no próprio ped fora do owner — use exports.vhub_hss:teleport/spawnAt"
     fi ;;
 esac
 

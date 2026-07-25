@@ -1,8 +1,8 @@
 -- vhub_spawselector/server/init.lua — provedor de coordenada do Spawn Owner
 -- PAPEL (Void-Zero/It.1): NÃO toca o ped, NÃO teleporta. Abre a UI quando o
---   vhub_player_state pede (chooseSpawn), valida a escolha server-side
---   (index + permissão por local) e devolve via exports.vhub_player_state:spawnAt.
--- ROLLBACK: parar este resource → player_state spawna direto (fluxo antigo).
+--   vhub_hss pede (chooseSpawn), valida a escolha server-side
+--   (index + permissão por local) e devolve via exports.vhub_hss:spawnAt.
+-- ROLLBACK: parar este resource → HSS spawna direto.
 
 local _open = {}  -- [src] = true → UI aberta por este fluxo (anti-spoof do RequestSpawn)
 
@@ -43,20 +43,20 @@ local function loginGateAtivo()
   return ok and active == true
 end
 
-AddEventHandler("vhub_player_state:chooseSpawn", function(src)
+AddEventHandler(VHubHSS.E.SPAWN_CHOOSE, function(src)
   if loginGateAtivo() then return end
   Citizen.CreateThread(function()
-    local user = exports.vhub:getUser(src)
-    if not user or not user.char_id then
+    local char_id = exports.vhub:getCharacterId(src)
+    if not tonumber(char_id) then
       -- sem sessão válida: devolve o controle imediatamente (timeout não espera)
-      pcall(function() exports.vhub_player_state:spawnAt(src, nil) end)
+      pcall(function() exports.vhub_hss:spawnAt(src, nil) end)
       return
     end
     _open[src] = true
     -- NOTA(IT.1/gate contrato): o CORE FROZEN NÃO expõe setCData via export
     --   (só global vHub.setCData). 'spawned'/'last_spawn' não tinham leitor algum
     --   (write-only morto) → removidos. O 1º-spawn é decidido por user.spawns no owner.
-    TriggerClientEvent("vhub_spawselector:client:Open", src, {
+    TriggerClientEvent(VHubSpawnSelector.E.OPEN, src, {
       data = locationsPara(src),
       last = Config.LastLocation,
     })
@@ -66,8 +66,8 @@ end)
 -- ── Escolha do jogador ────────────────────────────────────────────────────────
 -- index válido → coordenada do Config | index nil/inválido (fechar) → pos salva.
 
-RegisterNetEvent("vhub_spawselector:server:RequestSpawn")
-AddEventHandler("vhub_spawselector:server:RequestSpawn", function(index)
+RegisterNetEvent(VHubSpawnSelector.E.REQUEST_SPAWN)
+AddEventHandler(VHubSpawnSelector.E.REQUEST_SPAWN, function(index)
   local src = source
   if not _open[src] then return end   -- só aceita se fomos nós que abrimos
   _open[src] = nil
@@ -87,34 +87,27 @@ AddEventHandler("vhub_spawselector:server:RequestSpawn", function(index)
       pos = { x = c.x, y = c.y, z = c.z, heading = c.w }
     end
 
-    local ok, done = pcall(function() return exports.vhub_player_state:spawnAt(src, pos) end)
-    if not ok then
-      print(("[vhub_spawselector] spawnAt indisponível src=%d"):format(src))
-      return
-    end
-    -- Sem hold pendente (abertura manual via RequestOpen): teleporte simples
-    if done ~= true and pos then
-      pcall(function()
-        exports.vhub_player_state:teleport(src, pos.x, pos.y, pos.z, pos.heading)
-      end)
-    end
+    pcall(function() return exports.vhub_hss:spawnAt(src, pos) end)
   end)
 end)
 
 -- ── Abertura manual (export Open / admin) — throttle 5s por src ───────────────
 
 local _open_at = {}
-RegisterNetEvent("vhub_spawselector:server:RequestOpen")
-AddEventHandler("vhub_spawselector:server:RequestOpen", function()
+RegisterNetEvent(VHubSpawnSelector.E.REQUEST_OPEN)
+AddEventHandler(VHubSpawnSelector.E.REQUEST_OPEN, function()
   local src = source
   local now = GetGameTimer()
-  if (now - (_open_at[src] or 0)) < 5000 then return end
+  local previous = _open_at[src]
+  if previous and (now - previous) < 5000 then return end
   _open_at[src] = now
   Citizen.CreateThread(function()
-    local user = exports.vhub:getUser(src)
-    if not user or not user.char_id then return end
+    local pending_ok, pending = pcall(function() return exports.vhub_hss:isPendingSpawn(src) end)
+    if not pending_ok or pending ~= true then return end
+    local char_id = exports.vhub:getCharacterId(src)
+    if not tonumber(char_id) then return end
     _open[src] = true
-    TriggerClientEvent("vhub_spawselector:client:Open", src, {
+    TriggerClientEvent(VHubSpawnSelector.E.OPEN, src, {
       data = locationsPara(src),
       last = Config.LastLocation,
     })

@@ -283,6 +283,24 @@ function Payments.deliver(order, actor, onDone)
                 Payments.audit(order.id, order.txid, 'delivered', actor, { msg = delivMsg })
                 Core.log(('Payments: entregue txid=%s char=%s via %s'):format(
                     order.txid, tostring(order.char_id), actor))
+
+                -- notificação Discord de venda confirmada (convar df_discord_webhook)
+                local playerName = Core.getPlayerName(tonumber(order.src) or 0)
+                Core.discordAudit(
+                    '✅ Pix Recebido e Entregue',
+                    ('Produto **%s** entregue ao jogador **%s** (char `%s`).'):format(
+                        order.product_desc or order.product_key or '?',
+                        playerName,
+                        tostring(order.char_id)),
+                    VHubDF.cfg.discord.colorOk,
+                    {
+                        { name = 'Produto',  value = '`' .. (order.product_key or '?') .. '`', inline = true },
+                        { name = 'Valor',    value = ('R$ %.2f'):format(tonumber(order.amount_brl) or 0), inline = true },
+                        { name = 'TXID',     value = '`' .. order.txid .. '`', inline = false },
+                        { name = 'Via',      value = actor,                     inline = true },
+                    }
+                )
+
                 _notifyPlayerIfOnline(order, true)
                 onDone(true, delivMsg)
             else

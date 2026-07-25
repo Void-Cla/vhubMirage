@@ -1,20 +1,34 @@
+:root {
+    --vh-sand: #d9c19a;
+    --vh-sand-dim: #a89572;
+    --vh-gold: #f3b53a;
+    --vh-gold-soft: #ffd573;
+    --vh-ink: #0c0a06;
+    --vh-panel: rgba(18, 15, 11, 0.88);
+    --vh-line: rgba(230, 200, 132, 0.24);
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
 }
 
-body {
+html, body {
     overflow: hidden;
 	-webkit-touch-callout: none;
 	-webkit-user-select: none;
 	-khtml-user-select: none;
 	-moz-user-select: none;
-	-ms-user-select: none;
+    -ms-user-select: none;
 	user-select: none;
-    background: linear-gradient(180deg, #00000051 0%, rgba(0, 0, 0, 0.00) 51.04%, #00000051 100%);
-    /* display: none; */
+    background: transparent;
+    color: var(--vh-sand);
+}
+
+body {
+    display: none;
 }
 
 .wrapper {
@@ -23,6 +37,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: transparent;
 }
 
 .container {
@@ -52,8 +67,8 @@ body {
 }
 
 .card > .row > .icon {
-    background: rgba(0, 0, 0, 0.5);
-    color: white;
+    background: rgba(12, 10, 6, 0.72);
+    color: var(--vh-sand);
     border-radius: 2vw;
     width: 2.604vw;
     display: flex;
@@ -61,7 +76,7 @@ body {
     align-items: center;
     margin: 0.781vw;
     font-size: 0.833vw;
-    font-family: Goldman;
+    font-family: "Barlow Condensed", Bahnschrift, "Arial Narrow", sans-serif;
     font-weight: 500;
 }
 
@@ -79,22 +94,23 @@ body {
 }
 
 .description p {
-    color: #b0b0ba;
+    color: var(--vh-sand-dim);
     padding-top: 0.26vw;
     font-size: 0.677vw;
-    text-shadow: 0vw 0vw 1.563vw rgba(0, 0, 0, 0.80);
+    text-shadow: 0 0 1.563vw rgba(0, 0, 0, 0.80);
 }
 
 .description h4 {
     text-transform: uppercase;
-    text-shadow: 0vw 0.208vw 0.104vw rgba(0, 0, 0, 0.35), 0vw 0vw 0.781vw rgba(233, 218, 255, 0.80);
+    color: var(--vh-gold-soft);
+    text-shadow: 0 0.208vw 0.104vw rgba(0, 0, 0, 0.35);
     font-size: 0.938vw;
 }
 
 .select {
     position: relative;
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
+    background-color: var(--vh-gold);
+    color: var(--vh-ink);
     border-radius: 0.6vw 0.6vw 0vw 0vw;
     width: 4.604vw;
     height: 2.1vw;
@@ -104,8 +120,7 @@ body {
     top: 2.3vw;
     left: -6vw;
     font-size: 0.833vw;
-    font-family: Goldman;
-    text-shadow: 0vw 0.208vw 0.104vw rgba(0, 0, 0, 0.35), 0vw 0vw 0.781vw rgba(233, 218, 255, 0.80);
+    font-family: "Barlow Condensed", Bahnschrift, "Arial Narrow", sans-serif;
     font-weight: 500;
     text-transform: uppercase;
     box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
@@ -113,7 +128,7 @@ body {
 }
 
 .select:hover {
-    background-color: #366534;
+    background-color: var(--vh-gold-soft);
     transform:scale(0.95);
 } 
 
@@ -141,13 +156,14 @@ input:checked + label .description {
     height: 4vw;
     text-align: center;
     bottom: -4vw;
-    background-color: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--vh-line);
+    background-color: var(--vh-panel);
     border-radius: 0.8vw;
     transition: all ease 0.3s;
 }
 
 .container-down:hover {
-    background-color: rgba(45, 45, 45, 0.4);
+    background-color: rgba(35, 29, 20, 0.92);
 }
 
 .container-down::after {
@@ -176,12 +192,12 @@ input:checked + label .description {
     text-transform: uppercase;
     z-index: 1;
     font-size: 0.938vw;
-    color: #fff;
+    color: var(--vh-gold-soft);
 }
 
 .main-description p {
     z-index: 1;
-    color: #b0b0ba;
+    color: var(--vh-sand-dim);
     padding-top: 0.26vw;
     font-size: 0.677vw;
 }
@@ -189,8 +205,8 @@ input:checked + label .description {
 .main-icon {
     z-index: 1;
     position: absolute;
-    background-color: rgba(47, 47, 47, 0.5);
-    color: white;
+    background-color: rgba(12, 10, 6, 0.72);
+    color: var(--vh-sand);
     border-radius: 2vw;
     width: 2.604vw;
     display: flex;
@@ -199,6 +215,6 @@ input:checked + label .description {
     top: 0.99vw;
     left: 14.896vw;
     font-size: 0.833vw;
-    font-family: Goldman;
+    font-family: "Barlow Condensed", Bahnschrift, "Arial Narrow", sans-serif;
     font-weight: 500;
 }

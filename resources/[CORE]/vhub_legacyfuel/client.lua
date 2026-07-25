@@ -242,6 +242,10 @@ local function createCarry(pump)
   local prop = CreateObjectNoOffset(C.NozzleModel, 0.0, 0.0, 0.0, false, false, false)
   if not prop or prop == 0 then return end
   attachNozzleToHand(prop, ped)
+  -- aguarda um frame para o engine sincronizar a posição mundial do prop após o attach;
+  -- sem isso GetOffsetFromEntityInWorldCoords retorna ~0,0,0 e AttachEntitiesToRope crasha
+  Citizen.Wait(0)
+  if not DoesEntityExist(prop) then return end
   local rope, anchor = createHose(prop, pump)
   if not rope then DeleteEntity(prop); return end
   carryVisual = { prop = prop, rope = rope, anchor = anchor, pump = pump }

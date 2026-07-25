@@ -17,6 +17,7 @@ Inventory.TrustedResources = {
   ['vhub_custom'] = true,
   ['vhub_ferinha'] = true,
   ['vhub_garage'] = true,
+  ['vhub_hss'] = true,
   ['vhub_ipad'] = true,
   ['vhub_legacyfuel'] = true,
   ['vhub_nitro'] = true,
@@ -82,7 +83,6 @@ Inventory.Chests = {
 -- Seguranca e anti-dupe (server-side).
 Inventory.Security = {
   action_cooldown_ms = 250,    -- cooldown por jogador por acao (anti double-action)
-  container_lock_ms  = 300,    -- mutex por container (acesso concorrente)
   p2p_range          = 2.0,    -- distancia maxima para envio P2P (metros)
   pickup_range       = 2.5,    -- distancia maxima para pegar drop
   antidupe_window_ms = 1000,   -- janela de deteccao de flood
@@ -96,10 +96,10 @@ Inventory.Save = {
 }
 
 -- Comandos de TESTE/DEV.
--- give_command = true  -> QUALQUER jogador pode usar /item (so para testar!).
--- DESLIGUE (false) em PRODUCAO; com false, /item exige dono (uid 1) ou ACE 'vhub.item'.
+-- /item publico so existe com give_command habilitado E convar dev explicita.
+-- Em producao, mantenha false; /item exige dono (uid 1) ou ACE 'vhub.item'.
 Inventory.Dev = {
-  give_command = true,
+  give_command = false,
 }
 
 -- Drops no chao (SPRINT-INV-3 — valores ja definidos para nao mexer depois).
@@ -111,9 +111,10 @@ Inventory.Drops = {
   default_model    = 'prop_paper_bag_01',
 }
 
--- Base do CDN de icones (jsDelivr/GitHub). A NUI resolve <id>.png a partir daqui;
--- a config NUNCA guarda URL completa por item, apenas o identificador (a chave do item).
-Inventory.CDN = 'https://cdn.jsdelivr.net/gh/Void-Cla/vhub-assets@main'
+-- Icones: resolvidos automaticamente por chave de item.
+-- URL base: https://raw.githubusercontent.com/Void-Cla/vhub-assets/main/<id>.png
+-- Fallback visual (letra inicial do nome) exibido automaticamente quando o PNG nao existe.
+Inventory.Assets = {}
 
 
 -- ============================================================
@@ -138,61 +139,61 @@ Inventory.Items = {
   ['agua'] = {
     nome = 'Água', peso = 0.20, stack = true, max = 50,
     legalidade = 'comum', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'consumivel',
+    permitido_bau = true, categoria = 'consumivel', consume_policy = 'on_applied',
   },
   ['sandwich'] = {
     nome = 'Sanduíche', peso = 0.30, stack = true, max = 50,
     legalidade = 'comum', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'consumivel',
+    permitido_bau = true, categoria = 'consumivel', consume_policy = 'on_applied',
   },
   ['bandage'] = {
     nome = 'Bandagem', peso = 0.10, stack = true, max = 20,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'medico',
+    permitido_bau = true, categoria = 'medico', consume_policy = 'on_applied',
   },
   ['medkit'] = {
     nome = 'Kit Médico', peso = 1.50, stack = true, max = 5,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'medico',
+    permitido_bau = true, categoria = 'medico', consume_policy = 'on_applied',
   },
 
   -- FERRAMENTAS ------------------------------------------------
   ['repairkit'] = {
     nome = 'Kit de Reparo', peso = 1.00, stack = true, max = 5,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'ferramenta',
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
   ['caixadeferramentas'] = {
     nome = 'Caixa de Ferramentas', peso = 2.00, stack = true, max = 10,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'ferramenta',
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
   ['nitro'] = {
     nome = 'Garrafa de Nitro', peso = 1.50, stack = true, max = 10,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'ferramenta',
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
   ['fuel_can'] = {
     nome = 'Galão de Combustível', peso = 5.00, stack = false, serial = true,
     legalidade = 'legal', negociavel = true, perdivel = true,
-    permitido_bau = true, categoria = 'ferramenta',
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
   ['lockpick'] = {
     nome = 'Lockpick', peso = 0.10, stack = false,
     legalidade = 'ilegal', negociavel = true, perdivel = true,
-    permitido_bau = true, serial = true, categoria = 'ferramenta',
+    permitido_bau = true, serial = true, categoria = 'ferramenta', consume_policy = 'never',
   },
 
   -- DOCUMENTOS / CHAVES (nao perdiveis, nao negociaveis) -------
   ['rg'] = {
     nome = 'Carteira de Identidade', peso = 0.05, stack = false,
     legalidade = 'legal', negociavel = false, perdivel = false,
-    permitido_bau = false, categoria = 'documento',
+    permitido_bau = false, categoria = 'documento', consume_policy = 'never',
   },
   ['veh_key'] = {
     nome = 'Chave de Veículo', peso = 0.05, stack = false,
     legalidade = 'legal', negociavel = false, perdivel = false,
-    permitido_bau = false, serial = true, categoria = 'chave',
+    permitido_bau = false, serial = true, categoria = 'chave', consume_policy = 'never',
     -- meta = { plate = 'ABC1234' } definido pelo emissor (vhub_garage)
   },
 
@@ -202,6 +203,24 @@ Inventory.Items = {
   ['ipad'] = {
     nome = 'iPad', peso = 0.30, stack = false,
     legalidade = 'legal', negociavel = true, perdivel = false,
-    permitido_bau = true, serial = true, categoria = 'eletronico',
+    permitido_bau = true, serial = true, categoria = 'eletronico', consume_policy = 'never',
   },
+  ['radio'] = {
+    nome = 'Rádio Comunicador', peso = 0.45, stack = false,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, serial = true, categoria = 'eletronico', consume_policy = 'never',
+  },
+}
+
+
+-- ============================================================
+-- CUTOVER F2+ (monotônico, default-off)
+-- ============================================================
+
+-- Gate para features de F2+ (schema novo, CAS, protocol v2).
+-- Habilitar somente após F1 validado e rollback testado:
+--   setr inventory_vnext 1   ← no server.cfg/server-vnext.cfg
+-- Nunca ativar em produção sem o rito de migração completo (plan2.md §15).
+Inventory.VNext = {
+  enabled = GetConvar('inventory_vnext', '0') == '1',
 }

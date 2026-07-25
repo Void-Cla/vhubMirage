@@ -22,17 +22,17 @@ local function deliverItem(src, itemName, count)
     return ok and res == true
 end
 
--- entrega uma arma equipando no ped via vhub_player_state (dono do ped).
+-- entrega uma arma equipando no ped via vhub_hss (dono do ped).
 -- DÍVIDA TÉCNICA: arma de SESSÃO — não persiste no relog/respawn. Persistência de
 -- arma é domínio futuro (vhub_weapon_state, ainda inexistente). A UI do coinshop
 -- deve indicar "arma de sessão". (Decisão do arquiteto — fronteira F3.)
 local function deliverWeapon(src, weaponName, ammo)
     if not VHubCoin.isNonEmptyStr(weaponName) then return false end
     local weapons = { [weaponName] = { ammo = VHubCoin.clamp(ammo or 250, 0, 9999) } }
-    local ok = pcall(function()
-        exports.vhub_player_state:giveWeapons(src, weapons, false)
+    local ok, delivered = pcall(function()
+        return exports.vhub_hss:giveWeapons(src, weapons, false)
     end)
-    return ok == true
+    return ok and delivered == true
 end
 
 -- concede o veículo comprado via exports.vhub_conce:grantVehicle (escritor único da

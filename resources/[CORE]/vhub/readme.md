@@ -55,7 +55,7 @@ O core resolve os três:
 
 **O que o core NÃO faz:**
 - Não gerencia inventário, dinheiro, grupos ou identidade — esses são resources externos
-- Não decide onde o jogador spawna — isso é responsabilidade de `vhub_player_state`
+- Não decide onde o jogador spawna — isso é responsabilidade de `vhub_hss` (spawn owner)
 - Não tem UI — o core é 100% server-side (exceto 2 arquivos client leves)
 
 ---
@@ -88,7 +88,7 @@ resources/[CORE]/vhub/
 │   └── exports.lua        Exports cross-resource com whitelist de invocadores
 │
 ├── client/
-│   ├── bootstrap.lua      Ready único via playerSpawned + fallback nativo
+│   ├── bootstrap.lua      Ready via playerSpawned + fallback sem escrita física
 │   └── vehicle.lua        Report de estado (fuel, rpm, health) 0.5–4Hz adaptativo
 │
 └── sql/
@@ -808,15 +808,14 @@ visível no resmon). Com o yield, cada grupo de 50 é processado em ticks separa
 ```lua
 local function _invoker_allowed()
   local trust = vHub.cfg and vHub.cfg.trusted_resources
-  if not trust or next(trust) == nil then return true end  -- lista vazia = todos OK
+  if not trust or next(trust) == nil then return false end
   local caller = GetInvokingResource()
-  if not caller then return true end
+  if not caller then return false end
   return trust[caller] == true
 end
 ```
 
-Se `trusted_resources` está vazio, qualquer resource pode chamar exports sensíveis.
-Se tiver valores, apenas os listados podem.
+`trusted_resources` vazio ou invocador ausente nega todo export sensível.
 
 **Configuração recomendada para produção:**
 ```lua
@@ -837,6 +836,12 @@ vHub.mergeConfig({
 | `getVHub()` | não | Retorna namespace vHub completo — use com cuidado |
 | `getUser(src)` | não | Objeto User com `id, char_id, name, data` |
 | `getUID(src)` | não | Retorna user_id ou nil se não tem sessão |
+| `getCharacterId(src)` | **sim** | Escalar canônico; não expõe sessão viva |
+| `getCharacterBootstrap(src)` | **HSS exato** | Cópia de migração e contador de spawn |
+| `reportPhysicalDeath(src)` | **HSS exato** | Arma morte após validar réplica server-side |
+| `reportPhysicalRespawn(src)` | **HSS exato** | Conclui respawn após validar ped vivo |
+| `listCharacters(src)` | **login exato** | Cópia dos personagens da sessão |
+| `selectCharacter(src, cid)` | **login exato** | Seleção autoritativa auditada |
 | `hasPerm(uid, perm)` | não | Consulta `K._perms[uid][perm]` |
 | `grantPerm(uid, perm)` | **sim** | Concede permissão em runtime |
 | `getVehicle(plate)` | não | VehicleData ou nil |
@@ -849,7 +854,7 @@ vHub.mergeConfig({
 
 ## 14. client/bootstrap.lua
 
-### Estratégia de spawn dual-path
+### Estratégia de prontidão dual-path
 
 O cliente tem duas formas de avisar o servidor que está pronto:
 
@@ -858,17 +863,16 @@ O cliente tem duas formas de avisar o servidor que está pronto:
 FiveM dispara "playerSpawned" → enviarReady() → TriggerServerEvent("vHub:ready")
 ```
 
-**Caminho 2 (fallback nativo):**
+**Caminho 2 (fallback de prontidão):**
 ```
 Thread monitora por até 60s
 → se NetworkIsPlayerActive() = true E playerSpawned não disparou em 2s
-→ executa spawnNativo() (NetworkResurrectLocalPlayer + ShutdownLoadingScreen)
 → enviarReady()
 ```
 
 **Por que o fallback?** `playerSpawned` depende do `spawnmanager` do FiveM.
 Em algumas configurações mínimas de servidor, `spawnmanager` não está carregado.
-O fallback garante que o jogador entra no servidor mesmo sem ele.
+O fallback sinaliza prontidão; `vhub_hss` executa o spawn físico exclusivo.
 
 **Debounce de 5s:** se `playerSpawned` disparar E o fallback executar quase
 simultaneamente (janela de 2s foi curta), o debounce impede dois `vHub:ready`
@@ -1237,19 +1241,10 @@ com carga real. Não há ambiente de CI/CD automático para esses testes.
 **Impacto:** mudanças no core não podem ser validadas automaticamente em CI.
 A aprovação depende de testes manuais em ambiente de staging.
 
-### Client/bootstrap.lua tem posição de spawn hard-coded
+### Spawn físico
 
-```lua
-local SPAWN_POS = { x = -538.70, y = -214.91, z = 37.65, h = 0.0 }
-```
-
-A posição de spawn do fallback nativo é fixa no arquivo. Em servidores com
-spawn customizado, o fallback pode colocar o jogador na posição errada por
-~500ms antes de `vhub_player_state` aplicar a posição correta.
-
-**Mitigação:** `vhub_player_state` recebe `vHub:characterLoad` e teleporta
-imediatamente. O jogador mal percebe. Mas é uma posição visível por
-uma fração de segundo.
+`client/bootstrap.lua` não escreve modelo, vida ou coordenada. O `vhub_hss`
+mantém o ponto `vec4` local e cruza a fronteira somente como primitivos.
 
 ---
 

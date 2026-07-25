@@ -5,16 +5,18 @@ lua54      'yes'
 
 name        'vhub_spawselector'
 author      'vHub Mirage'
-version     '2.0.0'
-description 'Provedor de coordenada de spawn do vhub_player_state (UI pura — nunca toca o ped)'
+version     '2.1.2'
+description 'Provedor de coordenada de spawn do vhub_hss (UI pura — nunca toca o ped)'
 
 dependencies {
   'vhub',
   'vhub_groups',
-  'vhub_player_state'
+  'vhub_hss'
 }
 
 shared_scripts {
+  '@vhub_hss/shared/events.lua',
+  'shared/events.lua',
   'shared/config.lua'
 }
 

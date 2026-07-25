@@ -149,6 +149,11 @@ function RT.begin_racing(inst)
             players  = players,
         })
     end)
+
+    -- HSS: adrenalina na largada para todos os pilotos (soft-dep, pcall isolado por piloto)
+    for src in pairs(inst.players) do
+        pcall(function() exports.vhub_hss:addAdrenaline(src, 40) end)
+    end
 end
 
 
@@ -183,6 +188,9 @@ function RT.on_checkpoint(src, payload)
 
     -- Sincroniza state bag (HUD reflete imediato) — fonte unica race_bag
     Player(src).state:set('vhub_racha', race_bag(inst, player), true)
+
+    -- HSS: pulso de adrenalina em cada checkpoint (soft-dep, pcall)
+    pcall(function() exports.vhub_hss:addAdrenaline(src, 15) end)
 
     if cp_total > 0 and player.cp_done >= cp_total then
         RT._player_finish(inst, src)

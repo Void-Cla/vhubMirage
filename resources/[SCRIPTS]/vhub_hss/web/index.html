@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>vHub HSS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main id="hss-hud" class="hss-hud--hidden" aria-hidden="true">
+        <div class="hss-row" id="row-health" title="Vida">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-health">
+                <path d="M8 14S2 10.2 2 6a4 4 0 0 1 6-3.46A4 4 0 0 1 14 6c0 4.2-6 8-6 8z"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-health"><i id="fill-health"></i></div>
+        </div>
+
+        <div class="hss-row" id="row-food" title="Fome">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-food">
+                <path d="M5 1v5a3 3 0 0 0 2 2.83V15h2V8.83A3 3 0 0 0 11 6V1H9v4H8V1H7v4H6V1z"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-food"><i id="fill-food"></i></div>
+        </div>
+
+        <div class="hss-row" id="row-water" title="Sede">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-water">
+                <path d="M8 1S3 7 3 10.5a5 5 0 0 0 10 0C13 7 8 1 8 1z"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-water"><i id="fill-water"></i></div>
+        </div>
+
+        <div class="hss-row hss-cond--hidden" id="row-armour" title="Colete">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-armour">
+                <path d="M8 1 2 4v5c0 3.5 3 5.5 6 6 3-.5 6-2.5 6-6V4z"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-armour"><i id="fill-armour"></i></div>
+        </div>
+
+        <div class="hss-row" id="row-energy" title="Fadiga">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-energy"><path d="m10 1-6 8h5l-2 6 7-9H9z"/></svg>
+            <div class="hss-track hss-track--hidden" id="bar-energy"><i id="fill-energy"></i></div>
+        </div>
+
+        <div class="hss-row hss-cond--hidden" id="row-oxygen" title="Oxigênio">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-oxygen">
+                <circle cx="6" cy="10" r="4"/>
+                <circle cx="11" cy="6" r="3"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-oxygen"><i id="fill-oxygen"></i></div>
+        </div>
+
+        <div class="hss-row hss-cond--hidden" id="row-adrenaline" title="Adrenalina">
+            <svg viewBox="0 0 16 16" class="hss-icon icon-adrenaline">
+                <path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1m-.5 3v5l3 2 .6-1-2.4-1.5V4z"/>
+            </svg>
+            <div class="hss-track hss-track--hidden" id="bar-adrenaline"><i id="fill-adrenaline"></i></div>
+        </div>
+
+        <div id="hss-alerts" class="hss-alerts hss-cond--hidden">
+            <span id="alert-bleeding" class="hss-alert hss-cond--hidden" title="Sangramento">◆</span>
+            <span id="alert-pain" class="hss-alert hss-cond--hidden" title="Dor">✦</span>
+            <span id="alert-trauma" class="hss-alert hss-cond--hidden" title="Lesão">⚠</span>
+            <span id="alert-temperature" class="hss-alert hss-cond--hidden" title="Temperatura">♨</span>
+            <span id="alert-stress" class="hss-alert hss-cond--hidden" title="Estresse">!</span>
+        </div>
+
+        <div id="hss-bpm" class="hss-bpm hss-cond--hidden">
+            <svg viewBox="0 0 16 16" class="hss-icon svg-bpm">
+                <path d="M1 8h3l1.5-4L9 12l1.5-4H15v1h-3.8L9 15 5.5 6.5 4.8 9H1z"/>
+            </svg>
+            <span id="hss-bpm-value">72</span>
+        </div>
+
+        <div id="hss-mood" class="hss-status hss-cond--hidden"></div>
+        <div id="hss-unconscious" class="hss-status hss-status--danger hss-cond--hidden">INCONSCIENTE</div>
+    </main>
+
+    <script src="runtime.js"></script>
+    <script src="hud.js"></script>
+</body>
+</html>

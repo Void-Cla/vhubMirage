@@ -6,9 +6,9 @@
     "file": "resources/[SCRIPTS]/carmod/BMWE46GTR/common/handling.meta"
   },
   "F8T": {
-    "tier": "S",
-    "sha256": "sha256:c65806cc6e8a382bd931fa29274e3265b0b078c02eb20c3594c4f53524fb30fa",
-    "file": "resources/[SCRIPTS]/carmod/f8t/common/handling.meta"
+    "tier": "S+",
+    "sha256": "sha256:20e8517686465e19f36419f5817c2c2e2c04bbd042383ab16957eae5b7b321b1",
+    "file": "resources/[CAR]/carmod/f8t/common/handling.meta"
   },
   "FERRARIF8": {
     "tier": "A",
@@ -35,9 +35,14 @@
     "sha256": "sha256:e73e7974ab7b9c847fb76bb680ce07c835d0f9cde6cd289414b1b9d59620c3ef",
     "file": "resources/[SCRIPTS]/carmod/skyline/common/handling.meta"
   },
+  "SKYLINER34": {
+    "tier": "S+",
+    "sha256": "sha256:f34000d65f52487e859b012dc48f2cbb1e5afcf2e3a1b8cb57ec821f3f176364",
+    "file": "resources/[CAR]/carmod/SKYLINER34/common/handling.meta"
+  },
   "TOYOTASUPRA": {
-    "tier": "S",
-    "sha256": "sha256:89099bc783cbe0d0c48417a7810a067aceea29d3b136b44198efa03116e666e4",
-    "file": "resources/[SCRIPTS]/carmod/supra/common/handling.meta"
+    "tier": "A",
+    "sha256": "sha256:4f619ede727b4e37d86ec6889e9cb78132195c1374415c13acfec5e2db2e88ff",
+    "file": "resources/[CAR]/carmod/TOYOTASUPRA/common/handling.meta"
   }
 }

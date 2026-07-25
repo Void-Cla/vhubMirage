@@ -20,6 +20,23 @@ CREATE TABLE IF NOT EXISTS `vh_money_accounts` (
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `vh_money_operations` (
+  `operation_id`   VARCHAR(64)      NOT NULL,
+  `char_id`        INT UNSIGNED     NOT NULL,
+  `payload_digest` CHAR(64)         NOT NULL,
+  `amount`         BIGINT UNSIGNED  NOT NULL,
+  `wallet_debit`   BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `bank_debit`     BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `reason`         VARCHAR(96)      NOT NULL,
+  `state`          ENUM('charged','refunded') NOT NULL DEFAULT 'charged',
+  `created_at`     TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`operation_id`),
+  KEY `idx_money_operation_char` (`char_id`),
+  CONSTRAINT `fk_money_operation_char` FOREIGN KEY (`char_id`)
+    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `vh_money_transactions` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,
   `actor_char_id`   INT UNSIGNED      NOT NULL,

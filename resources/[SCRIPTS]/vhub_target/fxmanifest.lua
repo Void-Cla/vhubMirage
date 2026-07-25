@@ -6,7 +6,7 @@ nui_callback_strict_mode 'true'
 
 name        'vhub_target'
 author      'vHub Mirage'
-version     '1.0.0'
+version     '1.1.0'
 description 'Interação por mira (targeting) — API de exports compatível com ox_target 1.18.x'
 
 dependency 'vhub'

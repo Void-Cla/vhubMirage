@@ -12,10 +12,7 @@
   function render() {
     if (!root) return;
     const id = player.get('id');
-    root.querySelector('.hud-name').textContent  = player.get('name') || '';
     root.querySelector('.hud-id').textContent    = (id !== undefined && id !== null) ? ('ID ' + id) : '';
-    const ph = player.get('phone');
-    root.querySelector('.hud-phone').textContent = ph ? ('☎ ' + ph) : '';
   }
 
   // ============================================================
@@ -31,19 +28,21 @@
         if ('id' in h)    player.set('id', h.id);
         if ('phone' in h) player.set('phone', h.phone);
         if ('name' in h)  player.set('name', h.name);
-        render();
+        render();   // apenas ID; topbar da mochila ouve o mesmo bus e atualiza o perfil
       }));
     },
 
     onMount() {
       root = document.getElementById('hud-root');
       root.className = 'mod-hud';
-      root.innerHTML =
-        '<div class="hud-name"></div>' +
-        '<div class="hud-line"><span class="hud-id"></span><span class="hud-phone"></span></div>';
+      root.innerHTML = '<div class="hud-line"><span class="hud-id"></span></div>';
       root.classList.remove('hidden');
       render();
     },
+
+    onShow() { if (root) root.classList.remove('hidden'); },
+
+    onHide() { if (root) root.classList.add('hidden'); },
 
     onDestroy() {
       offs.forEach((o) => o());

@@ -189,6 +189,47 @@ function tests.test_vstate_roundtrip()
   return Citizen.Await(done)
 end
 
+-- Regressão HSS v2: retry injetado, flush, reload/digest e outbox KVP.
+function tests.test_hss_persistence_roundtrip()
+  if GetConvar('vhub_test_mode', '0') ~= '1' or GetResourceState('vhub_hss') ~= 'started' then
+    safePrint("HSS test mode indisponível — pulando test_hss_persistence_roundtrip")
+    return nil
+  end
+  local players = GetPlayers()
+  local src = players[1] and tonumber(players[1]) or nil
+  if not src then
+    safePrint("jogador online ausente — pulando test_hss_persistence_roundtrip")
+    return nil
+  end
+  local token = exports.vhub_hss:runPersistenceTest(src)
+  if type(token) ~= 'string' then return false end
+  local deadline = GetGameTimer() + 60000
+  while GetGameTimer() < deadline do
+    Citizen.Wait(100)
+    local result = exports.vhub_hss:getPersistenceTest(token)
+    if result and result.done == true then return result.result == true end
+  end
+  return false
+end
+
+-- Regressão login 0.2: migração, cifra, hash v1→v2 e recuperação miss/hit.
+function tests.test_login_persistence_roundtrip()
+  if GetConvar('vhub_test_mode', '0') ~= '1'
+    or GetResourceState('vhub_login') ~= 'started' then
+    safePrint("login test mode indisponível — pulando test_login_persistence_roundtrip")
+    return nil
+  end
+  local token = exports.vhub_login:runPersistenceTest()
+  if type(token) ~= 'string' then return false end
+  local deadline = GetGameTimer() + 30000
+  while GetGameTimer() < deadline do
+    Citizen.Wait(100)
+    local result = exports.vhub_login:getPersistenceTest(token)
+    if result and result.done == true then return result.result == true end
+  end
+  return false
+end
+
 -- Cobertura end-to-end do engine de skill (decisão #27): cria um veículo de teste
 -- com bloco p1 (nissan370z = tier A, budget 800) e valida que os exports read-only
 -- do vhub_vehcontrol derivam a ficha a partir do prontuário do conce. Espelha o

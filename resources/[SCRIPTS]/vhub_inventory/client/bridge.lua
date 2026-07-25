@@ -62,18 +62,11 @@ end)
 -- NUI -> SERVIDOR (intencao) / handshake
 -- ============================================================
 
--- token de cache-bust do CDN, fixo POR BOOT do resource client.
--- ATENCAO: a lib `os` NAO existe no client do FiveM (os.time => index nil). Usar
--- GetGameTimer() (native, sempre disponivel): muda a cada boot/restart => CEF
--- revalida o icone (trocou no CDN, troca aqui sem cache preso).
-local CDN_VER = GetGameTimer()
-
--- handshake: NUI pronta -> recebe catalogo + CDN + dimensoes (uma vez)
+-- handshake: NUI pronta -> recebe catalogo + assets locais + dimensoes (uma vez)
 RegisterNUICallback('nui_ready', function(_, cb)
   cb({
     catalog = Inventory.Items,
-    cdn     = Inventory.CDN,
-    cdn_ver = CDN_VER,
+    assets  = Inventory.Assets or {},
     size    = Inventory.Backpack.slots,
     max     = Inventory.Backpack.max_weight,
     hotbar  = Inventory.Hotbar.slots,
@@ -83,6 +76,13 @@ end)
 
 RegisterNUICallback('close', function(_, cb)
   closeBackpack()
+  cb('ok')
+end)
+
+-- abre o iPad na loja (fecha a mochila primeiro para não acumular foco NUI)
+RegisterNUICallback('open_loja', function(_, cb)
+  closeBackpack()
+  TriggerServerEvent('vhub_ipad:sv:requestOpen')
   cb('ok')
 end)
 

@@ -1,7 +1,7 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 
 -- shared/utils.lua — helpers PUROS (sem side-effect), usados por client e server.
--- Calculo de peso e regras de slot vivem aqui pois a NUI (otimista) e o servidor
+-- Calculo de peso e regras de slot vivem aqui pois a NUI e o servidor
 -- (autoritativo) precisam da MESMA matematica. Fonte unica de calculo.
 
 Inventory.Utils = {}
@@ -35,22 +35,21 @@ end
 -- VALIDACAO (anti-exploit)
 -- ============================================================
 
--- coage e valida quantidade: inteiro >= 1, opcionalmente limitada por maxv.
--- retorna numero valido ou nil (rejeita negativo, fracao e lixo).
+-- valida quantidade numerica: inteiro >= 1, opcionalmente limitada por maxv.
 function U.validQty(q, maxv)
-  q = tonumber(q)
-  if not q then return nil end
-  q = math.floor(q)
+  if type(q) ~= 'number' then return nil end
+  if q ~= q or q == math.huge or q == -math.huge then return nil end
+  if q % 1 ~= 0 then return nil end
   if q < 1 then return nil end
-  if maxv and q > maxv then q = maxv end
+  if maxv and q > maxv then return nil end
   return q
 end
 
 -- indice de slot valido dentro do tamanho declarado
 function U.validSlot(slot, size)
-  slot = tonumber(slot)
-  if not slot then return nil end
-  slot = math.floor(slot)
+  if type(slot) ~= 'number' then return nil end
+  if slot ~= slot or slot == math.huge or slot == -math.huge then return nil end
+  if slot % 1 ~= 0 then return nil end
   if slot < 1 or slot > (size or 0) then return nil end
   return slot
 end
@@ -113,7 +112,10 @@ function U.wireList(changes)
   local list = {}
   for slot, e in pairs(changes or {}) do
     if e == false then list[#list + 1] = { slot = slot, clear = true }
-    else list[#list + 1] = { slot = slot, id = e.id, amount = e.amount, meta = e.meta } end
+    else
+      local copy = U.copyEntry(e)
+      list[#list + 1] = { slot = slot, id = copy.id, amount = copy.amount, meta = copy.meta }
+    end
   end
   return list
 end
@@ -123,9 +125,78 @@ end
 function U.copyEntry(e)
   if not e then return nil end
   local m = nil
-  if e.meta then
+  if type(e.meta) == 'table' then
     m = {}
-    for k, v in pairs(e.meta) do m[k] = v end
+    for k, v in pairs(e.meta) do
+      local vt = type(v)
+      local finiteNumber = vt == 'number' and v == v and v ~= math.huge and v ~= -math.huge
+      if type(k) == 'string' and (vt == 'string' or finiteNumber or vt == 'boolean') then
+        m[k] = v
+      end
+    end
   end
   return { id = e.id, amount = e.amount, meta = m }
+end
+
+-- copia uma tabela de slots sem vazar referencia viva para outro resource.
+function U.copySlots(slots)
+  local out = {}
+  for slot, entry in pairs(slots or {}) do out[slot] = U.copyEntry(entry) end
+  return out
+end
+
+-- normaliza placa para comparar entidade, chave e storage sem confiar no cliente.
+function U.normalizePlate(plate)
+  if type(plate) ~= 'string' then return nil end
+  local s = plate:gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', ''):upper()
+  if s == '' or #s > 16 then return nil end
+  return s
+end
+
+
+-- ============================================================
+-- SERIALIZAÇÃO / INTEGRIDADE (F2 — server-only em runtime, shared na def)
+-- ============================================================
+
+-- copia profunda recursiva de uma tabela (sem metatables)
+function U.deepcopy(t)
+  if type(t) ~= 'table' then return t end
+  local out = {}
+  for k, v in pairs(t) do
+    out[U.deepcopy(k)] = U.deepcopy(v)
+  end
+  return out
+end
+
+-- serialização canônica (JSON com chaves ordenadas) para fingerprint estável
+function U.canonicalJson(t)
+  if type(t) ~= 'table' then return json.encode(t) end
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  local parts = {}
+  for _, k in ipairs(keys) do
+    local v = t[k]
+    if type(v) == 'table' then v = U.canonicalJson(v) else v = json.encode(v) end
+    parts[#parts + 1] = json.encode(tostring(k)) .. ':' .. v
+  end
+  return '{' .. table.concat(parts, ',') .. '}'
+end
+
+-- djb2 truncado a 8 hex — não criptográfico, usa apenas para detecção de drift
+function U.checksum(s)
+  local h = 5381
+  for i = 1, #s do
+    h = ((h * 33) ~ string.byte(s, i)) & 0xFFFFFFFF
+  end
+  return ('%08x'):format(h)
+end
+
+-- registra anomalia de deserialização sem crashar o resource.
+-- Print autorizado: caminho de quarentena é emergência (logger pode não estar disponível).
+-- (server-only em prática — não chamar no client)
+function U.quarantine(char_id, context, reason)
+  -- prefixo único facilita grep em logs de prod
+  print(('[INV-QUARANTINE] char=%s ctx=%s reason=%s'):format( -- luacheck: ignore
+    tostring(char_id), tostring(context), tostring(reason)))
 end

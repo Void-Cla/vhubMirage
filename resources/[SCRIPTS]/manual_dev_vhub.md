@@ -20,7 +20,7 @@
 | **Tipos PK canônicos** | `vh_users.id`, `vh_characters.id` = `INT UNSIGNED AUTO_INCREMENT` |
 | **Escrita de estado físico do veículo** | **`exports.vhub:commitVehicleState(plate, patch, reason)`** — único caminho p/ terceiros (IT.2); valida, clampa, marca dirty, sincroniza bags e loga o `reason` |
 | **Leitura de estado físico** | `exports.vhub:getVehicleState(plate)` (snapshot) no servidor; State Bags no cliente |
-| **Spawn do ped** | dono único = `vhub_player_state` (`spawnAt`, `teleport`, `giveWeapons`, `set*`) — nenhum script toca o ped |
+| **Estado físico do ped** | dono único = `vhub_hss` (`spawnAt`, `teleport`, `giveWeapons`, `set*`) — nenhum script toca o ped |
 | **Replay institucional** | `vHub:playerSpawn`/`vHub:characterLoad` são **re-disparados para todas as sessões** em `onResourceStart` de qualquer resource — todo handler precisa de replay-guard (L-17) |
 
 **Schemas externos com FK ao core DEVEM usar `INT UNSIGNED`** (signed dispara `errno 150`).
@@ -93,7 +93,7 @@ description '<frase única em PT-BR>'
 dependencies {
   'vhub',               -- SEMPRE
   'oxmysql',            -- SE tiver SQL próprio
-  'vhub_player_state',  -- SE mover/equipar o ped (teleport, armas, custom)
+  'vhub_hss',  -- SE mover/equipar o ped (teleport, armas, custom)
   'vhub_inventory',     -- SE consumir items/chaves
   'vhub_money',         -- SE mexer dinheiro
   'vhub_groups',        -- SE checar perms
@@ -129,7 +129,7 @@ Cada domínio tem um dono e um ciclo. Seu script **escuta os eventos do ciclo** 
 conexão → vHub:ready (client) → Auth (core) ─┬→ vHub:characterLoad(user)       ← carregue sua sessão aqui
                                              └→ vHub:playerSpawn(user, first)  ← REPLAY-GUARD obrigatório
 player_state aplica ped → [selector elege coordenada] → release
-                                             └→ client: 'vhub_player_state:spawned'(first)  ← inicie HUD/zonas aqui
+                                             └→ client: 'vhub_hss:spawned'(first)  ← inicie HUD/zonas aqui
 morte → vHub:playerDeath(user) | queda → playerDropped
 ```
 
@@ -162,12 +162,12 @@ end)
 Mexer no ped — **sempre pelo dono**:
 
 ```lua
-exports.vhub_player_state:teleport(src, x, y, z, h)        -- mover
-exports.vhub_player_state:giveWeapons(src, weapons, clear) -- armar
-exports.vhub_player_state:setHealth(src, 200)              -- curar
-exports.vhub_player_state:setCustomization(src, custom)    -- visual
+exports.vhub_hss:teleport(src, x, y, z, h)        -- mover
+exports.vhub_hss:giveWeapons(src, weapons, clear) -- armar
+exports.vhub_hss:setHealth(src, 200)              -- curar
+exports.vhub_hss:setCustomization(src, custom)    -- visual
 -- Provedor de coordenada de spawn (estilo selector): escute
--- 'vhub_player_state:chooseSpawn'(src) e devolva via spawnAt(src, pos|nil).
+-- 'vhub_hss:chooseSpawn'(src) e devolva via spawnAt(src, pos|nil).
 ```
 
 **Proibido (L-16):** `SetPlayerModel`, `NetworkResurrectLocalPlayer`, `SetEntityCoords` no ped em fluxo de spawn fora do owner. O hook avisa; o gate reprova.
@@ -380,7 +380,7 @@ Tabela de intervalos vive em `shared/config.lua` (`CFG.rates = { acao = 1000, ..
 | `setVData(...)` fora do core | viola L-13; foi a causa do last-write-wins em `vh_vehicle_data` (8 casos históricos) — **hook bloqueia** | `commitVehicleState(plate, patch, reason)` |
 | Mutar `vd.state`/internos via `getVHub()`/`getVehicle()` | L-14; repair-hack e corrupção de sessão | leitura: `getVehicleState`; escrita: contrato |
 | Escrever chave KV de outro domínio (`setCData(cid,'banco',...)` fora do money) | segunda verdade (L-04/L-13) | chave própria prefixada + linha no Registro |
-| `SetPlayerModel`/`SetEntityCoords` de spawn fora do `vhub_player_state` | 3 escritores disputaram o ped (caso real) | `spawnAt`/`teleport`/provider `chooseSpawn` |
+| `SetPlayerModel`/`SetEntityCoords` de spawn fora do `vhub_hss` | 3 escritores disputaram o ped (caso real) | `spawnAt`/`teleport`/provider `chooseSpawn` |
 | Handler `vHub:playerSpawn` sem replay-guard | core re-dispara em `onResourceStart` → re-teleporte global (caso real) | snapshot de `user.spawns` (§3.1) |
 | Arquivo `.lua` fora do manifest / módulo `return M` sem global | código morto/fantasma (5 casos reais, 1 com `os.exit`) — **hook bloqueia** | manifest no mesmo commit; `VHubX = M` |
 | `os.exit()`, version-check HTTP, anti-tamper vendor | derruba/expõe o servidor | deletar na chegada |

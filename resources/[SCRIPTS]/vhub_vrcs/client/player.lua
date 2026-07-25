@@ -24,8 +24,6 @@ local V = {
     dur      = 0.0,
     cam      = nil,
     cam_mode = 'chase',
-    origin   = nil,
-    origin_h = 0.0,
     thread   = false,
     last_push = 0,
 }
@@ -382,28 +380,16 @@ end
 -- ============================================================
 
 local function setup_scene(anchor)
-    local ped = PlayerPedId()
-    V.origin   = GetEntityCoords(ped)
-    V.origin_h = GetEntityHeading(ped)
-    SetEntityCoordsNoOffset(ped, anchor.x + 0.0, anchor.y + 0.0, anchor.z + 0.0, false, false, false)
-    FreezeEntityPosition(ped, true)
-    SetEntityVisible(ped, false, false)
-    SetEntityInvincible(ped, true)
-    SetEntityCollision(ped, false, false)
+    local ok, started = pcall(function() return exports.vhub_hss:beginVisualScene() end)
+    if not ok or started ~= true then return false end
+    SetFocusPosAndVel(anchor.x + 0.0, anchor.y + 0.0, anchor.z + 0.0, 0.0, 0.0, 0.0)
+    return true
 end
 
 
 local function teardown_scene()
-    local ped = PlayerPedId()
-    SetEntityVisible(ped, true, false)
-    SetEntityInvincible(ped, false)
-    FreezeEntityPosition(ped, false)
-    SetEntityCollision(ped, true, true)
-    if V.origin then
-        SetEntityCoordsNoOffset(ped, V.origin.x, V.origin.y, V.origin.z, false, false, false)
-        SetEntityHeading(ped, V.origin_h or 0.0)
-    end
-    V.origin = nil
+    ClearFocus()
+    pcall(function() exports.vhub_hss:endVisualScene() end)
 end
 
 
@@ -434,7 +420,10 @@ function P.start(replay)
     V.ghosts   = {}
 
     local anchor = first_anchor(replay)
-    setup_scene(anchor)
+    if not setup_scene(anchor) then
+        V.replay = nil
+        return false
+    end
 
     V.cam = CreateCamWithParams('DEFAULT_SCRIPTED_CAMERA',
         anchor.x, anchor.y, anchor.z + 5.0, 0.0, 0.0, 0.0, 55.0, false, 0)

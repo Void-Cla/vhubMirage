@@ -1,7 +1,7 @@
 # Skill — Isolamento por Routing Bucket (sessão/dimensão)
 
 > Padrão validado na Decisão #35 (2026-06-27). Owner de referência:
-> `resources/[SCRIPTS]/vhub_player_state/server.lua`.
+> `resources/[SCRIPTS]/vhub_hss/server/buckets.lua`.
 
 ## Quando usar
 Isolar jogadores em "dimensões" de rede: entrada/loading, test-drive, arena PVP,
@@ -24,7 +24,7 @@ replay, qualquer atividade que não pode colidir/interferir no mundo principal.
 
 ## Regras de ouro (aprendidas em revisão)
 1. **Escritor único (L-16).** UM resource toca `SetPlayerRoutingBucket`. Aqui é o
-   spawn owner (`vhub_player_state`), porque bucket é o "onde" do spawn elevado a
+   spawn owner (`vhub_hss`), porque bucket é o "onde" do spawn elevado a
    dimensão. NÃO colocar no core (fura a fronteira de camada + L-11 frozen).
 2. **Bucket NÃO é fonte de verdade (L-04).** É visibilidade/sync de rede. Não toca
    dado persistido → **não há vetor de dupe por bucket** (dupe é problema da TX do

@@ -1,0 +1,26 @@
+<section class="mod-checkout" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
+  <article class="mod-checkout__card">
+
+    <div class="mod-checkout__head">
+      <small>Revisão final</small>
+      <h2 id="checkout-title">Confirmar</h2>
+    </div>
+
+    <div class="mod-checkout__items" data-checkout-items></div>
+
+    <div class="mod-checkout__total">
+      <span>Total estimado</span>
+      <strong data-checkout-total>R$ 0</strong>
+    </div>
+
+    <p>O preço definitivo é recalculado e validado pelo servidor.</p>
+
+    <p class="sims-status" data-checkout-status role="status" aria-live="polite"></p>
+
+    <footer class="mod-checkout__footer">
+      <button class="sims-button sims-button--sm" data-action="back">← Voltar</button>
+      <button class="sims-button sims-button--primary sims-button--sm" data-action="confirm">Pagar →</button>
+    </footer>
+
+  </article>
+</section>

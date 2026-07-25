@@ -39,8 +39,8 @@
   --vh-r-pill: 999px;
 
   /* Tipografia */
-  --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
-  --vh-font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --vh-font-display: 'Bahnschrift Condensed', 'Arial Narrow', sans-serif;
+  --vh-font-body:    Inter, system-ui, -apple-system, sans-serif;
 
   /* Espacamentos */
   --vh-gap-xs: 4px;
@@ -67,6 +67,34 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+.fa-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1em;
+  font-family: system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+}
+.fa-building-columns::before { content: '▦'; }
+.fa-circle-dot::before { content: '●'; }
+.fa-xmark::before { content: '×'; }
+.fa-wallet::before { content: '▰'; }
+.fa-vault::before { content: '◆'; }
+.fa-coins::before { content: '◉'; }
+.fa-right-left::before { content: '⇄'; }
+.fa-paper-plane::before { content: '➤'; }
+.fa-clock-rotate-left::before { content: '↺'; }
+.fa-arrow-down-to-bracket::before { content: '↓'; }
+.fa-arrow-up-from-bracket::before { content: '↑'; }
+.fa-lock::before { content: '◆'; }
+.fa-shield-halved::before { content: '◇'; }
+.fa-circle-info::before { content: 'i'; }
+.fa-check::before,
+.fa-circle-check::before { content: '✓'; }
+.fa-triangle-exclamation::before { content: '!'; }
 
 /* ─── Background (L-D1: opacity 50%) ──────────────────────────────────────── */
 

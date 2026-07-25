@@ -1,6 +1,5 @@
-// modules/container/container.js — baú dual-pane (mochila | baú) com transfer otimista.
-// Otimista SO no lado de origem (remove de onde arrastou); o destino chega por delta
-// do servidor (autoritativo). Em falha, o servidor reenvia o slot e reverte.
+// modules/container/container.js — baú dual-pane (mochila | baú) com transfer autoritativa.
+// A UI só solicita; origem e destino mudam por delta do servidor.
 
 (function () {
 
@@ -8,10 +7,12 @@
   // ESTADO
   // ============================================================
 
-  const inv  = vhub.store('inventory');   // mochila (compartilhada com o módulo backpack)
-  const cont = vhub.store('container');    // baú aberto
+  const inv  = vhub.store('inventory');
+  const cont = vhub.store('container');
   let root = null, bpGrid = null, cnGrid = null, toastEl = null, toastT = 0;
-  const offs = [];
+  const offs      = [];
+  const pendingBp = new Map();   // slot → timeoutId (mochila)
+  const pendingCn = new Map();   // slot → timeoutId (baú)
 
   const LANG = {
     mov_negado: 'Movimento negado', ocupado: 'Baú em uso, tente de novo',
@@ -57,8 +58,15 @@
     for (let i = 1; i <= size; i++) {
       const cell = vhub.util.el('div', 'slot');
       cell.dataset.slot = i; cell.dataset.pane = pane;
+      cell.setAttribute('tabindex', '0');
+      cell.setAttribute('role', 'gridcell');
       const e = slots[i];
-      if (e) vhub.util.fillSlot(cell, e);
+      if (e) {
+        vhub.util.fillSlot(cell, e);
+        cell.setAttribute('aria-label', (vhub.util.itemDef(e.id) || {}).nome || e.id);
+      } else {
+        cell.setAttribute('aria-label', 'Slot vazio ' + i);
+      }
       frag.appendChild(cell);
     }
     gridEl.innerHTML = ''; gridEl.appendChild(frag);
@@ -69,7 +77,7 @@
     if (!bar || !val) return;
     const pct = m > 0 ? (w / m) * 100 : 0;
     val.textContent = `${vhub.util.fmtWeight(w)} / ${vhub.util.fmtWeight(m)} kg`;
-    bar.style.width = Math.min(100, pct) + '%';
+    bar.style.transform = 'scaleX(' + Math.min(1, pct / 100) + ')';
     bar.style.background = vhub.util.weightColor(pct);
   }
 
@@ -85,7 +93,26 @@
 
 
   // ============================================================
-  // TRANSFER (otimista no lado de origem)
+  // PENDING OVERLAY
+  // ============================================================
+
+  function setPending(map, grid, slot) {
+    if (!grid) return;
+    const cell = grid.querySelector(`.slot[data-slot="${slot}"]`);
+    if (cell) cell.classList.add('slot--pending');
+    clearTimeout(map.get(slot));
+    map.set(slot, setTimeout(() => clearPending(map, grid, slot), 5000));
+  }
+  function clearPending(map, grid, slot) {
+    clearTimeout(map.get(slot)); map.delete(slot);
+    if (!grid) return;
+    const cell = grid.querySelector(`.slot[data-slot="${slot}"]`);
+    if (cell) cell.classList.remove('slot--pending');
+  }
+
+
+  // ============================================================
+  // TRANSFER
   // ============================================================
 
   function toast(msg, err) {
@@ -94,49 +121,27 @@
     clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 2200);
   }
 
-  function isStackable(id) { const d = vhub.util.itemDef(id); return !!(d && d.stack); }
-
-  // remove `qty` de um slot (otimista no lado de origem)
-  function removeQty(s, slot, qty) {
-    const e = s[slot]; if (!e) return;
-    if ((qty || e.amount) >= e.amount) delete s[slot]; else e.amount -= qty;
-  }
-
-  // rearranjo otimista dentro da mochila (mesma logica do modulo backpack)
-  function localMoveBp(from, to, qty) {
-    const s = bpSlots(); const a = s[from]; if (!a) return;
-    qty = Math.min(qty || a.amount, a.amount);
-    const b = s[to];
-    if (!b) {
-      if (qty >= a.amount) { s[to] = a; delete s[from]; }
-      else { s[to] = { id: a.id, amount: qty, meta: isStackable(a.id) ? null : a.meta }; a.amount -= qty; }
-    } else if (b.id === a.id && isStackable(a.id)) {
-      b.amount += qty; if (qty >= a.amount) delete s[from]; else a.amount -= qty;
-    } else if (qty >= a.amount) { s[from] = b; s[to] = a; }
-  }
-
-  // destino otimista chega por delta do servidor; aqui so mexemos na ORIGEM
   async function onTransfer(src, dst, entry) {
-    if (dst.pane === 'hotbar') {                 // arrastar item da MOCHILA p/ a hotbar
+    if (dst.pane === 'hotbar') {
       if (src.pane === 'bp') vhub.post('set_bind', { slot: dst.slot, id: entry.id });
       return;
     }
     if (src.pane === dst.pane) {
-      if (src.pane === 'bp' && src.slot !== dst.slot) {       // rearranjo da mochila
+      if (src.pane === 'bp' && src.slot !== dst.slot) {
         let qty = entry.amount;
         if (qty > 1) { qty = await vhub.interact.qtyModal(entry.amount); if (!qty) return; }
-        localMoveBp(src.slot, dst.slot, qty); renderBackpack();
+        setPending(pendingBp, bpGrid, src.slot);
         vhub.post('move', { from: src.slot, to: dst.slot, qty: qty });
       }
-      return;   // cn->cn: rearranjo interno do baú fica p/ depois
+      return;
     }
     let qty = entry.amount;
     if (qty > 1) { qty = await vhub.interact.qtyModal(entry.amount); if (!qty) return; }
     if (src.pane === 'bp' && dst.pane === 'cn') {
-      removeQty(bpSlots(), src.slot, qty); renderBackpack();
+      setPending(pendingBp, bpGrid, src.slot);
       vhub.post('store', { from: src.slot, to: dst.slot, qty: qty });
     } else if (src.pane === 'cn' && dst.pane === 'bp') {
-      removeQty(cnSlots(), src.slot, qty); renderContainer();
+      setPending(pendingCn, cnGrid, src.slot);
       vhub.post('retrieve', { from: src.slot, to: dst.slot, qty: qty });
     }
   }
@@ -149,6 +154,9 @@
   vhub.createModule('container', {
 
     onInit() {
+      // guard: offs ja populado = listeners registrados; nao registrar duplo entre mounts
+      if (offs.length > 0) return;
+
       offs.push(vhub.listen('nui:container_open', (d) => {
         const data = d.data || {}, bp = data.backpack || {}, cn = data.container || {};
         setItems(inv, bp.items);  inv.set('max', bp.max || 0);     inv.set('size', bp.size || 30);
@@ -159,18 +167,25 @@
       }));
       offs.push(vhub.listen('nui:container_close', () => vhub.unmount('container')));
 
-      // diffs do servidor (autoritativos)
-      offs.push(vhub.listen('nui:container_delta', (d) => { applyItems(cont, (d.delta || {}).items); renderContainer(); }));
+      offs.push(vhub.listen('nui:container_delta', (d) => {
+        ((d.delta || {}).items || []).forEach((it) => clearPending(pendingCn, cnGrid, it.slot));
+        applyItems(cont, (d.delta || {}).items);
+        renderContainer();
+      }));
       offs.push(vhub.listen('nui:delta', (d) => {
         if (!d.delta || d.delta.scope !== 'backpack') return;
+        (d.delta.items || []).forEach((it) => clearPending(pendingBp, bpGrid, it.slot));
         applyItems(inv, d.delta.items); renderBackpack();
       }));
       offs.push(vhub.listen('nui:rollback', (d) => {
         const data = d.data || {}; if (data.scope && data.scope !== 'backpack') return;
+        (data.items || []).forEach((it) => clearPending(pendingBp, bpGrid, it.slot));
         applyItems(inv, data.items); renderBackpack();
         toast(LANG[data.reason] || 'Operação negada', true);
       }));
-      offs.push(vhub.listen('nui:notify', (d) => toast(d.msg || '', true)));
+
+      // notify e informativo (false = nao e erro)
+      offs.push(vhub.listen('nui:notify', (d) => toast(d.msg || '', false)));
     },
 
     onMount() {
@@ -180,26 +195,43 @@
         '<div class="ct-shell">' +
           '<section class="ct-panel">' +
             '<div class="ct-head"><div class="ct-title">MOCHILA</div></div>' +
-            '<div class="ct-grid" id="ct-bp"></div>' +
+            '<div class="ct-grid" id="ct-bp" role="grid" aria-label="Grade de itens da mochila"></div>' +
             '<div class="ct-foot"><div class="ct-wlabel"><span>Peso</span><span id="ct-bp-val"></span></div>' +
               '<div class="ct-track"><div class="ct-bar" id="ct-bp-bar"></div></div></div>' +
           '</section>' +
           '<section class="ct-panel">' +
-            '<div class="ct-head"><div class="ct-title ct-cn-title">BAÚ</div><div class="ct-close">&times;</div></div>' +
-            '<div class="ct-grid" id="ct-cn"></div>' +
+            '<div class="ct-head"><div class="ct-title ct-cn-title">BAÚ</div>' +
+              '<div class="ct-close" tabindex="0" role="button" aria-label="Fechar baú">&times;</div></div>' +
+            '<div class="ct-grid" id="ct-cn" role="grid" aria-label="Grade de itens do baú"></div>' +
             '<div class="ct-foot"><div class="ct-wlabel"><span>Capacidade</span><span id="ct-cn-val"></span></div>' +
               '<div class="ct-track"><div class="ct-bar" id="ct-cn-bar"></div></div></div>' +
           '</section>' +
+          '<div class="ct-insp"></div>' +
         '</div>' +
-        '<div class="ct-toast"></div>';
+        '<div class="ct-toast" role="status" aria-live="polite"></div>';
       root.classList.remove('hidden');
 
-      bpGrid = root.querySelector('#ct-bp');
-      cnGrid = root.querySelector('#ct-cn');
+      bpGrid  = root.querySelector('#ct-bp');
+      cnGrid  = root.querySelector('#ct-cn');
       toastEl = root.querySelector('.ct-toast');
       root.querySelector('.ct-cn-title').textContent = (cont.get('label') || 'Baú').toUpperCase();
 
-      // arraste por MOUSE nas duas paineis (compartilhado)
+      // inspector compartilhado entre os dois grids
+      this._inspectOff = vhub.inspect.init(root.querySelector('.ct-insp'));
+
+      this._onBpClick = (e) => {
+        const c = e.target.closest('.slot');
+        if (!c || !c.dataset.filled) { vhub.inspect.hide(); return; }
+        const entry = bpSlots()[+c.dataset.slot];
+        if (entry) vhub.inspect.show(entry);
+      };
+      this._onCnClick = (e) => {
+        const c = e.target.closest('.slot');
+        if (!c || !c.dataset.filled) { vhub.inspect.hide(); return; }
+        const entry = cnSlots()[+c.dataset.slot];
+        if (entry) vhub.inspect.show(entry);
+      };
+
       this._cleanupDrag = vhub.interact.enableDrag(root, {
         getEntry: (pane, slot) => (pane === 'cn' ? cnSlots() : bpSlots())[slot],
         onTransfer: onTransfer,
@@ -207,15 +239,28 @@
       this._onClose = () => vhub.post('container_close');
       this._onKey   = (e) => { if (e.key === 'Escape') vhub.post('container_close'); };
 
+      bpGrid.addEventListener('click', this._onBpClick);
+      cnGrid.addEventListener('click', this._onCnClick);
       root.querySelector('.ct-close').addEventListener('click', this._onClose);
       window.addEventListener('keydown', this._onKey);
     },
 
+    onShow() { if (root) root.classList.remove('hidden'); },
+
+    onHide() { if (vhub.inspect) vhub.inspect.hide(); },
+
     onDestroy() {
       if (this._cleanupDrag) this._cleanupDrag();
+      if (bpGrid) bpGrid.removeEventListener('click', this._onBpClick);
+      if (cnGrid) cnGrid.removeEventListener('click', this._onCnClick);
       window.removeEventListener('keydown', this._onKey);
       clearTimeout(toastT);
+      pendingBp.forEach((t) => clearTimeout(t)); pendingBp.clear();
+      pendingCn.forEach((t) => clearTimeout(t)); pendingCn.clear();
+      if (this._inspectOff) { this._inspectOff(); this._inspectOff = null; }
       if (root) { root.innerHTML = ''; root.classList.add('hidden'); }
+      // offs NAO sao drenados: governam o ciclo mount/unmount deste modulo lazy.
+      // Sao liberados apenas se o runtime descartar o modulo por completo.
       root = null; bpGrid = null; cnGrid = null; toastEl = null;
     },
   });

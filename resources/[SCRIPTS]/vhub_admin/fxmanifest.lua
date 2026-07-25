@@ -5,12 +5,12 @@ lua54      'yes'
 
 name        'vhub_admin'
 author      'vHub Mirage'
-version     '3.0.1'
+version     '3.1.0'
 description 'Painel admin completo: moderação, teleporte, player ops, veículos, mundo, economia, spec, reports, jail/mute persistentes.'
 
 dependencies {
   'vhub',
-  'vhub_player_state',
+  'vhub_hss',
   'vhub_inventory',
   'vhub_money',
   'vhub_identity',
@@ -20,6 +20,7 @@ dependencies {
 }
 
 shared_scripts {
+  '@vhub_hss/shared/events.lua',
   'shared/config.lua',
   'shared/events.lua',
   'shared/utils.lua',

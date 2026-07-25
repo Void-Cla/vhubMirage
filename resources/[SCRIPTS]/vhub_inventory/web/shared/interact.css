@@ -16,7 +16,7 @@
 }
 #qty-modal .qm-box {
   width: 300px; background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
-  border-radius: var(--vh-radius); box-shadow: var(--vh-shadow); backdrop-filter: blur(8px);
+  border-radius: var(--vh-radius); box-shadow: var(--vh-shadow);
   padding: 18px; display: flex; flex-direction: column; gap: 14px;
 }
 #qty-modal .qm-title { font-size: 15px; font-weight: 700; color: var(--vh-gold); text-align: center; letter-spacing: .5px; }
@@ -43,7 +43,7 @@
 .vh-ctx {
   position: fixed; z-index: 9997; min-width: 130px;
   background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
-  border-radius: var(--vh-radius-sm); box-shadow: var(--vh-shadow); backdrop-filter: blur(8px);
+  border-radius: var(--vh-radius-sm); box-shadow: var(--vh-shadow);
   padding: 5px; overflow: hidden;
 }
 .vh-ctx-item {

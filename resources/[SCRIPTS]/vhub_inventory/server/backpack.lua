@@ -17,6 +17,8 @@ local E   = VHubInvE
 
 local _sess = {}     -- [src] = { char_id, slots = { [i]={id,amount,meta} }, dirty, saving }
 
+local function vnext() return Inventory.VNext and Inventory.VNext.enabled end
+
 
 -- ============================================================
 -- AJUSTES DERIVADOS
@@ -44,6 +46,10 @@ end
 function M.flush(src)
   local s = _sess[src]; if not s or not s.dirty then return end
   s.dirty = false
+  if vnext() then
+    Inventory.State.flush(s.char_id)
+    return
+  end
   local cid, slots, hb = s.char_id, s.slots, s.hotbar
   CreateThread(function() Inventory.SQL:savePlayer(cid, slots, hb) end)
 end
@@ -62,6 +68,7 @@ end
 function M.markDirty(src)
   local s = _sess[src]; if not s then return end
   s.dirty = true
+  if vnext() then Inventory.State.bumpRevision(s.char_id) end
   scheduleSave(src)
 end
 
@@ -85,14 +92,31 @@ end
 
 -- carrega a mochila do personagem para o cache (chamar dentro de thread — usa Await)
 function M.load(src, char_id)
-  -- TROCA DE PERSONAGEM na MESMA sessao (mesmo user, outro char): faz flush do
-  -- anterior ANTES de trocar. Sem isso, dados de um character vazariam/perder-se-iam
-  -- para outro char do mesmo user_id. Inventario e SEMPRE por char_id (L-04).
+  -- TROCA DE PERSONAGEM na MESMA sessao: flush do anterior antes de trocar (L-04)
   local prev = _sess[src]
   if prev and prev.char_id ~= char_id and prev.dirty then
-    Inventory.SQL:savePlayer(prev.char_id, prev.slots, prev.hotbar)
+    if vnext() then Inventory.State.flush(prev.char_id)
+    else Inventory.SQL:savePlayer(prev.char_id, prev.slots, prev.hotbar) end
   end
 
+  if vnext() then
+    -- delega ao State (singleflight); _sess recebe referência à tabela interna do State
+    local done = promise.new()
+    Inventory.State.load(char_id, function(slots, hotbar)
+      _sess[src] = {
+        char_id = char_id,
+        slots   = slots or {},
+        hotbar  = normHotbar(hotbar),
+        dirty   = false,
+        saving  = false,
+      }
+      done:resolve(true)
+    end)
+    Citizen.Await(done)
+    return _sess[src] and _sess[src].slots
+  end
+
+  -- v0: SQL direto
   local slots, hotbar = Inventory.SQL:loadPlayer(char_id)
   _sess[src] = {
     char_id = char_id, slots = slots or {}, hotbar = normHotbar(hotbar),
@@ -101,9 +125,18 @@ function M.load(src, char_id)
   return _sess[src].slots
 end
 
--- libera a sessao; faz flush final se houver dado sujo (preserva o cliente)
+-- libera a sessao; drain async + unload quando VNext ativo
 function M.unload(src)
   local s = _sess[src]; if not s then return end
+  if vnext() then
+    local cid = s.char_id
+    _sess[src] = nil
+    -- drain: aguarda flush em-progresso antes de liberar VRAM
+    Inventory.State.drain(cid, function()
+      Inventory.State.unload(cid)
+    end)
+    return
+  end
   if s.dirty then
     local cid, slots, hb = s.char_id, s.slots, s.hotbar
     CreateThread(function() Inventory.SQL:savePlayer(cid, slots, hb) end)
@@ -113,6 +146,7 @@ end
 
 -- flush de todas as sessoes sujas (onResourceStop — flush triplo #3)
 function M.flushAll()
+  if vnext() then Inventory.State.flushAll(); return end
   for _, s in pairs(_sess) do
     if s.dirty then Inventory.SQL:savePlayer(s.char_id, s.slots, s.hotbar) end
   end
@@ -141,7 +175,7 @@ end
 -- snapshot (mapa de slots) para EXPORTS de outros resources
 function M.snapshot(src)
   local s = _sess[src]; if not s then return nil end
-  return { slots = s.slots, weight = U.calcWeight(s.slots), max = maxWeight(), size = slotCount() }
+  return { slots = U.copySlots(s.slots), weight = U.calcWeight(s.slots), max = maxWeight(), size = slotCount() }
 end
 
 -- snapshot em formato de fio (lista de itens) para abrir a NUI.
@@ -152,7 +186,7 @@ function M.wireSnapshot(src)
   local s = _sess[src]; if not s then return nil end
   local items = {}
   for slot, e in pairs(s.slots) do
-    local meta = e.meta
+    local meta = U.copyEntry(e).meta
     if e.id == 'veh_key' and meta and meta.plate then
       local ok, d = pcall(function() return exports.vhub_conce:getVehicleDossier(meta.plate) end)
       if ok and type(d) == 'table' then
@@ -350,13 +384,24 @@ end
 function M.giveToSlot(src, slot, id, amount, meta)
   local s = _sess[src]; if not s then return false end
   if not Cat.exists(id) then return false end
+  amount = U.validQty(amount); if not amount then return false end
+  slot = U.validSlot(slot, slotCount()); if not slot then return false end
+  if U.isStackable(id) then
+    if meta ~= nil and amount ~= 1 then return false end
+    if meta == nil and amount > U.stackMax(id) then return false end
+  elseif amount ~= 1 then
+    return false
+  end
 
   local e = s.slots[slot]
   local changes = {}
   if not e then
-    s.slots[slot] = { id = id, amount = amount, meta = meta }
+    local made = Cat.makeEntry(id, amount, meta); if not made then return false end
+    s.slots[slot] = made
     changes[slot] = U.copyEntry(s.slots[slot])
   elseif e.id == id and U.isStackable(id) then
+    if e.meta or meta then return false end
+    if e.amount + amount > U.stackMax(id) then return false end
     e.amount = e.amount + amount; changes[slot] = U.copyEntry(e)
   else
     return false
@@ -417,7 +462,7 @@ end
 -- ============================================================
 
 -- reenvia o estado AUTORITATIVO dos slots tocados (lista de fio) + razao PT-BR.
--- Reverte a UI otimista: o que o servidor manda aqui e a verdade.
+-- Reenvia a verdade autoritativa dos slots tocados.
 function M.rollback(src, list, reason)
   local s = _sess[src]; if not s then return end
   local items = {}

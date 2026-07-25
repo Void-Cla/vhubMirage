@@ -5,14 +5,14 @@
   const RES = (typeof GetParentResourceName === 'function')
     ? GetParentResourceName() : 'vhub_inventory';
 
-  // POST para um RegisterNUICallback do Lua; resolve com JSON (ou {} em erro)
+  // POST para um RegisterNUICallback do Lua; erro sempre volta tipado.
   vhub.post = function (cb, data) {
     return fetch(`https://${RES}/${cb}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data || {}),
     })
-      .then((r) => r.json().catch(() => ({})))
-      .catch(() => ({}));
+      .then((r) => r.json().catch(() => ({ ok: false, err: 'invalid_json' })))
+      .catch(() => ({ ok: false, err: 'fetch_failed' }));
   };
 })();

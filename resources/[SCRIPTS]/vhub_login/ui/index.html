@@ -3,57 +3,208 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mirage RP — Acesso</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div id="app" class="hidden">
-    <div id="bg"></div>
+    <div id="bg" aria-hidden="true">
+      <div class="sand sand-a"></div>
+      <div class="sand sand-b"></div>
+      <div class="horizon"></div>
+    </div>
 
-    <!-- ===== LOGIN ===== -->
     <section id="view-login" class="view">
-      <div class="panel">
-        <div class="brand">
-          <span class="brand-mark">vHub</span>
-          <span class="brand-sub">Mirage RP</span>
-        </div>
+      <div class="auth-shell">
+        <aside class="brand-rail">
+          <div class="brand-seal" aria-hidden="true">M</div>
+          <div class="brand-copy">
+            <span class="eyebrow">Cidade de corrida</span>
+            <h1>Mirage <strong>RP</strong></h1>
+            <p>Velocidade, prestígio e histórias que deixam marca.</p>
+          </div>
+          <div class="trust-strip">
+            <span><i></i> Acesso protegido</span>
+            <span>18+</span>
+          </div>
+        </aside>
 
-        <div class="tabs">
-          <button class="tab active" data-tab="login" type="button">Entrar</button>
-          <button class="tab" data-tab="register" type="button">Criar conta</button>
-        </div>
+        <main class="auth-card">
+          <div class="card-head">
+            <div>
+              <span class="section-kicker">Mirage ID</span>
+              <h2 id="auth-title">Bem-vindo de volta</h2>
+            </div>
+            <span class="status-pill"><i></i> Online</span>
+          </div>
 
-        <form id="form-auth" autocomplete="off">
-          <label class="field">
-            <span>Usuário</span>
-            <input id="in-user" type="text" maxlength="20" spellcheck="false" />
-          </label>
-          <label class="field">
-            <span>Senha</span>
-            <input id="in-pass" type="password" maxlength="64" />
-          </label>
-          <button id="btn-submit" class="btn-primary" type="submit">Entrar</button>
-        </form>
+          <nav id="auth-tabs" class="tabs" aria-label="Acesso">
+            <button class="tab active" data-mode="login" type="button">Entrar</button>
+            <button class="tab" data-mode="register" type="button">Criar conta</button>
+          </nav>
 
-        <div id="msg" class="msg"></div>
+          <form id="form-login" class="auth-form" autocomplete="on">
+            <label class="field">
+              <span>Usuário</span>
+              <input id="login-user" name="username" type="text" maxlength="20"
+                autocomplete="username" spellcheck="false" placeholder="Seu usuário" />
+            </label>
+            <label class="field">
+              <span>Senha</span>
+              <input id="login-pass" name="password" type="password" maxlength="64"
+                autocomplete="current-password" placeholder="Sua senha" />
+            </label>
+            <button id="btn-forgot" class="text-action" type="button">Esqueci minha senha</button>
+            <button class="btn-primary" type="submit">
+              <span>Entrar na cidade</span><b aria-hidden="true">→</b>
+            </button>
+          </form>
+
+          <form id="form-register" class="auth-form hidden" autocomplete="on">
+            <div class="field-grid">
+              <label class="field">
+                <span>Usuário</span>
+                <input id="register-user" type="text" maxlength="20" autocomplete="username"
+                  spellcheck="false" placeholder="3 a 20 caracteres" />
+              </label>
+              <label class="field">
+                <span>E-mail</span>
+                <input id="register-email" type="email" maxlength="254" autocomplete="email"
+                  spellcheck="false" placeholder="voce@email.com" />
+              </label>
+            </div>
+            <label class="field">
+              <span>WhatsApp</span>
+              <input id="register-whatsapp" type="tel" maxlength="32" autocomplete="tel"
+                inputmode="tel" placeholder="+55 (11) 99999-9999" />
+            </label>
+            <div class="field-grid">
+              <label class="field">
+                <span>Senha</span>
+                <input id="register-pass" type="password" maxlength="64"
+                  autocomplete="new-password" placeholder="Mínimo 8 caracteres" />
+              </label>
+              <label class="field">
+                <span>Confirmar senha</span>
+                <input id="register-confirm" type="password" maxlength="64"
+                  autocomplete="new-password" placeholder="Repita a senha" />
+              </label>
+            </div>
+            <label class="consent">
+              <input id="register-terms" type="checkbox" />
+              <span class="checkmark" aria-hidden="true">✓</span>
+              <span>Declaro ter 18 anos ou mais e aceito os
+                <button id="btn-terms" type="button">Termos de Uso e Privacidade</button>.
+              </span>
+            </label>
+            <button class="btn-primary" type="submit">
+              <span>Criar minha conta</span><b aria-hidden="true">→</b>
+            </button>
+          </form>
+
+          <form id="form-recovery" class="auth-form hidden" autocomplete="off">
+            <button id="btn-back-login" class="text-action back-action" type="button">← Voltar ao login</button>
+            <div class="recovery-note">
+              <strong>Recuperação local</strong>
+              <span>Use o e-mail ou WhatsApp cadastrado nesta mesma licença Rockstar.</span>
+            </div>
+            <label class="field">
+              <span>E-mail ou WhatsApp</span>
+              <input id="recovery-contact" type="text" maxlength="254"
+                placeholder="Contato cadastrado" />
+            </label>
+            <div class="field-grid">
+              <label class="field">
+                <span>Nova senha</span>
+                <input id="recovery-pass" type="password" maxlength="64"
+                  autocomplete="new-password" placeholder="Mínimo 8 caracteres" />
+              </label>
+              <label class="field">
+                <span>Confirmar</span>
+                <input id="recovery-confirm" type="password" maxlength="64"
+                  autocomplete="new-password" placeholder="Repita a senha" />
+              </label>
+            </div>
+            <button class="btn-primary" type="submit">
+              <span>Redefinir senha</span><b aria-hidden="true">→</b>
+            </button>
+          </form>
+
+          <div id="msg" class="msg" role="status" aria-live="polite"></div>
+          <button id="btn-privacy" class="privacy-link" type="button">Privacidade e dados coletados</button>
+        </main>
       </div>
     </section>
 
-    <!-- ===== SELEÇÃO DE PERSONAGEM ===== -->
     <section id="view-charselect" class="view hidden">
-      <div class="panel panel-wide">
-        <div class="brand">
-          <span class="brand-mark">Personagens</span>
-          <span class="brand-sub">Escolha quem jogar</span>
-        </div>
+      <div class="cs-layout">
 
-        <div id="char-list" class="char-list"></div>
-        <button id="btn-create" class="btn-ghost" type="button">+ Criar personagem</button>
+        <aside class="cs-side">
+          <div class="cs-brand">
+            <div class="brand-seal" aria-hidden="true">M</div>
+            <div>
+              <span class="eyebrow">Mirage RP</span>
+              <p class="cs-brand-line">Cidade de corrida</p>
+            </div>
+          </div>
+          <div class="cs-ped-frame" aria-hidden="true">
+            <div class="cs-ped-ring"></div>
+            <div class="cs-ped-shadow"></div>
+          </div>
+          <div class="cs-side-foot">
+            <span class="cs-slot-label" id="cs-slot-info">— / — slots</span>
+          </div>
+        </aside>
 
-        <div id="msg2" class="msg"></div>
+        <main class="cs-main">
+          <header class="cs-header">
+            <div>
+              <span class="section-kicker">Seus pilotos</span>
+              <h2 class="cs-title">Quem entra hoje?</h2>
+            </div>
+            <span class="status-pill"><i></i> Online</span>
+          </header>
+
+          <div id="char-list" class="char-grid"></div>
+
+          <div id="btn-create-wrap" class="cs-create-wrap">
+            <button id="btn-create" class="cs-btn-create" type="button">
+              <span class="cs-create-icon" aria-hidden="true">+</span>
+              <span>Novo personagem</span>
+            </button>
+          </div>
+
+          <div id="msg2" class="msg cs-msg" role="status" aria-live="polite"></div>
+        </main>
+
       </div>
     </section>
+
+    <div id="terms-modal" class="modal hidden" role="dialog" aria-modal="true"
+      aria-labelledby="terms-title">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <span class="section-kicker">Transparência</span>
+            <h2 id="terms-title">Termos rápidos</h2>
+          </div>
+          <button id="btn-close-terms" class="modal-close" type="button" aria-label="Fechar">×</button>
+        </div>
+        <div class="terms-body">
+          <p>O Mirage RP é destinado exclusivamente a maiores de 18 anos.</p>
+          <p>Para criar sua conta, tratamos usuário, e-mail e WhatsApp. A senha é protegida por
+            hash com salt e segredo exclusivo da instalação; contatos ficam cifrados.</p>
+          <p>Para segurança, antifraude e suporte, o núcleo do servidor vincula identificadores
+            Rockstar/Cfx, Steam, Discord e outros fornecidos pelo FiveM. Também registramos uma
+            impressão criptográfica do IP e o identificador temporário da sessão.</p>
+          <p>Não coletamos endereço MAC: o FiveM não o fornece de forma confiável. Não compartilhe
+            sua senha. Violações, fraude ou uso de hacks podem resultar em bloqueio.</p>
+        </div>
+        <button id="btn-understood" class="btn-primary" type="button">Entendi</button>
+      </div>
+    </div>
   </div>
 
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

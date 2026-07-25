@@ -44,7 +44,12 @@ RegisterNetEvent(E.CONTAINER_OPEN)
 AddEventHandler(E.CONTAINER_OPEN, function(data)
   _open = true
   SetNuiFocus(true, true)
-  if _trunkVeh and DoesEntityExist(_trunkVeh) then SetVehicleDoorOpen(_trunkVeh, 5, false, false) end
+  local isTrunk = data and data.container and data.container.kind == 'trunk'
+  if isTrunk and _trunkVeh and DoesEntityExist(_trunkVeh) then
+    SetVehicleDoorOpen(_trunkVeh, 5, false, false)
+  else
+    _trunkVeh = nil
+  end
   SendNUIMessage({ action = 'container_open', data = data })
 end)
 
@@ -55,6 +60,10 @@ end)
 
 RegisterNetEvent(E.CONTAINER_CLOSE)
 AddEventHandler(E.CONTAINER_CLOSE, function() closeChest() end)
+
+AddEventHandler(E.NOTIFY, function()
+  if not _open then _trunkVeh = nil end
+end)
 
 
 -- ============================================================
@@ -128,17 +137,12 @@ RegisterCommand('vhub_inv', function()
 
   local veh = vehicleInRange()
   if veh then
-    local plate = GetVehicleNumberPlateText(veh)   -- nativa client-side confiavel
-    if plate then
-      _trunkVeh = veh
-      -- netId p/ o servidor validar distancia (best-effort); placa decide o acesso
-      TriggerServerEvent(E.OPEN_CONTAINER, {
-        kind  = 'trunk',
-        plate = plate:gsub('%s+$', ''),
-        netId = NetworkGetNetworkIdFromEntity(veh),
-      })
-      return
-    end
+    _trunkVeh = veh
+    TriggerServerEvent(E.OPEN_CONTAINER, {
+      kind  = 'trunk',
+      netId = NetworkGetNetworkIdFromEntity(veh),
+    })
+    return
   end
 
   TriggerEvent('vhub_inventory:open_backpack')      -- nada perto: abre a mochila

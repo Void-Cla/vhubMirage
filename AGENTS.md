@@ -21,9 +21,10 @@ Framework FiveM GTARP server-authoritative, Lua 5.4. Foco: cidade de corrida.
 > O time deixou de ser **guardião do freeze** e passou a ser **guia da migração**. A missão
 > não é mais "não tocar no CORE"; é **mover para o CORE o que é dele, sob gate**, sem gambiarra.
 
-> **STATUS 2026-07-10 — FASE 1 APLICADA e VALIDADA EM DEV; fuel da FASE 2 cortado
-> para o CORE** (decisões/ADRs #37–#50 e #61–#65 — mesma numeração no `contexto.md` e no
-> `.claude/plano_core_v2/WORKLOG_CORE_V2.md`; **próximo livre = #66**): CORE v2.0.0-alpha.3 —
+> **STATUS 2026-07-22 — CORE v2.0.0-alpha.6; SIMS (#74) e voz/WOW (#75) integrados
+> estaticamente; fuel da FASE 2 cortado para o CORE** (decisões/ADRs #37–#75 — mesma
+> numeração no `contexto.md` e no `.claude/plano_core_v2/WORKLOG_CORE_V2.md`;
+> **próximo livre = #76**):
 > handlers veiculares reanimados com gate físico (boot dev limpo 2026-07-03),
 > `commitVehicleState`/`getVehicleState`(cópia)/`vh_audit`, VRAM eviction TTL, batch com cap
 > de retry, registro efêmero anti-FK, despawn server-side (zero broadcast `-1`), dual-write
@@ -103,7 +104,7 @@ metas/                             ← roadmap, decisões técnicas, referência
 | L-13 | **Escritor único de persistência.** `set*Data` (`setVData/setUData/setCData/setGData`) só dentro de `[CORE]/vhub`. Terceiros escrevem por **contrato de commit** (`commitVehicleState`, …), nunca direto. |
 | L-14 | **Não mutar internos via `getVHub()`/`getVehicle()`.** Leitura de estado por `getVehicleState`/export; escrita por contrato. `getVHub()` para escrita = repair-hack proibido. |
 | L-15 | **Código morto zero.** Todo `.lua` referenciado no `fxmanifest.lua` no mesmo commit; arquivo órfão/módulo-fantasma proibido. **Deletar é entrega.** |
-| L-16 | **Escritor único de entidade/spawn.** `SetPlayerModel`/`SetEntityCoords` de spawn fora do owner registrado (`vhub_player_state`) é proibido; a UI devolve coordenada por export do owner. |
+| L-16 | **Escritor único de entidade/spawn.** `SetPlayerModel`/`SetEntityCoords` de spawn fora do owner registrado (`vhub_hss`) é proibido; a UI devolve coordenada por export do owner. |
 | L-17 | **Replay-guard.** Handlers institucionais (`vHub:playerSpawn`, `vHub:characterLoad`) toleram re-disparo em `onResourceStart` sem duplicar efeito nem prender o player. |
 | L-18 | **Orçamentos = contrato.** Toda thread/loop declara budget (Hz/ms); estourar sem renegociação registrada = REPROVAR. Custo por player **O(1)**. |
 | L-19 | **Coordenadas como tipos vetoriais nativos.** `vec3(x,y,z)` para todo ponto sem orientação (blip, zona, marker, raio). `vec4(x,y,z,w)` (w=heading) **somente** para posição de spawn de veículo/ped (`test_spawn`, spawn de garagem, offset de saída). Nunca `vec4` para blip/zona/marker. **Fronteira:** `vec3`/`vec4` são de uso LOCAL — NÃO cruzam `TriggerClientEvent`/`TriggerServerEvent`/`exports`/`SendNUIMessage` (msgpack entrega o vetor como tabela indexada `{1,2,3}`; `json.encode(vec)` vira `{}`). Todo payload que cruza fronteira carrega coord como primitivo `{x=,y=,z=[,h=]}`; o consumidor reconstrói o vetor no ponto de uso. Adoção incremental: aplica-se a código novo e a config tocada (zonas de veículo migradas na decisão #25). |
@@ -178,7 +179,7 @@ return M
 - Sem `print()` fora de `shared/logger.lua` e `bootstrap.lua`
 - Sem SQL inline — CORE usa `S:prepare()` + `S:query()`; resources externos usam `exports.oxmysql` diretamente
 - Exports sensíveis: `_invoker_allowed()` + `GetInvokingResource()`
-- **Export-first (API nativa preventiva, decisão do dono 2026-06-27):** todo resource expõe `exports(...)` das suas ações públicas **mesmo sem consumidor atual** — quando a integração futura vier, o export já existe pronto (sem gambiarra/refactor). **Obrigatoriamente gated default-deny** (`_invoker_allowed()`/`invokerOK` + `GetInvokingResource()` + validação de args + alvo online). Assim NÃO conta como dead code (L-15) — é superfície de API deliberada; ownership ainda exigido (L-07). Referência: `setActivityBucket` em `vhub_player_state` (decisão #35).
+- **Export-first (API nativa preventiva, decisão do dono 2026-06-27):** todo resource expõe `exports(...)` das suas ações públicas **mesmo sem consumidor atual** — quando a integração futura vier, o export já existe pronto (sem gambiarra/refactor). **Obrigatoriamente gated default-deny** (`_invoker_allowed()`/`invokerOK` + `GetInvokingResource()` + validação de args + alvo online). Assim NÃO conta como dead code (L-15) — é superfície de API deliberada; ownership ainda exigido (L-07). Referência: `beginActivity` em `vhub_hss` (decisões #35/#70).
 
 ### Ordem de carregamento em `server/init.lua` (não alterar sem gate do arquiteto)
 

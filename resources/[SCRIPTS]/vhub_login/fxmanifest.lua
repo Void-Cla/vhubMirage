@@ -4,12 +4,24 @@ lua54     'yes'
 
 name        'vhub_login'
 author      'vHub Mirage'
-version     '0.1.0'
-description 'Gate de entrada: login de conta (username/senha) + seleção de personagem. Ponte para o futuro criador. NÃO faz loading nem criação de personagem.'
+version     '0.3.1'
+description 'Gate de entrada Mirage: conta, seleção e handoff autoritativo ao criador.'
 
-dependency  'vhub'
+dependencies {
+  'vhub',
+  'vhub_hss',
+  'vhub_identity',
+  'vhub_sims',
+  'vhub_spawselector',
+}
 
-shared_script 'config/config.lua'
+shared_scripts {
+  '@vhub_hss/shared/events.lua',
+  '@vhub_sims/core/shared/events.lua',
+  '@vhub_spawselector/shared/events.lua',
+  'config/config.lua',
+  'shared/events.lua',
+}
 
 server_scripts {
   '@oxmysql/lib/MySQL.lua',

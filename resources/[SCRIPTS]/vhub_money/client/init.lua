@@ -13,32 +13,23 @@ local function emit_local()
   TriggerEvent('vhub_money:local_update', _wallet, _bank)
 end
 
+local function update_local(value)
+  if type(value) ~= 'table' then return end
+  _wallet = tonumber(value.wallet) or 0
+  _bank = tonumber(value.bank) or 0
+  emit_local()
+end
+
 -- ── State Bag: HUD live (sem polling, sem rede custom) ──────────────────────
 
 AddStateBagChangeHandler('vhub_money',
   ('player:%d'):format(GetPlayerServerId(PlayerId())),
   function(_bag, _key, value)
-    if type(value) == 'table' then
-      _wallet = tonumber(value.wallet) or 0
-      _bank   = tonumber(value.bank)   or 0
-      emit_local()
-    end
+    update_local(value)
   end)
 
--- Le state bag no spawn (caso o evento de mudanca ainda nao tenha disparado)
-CreateThread(function()
-  while true do
-    Wait(2000)
-    local s = LocalPlayer.state.vhub_money
-    if type(s) == 'table' then
-      if s.wallet ~= _wallet or s.bank ~= _bank then
-        _wallet = tonumber(s.wallet) or 0
-        _bank   = tonumber(s.bank)   or 0
-        emit_local()
-      end
-    end
-  end
-end)
+-- Lê uma vez o snapshot já replicado antes do registro do handler.
+update_local(LocalPlayer.state.vhub_money)
 
 -- ── Notify (toast nativo do GTA) ────────────────────────────────────────────
 

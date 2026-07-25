@@ -244,23 +244,26 @@ local function call(fn)
   return ok and first == true, second
 end
 
--- Cura pelo owner de estado do ped.
+-- Cura pelo owner de estado do ped e normaliza sinais vitais do HSS.
 function M:heal(src)
-  local healthOk = call(function() return exports.vhub_player_state:setHealth(src, 200) end)
-  local armourOk = call(function() return exports.vhub_player_state:setArmour(src, 100) end)
-  return healthOk and armourOk
+  local healthOk = call(function() return exports.vhub_hss:setHealth(src, 200) end)
+  pcall(function() exports.vhub_hss:setArmour(src, 100) end)
+  pcall(function() exports.vhub_hss:fullHeal(src) end)
+  return healthOk
 end
 
--- Revive pelo owner de estado do ped.
+-- Revive pelo owner de estado do ped e cura HSS.
 function M:revive(src)
-  return call(function() return exports.vhub_player_state:revive(src) end)
+  local ok = call(function() return exports.vhub_hss:revive(src) end)
+  pcall(function() exports.vhub_hss:fullHeal(src) end)
+  return ok
 end
 
 -- Move pelo owner de posição do ped.
 function M:teleport(src, pos)
   if not U.validCoords(pos) then return false end
   return call(function()
-    return exports.vhub_player_state:teleport(src, pos.x, pos.y, pos.z, pos.h or pos.heading or 0.0)
+    return exports.vhub_hss:teleport(src, pos.x, pos.y, pos.z, pos.h or pos.heading or 0.0)
   end)
 end
 

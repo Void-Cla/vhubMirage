@@ -26,7 +26,7 @@ RegisterNetEvent(E.DO_SPAWNCAR)
 AddEventHandler(E.DO_SPAWNCAR, function(model)
   Citizen.CreateThread(function()
     local hash = loadModel(model)
-    if not hash then VHubAdmin.notify('Modelo inv lido.'); return end
+    if not hash then VHubAdmin.notify('Modelo inválido.'); return end
     local ped = PlayerPedId()
     -- spawna à frente do ped (forward vector), não em offset fixo de mundo
     local spawn = GetEntityCoords(ped) + GetEntityForwardVector(ped) * 3.0
@@ -71,7 +71,7 @@ AddEventHandler(E.DO_FIX, function()
 end)
 
 -- ----------------------------------------------------------------------------
--- BOOST tempor rio (par metros v m do server; auto-restaura ao expirar)
+-- BOOST temporário (parâmetros vêm do server; auto-restaura ao expirar)
 -- ----------------------------------------------------------------------------
 local _boost_active = false
 
@@ -80,7 +80,7 @@ AddEventHandler(E.DO_BOOST, function(mult, duration_ms)
   local ped = PlayerPedId()
   local veh = IsPedInAnyVehicle(ped, false) and GetVehiclePedIsIn(ped, false) or 0
   if veh == 0 then VHubAdmin.notify('Você não está em um veículo.'); return end
-  if _boost_active then VHubAdmin.notify('Boost j  ativo.'); return end
+  if _boost_active then VHubAdmin.notify('Boost já ativo.'); return end
 
   _boost_active = true
   ModifyVehicleTopSpeed(veh, mult)

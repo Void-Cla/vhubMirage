@@ -16,8 +16,20 @@ local function soundNameOf(src)
   return ('vc_radio_%d'):format(src)
 end
 
+local _actionAt = {}
+
+local function rateOk(src, action, interval)
+  local now = GetGameTimer()
+  local bucket = _actionAt[src] or {}
+  _actionAt[src] = bucket
+  local previous = bucket[action]
+  if previous and now - previous < interval then return false end
+  bucket[action] = now
+  return true
+end
+
 local function rejectSound(src)
-  TriggerClientEvent('vhub_vehcontrol:soundRejected', src)
+  TriggerClientEvent(VHubVeh.E.SOUND_REJECTED, src)
 end
 
 
@@ -50,11 +62,12 @@ local function detachVideo(src)
 end
 
 
-RegisterNetEvent('vhub_vehcontrol:soundPlay', function(netId, plate, url, volume, title)
+RegisterNetEvent(VHubVeh.E.SOUND_PLAY, function(netId, plate, url, volume, title)
   local src = source
+  if not rateOk(src, 'play', 750) then return end
   if not wowAvailable() then rejectSound(src); return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' or type(url) ~= 'string' then rejectSound(src); return end
-  if not VHubVeh.hasVehicleAccess(src, plate) then rejectSound(src); return end
+  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then rejectSound(src); return end
 
   -- title e cosmetico (rotulo da telinha): sanea tamanho, aceita nil
   local tt = (type(title) == 'string' and #title <= 120) and title or nil
@@ -69,8 +82,9 @@ RegisterNetEvent('vhub_vehcontrol:soundPlay', function(netId, plate, url, volume
   end
 end)
 
-RegisterNetEvent('vhub_vehcontrol:soundStop', function()
+RegisterNetEvent(VHubVeh.E.SOUND_STOP, function()
   local src = source
+  if not _now[src] then return end
   _now[src] = nil
   detachVideo(src)                       -- sem som = sem telinha
   if not wowAvailable() then return end
@@ -80,9 +94,9 @@ RegisterNetEvent('vhub_vehcontrol:soundStop', function()
   end)
 end)
 
-RegisterNetEvent('vhub_vehcontrol:soundVolume', function(volume)
+RegisterNetEvent(VHubVeh.E.SOUND_VOLUME, function(volume)
   local src = source
-  if not wowAvailable() then return end
+  if not _now[src] or not rateOk(src, 'volume', 100) or not wowAvailable() then return end
 
   pcall(function()
     exports.vhub_wow:SetVolume({ src }, soundNameOf(src), volume)
@@ -91,10 +105,11 @@ end)
 
 -- liga/desliga a telinha de video "DVD no carro" (so YouTube). Server valida acesso ao
 -- veiculo e so exibe se houver um som YouTube tocando; a telinha (video) e do vehcontrol.
-RegisterNetEvent('vhub_vehcontrol:soundVideo', function(netId, plate, show)
+RegisterNetEvent(VHubVeh.E.SOUND_VIDEO, function(netId, plate, show)
   local src = source
+  if not rateOk(src, 'video', 250) then return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' then return end
-  if not VHubVeh.hasVehicleAccess(src, plate) then return end
+  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then return end
 
   if show ~= true then detachVideo(src); return end
 
@@ -107,7 +122,8 @@ RegisterNetEvent('vhub_vehcontrol:soundVideo', function(netId, plate, show)
 end)
 
 -- usuario fechou a telinha pelo X (client) — limpa qualquer estado de exibicao
-RegisterNetEvent('vhub_vehcontrol:soundVideoOff', function()
+RegisterNetEvent(VHubVeh.E.SOUND_VIDEO_OFF, function()
+  if not rateOk(source, 'video_off', 250) then return end
   detachVideo(source)
 end)
 
@@ -120,7 +136,7 @@ local _searchAt = {}           -- [src] = ultimo ms de busca (rate-limit por pla
 local SEARCH_COOLDOWN = 1500    -- 1 busca por jogador a cada 1.5s
 
 -- busca: rate-limit por player + valida tamanho; resultado volta so pra quem pediu
-RegisterNetEvent('vhub_vehcontrol:soundSearch', function(query)
+RegisterNetEvent(VHubVeh.E.SOUND_SEARCH, function(query)
   local src = source
   if not wowAvailable() then return end
   if type(query) ~= 'string' or #query < 1 or #query > 80 then return end
@@ -134,11 +150,12 @@ RegisterNetEvent('vhub_vehcontrol:soundSearch', function(query)
 end)
 
 -- radio: exige acesso ao veiculo (mesmo gate do play); servidor escolhe a faixa
-RegisterNetEvent('vhub_vehcontrol:soundRadio', function(netId, plate, volume)
+RegisterNetEvent(VHubVeh.E.SOUND_RADIO, function(netId, plate, volume)
   local src = source
+  if not rateOk(src, 'radio', 750) then return end
   if not wowAvailable() then rejectSound(src); return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' then rejectSound(src); return end
-  if not VHubVeh.hasVehicleAccess(src, plate) then rejectSound(src); return end
+  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then rejectSound(src); return end
 
   local vol = tonumber(volume) or 0.5
   if vol < 0 then vol = 0 elseif vol > 1 then vol = 1 end
@@ -153,7 +170,7 @@ RegisterNetEvent('vhub_vehcontrol:soundRadio', function(netId, plate, volume)
   end)
   if okp and accepted == true then
     _now[src] = { url = track.url, title = track.title, plate = plate }
-    TriggerClientEvent('vhub_vehcontrol:soundNow', src, track.title, track.artist)
+    TriggerClientEvent(VHubVeh.E.SOUND_NOW, src, track.title, track.artist)
   else
     rejectSound(src)
   end
@@ -163,4 +180,5 @@ AddEventHandler('playerDropped', function()
   local src = source
   _searchAt[src] = nil
   _now[src] = nil
+  _actionAt[src] = nil
 end)

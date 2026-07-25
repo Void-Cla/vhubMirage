@@ -187,7 +187,7 @@
 
         <div class="vc-sound-url hidden" id="sound-url-row">
           <input class="vc-sound-url-input" id="sound-url-input" type="text"
-                 placeholder="YouTube, SoundCloud ou link .mp3 direto…"
+                 placeholder="YouTube ou link de áudio direto…"
                  maxlength="512" autocomplete="off">
         </div>
 
@@ -207,6 +207,15 @@
           </svg>
           <span>Vídeo no carro</span>
         </button>
+
+        <label class="vc-sound-streamer" for="sound-streamer">
+          <span class="vc-sound-streamer-copy">
+            <strong>Modo streamer</strong>
+            <small>Silencia todo áudio musical do WOW.</small>
+          </span>
+          <input id="sound-streamer" type="checkbox" role="switch" aria-label="Ativar modo streamer">
+          <i aria-hidden="true"></i>
+        </label>
       </div>
     </aside>
 
@@ -314,8 +323,6 @@
     </header>
     <div class="vc-dvd-frame" id="vc-dvd-frame"></div>
   </div>
-
-  <script src="https://www.youtube.com/iframe_api"></script>
 
   <script src="core.js"></script>
   <script src="controls.js"></script>

@@ -1,289 +1,390 @@
--- vhub_identity/server.lua
--- Responsabilidade: identidade do personagem (nome, sobrenome, idade, registro, telefone).
--- Autoridade: servidor — cliente jamais altera dados de identidade.
--- Dependências: vhub (Auth, characterLoad, playerSpawn), oxmysql (persistência própria).
--- Persistência: tabela dedicada vh_identity via oxmysql direto.
--- NOTA ARQUITETURAL: usa oxmysql sem passar pelo vhub.State porque o
---   FiveM serializa tabelas em exports cross-resource — chamadas como
---   S:prepare() de fora do vhub não persistem no _prepared real.
+-- server.lua — identidade autoritativa e operações idempotentes por personagem
 
-local _vHub   = nil
-local _pronto = false
+local _ready = false
 
--- ── Configuração ──────────────────────────────────────────────────────────────
 
-local CFG = {
-  custo_nova_identidade = 0,
-  formato_telefone      = "DDD-DDDD",
+-- ============================================================
+-- SQL / LOG
+-- ============================================================
 
-  primeiros_nomes = {
-    "Carlos","João","Pedro","Lucas","Matheus","Rafael","Gabriel","Felipe","André",
-    "Bruno","Diego","Eduardo","Fernando","Gustavo","Henrique","Igor","Jorge",
-    "Leandro","Marcos","Nelson","Otávio","Paulo","Ricardo","Sérgio","Thiago",
-    "Ana","Beatriz","Camila","Daniela","Eduarda","Fernanda","Gabriela","Helena",
-    "Isabela","Juliana","Larissa","Mariana","Natália","Patrícia","Roberta","Sandra",
-  },
-  ultimos_nomes = {
-    "Silva","Santos","Oliveira","Souza","Rodrigues","Ferreira","Alves","Pereira",
-    "Lima","Gomes","Costa","Ribeiro","Martins","Carvalho","Almeida","Lopes",
-    "Sousa","Fernandes","Vieira","Barbosa","Rocha","Dias","Nascimento","Andrade",
-    "Moreira","Nunes","Marques","Machado","Mendes","Freitas","Cardoso","Ramos",
-  },
-}
-
--- ── Helpers SQL (oxmysql direto, callback → promise) ─────────────────────────
-
--- Executa SELECT múltiplas linhas; retorna {} em caso de falha
-local function _query(sql, params)
-  local p = promise.new()
-  exports.oxmysql:query(sql, params or {}, function(r) p:resolve(r or {}) end)
-  return Citizen.Await(p)
+local function log(level, message, meta)
+    pcall(function() exports.vhub:log(level, 'identity', message, meta) end)
 end
 
--- Executa INSERT/UPDATE/DELETE; retorna affectedRows (number) ou 0
-local function _execute(sql, params)
-  local p = promise.new()
-  exports.oxmysql:execute(sql, params or {}, function(r) p:resolve(r or 0) end)
-  return Citizen.Await(p)
-end
-
--- ── Helpers de geração ───────────────────────────────────────────────────────
-
-local function gerarString(formato)
-  local s = ""
-  for i = 1, #formato do
-    local c = formato:sub(i, i)
-    if     c == "D" then s = s .. tostring(math.random(0, 9))
-    elseif c == "L" then s = s .. string.char(65 + math.random(0, 25))
-    else                 s = s .. c
-    end
-  end
-  return s
-end
-
-local function gerarRegistroUnico()
-  for _ = 1, 20 do
-    local reg = gerarString("DDDDLL")
-    local r   = _query("SELECT char_id FROM vh_identity WHERE registration = ? LIMIT 1", { reg })
-    if #r == 0 then return reg end
-  end
-  return gerarString("DDD") .. tostring(os.time() % 1000)
-end
-
-local function gerarTelefoneUnico()
-  for _ = 1, 20 do
-    local tel = gerarString(CFG.formato_telefone)
-    local r   = _query("SELECT char_id FROM vh_identity WHERE phone = ? LIMIT 1", { tel })
-    if #r == 0 then return tel end
-  end
-  return gerarString("DDD") .. "-" .. tostring(os.time() % 10000)
-end
-
-local function nomeAleatorio()
-  return
-    CFG.primeiros_nomes[math.random(#CFG.primeiros_nomes)],
-    CFG.ultimos_nomes[math.random(#CFG.ultimos_nomes)]
-end
-
--- Sanitiza string: só letras (incluindo acentuadas), espaços e hífens
-local function sanitizaNome(s)
-  if type(s) ~= "string" then return "" end
-  return s:match("^%s*(.-)%s*$"):gsub("[^%a%sÀ-ÿ%-]", ""):sub(1, 50)
-end
-
--- ── Persistência ─────────────────────────────────────────────────────────────
-
-local function upsertIdentity(char_id, ident)
-  _execute(
-    "INSERT INTO vh_identity(char_id, firstname, lastname, age, registration, phone) " ..
-    "VALUES(?, ?, ?, ?, ?, ?) " ..
-    "ON DUPLICATE KEY UPDATE firstname=VALUES(firstname), lastname=VALUES(lastname), " ..
-    "age=VALUES(age), registration=VALUES(registration), phone=VALUES(phone)",
-    { char_id, ident.firstname, ident.lastname, ident.age, ident.registration, ident.phone })
-end
-
-local function getIdentity(char_id)
-  local r = _query(
-    "SELECT firstname, lastname, age, registration, phone " ..
-    "FROM vh_identity WHERE char_id = ? LIMIT 1",
-    { char_id })
-  return r[1]
-end
-
--- ── Inicialização ────────────────────────────────────────────────────────────
-
-AddEventHandler("onResourceStart", function(res)
-  if res ~= GetCurrentResourceName() then return end
-
-  Citizen.CreateThread(function()
-    -- Aguarda vHub disponível (precisamos do Auth e do Logger)
-    local tentativas = 0
-    while tentativas < 50 do
-      local ok, vh = pcall(function() return exports.vhub:getVHub() end)
-      if ok and type(vh) == "table" and vh.Auth then
-        _vHub = vh
-        break
-      end
-      Citizen.Wait(200)
-      tentativas = tentativas + 1
-    end
-
-    if not _vHub then
-      print("[vhub_identity][ERRO] vHub não disponível após 10s")
-      return
-    end
-
-    -- Aplica schema via oxmysql direto (resource carrega o .sql)
-    local schema = LoadResourceFile(GetCurrentResourceName(), "sql/schema.sql")
-    if type(schema) ~= "string" or schema == "" then
-      print("[vhub_identity][ERRO] sql/schema.sql não encontrado")
-      return
-    end
-    _execute(schema, {})
-
-    _pronto = true
-    print("[vhub_identity] Pronto — schema aplicado.")
-  end)
-end)
-
--- ── Carregamento de identidade ───────────────────────────────────────────────
-
-AddEventHandler("vHub:characterLoad", function(user)
-  if not user or not user.char_id then return end
-  if not _pronto then
-    print(("[vhub_identity] AVISO: characterLoad antes de _pronto (uid=%d)"):format(
-      user.id or 0))
-    return
-  end
-
-  Citizen.CreateThread(function()
-    local row = getIdentity(user.char_id)
-    local identity
-
-    if row then
-      identity = {
-        firstname    = row.firstname,
-        lastname     = row.lastname,
-        age          = tonumber(row.age),
-        registration = row.registration,
-        phone        = row.phone,
-      }
-    else
-      -- Primeiro acesso: gera identidade aleatória e persiste imediatamente
-      local fn, ln = nomeAleatorio()
-      identity = {
-        firstname    = fn,
-        lastname     = ln,
-        age          = math.random(18, 45),
-        registration = gerarRegistroUnico(),
-        phone        = gerarTelefoneUnico(),
-      }
-      upsertIdentity(user.char_id, identity)
-    end
-
-    user.identity = identity
-    TriggerClientEvent("vhub_identity:load", user.source, identity)
-
-    if _vHub and _vHub.Logger then
-      _vHub.Logger:debug("identity",
-        ("uid=%d char=%d identidade carregada: %s %s"):format(
-          user.id, user.char_id, identity.firstname, identity.lastname))
-    end
-  end)
-end)
-
--- Reenvia identidade ao spawnar (cliente pode ter perdido o evento anterior)
-AddEventHandler("vHub:playerSpawn", function(user, _)
-  if not user or not user.identity then return end
-  TriggerClientEvent("vhub_identity:load", user.source, user.identity)
-end)
-
--- ── Net events ───────────────────────────────────────────────────────────────
-
--- Solicita própria identidade (cliente recém-conectado)
-RegisterNetEvent("vhub_identity:get")
-AddEventHandler("vhub_identity:get", function()
-  local src  = source
-  if not _vHub then return end
-  local user = _vHub.Auth:getUser(src)
-  if not user or not user.identity then return end
-  TriggerClientEvent("vhub_identity:load", src, user.identity)
-end)
-
--- Atualiza nome/sobrenome/idade via prefeitura
-RegisterNetEvent("vhub_identity:update")
-AddEventHandler("vhub_identity:update", function(dados)
-  local src = source
-  if type(dados) ~= "table" or not _pronto or not _vHub then return end
-
-  local user = _vHub.Auth:getUser(src)
-  if not user or not user.char_id or not user.identity then return end
-
-  local fn  = sanitizaNome(dados.firstname or "")
-  local ln  = sanitizaNome(dados.lastname  or "")
-  local age = tonumber(dados.age) or 0
-
-  if #fn < 2 or #ln < 2 then
-    TriggerClientEvent("vhub_identity:error", src, "nome_invalido")
-    return
-  end
-  if age < 16 or age > 120 then
-    TriggerClientEvent("vhub_identity:error", src, "idade_invalida")
-    return
-  end
-
-  if CFG.custo_nova_identidade > 0 then
-    local pagou = pcall(function()
-      assert(exports.vhub_money:tryPayment(src, CFG.custo_nova_identidade))
+local function apply_schema()
+    local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
+    if type(schema) ~= 'string' or schema == '' then return false end
+    local ok = pcall(function()
+        for statement in schema:gmatch('([^;]+);') do
+            if statement:match('%S') then MySQL.query.await(statement, {}) end
+        end
     end)
-    if not pagou then
-      TriggerClientEvent("vhub_identity:error", src, "sem_dinheiro")
-      return
+    return ok
+end
+
+local function get_identity(char_id)
+    return MySQL.single.await([[
+        SELECT `firstname`, `lastname`, `age`, `registration`, `phone`
+          FROM `vh_identity` WHERE `char_id` = ? LIMIT 1
+    ]], { char_id })
+end
+
+local function copy_identity(identity)
+    if type(identity) ~= 'table' then return nil end
+    return {
+        firstname = identity.firstname,
+        lastname = identity.lastname,
+        age = tonumber(identity.age),
+        registration = identity.registration,
+        phone = identity.phone,
+    }
+end
+
+
+-- ============================================================
+-- NORMALIZAÇÃO / GERAÇÃO
+-- ============================================================
+
+local function stable_encode(value)
+    local kind = type(value)
+    if kind == 'nil' then return 'null' end
+    if kind == 'boolean' then return value and 'true' or 'false' end
+    if kind == 'number' then return ('%.17g'):format(value) end
+    if kind == 'string' then return json.encode(value) end
+    if kind ~= 'table' then return 'null' end
+    local keys = {}
+    for key in pairs(value) do
+        if type(key) == 'string' then keys[#keys + 1] = key end
     end
-  end
+    table.sort(keys)
+    local items = {}
+    for index, key in ipairs(keys) do
+        items[index] = json.encode(key) .. ':' .. stable_encode(value[key])
+    end
+    return '{' .. table.concat(items, ',') .. '}'
+end
 
-  user.identity.firstname = fn
-  user.identity.lastname  = ln
-  user.identity.age       = age
+local function sanitize_name(value)
+    if type(value) ~= 'string' then return nil end
+    local trimmed = value:match('^%s*(.-)%s*$')
+    if #trimmed < 2 or #trimmed > 50 or trimmed:find('[^%a%sÀ-ÿ%-]') then return nil end
+    return trimmed
+end
 
-  Citizen.CreateThread(function()
-    upsertIdentity(user.char_id, user.identity)
-  end)
+local function sanitize_identity(data)
+    if type(data) ~= 'table' then return nil end
+    for key in pairs(data) do
+        if key ~= 'firstname' and key ~= 'lastname' and key ~= 'age' then return nil end
+    end
+    local firstname = sanitize_name(data.firstname)
+    local lastname = sanitize_name(data.lastname)
+    local age = tonumber(data.age)
+    if not firstname or not lastname or not age or age % 1 ~= 0 or age < 16 or age > 120 then
+        return nil
+    end
+    return { firstname = firstname, lastname = lastname, age = math.floor(age) }
+end
 
-  TriggerClientEvent("vhub_identity:load", src, user.identity)
+local function valid_operation_id(value)
+    return type(value) == 'string'
+        and #value >= 8
+        and #value <= 96
+        and value:match('^[a-zA-Z0-9:_%-]+$') ~= nil
+end
+
+local function decode_identity(value)
+    if type(value) == 'table' then return copy_identity(value) end
+    local ok, decoded = pcall(json.decode, value or '{}')
+    return ok and copy_identity(decoded) or nil
+end
+
+local function resolve_online(src)
+    src = tonumber(src)
+    if not src or src < 1 or not GetPlayerName(src) then return nil end
+    local ok, char_id = pcall(function() return exports.vhub:getCharacterId(src) end)
+    if not ok or not tonumber(char_id) then return nil end
+    return math.floor(tonumber(char_id))
+end
+
+
+-- ============================================================
+-- LIFECYCLE / CARGA
+-- ============================================================
+
+AddEventHandler('onResourceStart', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+    Citizen.CreateThread(function()
+        for _ = 1, 50 do
+            local ok = pcall(function() return exports.vhub:getCharacterId(0) end)
+            if ok then break end
+            Citizen.Wait(200)
+        end
+        if not apply_schema() then
+            log('error', 'Schema de identidade indisponível.')
+            return
+        end
+        _ready = true
+        log('info', 'Identidade inicializada.')
+    end)
 end)
 
--- ── Exports ──────────────────────────────────────────────────────────────────
-
--- Retorna identidade de um jogador online por source
-exports("getIdentity", function(src)
-  if not _vHub then return nil end
-  local user = _vHub.Auth:getUser(src)
-  return user and user.identity or nil
+AddEventHandler('vHub:characterLoad', function(user)
+    if not _ready or type(user) ~= 'table' then return end
+    local src, char_id = tonumber(user.source), tonumber(user.char_id)
+    if not src or not char_id then return end
+    Citizen.CreateThread(function()
+        local identity = get_identity(char_id)
+        -- identidade ausente = personagem novo aguardando SIMS; não gerar dado falso
+        if identity and GetPlayerName(src) then
+            TriggerClientEvent('vhub_identity:load', src, copy_identity(identity))
+        end
+    end)
 end)
 
--- Retorna nome completo formatado de um jogador
-exports("getFullName", function(src)
-  if not _vHub then return "Desconhecido" end
-  local user = _vHub.Auth:getUser(src)
-  if not user or not user.identity then return "Desconhecido" end
-  return user.identity.firstname .. " " .. user.identity.lastname
+AddEventHandler('vHub:playerSpawn', function(user)
+    if not _ready or type(user) ~= 'table' then return end
+    local src, char_id = tonumber(user.source), tonumber(user.char_id)
+    if not src or not char_id then return end
+    Citizen.CreateThread(function()
+        local identity = get_identity(char_id)
+        if identity and GetPlayerName(src) then
+            TriggerClientEvent('vhub_identity:load', src, copy_identity(identity))
+        end
+    end)
 end)
 
--- Busca char_id pelo número de registro (para polícia verificar veículos)
-exports("getCharByRegistration", function(registration)
-  if not _pronto or type(registration) ~= "string" then return nil end
-  local r = _query(
-    "SELECT char_id FROM vh_identity WHERE registration = ? LIMIT 1",
-    { registration })
-  return r[1] and tonumber(r[1].char_id) or nil
+
+-- ============================================================
+-- EVENTOS LEGADOS VALIDADOS
+-- ============================================================
+
+RegisterNetEvent('vhub_identity:get', function()
+    local src = source
+    local char_id = _ready and resolve_online(src) or nil
+    if not char_id then return end
+    Citizen.CreateThread(function()
+        local identity = get_identity(char_id)
+        if identity and GetPlayerName(src) then
+            TriggerClientEvent('vhub_identity:load', src, copy_identity(identity))
+        end
+    end)
 end)
 
--- Busca char_id por número de telefone
-exports("getCharByPhone", function(phone)
-  if not _pronto or type(phone) ~= "string" then return nil end
-  local r = _query(
-    "SELECT char_id FROM vh_identity WHERE phone = ? LIMIT 1",
-    { phone })
-  return r[1] and tonumber(r[1].char_id) or nil
+
+-- ============================================================
+-- EXPORTS ADR #74
+-- ============================================================
+
+-- Persiste nome/idade idempotentes; registro e telefone são preservados no SQL.
+exports('setIdentity', function(src, data, operation_id)
+    if GetInvokingResource() ~= 'vhub_sims' then return { ok = false, err = 'forbidden' } end
+    src = tonumber(src)
+    if not src or not GetPlayerName(src) then return { ok = false, err = 'offline' } end
+    local clean = sanitize_identity(data)
+    if not clean or not valid_operation_id(operation_id) then
+        return { ok = false, err = 'invalid_identity' }
+    end
+    if not _ready then return { ok = false, err = 'storage' } end
+    local char_id = resolve_online(src)
+    if not char_id then return { ok = false, err = 'offline' } end
+    local payload_json = stable_encode(clean)
+    local registration = ('VH%010d'):format(char_id)
+    local phone = ('55%010d'):format(char_id)
+
+    local read_ok, existing = pcall(function()
+        return MySQL.single.await([[
+            SELECT *, `digest` = SHA2(?, 256) AS `digest_ok`
+              FROM `vh_identity_operations` WHERE `operation_id` = ? LIMIT 1
+        ]], { payload_json, operation_id })
+    end)
+    if not read_ok then return { ok = false, err = 'storage' } end
+    if existing then
+        if tonumber(existing.char_id) ~= char_id or tonumber(existing.digest_ok) ~= 1 then
+            return { ok = false, err = 'conflict' }
+        end
+        local replay_identity = decode_identity(existing.result_identity)
+        if existing.state ~= 'committed' or not replay_identity then
+            return { ok = false, err = 'storage' }
+        end
+        local current_ok, current_identity = pcall(get_identity, char_id)
+        current_identity = current_ok and copy_identity(current_identity) or nil
+        if current_identity
+            and current_identity.firstname == replay_identity.firstname
+            and current_identity.lastname == replay_identity.lastname
+            and current_identity.age == replay_identity.age
+            and current_identity.registration == replay_identity.registration
+            and current_identity.phone == replay_identity.phone then
+            TriggerClientEvent('vhub_identity:load', src, current_identity)
+        end
+        return { ok = true, identity = replay_identity, replayed = true }
+    end
+
+    local ok, transaction_result = pcall(function()
+        return MySQL.transaction.await({
+            {
+                query = [[
+                    INSERT IGNORE INTO `vh_identity`
+                      (`char_id`, `firstname`, `lastname`, `age`, `registration`, `phone`)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ]],
+                values = {
+                    char_id,
+                    clean.firstname,
+                    clean.lastname,
+                    clean.age,
+                    registration,
+                    phone,
+                },
+            },
+            {
+                query = [[
+                    INSERT IGNORE INTO `vh_identity_operations`
+                      (`operation_id`, `char_id`, `digest`, `state`)
+                    SELECT ?, ?, SHA2(?, 256), 'pending'
+                      FROM `vh_identity` WHERE `char_id` = ?
+                ]],
+                values = { operation_id, char_id, payload_json, char_id },
+            },
+            {
+                query = [[
+                    UPDATE `vh_identity` i
+                    JOIN `vh_identity_operations` o
+                      ON o.`operation_id` = ?
+                     AND o.`char_id` = i.`char_id`
+                     AND o.`digest` = SHA2(?, 256)
+                     AND o.`state` = 'pending'
+                       SET i.`firstname` = ?, i.`lastname` = ?, i.`age` = ?
+                     WHERE i.`char_id` = ?
+                ]],
+                values = {
+                    operation_id,
+                    payload_json,
+                    clean.firstname,
+                    clean.lastname,
+                    clean.age,
+                    char_id,
+                },
+            },
+            {
+                query = [[
+                    UPDATE `vh_identity_operations` o
+                    JOIN `vh_identity` i ON i.`char_id` = o.`char_id`
+                       SET o.`result_identity` = JSON_OBJECT(
+                             'firstname', i.`firstname`, 'lastname', i.`lastname`, 'age', i.`age`,
+                             'registration', i.`registration`, 'phone', i.`phone`
+                           ),
+                           o.`state` = 'committed'
+                     WHERE o.`operation_id` = ?
+                       AND o.`char_id` = ?
+                       AND o.`digest` = SHA2(?, 256)
+                       AND o.`state` = 'pending'
+                ]],
+                values = { operation_id, char_id, payload_json },
+            },
+        })
+    end)
+    if not ok or transaction_result ~= true then return { ok = false, err = 'storage' } end
+
+    local operation_ok, operation = pcall(function()
+        return MySQL.single.await([[
+            SELECT *, `digest` = SHA2(?, 256) AS `digest_ok`
+              FROM `vh_identity_operations` WHERE `operation_id` = ? LIMIT 1
+        ]], { payload_json, operation_id })
+    end)
+    if not operation_ok or not operation then return { ok = false, err = 'storage' } end
+    if tonumber(operation.char_id) ~= char_id or tonumber(operation.digest_ok) ~= 1 then
+        return { ok = false, err = 'conflict' }
+    end
+    if operation.state ~= 'committed' then return { ok = false, err = 'storage' } end
+
+    local identity_ok, identity = pcall(get_identity, char_id)
+    local expected = decode_identity(operation.result_identity)
+    if not identity_ok or not identity or not expected
+        or identity.firstname ~= expected.firstname
+        or identity.lastname ~= expected.lastname
+        or tonumber(identity.age) ~= expected.age
+        or identity.registration ~= expected.registration
+        or identity.phone ~= expected.phone then
+        return { ok = false, err = 'storage' }
+    end
+    identity = copy_identity(identity)
+    TriggerClientEvent('vhub_identity:load', src, identity)
+    return { ok = true, identity = copy_identity(identity), replayed = false }
+end)
+
+-- Retorna resumos públicos dos IDs canônicos derivados no CORE.
+exports('getCharacterSummaries', function(src)
+    if GetInvokingResource() ~= 'vhub_login' then return { ok = false, err = 'forbidden' } end
+    src = tonumber(src)
+    if not src or not GetPlayerName(src) then return { ok = false, err = 'offline' } end
+    if not _ready then return { ok = false, err = 'storage' } end
+    local called, response = pcall(function() return exports.vhub:getCharacterIds(src) end)
+    if not called or type(response) ~= 'table' or response.ok ~= true or type(response.items) ~= 'table' then
+        local error_code = type(response) == 'table' and response.err or nil
+        return { ok = false, err = error_code == 'offline' and 'offline' or 'storage' }
+    end
+
+    local ids = {}
+    for index = 1, math.min(#response.items, 3) do
+        local char_id = tonumber(response.items[index])
+        if char_id and char_id > 0 then ids[#ids + 1] = math.floor(char_id) end
+    end
+    if #ids == 0 then return { ok = true, items = {} } end
+    local placeholders = {}
+    for index = 1, #ids do placeholders[index] = '?' end
+    local ok_rows, rows = pcall(function()
+        return MySQL.query.await(([[
+            SELECT `char_id`, `firstname`, `lastname`, `age`
+              FROM `vh_identity` WHERE `char_id` IN (%s)
+        ]]):format(table.concat(placeholders, ',')), ids)
+    end)
+    if not ok_rows or type(rows) ~= 'table' then return { ok = false, err = 'storage' } end
+
+    local by_id = {}
+    for _, row in ipairs(rows) do by_id[tonumber(row.char_id)] = row end
+    local items = {}
+    for _, char_id in ipairs(ids) do
+        local row = by_id[char_id]
+        if row then
+            items[#items + 1] = {
+                char_id = char_id,
+                firstname = row.firstname,
+                lastname = row.lastname,
+                age = tonumber(row.age),
+            }
+        end
+    end
+    return { ok = true, items = items }
+end)
+
+
+-- ============================================================
+-- EXPORTS LEGADOS DE LEITURA
+-- ============================================================
+
+exports('getIdentity', function(src)
+    local char_id = _ready and resolve_online(src) or nil
+    return char_id and copy_identity(get_identity(char_id)) or nil
+end)
+
+exports('getFullName', function(src)
+    local char_id = _ready and resolve_online(src) or nil
+    local identity = char_id and get_identity(char_id) or nil
+    return identity and (identity.firstname .. ' ' .. identity.lastname) or 'Desconhecido'
+end)
+
+exports('getCharByRegistration', function(registration)
+    if not _ready or type(registration) ~= 'string' then return nil end
+    return tonumber(MySQL.scalar.await(
+        'SELECT `char_id` FROM `vh_identity` WHERE `registration` = ? LIMIT 1',
+        { registration }
+    ))
+end)
+
+exports('getCharByPhone', function(phone)
+    if not _ready or type(phone) ~= 'string' then return nil end
+    return tonumber(MySQL.scalar.await(
+        'SELECT `char_id` FROM `vh_identity` WHERE `phone` = ? LIMIT 1',
+        { phone }
+    ))
 end)

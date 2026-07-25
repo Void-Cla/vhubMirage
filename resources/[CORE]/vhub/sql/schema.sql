@@ -219,3 +219,36 @@ CREATE TABLE IF NOT EXISTS vh_audit (
   KEY idx_vh_audit_actor  (actor)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='vHub — auditoria unificada append-only (ADR #42)';
+
+
+-- Criação idempotente de personagem pelo gate de login (ADR #74).
+CREATE TABLE IF NOT EXISTS vh_character_requests (
+  user_id     INT UNSIGNED NOT NULL,
+  request_id  VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  char_id     INT UNSIGNED NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, request_id),
+  UNIQUE KEY uq_vh_character_requests_char (char_id),
+  CONSTRAINT fk_vh_character_requests_user
+    FOREIGN KEY (user_id) REFERENCES vh_users(id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_vh_character_requests_char
+    FOREIGN KEY (char_id) REFERENCES vh_characters(id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='vHub — requests idempotentes de criação de personagem';
+
+
+-- Marca canônica de passagem pelo criador SIMS (ADR #74).
+CREATE TABLE IF NOT EXISTS vh_sims_creation (
+  char_id     INT UNSIGNED NOT NULL,
+  request_id  VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  apv         TINYINT UNSIGNED NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (char_id),
+  UNIQUE KEY uq_vh_sims_creation_request (request_id),
+  CONSTRAINT fk_vh_sims_creation_char
+    FOREIGN KEY (char_id) REFERENCES vh_characters(id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='vHub — conclusão canônica do criador SIMS';

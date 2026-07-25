@@ -1,0 +1,131 @@
+/* ============================================================
+   MOD-WIZARD — card horizontal âncora-inferior
+   Montado em #route-layer (z-index 20); personagem visível
+   ao centro enquanto o player preenche seus dados civis.
+   ============================================================ */
+
+.mod-wizard {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* recua o equivalente da bottom bar para não sobreporá-la */
+  padding-bottom: 60px;
+  pointer-events: none;
+}
+
+.mod-wizard__card {
+  width: min(820px, 94vw);
+  display: grid;
+  /* header | campos | rodapé */
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 22px;
+  border: 1px solid var(--vh-line);
+  border-radius: 20px 20px 18px 18px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 217, 120, 0.13), transparent 38%),
+    rgba(12, 10, 6, 0.97);
+  box-shadow:
+    0 -6px 32px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 217, 120, 0.06);
+  pointer-events: auto;
+  /* entrada suave a partir de baixo */
+  animation: wizard-rise 220ms cubic-bezier(.22,.61,.36,1) both;
+}
+
+@keyframes wizard-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== HEADER ====== */
+
+.mod-wizard__header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-shrink: 0;
+}
+
+.mod-wizard__header img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  opacity: .9;
+}
+
+.mod-wizard__header small {
+  display: block;
+  color: var(--vh-gold-soft);
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  font-size: 9px;
+  margin-bottom: 2px;
+}
+
+.mod-wizard__header h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: .02em;
+  line-height: 1;
+}
+
+/* ====== CAMPOS ====== */
+
+.mod-wizard__fields {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.mod-wizard__fields .sims-field {
+  flex: 1;
+}
+
+/* campo idade menor */
+.mod-wizard__age {
+  flex: 0 0 90px !important;
+}
+
+.mod-wizard__fields .sims-field input {
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+/* ====== RODAPÉ ====== */
+
+.mod-wizard__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.mod-wizard__footer .sims-button {
+  white-space: nowrap;
+  min-height: 38px;
+}
+
+.mod-wizard__footer .sims-status {
+  text-align: right;
+  font-size: 10.5px;
+  min-height: 16px;
+}
+
+/* ====== RESPONSIVO ====== */
+
+@media (max-width: 720px) {
+  .mod-wizard__card {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    padding: 16px 18px;
+    border-radius: 18px 18px 0 0;
+    width: 100%;
+  }
+  .mod-wizard__fields { flex-wrap: wrap; }
+  .mod-wizard__age { flex: 0 0 80px !important; }
+}

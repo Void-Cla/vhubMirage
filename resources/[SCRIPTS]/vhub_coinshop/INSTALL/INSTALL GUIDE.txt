@@ -16,7 +16,7 @@ Antes de instalar o vhub_coinshop, o servidor deve ter:
   - exports.vhub:getUser / getCData / setCData / getGData / setGData
 ✓ vhub_groups (checagem de permissão ACE + grupos)
 ✓ vhub_inventory (giveItem)
-✓ vhub_player_state (teleport do test-drive — owner único do ped)
+✓ vhub_hss (teleport/bucket do test-drive — owner único do ped)
 ✓ vhub_conce (grantVehicle — contrato de commit para veículos)
 ✓ oxmysql (driver MySQL upstream)
 
@@ -108,8 +108,8 @@ Contratos de escrita usados:
   - exports.vhub:setCData/getCData    (moedas e settings)
   - exports.vhub_inventory:giveItem              (entrega de itens)
   - exports.vhub_conce:grantVehicle              (registro de veículo comprado)
-  - exports.vhub_player_state:begin/attach/endActivity (bucket exclusivo)
-  - exports.vhub_player_state:teleport           (teleport do test-drive)
+  - exports.vhub_hss:begin/attach/endActivity (bucket exclusivo)
+  - exports.vhub_hss:teleport                  (teleport do test-drive)
   - exports.vhub_groups:hasPermission            (checagem admin)
   - evento vHub:notify                            (notificações ao jogador)
 

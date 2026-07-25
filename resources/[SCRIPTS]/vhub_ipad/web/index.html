@@ -25,22 +25,137 @@
     <svg viewBox="0 0 1180 820" xmlns="http://www.w3.org/2000/svg" id="ipad-frame">
       <defs>
         <linearGradient id="bezel-gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stop-color="#2a2a2c"/>
-          <stop offset="50%"  stop-color="#1a1a1c"/>
-          <stop offset="100%" stop-color="#0d0d0f"/>
+          <stop offset="0%"   stop-color="#141416"/>
+          <stop offset="50%"  stop-color="#0d0d0f"/>
+          <stop offset="100%" stop-color="#08080a"/>
         </linearGradient>
         <linearGradient id="frame-edge" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%"   stop-color="#4a4a4d"/>
-          <stop offset="50%"  stop-color="#2c2c2e"/>
-          <stop offset="100%" stop-color="#1c1c1e"/>
+          <stop offset="0%"   stop-color="#3a3a3d"/>
+          <stop offset="50%"  stop-color="#1c1c1e"/>
+          <stop offset="100%" stop-color="#0e0e10"/>
         </linearGradient>
+        <linearGradient id="gold-hairline" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%"   stop-color="#d4af6a" stop-opacity="0.9"/>
+          <stop offset="35%"  stop-color="#f5d98a" stop-opacity="0.55"/>
+          <stop offset="65%"  stop-color="#9e7b3a" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#d4af6a" stop-opacity="0.8"/>
+        </linearGradient>
+        <radialGradient id="sand-gold" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="#fbe6a8"/>
+          <stop offset="60%" stop-color="#d4af6a"/>
+          <stop offset="100%" stop-color="#8a6a30" stop-opacity="0"/>
+        </radialGradient>
       </defs>
 
-      <rect x="10" y="10" width="1160" height="800" rx="42" ry="42" fill="url(#frame-edge)"/>
-      <rect x="22" y="22" width="1136" height="776" rx="34" ry="34" fill="url(#bezel-gradient)"/>
-      <rect x="44" y="44" width="1092" height="732" rx="20" ry="20" fill="#000"/>
-      <circle cx="590" cy="40" r="6"   fill="#0a0a0a" stroke="#2a2a2c" stroke-width="1.5"/>
-      <circle cx="590" cy="40" r="2.5" fill="#1a3a4a"/>
+      <!-- moldura fina premium: apenas ~1.4% de margem por lado -->
+      <rect x="6"  y="6"  width="1168" height="808" rx="44" ry="44" fill="url(#frame-edge)"/>
+      <rect x="10" y="10" width="1160" height="800" rx="40" ry="40" fill="url(#bezel-gradient)"/>
+
+      <!-- hairline dourada externa -->
+      <rect x="8"  y="8"  width="1164" height="804" rx="42" ry="42"
+            fill="none" stroke="url(#gold-hairline)" stroke-width="0.6" opacity="0.85"/>
+      <!-- hairline dourada interna (moldura da tela) -->
+      <rect x="15" y="15" width="1150" height="790" rx="30" ry="30"
+            fill="none" stroke="url(#gold-hairline)" stroke-width="0.5" opacity="0.7"/>
+
+      <!-- tela -->
+      <rect x="16" y="16" width="1148" height="788" rx="28" ry="28" fill="#000"/>
+
+      <!-- partículas de areia dourada sobre a moldura -->
+        <circle cx="14.6" cy="328.0" r="0.4" fill="url(#sand-gold)" opacity="0.29"/>
+        <circle cx="436.9" cy="7.5" r="0.9" fill="url(#sand-gold)" opacity="0.36"/>
+        <circle cx="514.4" cy="7.6" r="0.4" fill="url(#sand-gold)" opacity="0.53"/>
+        <circle cx="962.6" cy="8.0" r="0.5" fill="url(#sand-gold)" opacity="0.57"/>
+        <circle cx="677.9" cy="10.2" r="0.5" fill="url(#sand-gold)" opacity="0.27"/>
+        <circle cx="350.2" cy="806.2" r="0.4" fill="url(#sand-gold)" opacity="0.54"/>
+        <circle cx="137.5" cy="809.6" r="0.5" fill="url(#sand-gold)" opacity="0.44"/>
+        <circle cx="663.4" cy="12.0" r="0.7" fill="url(#sand-gold)" opacity="0.59"/>
+        <circle cx="1171.2" cy="383.2" r="0.7" fill="url(#sand-gold)" opacity="0.43"/>
+        <circle cx="925.6" cy="810.6" r="0.5" fill="url(#sand-gold)" opacity="0.29"/>
+        <circle cx="11.2" cy="702.6" r="0.7" fill="url(#sand-gold)" opacity="0.39"/>
+        <circle cx="154.6" cy="10.3" r="0.6" fill="url(#sand-gold)" opacity="0.33"/>
+        <circle cx="1168.4" cy="770.4" r="0.4" fill="url(#sand-gold)" opacity="0.63"/>
+        <circle cx="9.7" cy="293.1" r="0.7" fill="url(#sand-gold)" opacity="0.54"/>
+        <circle cx="1165.6" cy="93.0" r="0.6" fill="url(#sand-gold)" opacity="0.49"/>
+        <circle cx="89.2" cy="12.6" r="0.9" fill="url(#sand-gold)" opacity="0.75"/>
+        <circle cx="1167.3" cy="320.9" r="0.6" fill="url(#sand-gold)" opacity="0.26"/>
+        <circle cx="1167.8" cy="496.5" r="0.7" fill="url(#sand-gold)" opacity="0.28"/>
+        <circle cx="8.0" cy="213.1" r="0.7" fill="url(#sand-gold)" opacity="0.71"/>
+        <circle cx="1165.6" cy="370.4" r="0.9" fill="url(#sand-gold)" opacity="0.39"/>
+        <circle cx="954.0" cy="811.9" r="0.6" fill="url(#sand-gold)" opacity="0.60"/>
+        <circle cx="12.5" cy="316.7" r="0.5" fill="url(#sand-gold)" opacity="0.33"/>
+        <circle cx="192.5" cy="810.3" r="0.4" fill="url(#sand-gold)" opacity="0.49"/>
+        <circle cx="319.5" cy="805.0" r="0.7" fill="url(#sand-gold)" opacity="0.52"/>
+        <circle cx="14.6" cy="558.6" r="0.9" fill="url(#sand-gold)" opacity="0.73"/>
+        <circle cx="540.6" cy="14.0" r="0.9" fill="url(#sand-gold)" opacity="0.45"/>
+        <circle cx="1168.2" cy="395.6" r="0.7" fill="url(#sand-gold)" opacity="0.28"/>
+        <circle cx="1142.5" cy="10.5" r="0.4" fill="url(#sand-gold)" opacity="0.42"/>
+        <circle cx="136.7" cy="11.5" r="0.9" fill="url(#sand-gold)" opacity="0.30"/>
+        <circle cx="11.9" cy="74.8" r="0.5" fill="url(#sand-gold)" opacity="0.56"/>
+        <circle cx="743.2" cy="812.6" r="0.9" fill="url(#sand-gold)" opacity="0.43"/>
+        <circle cx="151.5" cy="10.9" r="0.7" fill="url(#sand-gold)" opacity="0.49"/>
+        <circle cx="7.7" cy="99.7" r="0.6" fill="url(#sand-gold)" opacity="0.62"/>
+        <circle cx="1171.6" cy="145.9" r="0.4" fill="url(#sand-gold)" opacity="0.35"/>
+        <circle cx="8.2" cy="443.7" r="0.4" fill="url(#sand-gold)" opacity="0.63"/>
+        <circle cx="14.8" cy="693.4" r="0.6" fill="url(#sand-gold)" opacity="0.51"/>
+        <circle cx="425.5" cy="806.8" r="0.9" fill="url(#sand-gold)" opacity="0.64"/>
+        <circle cx="12.1" cy="498.3" r="0.5" fill="url(#sand-gold)" opacity="0.65"/>
+        <circle cx="1170.9" cy="196.9" r="0.9" fill="url(#sand-gold)" opacity="0.50"/>
+        <circle cx="1148.1" cy="13.3" r="0.7" fill="url(#sand-gold)" opacity="0.38"/>
+        <circle cx="10.6" cy="750.9" r="0.6" fill="url(#sand-gold)" opacity="0.73"/>
+        <circle cx="7.6" cy="99.7" r="0.7" fill="url(#sand-gold)" opacity="0.35"/>
+        <circle cx="570.2" cy="812.9" r="0.9" fill="url(#sand-gold)" opacity="0.67"/>
+        <circle cx="1172.3" cy="288.3" r="0.4" fill="url(#sand-gold)" opacity="0.67"/>
+        <circle cx="1057.1" cy="13.3" r="0.5" fill="url(#sand-gold)" opacity="0.49"/>
+        <circle cx="514.7" cy="810.1" r="0.4" fill="url(#sand-gold)" opacity="0.65"/>
+        <circle cx="1168.7" cy="599.8" r="0.4" fill="url(#sand-gold)" opacity="0.61"/>
+        <circle cx="1152.1" cy="805.2" r="0.9" fill="url(#sand-gold)" opacity="0.70"/>
+        <circle cx="717.2" cy="809.8" r="0.7" fill="url(#sand-gold)" opacity="0.58"/>
+        <circle cx="8.2" cy="447.7" r="0.4" fill="url(#sand-gold)" opacity="0.26"/>
+        <circle cx="620.3" cy="14.5" r="0.7" fill="url(#sand-gold)" opacity="0.74"/>
+        <circle cx="961.8" cy="806.7" r="0.6" fill="url(#sand-gold)" opacity="0.36"/>
+        <circle cx="890.6" cy="807.6" r="0.9" fill="url(#sand-gold)" opacity="0.46"/>
+        <circle cx="89.4" cy="810.9" r="0.7" fill="url(#sand-gold)" opacity="0.58"/>
+        <circle cx="1171.6" cy="705.0" r="0.5" fill="url(#sand-gold)" opacity="0.52"/>
+        <circle cx="1015.0" cy="13.2" r="0.9" fill="url(#sand-gold)" opacity="0.25"/>
+        <circle cx="216.5" cy="808.8" r="0.4" fill="url(#sand-gold)" opacity="0.53"/>
+        <circle cx="12.5" cy="434.0" r="0.7" fill="url(#sand-gold)" opacity="0.64"/>
+        <circle cx="1026.9" cy="7.5" r="0.5" fill="url(#sand-gold)" opacity="0.39"/>
+        <circle cx="598.8" cy="11.5" r="0.4" fill="url(#sand-gold)" opacity="0.47"/>
+        <circle cx="809.7" cy="808.6" r="0.9" fill="url(#sand-gold)" opacity="0.65"/>
+        <circle cx="817.1" cy="812.0" r="0.6" fill="url(#sand-gold)" opacity="0.71"/>
+        <circle cx="977.6" cy="806.1" r="0.4" fill="url(#sand-gold)" opacity="0.45"/>
+        <circle cx="7.6" cy="207.7" r="0.4" fill="url(#sand-gold)" opacity="0.36"/>
+        <circle cx="13.3" cy="719.7" r="0.5" fill="url(#sand-gold)" opacity="0.72"/>
+        <circle cx="8.1" cy="708.6" r="0.7" fill="url(#sand-gold)" opacity="0.36"/>
+        <circle cx="474.0" cy="10.9" r="0.5" fill="url(#sand-gold)" opacity="0.33"/>
+        <circle cx="1173.0" cy="335.0" r="0.7" fill="url(#sand-gold)" opacity="0.35"/>
+        <circle cx="7.7" cy="305.4" r="0.6" fill="url(#sand-gold)" opacity="0.53"/>
+        <circle cx="1170.6" cy="319.8" r="0.9" fill="url(#sand-gold)" opacity="0.56"/>
+        <circle cx="148.6" cy="14.3" r="0.5" fill="url(#sand-gold)" opacity="0.74"/>
+        <circle cx="115.8" cy="9.2" r="0.5" fill="url(#sand-gold)" opacity="0.39"/>
+        <circle cx="954.5" cy="811.8" r="0.6" fill="url(#sand-gold)" opacity="0.45"/>
+        <circle cx="1170.6" cy="89.8" r="0.4" fill="url(#sand-gold)" opacity="0.65"/>
+        <circle cx="504.9" cy="805.6" r="0.4" fill="url(#sand-gold)" opacity="0.57"/>
+        <circle cx="7.7" cy="687.9" r="0.4" fill="url(#sand-gold)" opacity="0.38"/>
+        <circle cx="537.3" cy="9.7" r="0.9" fill="url(#sand-gold)" opacity="0.46"/>
+        <circle cx="12.0" cy="53.7" r="0.5" fill="url(#sand-gold)" opacity="0.72"/>
+        <circle cx="318.6" cy="806.4" r="0.6" fill="url(#sand-gold)" opacity="0.56"/>
+        <circle cx="350.6" cy="809.0" r="0.5" fill="url(#sand-gold)" opacity="0.39"/>
+        <circle cx="1153.7" cy="7.3" r="0.4" fill="url(#sand-gold)" opacity="0.62"/>
+        <circle cx="606.2" cy="807.0" r="0.7" fill="url(#sand-gold)" opacity="0.30"/>
+        <circle cx="1170.3" cy="445.8" r="0.7" fill="url(#sand-gold)" opacity="0.74"/>
+        <circle cx="12.5" cy="786.3" r="0.6" fill="url(#sand-gold)" opacity="0.35"/>
+        <circle cx="481.4" cy="807.8" r="0.4" fill="url(#sand-gold)" opacity="0.67"/>
+        <circle cx="100.6" cy="12.9" r="0.6" fill="url(#sand-gold)" opacity="0.47"/>
+        <circle cx="116.3" cy="13.7" r="0.9" fill="url(#sand-gold)" opacity="0.59"/>
+        <circle cx="11.8" cy="560.3" r="0.4" fill="url(#sand-gold)" opacity="0.48"/>
+        <circle cx="326.7" cy="805.0" r="0.6" fill="url(#sand-gold)" opacity="0.73"/>
+        <circle cx="9.0" cy="773.2" r="0.6" fill="url(#sand-gold)" opacity="0.36"/>
+
+      <!-- câmera frontal -->
+      <circle cx="590" cy="12" r="3"   fill="#0a0a0a" stroke="#3a2f18" stroke-width="0.6"/>
+      <circle cx="590" cy="12" r="1.2" fill="#1a3a4a"/>
     </svg>
 
     <div id="ipad-screen">

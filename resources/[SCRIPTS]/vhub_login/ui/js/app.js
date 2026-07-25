@@ -1,46 +1,78 @@
-// ui/js/app.js — runtime da NUI do gate de entrada (Mirage).
-// A-01: NÃO decide regra de negócio (validação real é server-side); só UI + relay.
-// Anti-XSS: todo texto vai por textContent, nunca innerHTML.
+// ui/js/app.js — UI single-shot do gate Mirage; autoridade permanece no servidor.
+
+// Guard global: erros JS não-capturados aparecem no #msg para facilitar debug no CEF.
+window.onerror = function (msg, src, line, col) {
+  var el = document.getElementById('msg') || document.getElementById('msg2');
+  if (el) el.textContent = '[JS ERR] ' + msg + ' (' + line + ':' + col + ')';
+};
+
 (function () {
   'use strict';
 
-  var RES = (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'vhub_login';
+  var RES = (typeof GetParentResourceName === 'function')
+    ? GetParentResourceName()
+    : 'vhub_login';
 
-  var app    = document.getElementById('app');
-  var vLogin = document.getElementById('view-login');
-  var vChar  = document.getElementById('view-charselect');
-  var inUser = document.getElementById('in-user');
-  var inPass = document.getElementById('in-pass');
-  var btn    = document.getElementById('btn-submit');
-  var form   = document.getElementById('form-auth');
-  var msg    = document.getElementById('msg');
-  var msg2   = document.getElementById('msg2');
-  var list   = document.getElementById('char-list');
+  var refs = {
+    app: document.getElementById('app'),
+    loginView: document.getElementById('view-login'),
+    charView: document.getElementById('view-charselect'),
+    title: document.getElementById('auth-title'),
+    tabs: document.getElementById('auth-tabs'),
+    loginForm: document.getElementById('form-login'),
+    registerForm: document.getElementById('form-register'),
+    recoveryForm: document.getElementById('form-recovery'),
+    msg: document.getElementById('msg'),
+    msg2: document.getElementById('msg2'),
+    charList: document.getElementById('char-list'),
+    modal: document.getElementById('terms-modal'),
+    btnCreateWrap: document.getElementById('btn-create-wrap')
+  };
 
-  var mode = 'login';     // 'login' | 'register'
   var busy = false;
+  var termsVersion = '';
+  var listeners = [];
+  var characterListeners = [];
 
-  // códigos do servidor → texto amigável PT-BR
   var ERR = {
-    credencial_invalida:  'Usuário ou senha incorretos.',
-    senha_invalida:       'Senha entre 6 e 64 caracteres.',
-    username_invalido:    'Usuário: 3 a 20 (letras, números, _).',
-    username_em_uso:      'Esse usuário já existe.',
-    uid_ja_tem_conta:     'Já existe conta nesta licença. Faça login.',
-    conta_outra_licenca:  'Conta vinculada a outra licença.',
-    conta_bloqueada:      'Conta bloqueada.',
+    credencial_invalida: 'Usuário ou senha incorretos.',
+    username_invalido: 'Use 3 a 20 caracteres: letras, números ou _.',
+    senha_invalida: 'A senha deve ter entre 8 e 64 caracteres.',
+    senha_confirmacao: 'As senhas não coincidem.',
+    email_invalido: 'Informe um e-mail válido.',
+    whatsapp_invalido: 'Informe um WhatsApp válido com DDD.',
+    contato_invalido: 'Informe o e-mail ou WhatsApp cadastrado.',
+    termos_obrigatorios: 'Confirme que possui 18 anos e aceite os termos.',
+    termos_desatualizados: 'Os termos mudaram. Reabra a tela e tente novamente.',
+    cadastro_atualizacao_necessaria: 'Atualize o cliente para criar uma conta.',
+    cadastro_indisponivel: 'Não foi possível criar a conta com esses dados.',
+    conta_bloqueada: 'Conta bloqueada.',
     bloqueado_temporario: 'Muitas tentativas. Aguarde um momento.',
-    rate_limit:           'Muitas tentativas. Aguarde um momento.',
-    char_invalido:        'Personagem inválido.',
-    criacao_indisponivel: 'Criação de personagem chega em breve.',
-    estado_invalido:      'Sessão expirada. Reconecte.',
-    falha_db:             'Falha no servidor. Tente novamente.',
-    erro:                 'Algo deu errado.'
+    rate_limit: 'Muitas tentativas. Aguarde um momento.',
+    operacao_em_andamento: 'Aguarde a operação atual.',
+    char_invalido: 'Personagem inválido.',
+    dependency: 'Criador indisponível. Tente novamente.',
+    already_created: 'Este personagem já concluiu a criação.',
+    not_ready: 'Preparando seu piloto… toque em Entrar novamente em instantes.',
+    conflict: 'A operação conflitou. Atualize e tente novamente.',
+    invalid_request: 'Solicitação inválida.',
+    limit: 'Limite de três personagens atingido.',
+    storage: 'Falha de persistência. Tente novamente.',
+    offline: 'Sessão indisponível. Reconecte.',
+    estado_invalido: 'Sessão expirada. Reconecte.',
+    falha_db: 'Falha no servidor. Tente novamente.',
+    native: 'Falha ao preparar o cenário. Tente novamente.',
+    hss_indisponivel: 'Serviço de personagem indisponível. Tente novamente.',
+    core_indisponivel: 'Servidor ocupado. Tente novamente.',
+    no_character: 'Personagem não encontrado. Atualize e tente novamente.',
+    not_pending: 'Preparando seu piloto… toque em Entrar novamente em instantes.',
+    forbidden: 'Ação não permitida.',
+    erro: 'Algo deu errado. Tente novamente.'
   };
 
 
   // ============================================================
-  // HELPERS
+  // SERVIÇO / HELPERS
   // ============================================================
 
   function nui(name, data) {
@@ -48,45 +80,183 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(data || {})
-    }).catch(function () {});
+    }).catch(function () {
+      setBusy(false);
+      setMessage(activeMessage(), ERR.erro);
+    });
   }
 
-  function show(el, on) { el.classList.toggle('hidden', !on); }
-  function setMsg(node, text, ok) { node.textContent = text || ''; node.classList.toggle('ok', !!ok); }
-  function setBusy(b) { busy = b; btn.disabled = b; }
-  function activeMsg() { return vChar.classList.contains('hidden') ? msg : msg2; }
+  function on(node, event, handler) {
+    node.addEventListener(event, handler);
+    listeners.push(function () { node.removeEventListener(event, handler); });
+  }
+
+  function onCharacter(node, event, handler) {
+    node.addEventListener(event, handler);
+    characterListeners.push(function () { node.removeEventListener(event, handler); });
+  }
+
+  function clearCharacterListeners() {
+    while (characterListeners.length) characterListeners.pop()();
+  }
+
+  function show(node, visible) {
+    node.classList.toggle('hidden', !visible);
+  }
+
+  function value(id) {
+    var node = document.getElementById(id);
+    return node ? node.value || '' : '';
+  }
+
+  function setMessage(node, text, success) {
+    node.textContent = text || '';
+    node.classList.toggle('ok', !!success);
+  }
+
+  function activeMessage() {
+    return refs.charView.classList.contains('hidden') ? refs.msg : refs.msg2;
+  }
+
+  function setBusy(next) {
+    busy = next;
+    document.querySelectorAll('button[type="submit"]').forEach(function (button) {
+      button.disabled = next;
+    });
+  }
+
+  function clearSensitive() {
+    [
+      'login-pass', 'register-pass', 'register-confirm',
+      'recovery-contact', 'recovery-pass', 'recovery-confirm'
+    ].forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) node.value = '';
+    });
+    document.getElementById('register-terms').checked = false;
+  }
+
+  function setMode(next) {
+    show(refs.loginForm, next === 'login');
+    show(refs.registerForm, next === 'register');
+    show(refs.recoveryForm, next === 'recovery');
+    show(refs.tabs, next !== 'recovery');
+
+    refs.title.textContent = next === 'register'
+      ? 'Sua história começa aqui'
+      : next === 'recovery'
+        ? 'Recupere seu acesso'
+        : 'Bem-vindo de volta';
+
+    document.querySelectorAll('.tab').forEach(function (tab) {
+      tab.classList.toggle('active', tab.getAttribute('data-mode') === next);
+    });
+    setMessage(refs.msg, '');
+    setBusy(false);
+  }
+
+  function openTerms() {
+    show(refs.modal, true);
+    document.getElementById('btn-close-terms').focus();
+  }
+
+  function closeTerms() {
+    show(refs.modal, false);
+  }
 
 
   // ============================================================
-  // LOGIN
+  // AUTENTICAÇÃO
   // ============================================================
 
-  document.querySelectorAll('.tab').forEach(function (t) {
-    t.addEventListener('click', function () {
-      document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('active'); });
-      t.classList.add('active');
-      mode = t.getAttribute('data-tab');
-      btn.textContent = (mode === 'register') ? 'Criar conta' : 'Entrar';
-      setMsg(msg, '');
+  document.querySelectorAll('.tab').forEach(function (tab) {
+    on(tab, 'click', function () {
+      if (!busy) setMode(tab.getAttribute('data-mode'));
     });
   });
 
-  // lê o campo re-consultando o DOM (robustez contra ref obsoleta)
-  function readField(id) {
-    var el = document.getElementById(id);
-    return el ? (el.value || '') : '';
-  }
+  on(document.getElementById('btn-forgot'), 'click', function () {
+    if (!busy) setMode('recovery');
+  });
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
+  on(document.getElementById('btn-back-login'), 'click', function () {
+    if (!busy) setMode('login');
+  });
+
+  on(refs.loginForm, 'submit', function (event) {
+    event.preventDefault();
     if (busy) return;
-    var u = readField('in-user').trim();
-    var p = readField('in-pass');
-    // mensagens ESPECÍFICAS + diagnóstico (lido:N) p/ distinguir "curto" de "vazio"
-    if (u.length < 3) { setMsg(msg, 'Usuário: mínimo 3 caracteres. (lido: ' + u.length + ')'); return; }
-    if (p.length < 6) { setMsg(msg, 'Senha: mínimo 6 caracteres. (lido: ' + p.length + ')'); return; }
-    setBusy(true); setMsg(msg, '');
-    nui(mode === 'register' ? 'register' : 'login', { username: u, password: p });
+    var username = value('login-user').trim();
+    var password = value('login-pass');
+    if (username.length < 3 || password.length < 6) {
+      setMessage(refs.msg, ERR.credencial_invalida);
+      return;
+    }
+    setBusy(true);
+    setMessage(refs.msg, '');
+    nui('login', { username: username, password: password });
+  });
+
+  on(refs.registerForm, 'submit', function (event) {
+    event.preventDefault();
+    if (busy) return;
+    var password = value('register-pass');
+    var confirmation = value('register-confirm');
+    var accepted = document.getElementById('register-terms').checked;
+    if (password.length < 8) return setMessage(refs.msg, ERR.senha_invalida);
+    if (password !== confirmation) return setMessage(refs.msg, ERR.senha_confirmacao);
+    if (!accepted) return setMessage(refs.msg, ERR.termos_obrigatorios);
+
+    setBusy(true);
+    setMessage(refs.msg, '');
+    nui('register', {
+      username: value('register-user').trim(),
+      password: password,
+      password_confirmation: confirmation,
+      email: value('register-email').trim(),
+      whatsapp: value('register-whatsapp').trim(),
+      terms_accepted: true,
+      age_18: true,
+      terms_version: termsVersion
+    });
+  });
+
+  on(refs.recoveryForm, 'submit', function (event) {
+    event.preventDefault();
+    if (busy) return;
+    var password = value('recovery-pass');
+    var confirmation = value('recovery-confirm');
+    if (!value('recovery-contact').trim()) return setMessage(refs.msg, ERR.contato_invalido);
+    if (password.length < 8) return setMessage(refs.msg, ERR.senha_invalida);
+    if (password !== confirmation) return setMessage(refs.msg, ERR.senha_confirmacao);
+
+    setBusy(true);
+    setMessage(refs.msg, '');
+    nui('recovery', {
+      contact: value('recovery-contact').trim(),
+      password: password,
+      password_confirmation: confirmation
+    });
+  });
+
+
+  // ============================================================
+  // TERMOS
+  // ============================================================
+
+  on(document.getElementById('btn-terms'), 'click', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    openTerms();
+  });
+  on(document.getElementById('btn-privacy'), 'click', openTerms);
+  on(document.getElementById('btn-close-terms'), 'click', closeTerms);
+  on(document.getElementById('btn-understood'), 'click', closeTerms);
+  on(refs.modal, 'click', function (event) {
+    if (event.target === refs.modal) closeTerms();
+  });
+  on(document, 'keydown', function (event) {
+    if (event.key === 'Escape' && !refs.modal.classList.contains('hidden')) closeTerms();
   });
 
 
@@ -94,77 +264,168 @@
   // PERSONAGENS
   // ============================================================
 
-  function renderChars(chars) {
-    list.textContent = '';
-    if (!chars || !chars.length) {
-      var e = document.createElement('div');
-      e.className = 'char-empty';
-      e.textContent = 'Nenhum personagem ainda. Crie o primeiro.';
-      list.appendChild(e);
+  function renderCharacters(characters) {
+    clearCharacterListeners();
+    refs.charList.textContent = '';
+
+    var slotInfo = document.getElementById('cs-slot-info');
+    if (slotInfo) {
+      var total = characters ? characters.length : 0;
+      slotInfo.textContent = total + ' / 3 slots';
+      show(refs.btnCreateWrap, total < 3);
+    }
+
+    if (!characters || !characters.length) {
+      var empty = document.createElement('div');
+      empty.className = 'char-empty';
+
+      var icon = document.createElement('span');
+      icon.className = 'char-empty-icon';
+      icon.textContent = '🏎';
+      empty.appendChild(icon);
+
+      var txt = document.createElement('span');
+      txt.textContent = 'Nenhum piloto ainda. Crie o primeiro.';
+      empty.appendChild(txt);
+
+      refs.charList.appendChild(empty);
       return;
     }
-    chars.forEach(function (c, i) {
-      var cid = (c.id != null) ? c.id : c.char_id;
-      var card = document.createElement('div');
+
+    characters.forEach(function (character, index) {
+      var cid = character.id != null ? character.id : character.char_id;
+      var label = character.name || ('Piloto ' + (index + 1));
+      var initial = label.charAt(0).toUpperCase();
+
+      var card = document.createElement('button');
+      card.type = 'button';
       card.className = 'char-card';
+      card.style.animationDelay = (index * 40) + 'ms';
 
-      var left = document.createElement('div');
-      var name = document.createElement('div');
-      name.className = 'c-name';
-      name.textContent = 'Personagem ' + (i + 1);   // nome real virá do futuro perfil
-      var idl = document.createElement('div');
-      idl.className = 'c-id';
-      idl.textContent = 'ID ' + cid;
-      left.appendChild(name); left.appendChild(idl);
+      /* topo com avatar */
+      var top = document.createElement('div');
+      top.className = 'char-card-top';
 
-      var go = document.createElement('div');
-      go.className = 'c-go';
-      go.textContent = '›';
+      var avatar = document.createElement('div');
+      avatar.className = 'char-avatar';
+      avatar.textContent = initial;
+      top.appendChild(avatar);
 
-      card.appendChild(left); card.appendChild(go);
-      card.addEventListener('click', function () {
+      var badge = document.createElement('span');
+      badge.className = 'char-index-badge';
+      badge.textContent = '#' + (index + 1);
+      top.appendChild(badge);
+
+      card.appendChild(top);
+
+      /* corpo */
+      var body = document.createElement('div');
+      body.className = 'char-card-body';
+
+      var nameEl = document.createElement('div');
+      nameEl.className = 'char-card-name';
+      nameEl.textContent = label;
+      body.appendChild(nameEl);
+
+      var idEl = document.createElement('div');
+      idEl.className = 'char-card-id';
+      idEl.textContent = 'ID ' + cid;
+      body.appendChild(idEl);
+
+      var details = document.createElement('div');
+      details.className = 'char-card-details';
+      var profile = character.model === 'mp_f_freemode_01'
+        ? 'Feminino'
+        : character.model === 'mp_m_freemode_01' ? 'Masculino' : 'Perfil pendente';
+      details.textContent = (character.age ? character.age + ' anos · ' : '') + profile;
+      body.appendChild(details);
+
+      /* botão decorativo "Entrar" */
+      var enterBtn = document.createElement('div');
+      enterBtn.className = 'char-enter-btn';
+      enterBtn.innerHTML = 'Entrar <span class="char-enter-arrow">→</span>';
+      body.appendChild(enterBtn);
+
+      card.appendChild(body);
+
+      onCharacter(card, 'click', function () {
         if (busy) return;
-        setBusy(true); setMsg(msg2, '');
+        setBusy(true);
+        setMessage(refs.msg2, '');
         nui('pickChar', { cid: cid });
       });
-      list.appendChild(card);
+
+      refs.charList.appendChild(card);
     });
   }
 
-  document.getElementById('btn-create').addEventListener('click', function () {
+  on(document.getElementById('btn-create'), 'click', function () {
     if (busy) return;
+    setBusy(true);
+    setMessage(refs.msg2, '');
     nui('createChar', {});
   });
 
 
   // ============================================================
-  // MENSAGENS DO CLIENTE LUA
+  // BRIDGE LUA → NUI / CLEANUP
   // ============================================================
 
-  window.addEventListener('message', function (ev) {
-    var d = ev.data || {};
-    switch (d.action) {
-      case 'open':
-        show(app, true); show(vLogin, true); show(vChar, false);
-        setBusy(false); setMsg(msg, ''); setMsg(msg2, '');
-        inUser.value = ''; inPass.value = '';
-        setTimeout(function () { inUser.focus(); }, 50);
+  on(window, 'message', function (event) {
+    var message = event.data || {};
+    var data = message.data || {};
+    switch (message.type) {
+      case 'login:open':
+        termsVersion = typeof data.termsVersion === 'string' ? data.termsVersion : '';
+        show(refs.app, true);
+        show(refs.loginView, true);
+        show(refs.charView, false);
+        closeTerms();
+        clearSensitive();
+        setMode('login');
+        document.getElementById('login-user').value = '';
+        document.getElementById('login-user').focus();
         break;
-      case 'view':
-        show(vLogin, d.view === 'login');
-        show(vChar, d.view === 'charselect');
-        setBusy(false); setMsg(msg, ''); setMsg(msg2, '');
-        break;
-      case 'chars':
-        renderChars(d.chars);
-        break;
-      case 'error':
+      case 'login:view':
+        show(refs.loginView, data.view === 'login');
+        show(refs.charView, data.view === 'charselect');
         setBusy(false);
-        setMsg(activeMsg(), ERR[d.err] || ERR.erro);
+        setMessage(refs.msg, '');
+        setMessage(refs.msg2, '');
         break;
-      case 'close':
-        show(app, false); setBusy(false);
+      case 'login:chars':
+        renderCharacters(data.chars);
+        break;
+      case 'login:error':
+        setBusy(false);
+        setMessage(activeMessage(), ERR[data.err] || ERR.erro);
+        break;
+      case 'login:recoveryDone':
+        clearSensitive();
+        setMode('login');
+        setMessage(refs.msg, 'Se o contato coincidiu, sua senha foi redefinida.', true);
+        break;
+      case 'login:creationReturn':
+        show(refs.app, true);
+        show(refs.loginView, false);
+        show(refs.charView, true);
+        renderCharacters(data.chars || []);
+        setBusy(false);
+        setMessage(refs.msg2, data.err ? (ERR[data.err] || ERR.erro) : '');
+        break;
+      case 'login:close':
+        clearSensitive();
+        clearCharacterListeners();
+        closeTerms();
+        show(refs.app, false);
+        setBusy(false);
         break;
     }
+  });
+
+  on(window, 'beforeunload', function () {
+    clearSensitive();
+    clearCharacterListeners();
+    while (listeners.length) listeners.pop()();
   });
 })();

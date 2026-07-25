@@ -382,3 +382,125 @@ relogin/restart, resmon e spoof de netId/proximidade.
 
 Reversível por arquivo. Validação estática: `luac -p` e `git diff --check`.
 Runtime obrigatório: reinício completo, bomba/galão/elétrico, dois clientes, relog e resmon.
+
+### [ADR #70] 2026-07-18 | módulos: CORE exports / vhub_hss
+
+**HSS assume o estado físico do ped sem receber referência viva da sessão.**
+
+- `char_id` permanece verdade exclusiva de `vHub.Auth`.
+- Export gated `getCharacterId(src)` retorna somente o identificador escalar da sessão online.
+- Export exato `getCharacterBootstrap(src)` entrega cópia limitada ao HSS, sem referência viva.
+- Exports exatos `reportPhysicalDeath/Respawn(src)` validam a réplica e fecham o ciclo institucional;
+  `vHub:ready` repetido nunca conclui respawn.
+- Export gated `log(level,module,message,meta)` preserva observabilidade sem `getVHub()` externo.
+- `vhub_hss` entra no trust do CORE; nenhuma mutação de `user.data` é autorizada.
+- Versão CORE: `2.0.0-alpha.5`; HSS: `2.0.2`.
+- Morte/respawn é detectado e confirmado server-side pelo HSS; jail cliente não escreve coordenada.
+- Fila SQL HSS dirigida por callback, revisão+digest, escalares `DOUBLE`, retry e outbox terminal.
+- Schedulers de monitor/fisiologia processam lotes de 16 a 1 Hz/jogador.
+
+Validação estática: 162 Lua e 24 JS relevantes sem erro; manifest HSS 21/21; NUI com lifecycle completo e
+identidade Areia/Dourado. Validação runtime obrigatória:
+spawn/replay/troca de personagem, morte/respawn, restart/buckets, persistência e resmon. A remoção
+da fachada `vhub_player_state` exige ADR posterior (#71) e grep global zero.
+
+### [ADR #74] 2026-07-22 | módulos: CORE auth/sql/exports + login/HSS/SIMS
+
+**Criação multichar passa a ser uma saga server-authoritative integrada ao login.**
+
+- CORE `2.0.0-alpha.6`: criação transacional/idempotente, cap de três slots e flag
+  `sims_created` autoritativa.
+- Login `0.3.0`: personagem incompleto vai ao SIMS e retorna ao charselect; spawn só depois do gate.
+- Spawn Selector `2.1.1`: preload/timeout nunca libera personagem incompleto; NUI sem CDN.
+- HSS `2.2.1`: pending/bucket 999, estágio temporário, APV2, CAS confirmado após revisão/digest
+  e rollback durável.
+- Identity `1.1.1`/Money `2.1.1`: identidade inicial atômica e operações idempotentes;
+  pagamento possui refund offline-safe.
+- SIMS `1.0.1`: saga durável, recovery estorna débito offline, criação e lojas de aparência/outfits; nenhum payload cliente escolhe
+  personagem, bucket, preço ou saldo.
+
+Validação estática conjunta concluída. Runtime obrigatório: DB real, restart/replay, falhas injetadas,
+fluxo com três slots, CEF e resmon.
+
+### [ADR #75] 2026-07-22 | módulos: voicePMA / WOW / HSS / vehcontrol
+
+**Voz Mumble nativa passa a ter owner vHub e controla o ganho musical local.**
+
+- `vhub_voicePMA` `1.0.0`: proximidade, rádio e ligação efêmeros, validação HSS, rate/cap,
+  sync/deltas targeted e reconexão replay-safe.
+- HSS `2.2.1` publica `vhub_routing_bucket`; voice converte o bucket em canal Mumble. O CAS de
+  customização só confirma a operação após revisão/digest persistidos.
+- WOW `2.0.0`: ducking progressivo até 50%, modo streamer KVP com ganho zero, iframe YouTube
+  nocookie sem scripts CDN e egress de busca limitado/deduplicado.
+- `vhub_vehcontrol` `1.5.0`: checkbox streamer, bridge WOW e State Bags server-owned de trava/motor;
+  somente o network owner aplica natives.
+- Referências legadas ficam fora do runtime; launcher Node removido.
+
+Gates estáticos de segurança, performance, natives, contrato e design aprovados. Runtime obrigatório:
+Mumble 2+ clientes/buckets/reconnect, rádio/ligação, CEF/iframe, streamer, resmon 32/64 e stress.
+
+### [ADR #76] 2026-07-23 | CORE `2.0.0-alpha.7` — fix LOCKOUT do gate de login + `deleteCharacter` gated
+
+**Conta com char persistido travava em lockout permanente sob o gate de login; export de char zerado (modelo conta-zerada) entra export-first.**
+
+**Bug vivo determinístico.** Com `vhub_login` gate ATIVO, QUALQUER conta com char persistido travava
+em lockout permanente: presa no bucket 999, NUI de login nunca abre, sobrevive a restart. Sintoma do
+dono: criar 1 "novo personagem" que falhou (órfão) travava a conta para sempre.
+
+**Raiz.** `server/boot.lua` só respeitava o gate no ramo `#chars==0`; `#chars>0` caía no auto-load
+(`characterLoad`+`playerSpawn`) e nesse caminho o `SPAWN_CHOOSE` do HSS nunca dispara: `handle_character_load`
+assume que o CORE já disparou o choose (verdade só p/ `#chars==0`) e `handle_spawn` bate no replay-guard
+`_spawn_seen` e retorna cedo. Player online, sem char selecionável, sem tela — 999 pra sempre.
+
+**Correções (6 arquivos).**
+- `server/boot.lua` (~182-240): HOIST do gate. Quando `loginGateAtivo`, SEMPRE `SetPlayerRoutingBucket(src,999)`
+  + `SetTimeout(600, chooseSpawn)` e **NÃO** seta `user.char_id`. Invariante de segurança: o guard `if user.char_id`
+  do `SetTimeout(500)` é o que impede `playerSpawn`; sob o gate o `char_id` nasce SÓ de `selectCharacter`.
+  Gate OFF = comportamento legado intacto (`#chars==0` cria padrão; senão auto-load do último). M1 (segurança):
+  `loginGateAtivo = (not gateOk) or (gateResult == true)` dentro de `if GetResourceState('vhub_login')=='started'`
+  — pcall de `isGateActive` falhar conta como gate ATIVO (fail-CLOSED); fail-open só quando o login NÃO está started.
+- `server/auth.lua`: `Auth:deleteCharacterRequest(src, char_id)` — getUser(src); recusa `in_use` se
+  `char_id == user.char_id` (M2 — nunca apaga o char ativo da sessão, estado vivo na VRAM); ownership em
+  profundidade via `vh/get_char_ids` (ausência → `{ok=true,deleted=false,replayed=true}` idempotente);
+  DELETE pelo prepared existente `vh/delete_char` (`WHERE id=@id AND user_id=@user_id`, duplo-guard);
+  `vHub.audit("vhub_login","deleteCharacter", char_id, src, {user_id}, {deleted=true})` (R12). Sem `request_id`
+  — `char_id` monotônico + `WHERE user_id` = idempotente por efeito.
+- `server/exports.lua`: export gated `deleteCharacter(src,char_id)` com `_invoker_is('vhub_login')`. Export-first
+  (R3); consumidor de abandono é follow-up (o guard char-ativo exige deselect antes).
+- `fxmanifest.lua`: versão → `2.0.0-alpha.7`.
+- `[SCRIPTS]/vhub_sims/core/server/creation.lua`: `waitOwnerReady` 2s→6s (cold-load do 1º char) + log de erro
+  quando o owner físico (HSS) não fica pronto no budget. Sem persistência nova.
+- `[SCRIPTS]/vhub_hss/server/init.lua`: log quando `_state_ready==false` no CHARACTER_LOAD (diagnóstico). Sem persistência nova.
+
+**Persistência verificada (gate final).**
+- **Delete cascade COMPLETO e seguro.** `vh_characters(id)` é a âncora; TODOS os dependentes têm `ON DELETE CASCADE`:
+  CORE — `vh_char_data` (schema:125-127), `vh_character_requests` (235-237), `vh_sims_creation` (250-252);
+  HSS — `vhub_hss_state` (`fk_hss_char`) e `vhub_hss_customization_ops` (`fk_hss_customization_char`).
+  Apagar o char limpa todo o estado dependente → **zero órfão de estado**.
+- **Idempotência.** `char_id` monotônico (`_next_char_id = MAX+1`, `state.lua:110`) nunca reciclado → sem herança
+  de identidade órfã. Ausência de ownership no `get_char_ids` = no-op idempotente (`replayed=true`); segundo DELETE
+  real afeta 0 linhas mas o pcall segue OK — mesmo estado final.
+- **L-13/L-14 OK.** Escritor é o CORE (`auth.lua` dentro de `[CORE]/vhub`) via prepared `vh/delete_char`; ZERO
+  `set*Data`, ZERO mutação de internos via `getVHub()`.
+- **Audit OK.** Assinatura confere `vHub.audit(actor,action,target,source,before,after)` em `state.lua:452`.
+
+**Verificação de sintaxe:** `luac -p` OK nos 6. O hook `post_lua_check` deu falso-positivo L-12 no fxmanifest
+(manifest não contém SQL) — ignorado.
+
+**Gates:** arquiteto + segurança JÁ APROVARAM (M1 fail-closed no boot; M2 recusa char ativo). Persistência
+(gate final) — **APROVAR**: nenhum vetor de perda de dado; cascade completo CORE+HSS; idempotente; escritor único
+respeitado.
+
+**Pendências (não bloqueiam).**
+- `deleteCharacter` ainda SEM consumidor — o wiring de abandono (deselect antes) é follow-up. O LOCKOUT em si já
+  está resolvido pelo `boot.lua`; o char órfão remanescente persiste até o wiring chegar.
+- `not_ready` residual de cold-load agora é diagnosticável pelos logs novos (creation.lua / hss init.lua).
+- Ativos keyed ao char (veículos via `key_uid`) NÃO cascateiam (sem FK char→`vh_vehicles`) — irrelevante p/
+  conta-zerada/abandonada (sem ativos), mas o consumidor de abandono deve definir política de ativos antes de
+  permitir deleção de char estabelecido.
+
+**Rollback:** `git checkout HEAD -- "resources/[CORE]/vhub/server/boot.lua" "resources/[CORE]/vhub/server/auth.lua" "resources/[CORE]/vhub/server/exports.lua" "resources/[CORE]/vhub/fxmanifest.lua"`
+(4 CORE tracked). Os 2 [SCRIPTS] são UNTRACKED → não restauráveis por `git checkout HEAD` (reverter manual: 6s→2s
++ remover logs, ou descartar a working copy).
+
+Próximo ADR livre: **#77**.

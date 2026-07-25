@@ -5,7 +5,8 @@
 -- O CLIENTE executa os natives (tem a entidade): portas, janelas, luzes, banco, cinto.
 -- Trava e motor passam pelo SERVIDOR (autoridade por chave) e voltam por broadcast.
 
-local E = 'vhub_vehcontrol:'
+local E = VHubVeh.E
+local B = VHubVeh.B
 
 
 -- ============================================================
@@ -21,6 +22,7 @@ local extLight = false
 local sigL, sigR = false, false   -- estado do pisca (esq/dir; ambos ligados = alerta)
 local seatbelt = false     -- cinto de segurança (keyboard 'g')
 local _running  = true     -- saida deterministica das threads (L-06)
+local _stateHandlers = {}
 
 
 -- ============================================================
@@ -59,7 +61,7 @@ local function closePanel()
   if not open then return end
   open = false
   setFocus(false)
-  SendNUIMessage({ type = 'ui', status = false })
+  SendNUIMessage({ type = 'ui', data = { status = false } })
 end
 
 -- abre o painel. editTab=true (uso da caixa de ferramentas) já mostra a Ficha em modo edição
@@ -71,8 +73,11 @@ local function openPanel(editTab)
   winDown = {}
   open = true
   setFocus(true)
-  SendNUIMessage({ type = 'ui', status = true, windows = Config.viewWindows == true, editTab = editTab == true })
-  SendNUIMessage({ type = 'emergency', emergencystatus = (sigL and sigR) })
+  SendNUIMessage({
+    type = 'ui',
+    data = { status = true, windows = Config.viewWindows == true, edit_tab = editTab == true },
+  })
+  SendNUIMessage({ type = 'emergency', data = { emergency_status = sigL and sigR } })
   -- pede a ficha derivada do veículo (aba Ficha) — servidor responde com SHEET
   if plate then TriggerServerEvent(VHubVeh.E.REQ_SHEET, plate) end
 end
@@ -80,7 +85,7 @@ end
 -- servidor devolve a ficha derivada (flat) → repassa à NUI
 RegisterNetEvent(VHubVeh.E.SHEET)
 AddEventHandler(VHubVeh.E.SHEET, function(sheet)
-  SendNUIMessage({ type = 'sheet', data = sheet or nil })
+  SendNUIMessage({ type = 'sheet', data = { sheet = sheet or nil } })
 end)
 
 -- uso do item "caixa de ferramentas" perto do veículo: abre direto na Ficha em edição
@@ -97,7 +102,10 @@ end)
 RegisterNetEvent(VHubVeh.E.RECAL_DONE)
 AddEventHandler(VHubVeh.E.RECAL_DONE, function(ok, msg, kind, sheet)
   if msg ~= '' and Config.notify then Config.notify(msg) end
-  SendNUIMessage({ type = 'recalDone', ok = ok == true, kind = kind, data = sheet or nil })
+  SendNUIMessage({
+    type = 'recalDone',
+    data = { ok = ok == true, kind = kind, sheet = sheet or nil },
+  })
 end)
 
 -- comando de chat (sempre disponivel)
@@ -116,7 +124,7 @@ end
 local function requestLock(v)
   if not v or v == 0 then return end
   local pl = plateOf(v)
-  if pl then TriggerServerEvent(E .. 'requestLock', VehToNet(v), pl) end
+  if pl then TriggerServerEvent(E.REQUEST_LOCK, VehToNet(v), pl) end
 end
 
 -- aplica o pisca atual ao veiculo + reflete o alerta na NUI (se aberta)
@@ -125,7 +133,9 @@ local function applySignals()
   if v == 0 then return end
   SetVehicleIndicatorLights(v, Config.indicator.left, sigL)
   SetVehicleIndicatorLights(v, Config.indicator.right, sigR)
-  if open then SendNUIMessage({ type = 'emergency', emergencystatus = (sigL and sigR) }) end
+  if open then
+    SendNUIMessage({ type = 'emergency', data = { emergency_status = sigL and sigR } })
+  end
 end
 
 -- liga/desliga o pisca-alerta (os dois lados juntos)
@@ -199,8 +209,8 @@ RegisterCommand('vhubvc_winDn', function() windowAction(false) end, false)
 RegisterKeyMapping('vhubvc_winDn', 'Veiculo: descer janela', 'keyboard', Config.keys.windowDown or 'DOWN')
 
 -- notificacao de trava (o servidor avisa quem acionou)
-RegisterNetEvent(E .. 'lockNotify')
-AddEventHandler(E .. 'lockNotify', function(state)
+RegisterNetEvent(E.LOCK_NOTIFY)
+AddEventHandler(E.LOCK_NOTIFY, function(state)
   if Config.notify then Config.notify(state == 2 and 'Veículo trancado' or 'Veículo destrancado') end
 end)
 
@@ -213,7 +223,7 @@ end)
 -- Este resource e a fonte unica de verdade do cinto (L-04). false = desafivelado.
 local function setSeatbelt(state)
   seatbelt = state and true or false
-  LocalPlayer.state:set('vhub_seatbelt', seatbelt, false)
+  LocalPlayer.state:set(B.SEATBELT, seatbelt, false)
 end
 
 -- estado inicial: sempre desafivelado
@@ -297,13 +307,13 @@ end
 
 -- envia snapshot ao servidor (validado la; escrita unica no conce)
 local function sendSnapshot(v, pl, final)
-  TriggerServerEvent(E .. 'stateSync', VehToNet(v), pl, buildSnapshot(v, final))
+  TriggerServerEvent(E.STATE_SYNC, VehToNet(v), pl, buildSnapshot(v, final))
   vc_lastSnap = GetGameTimer()
 end
 
 -- aplica o estado salvo na entidade local (fuel local; dano atras de controle de rede)
-RegisterNetEvent(E .. 'applyState')
-AddEventHandler(E .. 'applyState', function(pl, st)
+RegisterNetEvent(E.APPLY_STATE)
+AddEventHandler(E.APPLY_STATE, function(pl, st)
   if type(st) ~= 'table' then return end
   local ped = PlayerPedId()
   local v = GetVehiclePedIsIn(ped, false)   -- sempre fresh (race: trocou de carro)
@@ -332,7 +342,7 @@ AddEventHandler(E .. 'applyState', function(pl, st)
   end)
 
   -- evento LOCAL p/ HUDs (vhub_velo semeia o odometro daqui)
-  TriggerEvent('vhub_vehcontrol:stateApplied', pl, st)
+  TriggerEvent(E.STATE_APPLIED, pl, st)
 end)
 
 -- detecta crash (eject sem cinto), reseta o cinto ao entrar e gerencia o ciclo
@@ -377,7 +387,7 @@ CreateThread(function()
             local now = GetGameTimer()
             if now - vc_lastReq > 2500 then
               vc_lastReq, vc_reqTries = now, vc_reqTries + 1
-              TriggerServerEvent(E .. 'requestState', VehToNet(v), pl)
+              TriggerServerEvent(E.REQUEST_STATE, VehToNet(v), pl)
             end
           end
           -- snapshot periodico (15s dirigindo)
@@ -453,7 +463,7 @@ CreateThread(function()
         -- do CORE) p/ os dois HUDs nunca divergirem; fallback ao native sem registro vHub.
         local okf, fbag = pcall(function() return Entity(veh).state.vh_fuel end)
         local fuelv = (okf and type(fbag) == 'number' and fbag >= 0) and fbag or GetVehicleFuelLevel(veh)
-        SendNUIMessage({ type = 'updateFuel', fuel = math.floor(fuelv) })
+        SendNUIMessage({ type = 'updateFuel', data = { fuel = math.floor(fuelv) } })
       end
     else
       if open then closePanel() end
@@ -467,67 +477,80 @@ end)
 -- NUI CALLBACKS — controles
 -- ============================================================
 
-RegisterNUICallback('exit', function(_, cb) closePanel(); cb('ok') end)
+local function reply(cb, ok, err)
+  cb({ ok = ok == true, err = ok == true and nil or err })
+end
+
+RegisterNUICallback('exit', function(_, cb) closePanel(); cb({ ok = true }) end)
 
 -- portas (lf/rf/lr/rr/hood/trunk) — toggle local
 RegisterNUICallback('door', function(d, cb)
   local idx = Config.doorIndex[d and d.door]
-  if veh ~= 0 and idx then
+  local ok = veh ~= 0 and DoesEntityExist(veh) and idx ~= nil
+  if ok then
     if GetVehicleDoorAngleRatio(veh, idx) > 0.0 then
       SetVehicleDoorShut(veh, idx, false)
     else
       SetVehicleDoorOpen(veh, idx, false, false)
     end
   end
-  cb('ok')
+  reply(cb, ok, idx and 'vehicle_unavailable' or 'invalid_door')
 end)
 
 -- janelas — toggle local (estado proprio por nao haver native confiavel de leitura)
 RegisterNUICallback('window', function(d, cb)
   local idx = Config.windowIndex[d and d.window]
-  if veh ~= 0 and idx then
+  local ok = veh ~= 0 and DoesEntityExist(veh) and idx ~= nil
+  if ok then
     winDown[idx] = not winDown[idx]
     if winDown[idx] then RollDownWindow(veh, idx) else RollUpWindow(veh, idx) end
   end
-  cb('ok')
+  reply(cb, ok, idx and 'vehicle_unavailable' or 'invalid_window')
 end)
 
 -- luz interna — local
 RegisterNUICallback('light', function(_, cb)
-  if veh ~= 0 then intLight = not intLight; SetVehicleInteriorlight(veh, intLight) end
-  cb('ok')
+  local ok = veh ~= 0 and DoesEntityExist(veh)
+  if ok then intLight = not intLight; SetVehicleInteriorlight(veh, intLight) end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 -- farois — local (2 = faróis forçados; 0 = devolve o controle automatico ao jogo)
 RegisterNUICallback('lights', function(_, cb)
-  if veh ~= 0 then extLight = not extLight; SetVehicleLights(veh, extLight and 2 or 0) end
-  cb('ok')
+  local ok = veh ~= 0 and DoesEntityExist(veh)
+  if ok then extLight = not extLight; SetVehicleLights(veh, extLight and 2 or 0) end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 -- banco — vai p/ o proximo assento livre
 RegisterNUICallback('seat', function(_, cb)
-  if veh ~= 0 then
+  local placed = false
+  if veh ~= 0 and DoesEntityExist(veh) then
     local ped = PlayerPedId()
     local seats = GetVehicleModelNumberOfSeats(GetEntityModel(veh))
     local cur = -2
     for s = -1, seats - 2 do if GetPedInVehicleSeat(veh, s) == ped then cur = s; break end end
-    local placed = false
     for s = cur + 1, seats - 2 do
       if IsVehicleSeatFree(veh, s) then SetPedIntoVehicle(ped, veh, s); placed = true; break end
     end
     if not placed then
       for s = -1, cur - 1 do
-        if IsVehicleSeatFree(veh, s) then SetPedIntoVehicle(ped, veh, s); break end
+        if IsVehicleSeatFree(veh, s) then
+          SetPedIntoVehicle(ped, veh, s)
+          placed = true
+          break
+        end
       end
     end
   end
-  cb('ok')
+  reply(cb, placed, 'seat_unavailable')
 end)
 
 -- emergencia — pisca-alerta (mesma logica da tecla seta-esq+dir)
 RegisterNUICallback('emergency', function(_, cb)
-  toggleHazard()
-  cb('ok')
+  local ok = controlledVehicle() ~= 0
+  if ok then toggleHazard() end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 
@@ -537,10 +560,11 @@ end)
 
 -- NUI manda o alloc escolhido nos sliders; servidor valida, cobra e persiste
 RegisterNUICallback('recalibrate', function(d, cb)
-  if plate and type(d) == 'table' and type(d.alloc) == 'table' then
+  local ok = plate ~= nil and type(d) == 'table' and type(d.alloc) == 'table'
+  if ok then
     TriggerServerEvent(VHubVeh.E.RECALIBRATE, plate, d.alloc, 'toolbox')
   end
-  cb('ok')
+  reply(cb, ok, 'invalid_recalibration')
 end)
 
 
@@ -550,31 +574,35 @@ end)
 
 -- liga/desliga o nitro do veículo da ficha
 RegisterNUICallback('nitroToggle', function(d, cb)
-  if plate and type(d) == 'table' then
+  local ok = plate ~= nil and type(d) == 'table'
+  if ok then
     TriggerServerEvent(VHubVeh.E.NITRO_TOGGLE, plate, d.on == true)
   end
-  cb('ok')
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 -- ajusta o nível 1..10 do nitro
 RegisterNUICallback('nitroLevel', function(d, cb)
-  if plate and type(d) == 'table' then
-    TriggerServerEvent(VHubVeh.E.NITRO_LEVEL, plate, tonumber(d.level))
+  local level = type(d) == 'table' and tonumber(d.level) or nil
+  local ok = plate ~= nil and level ~= nil
+  if ok then
+    TriggerServerEvent(VHubVeh.E.NITRO_LEVEL, plate, level)
   end
-  cb('ok')
+  reply(cb, ok, 'invalid_nitro_level')
 end)
 
 -- abastece o nitro (consome 1 Garrafa de Nitro, server-side)
 RegisterNUICallback('nitroCharge', function(_, cb)
-  if plate then TriggerServerEvent(VHubVeh.E.NITRO_CHARGE, plate) end
-  cb('ok')
+  local ok = plate ~= nil
+  if ok then TriggerServerEvent(VHubVeh.E.NITRO_CHARGE, plate) end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 -- resultado da operação de nitro → feedback nativo + atualiza a seção na NUI
 RegisterNetEvent(VHubVeh.E.NITRO_DONE)
 AddEventHandler(VHubVeh.E.NITRO_DONE, function(ok, msg, nitro)
   if msg and msg ~= '' and Config.notify then Config.notify(msg) end
-  SendNUIMessage({ type = 'nitroDone', ok = ok == true, nitro = nitro or nil })
+  SendNUIMessage({ type = 'nitroDone', data = { ok = ok == true, nitro = nitro or nil } })
 end)
 
 
@@ -583,33 +611,34 @@ end)
 -- ============================================================
 
 RegisterNUICallback('lock', function(_, cb)
-  requestLock(veh)
-  cb('ok')
+  local ok = veh ~= 0 and DoesEntityExist(veh) and plate ~= nil
+  if ok then requestLock(veh) end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 RegisterNUICallback('engine', function(_, cb)
-  if veh ~= 0 and plate then TriggerServerEvent(E .. 'requestEngine', VehToNet(veh), plate) end
-  cb('ok')
+  local ok = veh ~= 0 and DoesEntityExist(veh) and plate ~= nil
+  if ok then TriggerServerEvent(E.REQUEST_ENGINE, VehToNet(veh), plate) end
+  reply(cb, ok, 'vehicle_unavailable')
 end)
 
 -- aplica o estado autoritativo (broadcast). So aplica se a placa do veiculo do
 -- netId bater com a autorizada — fecha spoof de netId (plateOf e confiavel no client).
-RegisterNetEvent(E .. 'applyLock')
-AddEventHandler(E .. 'applyLock', function(netId, pl, state)
-  local v = NetToVeh(netId)
-  if v and v ~= 0 and DoesEntityExist(v) and plateOf(v) == pl then
-    SetVehicleDoorsLocked(v, state)
-    if state == 2 then PlayVehicleDoorCloseSound(v, 1) else PlayVehicleDoorOpenSound(v, 0) end
+local function applyEntityControl(bag_name, key, value)
+  local entity = GetEntityFromStateBagName(bag_name)
+  if entity == 0 or not DoesEntityExist(entity) or GetEntityType(entity) ~= 2
+      or not NetworkHasControlOfEntity(entity) then return end
+  if key == B.LOCK and (value == 1 or value == 2) then
+    SetVehicleDoorsLocked(entity, value)
+    if value == 2 then PlayVehicleDoorCloseSound(entity, 1)
+    else PlayVehicleDoorOpenSound(entity, 0) end
+  elseif key == B.ENGINE and type(value) == 'boolean' then
+    SetVehicleEngineOn(entity, value, false, true)
   end
-end)
+end
 
-RegisterNetEvent(E .. 'applyEngine')
-AddEventHandler(E .. 'applyEngine', function(netId, pl, on)
-  local v = NetToVeh(netId)
-  if v and v ~= 0 and DoesEntityExist(v) and plateOf(v) == pl then
-    SetVehicleEngineOn(v, on, false, true)
-  end
-end)
+_stateHandlers[#_stateHandlers + 1] = AddStateBagChangeHandler(B.LOCK, nil, applyEntityControl)
+_stateHandlers[#_stateHandlers + 1] = AddStateBagChangeHandler(B.ENGINE, nil, applyEntityControl)
 
 
 -- ============================================================
@@ -619,5 +648,7 @@ end)
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
   _running = false                       -- encerra as threads (L-06)
+  for _, cookie in ipairs(_stateHandlers) do RemoveStateBagChangeHandler(cookie) end
+  _stateHandlers = {}
   if open then setFocus(false) end
 end)

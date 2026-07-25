@@ -456,16 +456,23 @@ function L.start(inst_id, solo)
     -- Envia RACE_PREPARE com spawn position de grid para cada player
     local track = ST.track(inst.track_id)
     for src, p in pairs(inst.players) do
-        TriggerClientEvent(E.RACE_PREPARE, src, {
+        local grid_position = GR.spawn_for(track, p.grid_slot)
+        local authorized = false
+        local ok = pcall(function()
+            authorized = exports.vhub_hss:authorizePosition(src, grid_position) == true
+        end)
+        if ok and authorized then TriggerClientEvent(E.RACE_PREPARE, src, {
             inst_id       = inst.id,
             track         = track,
             laps          = inst.laps,
             mode          = inst.mode,
-            grid_pos      = GR.spawn_for(track, p.grid_slot),
+            grid_pos      = grid_position,
             starts_at     = inst.starts_at,
             countdown     = Cfg.COUNTDOWN_MS or 7000,
             players_total = ST.count_players(inst),
-        })
+        }) else
+            VHubRachaLog.error('HSS recusou grid src=%s inst=%s', tostring(src), tostring(inst.id))
+        end
     end
 
     -- Agenda transicao warmup → racing

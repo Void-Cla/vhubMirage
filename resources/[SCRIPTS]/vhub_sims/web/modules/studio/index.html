@@ -1,0 +1,57 @@
+<section class="mod-studio" aria-label="Estúdio de aparência">
+
+  <!-- ======================================================
+       TOP BAR — marca + modo + status + sair
+       ====================================================== -->
+  <header class="mod-studio__topbar">
+    <div class="mod-studio__brand">
+      <img src="../../assets/logo.svg" alt="vHub Mirage">
+      <div class="mod-studio__brand-text">
+        <small>vHub Mirage</small>
+        <strong data-studio-title>SIMS</strong>
+      </div>
+    </div>
+    <span class="mod-studio__mode-label" data-studio-mode></span>
+    <div class="mod-studio__topbar-end">
+      <p class="sims-status mod-studio__topstatus" data-studio-status role="status" aria-live="polite"></p>
+      <button class="sims-button sims-button--ghost-danger sims-button--sm" data-action="cancel">✕ Sair</button>
+    </div>
+  </header>
+
+  <!-- ======================================================
+       LEFT NAV — abas verticais com ícone + rótulo
+       ====================================================== -->
+  <nav class="mod-studio__nav" data-studio-tabs
+    role="tablist" aria-label="Categorias de personalização"></nav>
+
+  <!-- ======================================================
+       RIGHT PANEL — controles da aba selecionada
+       ====================================================== -->
+  <aside class="mod-studio__panel">
+    <div id="studio-controls" class="mod-studio__controls"
+      data-studio-controls role="tabpanel"></div>
+    <footer class="mod-studio__panel-footer">
+      <button class="sims-button sims-button--sm" data-action="reset">Resetar</button>
+      <button class="sims-button sims-button--primary sims-button--sm"
+        data-action="continue">Confirmar →</button>
+    </footer>
+  </aside>
+
+  <!-- ======================================================
+       BOTTOM BAR — vistas de câmera + rotação
+       ====================================================== -->
+  <footer class="mod-studio__bottombar">
+    <div class="mod-studio__cameras" role="group" aria-label="Vista da câmera">
+      <button class="sims-cam-btn" data-action="camera-body"  aria-pressed="true">Corpo</button>
+      <button class="sims-cam-btn" data-action="camera-head"  aria-pressed="false">Rosto</button>
+      <button class="sims-cam-btn" data-action="camera-chest" aria-pressed="false">Torso</button>
+      <button class="sims-cam-btn" data-action="camera-legs"  aria-pressed="false">Pernas</button>
+      <button class="sims-cam-btn" data-action="camera-feet"  aria-pressed="false">Pés</button>
+    </div>
+    <div class="mod-studio__rotation" aria-label="Rotação">
+      <button class="sims-rot-btn" data-action="rotate-left"  aria-label="Girar à esquerda">↶</button>
+      <button class="sims-rot-btn" data-action="rotate-right" aria-label="Girar à direita">↷</button>
+    </div>
+  </footer>
+
+</section>

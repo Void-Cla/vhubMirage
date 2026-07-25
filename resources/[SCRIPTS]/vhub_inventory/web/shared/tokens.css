@@ -5,8 +5,8 @@
   --vh-gold-neon: rgb(248, 200, 105);
   --vh-sand:      #e8d2a0;
 
-  --vh-glass:     rgba(20, 18, 14, 0.55);
-  --vh-glass-2:   rgba(28, 25, 19, 0.72);
+  --vh-glass:     rgba(20, 18, 14, 0.72);
+  --vh-glass-2:   rgba(28, 25, 19, 0.84);
   --vh-border:    rgba(248, 200, 105, 0.22);
   --vh-border-2:  rgba(248, 200, 105, 0.40);
 
@@ -20,5 +20,8 @@
   --vh-shadow:    0 10px 34px rgba(0, 0, 0, 0.45);
   --vh-glow:      0 0 10px rgba(248, 200, 105, 0.35);
 
-  --vh-font:      'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --vh-font-title: 'Barlow Condensed', 'Segoe UI Condensed', 'Segoe UI', system-ui, sans-serif;
+  --vh-font-body:  'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  --vh-pending:   rgba(248, 200, 105, 0.18);
 }

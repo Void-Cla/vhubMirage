@@ -58,4 +58,6 @@ AddEventHandler('onResourceStop', function(res)
     SetNuiFocus(false, false)
     VHubCustom.inMenu = false
   end
+  -- garante que RenderScriptCams não fica ativo com câmera destruída (= tela preta)
+  if Cam and Cam.active and Cam.active() then Cam.stop() end
 end)

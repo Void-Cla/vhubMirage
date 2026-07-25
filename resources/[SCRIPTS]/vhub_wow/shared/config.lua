@@ -15,6 +15,11 @@ WOW_Config.TrustedResources = {
   'vhub_vehcontrol',
 }
 
+-- consumers client-side autorizados a alterar preferencias locais do WOW
+WOW_Config.TrustedClientResources = {
+  ['vhub_vehcontrol'] = true,
+}
+
 -- dominios permitidos para URL de AUDIO DIRETO (tocavel no <audio> HTML5).
 -- Pagina de YouTube NAO entra aqui: e tratada a parte (parseYouTubeId + embed nocookie).
 WOW_Config.AllowedDomains = {
@@ -144,24 +149,10 @@ function WOW_Config.buildEmbedUrl(videoId)
   return ('https://%s/embed/%s'):format(WOW_Config.YouTube.embedHost, videoId)
 end
 
--- valida permalink do SoundCloud (host ancorado + caminho /artista/faixa)
-function WOW_Config.isSoundCloudUrl(url)
-  if type(url) ~= 'string' or #url == 0 or #url > 512 then return false end
-
-  local host, path = url:match('^https://([%w%.%-]+)(/.*)$')
-  if not host then return false end
-  if not (host == 'soundcloud.com' or host == 'www.soundcloud.com' or host == 'm.soundcloud.com') then
-    return false
-  end
-
-  return path:match('^/[%w%-_]+/[%w%-_]+') ~= nil
-end
-
--- aceita p/ playback: arquivo direto (allowlist) OU YouTube OU SoundCloud
+-- aceita p/ playback: arquivo direto (allowlist) OU YouTube
 function WOW_Config.isPlayableUrl(url)
   if WOW_Config.isValidUrl(url) then return true end
   if WOW_Config.parseYouTubeId(url) then return true end
-  if WOW_Config.isSoundCloudUrl(url) then return true end
   return false
 end
 

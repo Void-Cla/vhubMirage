@@ -1,0 +1,38 @@
+<section class="mod-wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+  <form class="mod-wizard__card" data-wizard-form>
+
+    <!-- marca + título -->
+    <div class="mod-wizard__header">
+      <img src="../../assets/logo.svg" alt="vHub Mirage">
+      <div>
+        <small>Bem-vindo à cidade</small>
+        <h2 id="wizard-title">Quem é você?</h2>
+      </div>
+    </div>
+
+    <!-- campos em linha: nome · sobrenome · idade -->
+    <div class="mod-wizard__fields">
+      <label class="sims-field">
+        <span>Nome</span>
+        <input name="firstname" maxlength="50" autocomplete="off" required placeholder="Ex: João">
+      </label>
+      <label class="sims-field">
+        <span>Sobrenome</span>
+        <input name="lastname" maxlength="50" autocomplete="off" required placeholder="Ex: Silva">
+      </label>
+      <label class="sims-field mod-wizard__age">
+        <span>Idade</span>
+        <input name="age" type="number" min="16" max="120" step="1" required placeholder="18">
+      </label>
+    </div>
+
+    <!-- status + submit -->
+    <div class="mod-wizard__footer">
+      <p class="sims-status" data-wizard-status role="status" aria-live="polite"></p>
+      <button class="sims-button sims-button--primary" type="submit">
+        Entrar no estúdio →
+      </button>
+    </div>
+
+  </form>
+</section>

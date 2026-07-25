@@ -73,6 +73,10 @@
             width: 44px; height: 32px; padding: 2px; cursor: pointer;
             background: rgba(0,0,0,0.30); border: 1px solid rgba(217,193,154,0.22); border-radius: 8px;
         }
+        .vg-custom input[type=range] {
+            width: 100%; accent-color: #f3b53a; cursor: pointer;
+            margin-top: 2px;
+        }
         .vg-apply, .vg-clearbg {
             border-radius: 8px; border: 1px solid rgba(217,193,154,0.22);
             padding: 8px 12px; cursor: pointer; font-weight: 700; font-size: 12px; font-family: system-ui, sans-serif;
@@ -103,6 +107,10 @@
                 <div class="vg-custom-row">
                     <label>Fundo do velocímetro — link de imagem</label>
                     <input type="url" id="vg-bg" placeholder="https://.../fundo.png" autocomplete="off" />
+                </div>
+                <div class="vg-custom-row">
+                    <label>Zoom — <span id="vg-zoom-val">1.0×</span></label>
+                    <input type="range" id="vg-zoom" min="0.6" max="1.4" step="0.05" value="1.0" />
                 </div>
                 <div class="vg-custom-inline">
                     <div>

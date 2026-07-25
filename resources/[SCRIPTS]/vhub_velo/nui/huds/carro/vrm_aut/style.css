@@ -243,7 +243,9 @@ body.velo-active #velocimetro { opacity: 1; transform: translateY(0); }
 .status-icon { transition: color 0.2s ease, opacity 0.2s ease; }
 
 .status-icon.turn    { color: #2a2c34; }
-.status-icon.turn.on { color: #37e0a1; animation: blink 0.55s steps(2, start) infinite; }
+/* o velo-core acende via data-status (já com o lado corrigido); .on mantido p/ preview manual */
+.status-icon.turn.on,
+.status-icon.turn[data-status="on"] { color: #37e0a1; animation: blink 0.55s steps(2, start) infinite; }
 @keyframes blink {
     0%, 49%   { opacity: 1; filter: drop-shadow(0 0 6px #37e0a1); }
     50%, 100% { opacity: 0.25; filter: none; }

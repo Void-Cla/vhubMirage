@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_racha'
 author      'vHub Mirage'
-version     '3.1.0'
+version     '3.1.1'
 description 'Liga clandestina premium — 7 modos, ready-zone, totem cinematografico, editor visual, ranking persistido.'
 
 dependencies {
@@ -14,6 +14,7 @@ dependencies {
   'vhub_money',
   'vhub_identity',
   'vhub_groups',
+  'vhub_hss',
 }
 
 shared_scripts {

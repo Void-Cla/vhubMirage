@@ -70,7 +70,7 @@ loadmod("server/vehicle.lua")  -- entidade de veículo, State Bags
 loadmod("server/security.lua") -- payload, ACE, invoker whitelist
 loadmod("server/boot.lua")     -- net events, autosave, lifecycle
 loadmod("server/exports.lua")
--- spawn é responsabilidade de vhub_player_state (resource externo) — sem duplicação no core
+-- spawn é responsabilidade de vhub_hss (resource externo) — sem duplicação no core
 
 -- ── Export: registerStateDriver ──────────────────────────────────────────
 -- Permite que vhub_oxmysql externo registre um driver alternativo.

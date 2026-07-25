@@ -1,19 +1,14 @@
--- client/jail.lua  aplicação local do jail (teleporte fixo + bloqueio de a  es)
+-- client/jail.lua  reflexo visual do jail e bloqueio efêmero de controles
 ---@diagnostic disable: undefined-global
 
 local E = VHubAdmin.E
 local S = VHubAdmin.state
+local running = true
 
 RegisterNetEvent(E.JAIL_APPLY)
 AddEventHandler(E.JAIL_APPLY, function(data)
   if type(data) ~= 'table' then return end
   S.jail = { expires_at = tonumber(data.expires_at) or 0, pos = data.pos }
-  local p = data.pos
-  if p then
-    local ped = PlayerPedId()
-    SetEntityCoords(ped, p.x, p.y, p.z, false, false, false, false)
-    SetEntityHeading(ped, p.h or 0.0)
-  end
   VHubAdmin.notify('Você foi preso. ' .. (data.reason or ''))
 end)
 
@@ -23,36 +18,25 @@ AddEventHandler(E.JAIL_RELEASE, function()
   VHubAdmin.notify('Você foi liberado.')
 end)
 
--- thread: mant m no per metro do jail e bloqueia armas (1Hz)
+-- Suprimir tiro/ataque enquanto preso (frame loop só enquanto preso)
 Citizen.CreateThread(function()
-  while true do
-    Citizen.Wait(2000)
-    if S.jail then
-      if S.jail.expires_at <= os.time() then S.jail = nil
+  while running do
+    if not S.jail then Citizen.Wait(1000)
+    else
+      Citizen.Wait(0)
+      if S.jail.expires_at <= os.time() then
+        S.jail = nil
       else
-        local ped = PlayerPedId()
-        local c   = GetEntityCoords(ped)
-        local p   = S.jail.pos
-        if p and #(c - vector3(p.x, p.y, p.z)) > 30.0 then
-          SetEntityCoords(ped, p.x, p.y, p.z, false, false, false, false)
-          VHubAdmin.notify('Você ainda está preso.')
-        end
         DisablePlayerFiring(PlayerId(), true)
+        DisableControlAction(0, 24, true)   -- attack
+        DisableControlAction(0, 25, true)   -- aim
+        DisableControlAction(0, 47, true)   -- weapon
+        DisableControlAction(0, 58, true)
       end
     end
   end
 end)
 
--- Suprimir tiro/ataque enquanto preso (16ms frame loop s  enquanto preso)
-Citizen.CreateThread(function()
-  while true do
-    if not S.jail then Citizen.Wait(500)
-    else
-      Citizen.Wait(0)
-      DisableControlAction(0, 24, true)   -- attack
-      DisableControlAction(0, 25, true)   -- aim
-      DisableControlAction(0, 47, true)   -- weapon
-      DisableControlAction(0, 58, true)
-    end
-  end
+AddEventHandler('onResourceStop', function(resource)
+  if resource == GetCurrentResourceName() then running = false end
 end)

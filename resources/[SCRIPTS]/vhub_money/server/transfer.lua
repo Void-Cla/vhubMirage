@@ -50,6 +50,7 @@ local function update_offline_bank(char_id, delta)
   -- Carrega conta (cria se nao existir) — VRAM se ja estiver, senao SQL
   local entry = Core.by_char(char_id)
   if entry then
+    if Core.is_operation_locked(entry) then return false, 'busy' end
     -- Online: usa caminho de VRAM normal
     Core.apply_mutation(entry, 0, delta)
     return true, entry.bank
@@ -86,6 +87,7 @@ function T.try_transfer(actor_src, target_raw, amount, reason)
   local cfg = Cfg.TRANSFER
   local actor_entry = Core.by_src(tonumber(actor_src) or 0)
   if not actor_entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(actor_entry) then return false, 'busy' end
 
   local n = H.amount(amount)
   if n < (cfg.MIN_AMOUNT or 1) then return false, 'valor_abaixo_do_minimo' end
@@ -105,6 +107,7 @@ function T.try_transfer(actor_src, target_raw, amount, reason)
 
   -- Target online?
   local target_entry = Core.by_char(target_char_id)
+  if target_entry and Core.is_operation_locked(target_entry) then return false, 'busy' end
   if cfg.REQUIRE_TARGET_ONLINE and not target_entry then
     return false, 'destinatario_offline'
   end
@@ -196,6 +199,9 @@ function T.try_give(actor_src, target_src, amount, reason)
   local target_entry = Core.by_src(tonumber(target_src) or 0)
   if not actor_entry  then return false, 'sem_sessao' end
   if not target_entry then return false, 'destino_offline' end
+  if Core.is_operation_locked(actor_entry) or Core.is_operation_locked(target_entry) then
+    return false, 'busy'
+  end
   if actor_entry.char_id == target_entry.char_id then return false, 'autotransferencia' end
 
   local n = H.amount(amount)

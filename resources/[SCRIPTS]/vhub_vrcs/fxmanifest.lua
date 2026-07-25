@@ -5,13 +5,14 @@ lua54      'yes'
 
 name        'vhub_vrcs'
 author      'vHub Mirage'
-version     '1.0.0'
+version     '1.0.1'
 description 'VHUB Race Cinema System — gravador de telemetria autoritativa -> .vhr + fila de render (Fase 1 MVP).'
 
 -- Soft-coupling com vhub_racha: o racha EMPURRA telemetria validada via export
 -- (sob pcall do lado de la). vhub_vrcs nao depende do racha em runtime — so do driver.
 dependencies {
   'oxmysql',
+  'vhub_hss',
 }
 
 shared_scripts {

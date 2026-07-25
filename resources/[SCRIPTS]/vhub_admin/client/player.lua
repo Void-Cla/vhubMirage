@@ -42,7 +42,7 @@ AddEventHandler(E.TOGGLE_GOD, function()
   SetEntityInvincible(ped, S.god)
   SetPedCanRagdoll(ped, not S.god)
   SetEntityProofs(ped, S.god, S.god, S.god, S.god, S.god, S.god, S.god, S.god)
-  VHubAdmin.notify(S.god and 'Invencibilidade ativada.' or 'Invencibilidade desativada.')
+  VHubAdmin.notify(S.god and 'Invencibilidade + cura ativadas.' or 'Invencibilidade desativada.')
   syncFlags()
 end)
 
@@ -87,7 +87,7 @@ AddEventHandler(E.DO_CLEANPED, function()
   ClearPedEnvDirt(ped)
 end)
 
-AddEventHandler('vhub_admin:cleanupEffects', function()
+local function cleanupEffects()
   S.god, S.freeze, S.invis, S.stamina, S.jump = false, false, false, false, false
   local ped = PlayerPedId()
   SetPlayerInvincible(PlayerId(), false)
@@ -98,10 +98,14 @@ AddEventHandler('vhub_admin:cleanupEffects', function()
   ResetEntityAlpha(ped)
   FreezeEntityPosition(ped, false)
   syncFlags()
-end)
+end
+
+AddEventHandler(E.CLEANUP_EFFECTS, cleanupEffects)
 
 AddEventHandler('onResourceStop', function(resource)
-  if resource == GetCurrentResourceName() then running = false end
+  if resource ~= GetCurrentResourceName() then return end
+  running = false
+  cleanupEffects()
 end)
 
 RegisterCommand('god', function()

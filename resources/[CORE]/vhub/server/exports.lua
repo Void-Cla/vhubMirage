@@ -16,6 +16,33 @@ local function _invoker_allowed()
   return trust[caller] == true
 end
 
+local function _invoker_is(resource)
+  return GetInvokingResource() == resource
+end
+
+local CHARACTER_ID_CALLERS = {
+  vhub_login = true,
+  vhub_hss = true,
+  vhub_identity = true,
+  vhub_sims = true,
+  vhub_spawselector = true,
+  vhub_voicePMA = true,
+  vhub_vehcontrol = true,
+}
+
+local SIMS_READ_CALLERS = {
+  vhub_hss = true,
+  vhub_login = true,
+  vhub_sims = true,
+}
+
+local LOG_CALLERS = {
+  vhub_hss = true,
+  vhub_identity = true,
+  vhub_login = true,
+  vhub_sims = true,
+}
+
 
 -- ============================================================
 -- QUERIES (read-only)
@@ -25,6 +52,112 @@ vHub.Kernel:export("getVHub",      function()           return vHub            e
 vHub.Kernel:export("getUser",      function(src)        return vHub.Auth:getUser(src) end)
 vHub.Kernel:export("getUID",       function(src)        return vHub.Auth:getUID(src)  end)
 vHub.Kernel:export("hasPerm",      function(u,p)        return vHub.Kernel:hasPerm(u,p)   end)
+
+-- Retorna somente o char_id canônico da sessão online, sem expor referência viva.
+vHub.Kernel:export("getCharacterId", function(src)
+  if CHARACTER_ID_CALLERS[GetInvokingResource() or ""] ~= true then return nil end
+  src = tonumber(src)
+  if not src or src < 1 then return nil end
+  local user = vHub.Auth:getUser(src)
+  return user and tonumber(user.char_id) or nil
+end)
+
+-- Retorna bootstrap imutável de migração exclusivamente ao owner físico HSS.
+vHub.Kernel:export("getCharacterBootstrap", function(src)
+  if not _invoker_is("vhub_hss") then return nil end
+  src = tonumber(src)
+  local user = src and vHub.Auth:getUser(src) or nil
+  if not user or not tonumber(user.char_id) then return nil end
+  local data = type(user.data) == "table" and user.data or {}
+  return {
+    char_id = tonumber(user.char_id),
+    spawns = math.max(0, tonumber(user.spawns) or 0),
+    vitals = vHub.Utils.dataCopy(type(data.vitals) == "table" and data.vitals or {}),
+    state = vHub.Utils.dataCopy(type(data.state) == "table" and data.state or {}),
+  }
+end)
+
+-- Registra morte física observada exclusivamente pelo owner HSS.
+vHub.Kernel:export("reportPhysicalDeath", function(src)
+  if not _invoker_is("vhub_hss") then return false end
+  return vHub.Boot.reportPhysicalDeath(src)
+end)
+
+-- Conclui respawn físico observado exclusivamente pelo owner HSS.
+vHub.Kernel:export("reportPhysicalRespawn", function(src)
+  if not _invoker_is("vhub_hss") then return false end
+  return vHub.Boot.reportPhysicalRespawn(src)
+end)
+
+-- Lista cópias dos personagens da sessão exclusivamente ao gate de login.
+vHub.Kernel:export("listCharacters", function(src)
+  if not _invoker_is("vhub_login") then return nil end
+  src = tonumber(src)
+  local user = src and vHub.Auth:getUser(src) or nil
+  return user and vHub.Utils.dataCopy(vHub.Auth:getCharacters(user.id)) or nil
+end)
+
+-- Retorna IDs de personagem exclusivamente aos owners consumidores autorizados.
+vHub.Kernel:export("getCharacterIds", function(src)
+  if CHARACTER_ID_CALLERS[GetInvokingResource() or ""] ~= true then
+    return { ok = false, err = "forbidden" }
+  end
+  return vHub.Auth:getCharacterIds(src)
+end)
+
+-- Cria personagem exclusivamente por intenção do gate de login.
+vHub.Kernel:export("createCharacter", function(src, request_id)
+  if not _invoker_is("vhub_login") then return { ok = false, err = "forbidden" } end
+  return vHub.Auth:createCharacterRequest(src, request_id)
+end)
+
+-- Apaga personagem meio-criado/abandonado exclusivamente por intenção do gate de login (ADR #76).
+vHub.Kernel:export("deleteCharacter", function(src, char_id)
+  if not _invoker_is("vhub_login") then return { ok = false, err = "forbidden" } end
+  return vHub.Auth:deleteCharacterRequest(src, char_id)
+end)
+
+-- Consulta conclusão do criador para login e SIMS.
+vHub.Kernel:export("getSimsCreation", function(src)
+  if SIMS_READ_CALLERS[GetInvokingResource() or ""] ~= true then
+    return { ok = false, err = "forbidden" }
+  end
+  return vHub.Auth:getSimsCreation(src)
+end)
+
+-- Persiste conclusão do criador exclusivamente pelo owner SIMS.
+vHub.Kernel:export("commitSimsCreation", function(src, request_id, apv)
+  if not _invoker_is("vhub_sims") then return { ok = false, err = "forbidden" } end
+  return vHub.Auth:commitSimsCreation(src, request_id, apv)
+end)
+
+-- Seleciona personagem pelo contrato autoritativo exclusivo do gate de login.
+vHub.Kernel:export("selectCharacter", function(src, char_id)
+  if not _invoker_is("vhub_login") then return false end
+  src, char_id = tonumber(src), tonumber(char_id)
+  local user = src and vHub.Auth:getUser(src) or nil
+  if not user or not char_id then return false end
+  local before = tonumber(user.char_id)
+  local selected = vHub.Auth:selectCharacter(user, char_id)
+  if selected then
+    vHub.audit("vhub_login", "selectCharacter", tostring(src), "login", before, char_id)
+  end
+  return selected == true
+end)
+
+-- Encaminha log estruturado de resources confiáveis sem expor o objeto vHub.
+vHub.Kernel:export("log", function(level, module, message, meta)
+  local caller = GetInvokingResource() or ""
+  if not _invoker_allowed() and LOG_CALLERS[caller] ~= true then return false end
+  local method = type(level) == "string" and level:lower() or ""
+  if method ~= "debug" and method ~= "info" and method ~= "warn" and method ~= "error" then
+    return false
+  end
+  if type(module) ~= "string" or module == "" or #module > 32 then return false end
+  if type(message) ~= "string" or message == "" or #message > 512 then return false end
+  vHub.Logger[method](vHub.Logger, module, message, type(meta) == "table" and meta or nil)
+  return true
+end)
 -- Snapshot do VD como CÓPIA (L-14; ADR #50) — com a cadeia física reanimada (#37),
 -- devolver a referência viva reativaria o vetor de mutação externa apontado no
 -- GATILHO da decisão #32. Consumidores (vehcontrol/lspdtool) só leem campos.

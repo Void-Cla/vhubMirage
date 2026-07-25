@@ -274,6 +274,199 @@ function Auth:getCharacters(uid)
   return (ok and r) and r or {}
 end
 
+local function validRequestId(request_id)
+  return type(request_id) == "string"
+    and #request_id >= 8
+    and #request_id <= 64
+    and request_id:match("^[%w%._:%-]+$") ~= nil
+end
+
+local function reserveCharacterId()
+  local waited = 0
+  while not vHub._next_char_id and waited < 5000 do
+    Citizen.Wait(100)
+    waited = waited + 100
+  end
+  if not vHub._next_char_id then return nil end
+
+  local char_id = vHub._next_char_id
+  vHub._next_char_id = char_id + 1
+  return char_id
+end
+
+local function queryRows(name, params)
+  local ok, rows = pcall(function()
+    return Citizen.Await(vHub.State:query(name, params))
+  end)
+  if not ok or type(rows) ~= "table" then return nil end
+  return rows
+end
+
+-- Retorna IDs canônicos do usuário online, limitados a três.
+function Auth:getCharacterIds(src)
+  vHub.assertThread()
+  src = tonumber(src)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+
+  local rows = queryRows("vh/get_char_ids", { user_id = user.id })
+  if not rows then return { ok = false, err = "storage" } end
+
+  local items = {}
+  for _, row in ipairs(rows) do
+    local char_id = tonumber(row.id)
+    if char_id then items[#items + 1] = char_id end
+  end
+  return { ok = true, items = items }
+end
+
+-- Cria personagem idempotente sob lock persistido e limite de três.
+function Auth:createCharacterRequest(src, request_id)
+  vHub.assertThread()
+  src = tonumber(src)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+  if not validRequestId(request_id) then
+    return { ok = false, err = "invalid_request" }
+  end
+
+  local params = { user_id = user.id, request_id = request_id }
+  local previous = queryRows("vh/get_character_request", params)
+  if not previous then return { ok = false, err = "storage" } end
+  if previous[1] and tonumber(previous[1].char_id) then
+    return { ok = true, char_id = tonumber(previous[1].char_id), replayed = true }
+  end
+
+  local char_id = reserveCharacterId()
+  if not char_id then return { ok = false, err = "storage" } end
+
+  local committed = vHub.SQL.createCharacterAtomic(user.id, char_id, request_id)
+  local persisted = queryRows("vh/get_character_request", params)
+  local stored_id = persisted and persisted[1] and tonumber(persisted[1].char_id) or nil
+  if stored_id then
+    local replayed = stored_id ~= char_id
+    if not replayed then
+      vHub.audit("vhub_login", "createCharacter", tostring(stored_id), tostring(src), nil, {
+        user_id = user.id,
+        request_id = request_id,
+      })
+    end
+    return { ok = true, char_id = stored_id, replayed = replayed }
+  end
+
+  local countRows = queryRows("vh/count_chars", { user_id = user.id })
+  local count = countRows and countRows[1] and tonumber(countRows[1].total) or nil
+  if count and count >= 3 then return { ok = false, err = "limit" } end
+  if not committed then return { ok = false, err = "storage" } end
+  return { ok = false, err = "storage" }
+end
+
+-- Apaga personagem meio-criado/abandonado sob contrato do gate de login (ADR #76).
+-- Idempotente por efeito (char_id monotônico + WHERE user_id no prepared). Recusa o char
+-- ATIVO da sessão (ped/veículos keyed ao char). Toda deleção audita (R12).
+function Auth:deleteCharacterRequest(src, char_id)
+  vHub.assertThread()
+  src = tonumber(src)
+  char_id = tonumber(char_id)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+  if not char_id or char_id < 1 then return { ok = false, err = "invalid_request" } end
+
+  -- Nunca apagar o personagem ativo da sessão online (estado vivo na VRAM).
+  if char_id == tonumber(user.char_id) then return { ok = false, err = "in_use" } end
+
+  -- Ownership em profundidade (além do WHERE user_id do prepared): char precisa ser do uid.
+  -- Ausência = já apagado ou nunca foi dono → no-op idempotente (nada a fazer, sucesso).
+  local rows = queryRows("vh/get_char_ids", { user_id = user.id })
+  if not rows then return { ok = false, err = "storage" } end
+  local owned = false
+  for _, row in ipairs(rows) do
+    if tonumber(row.id) == char_id then owned = true; break end
+  end
+  if not owned then return { ok = true, deleted = false, replayed = true } end
+
+  local ok = pcall(function()
+    Citizen.Await(vHub.State:exec("vh/delete_char", { id = char_id, user_id = user.id }))
+  end)
+  if not ok then return { ok = false, err = "storage" } end
+
+  vHub.audit("vhub_login", "deleteCharacter", tostring(char_id), tostring(src),
+    { user_id = user.id }, { deleted = true })
+  return { ok = true, deleted = true }
+end
+
+-- Retorna a marca persistida de conclusão do criador do personagem atual.
+function Auth:getSimsCreation(src)
+  vHub.assertThread()
+  src = tonumber(src)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+  local char_id = tonumber(user.char_id)
+  if not char_id then return { ok = false, err = "no_character" } end
+
+  local rows = queryRows("vh/get_sims_creation", { char_id = char_id })
+  if not rows then return { ok = false, err = "storage" } end
+  if not rows[1] then return { ok = true, created = false } end
+  return { ok = true, created = true, apv = tonumber(rows[1].apv) }
+end
+
+-- persiste conclusão do criador; tolera replay de request anterior se apv bate.
+function Auth:commitSimsCreation(src, request_id, apv)
+  vHub.assertThread()
+  src = tonumber(src)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+  local char_id = tonumber(user.char_id)
+  if not char_id then return { ok = false, err = "no_character" } end
+
+  apv = tonumber(apv)
+  if not validRequestId(request_id) or not apv or apv ~= math.floor(apv)
+    or apv < 1 or apv > 255 then
+    return { ok = false, err = "invalid_request" }
+  end
+
+  local current = queryRows("vh/get_sims_creation", { char_id = char_id })
+  if not current then return { ok = false, err = "storage" } end
+  if current[1] then
+    -- Personagem já completou criação. Se apv bate → replayed ok, independente do request_id
+    -- (o mesmo personagem pode ter sido criado em outra sessão/request anterior).
+    -- Conflict real: apv diferente = tentativa de sobrescrever com dados distintos.
+    if tonumber(current[1].apv) == apv then
+      return { ok = true, created = true, replayed = true }
+    end
+    return { ok = false, err = "conflict" }
+  end
+
+  local inserted, affected = pcall(function()
+    return Citizen.Await(vHub.State:exec("vh/commit_sims_creation", {
+      char_id = char_id,
+      request_id = request_id,
+      apv = apv,
+    }))
+  end)
+
+  local persisted = queryRows("vh/get_sims_creation", { char_id = char_id })
+  if persisted and persisted[1] then
+    -- Aceita se o apv gravado bate (pode ser de request diferente por race benigna)
+    if tonumber(persisted[1].apv) ~= apv then
+      return { ok = false, err = "conflict" }
+    end
+    local replayed = tonumber(affected) == 0
+    if not replayed then
+      vHub.audit("vhub_sims", "commitSimsCreation", tostring(char_id), tostring(src), nil, {
+        request_id = request_id,
+        apv = apv,
+      })
+    end
+    return { ok = true, created = true, replayed = replayed }
+  end
+
+  local requestRows = queryRows("vh/get_sims_creation_by_request", { request_id = request_id })
+  if requestRows and requestRows[1] then return { ok = false, err = "conflict" } end
+  if not inserted then return { ok = false, err = "storage" } end
+  return { ok = false, err = "storage" }
+end
+
 function Auth:createCharacter(uid)
   vHub.assertThread()
 

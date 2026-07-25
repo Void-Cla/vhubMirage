@@ -9,17 +9,44 @@ local ItemUse  = Inventory.ItemUse
 local Cat      = Inventory.Catalog
 local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true, ['vhub_admin'] = true }
 
+local function copyDef(def)
+  if type(def) ~= 'table' then return nil end
+  local out = {}
+  for k, v in pairs(def) do
+    if type(k) == 'string' and (type(v) == 'string' or type(v) == 'number'
+        or type(v) == 'boolean') then
+      out[k] = v
+    end
+  end
+  return out
+end
+
+local function catalogSnapshot()
+  local out = {}
+  for id, def in pairs(Inventory.Items) do
+    if type(id) == 'string' and type(def) == 'table' then
+      out[#out + 1] = {
+        id       = id,
+        name     = tostring(def.nome or id):sub(1, 100),
+        category = tostring(def.categoria or ''):sub(1, 32),
+      }
+    end
+  end
+  table.sort(out, function(a, b) return a.id < b.id end)
+  return out
+end
+
 
 -- ============================================================
 -- CONTROLE DE INVOCADOR
 -- ============================================================
 
--- libera chamada local; cross-resource passa se nao houver whitelist (ou se estiver nela)
-local function _invoker_allowed()
+-- libera somente resource explicitamente confiável; ausência de trust falha fechada
+local function _invoker_allowed(caller)
   local trust = Inventory.TrustedResources
-  if not trust or next(trust) == nil then return true end
-  local caller = GetInvokingResource()
-  if not caller then return true end
+  if type(trust) ~= 'table' or next(trust) == nil then return false end
+  caller = caller or GetInvokingResource()
+  if type(caller) ~= 'string' or caller == '' then return false end
   return trust[caller] == true
 end
 
@@ -35,18 +62,15 @@ exports('getCatalogSnapshot', function()
     return {}
   end
 
-  local out = {}
-  for id, def in pairs(Inventory.Items) do
-    if type(id) == 'string' and type(def) == 'table' then
-      out[#out + 1] = {
-        id       = id,
-        name     = tostring(def.nome or id):sub(1, 100),
-        category = tostring(def.categoria or ''):sub(1, 32),
-      }
-    end
+  return catalogSnapshot()
+end)
+
+exports('getItemsSnapshot', function()
+  local caller = GetInvokingResource()
+  if caller and caller ~= GetCurrentResourceName() and not CATALOG_SNAPSHOT_TRUSTED[caller] then
+    return {}
   end
-  table.sort(out, function(a, b) return a.id < b.id end)
-  return out
+  return catalogSnapshot()
 end)
 
 -- retorna { slots, weight, max, size } da mochila (copia ao cruzar resource)
@@ -57,7 +81,7 @@ end)
 exports('getItemAmount',  function(src, id)      return Backpack.amount(src, id)        end)
 exports('hasItem',        function(src, id, qty) return Backpack.has(src, id, qty)      end)
 exports('getInventoryWeight', function(src)      return Backpack.weight(src)            end)
-exports('getItemDef',     function(id)           return Cat.def(id)                     end)
+exports('getItemDef',     function(id)           return copyDef(Cat.def(id))            end)
 exports('getItemName',    function(id)           local d = Cat.def(id); return d and d.nome or id end)
 
 
@@ -84,11 +108,11 @@ exports('takeItemFromSlot', function(src, slot, amount)
   return Backpack.takeFromSlot(src, slot, amount) == true
 end)
 
--- registra o efeito de uso de um item (dono do dominio chama isto)
-exports('registerItemUse', function(id, fn)
-  if not _invoker_allowed() then return false end
-  ItemUse.register(id, fn)
-  return true
+-- registra função legada ou nome de export síncrono do dono do domínio
+exports('registerItemUse', function(id, handler)
+  local caller = GetInvokingResource()
+  if not _invoker_allowed(caller) then return false end
+  return ItemUse.register(id, handler, caller) == true
 end)
 
 -- abre um baú para o jogador (valida proximidade/permissao). desc = { kind, name|group|netId }
@@ -104,23 +128,28 @@ end)
 
 exports('giveVehicleKey', function(src, plate)
   if not _invoker_allowed() then return false end
-  if type(plate) ~= 'string' then return false end
+  plate = Inventory.Utils.normalizePlate(plate)
+  if not plate then return false end
   return (Backpack.give(src, 'veh_key', 1, { plate = plate })) == true
 end)
 
 exports('hasVehicleKey', function(src, plate)
+  plate = Inventory.Utils.normalizePlate(plate)
+  if not plate then return false end
   local snap = Backpack.snapshot(src); if not snap then return false end
   for _, e in pairs(snap.slots) do
-    if e.id == 'veh_key' and e.meta and e.meta.plate == plate then return true end
+    if e.id == 'veh_key' and e.meta and Inventory.Utils.normalizePlate(e.meta.plate) == plate then return true end
   end
   return false
 end)
 
 exports('takeVehicleKey', function(src, plate)
   if not _invoker_allowed() then return false end
+  plate = Inventory.Utils.normalizePlate(plate)
+  if not plate then return false end
   local snap = Backpack.snapshot(src); if not snap then return false end
   for slot, e in pairs(snap.slots) do
-    if e.id == 'veh_key' and e.meta and e.meta.plate == plate then
+    if e.id == 'veh_key' and e.meta and Inventory.Utils.normalizePlate(e.meta.plate) == plate then
       return Backpack.takeFromSlot(src, slot, 1) == true
     end
   end

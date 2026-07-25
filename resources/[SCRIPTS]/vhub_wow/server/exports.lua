@@ -1,207 +1,206 @@
----@diagnostic disable: undefined-global, lowercase-global
+-- server/exports.lua — porta server-side validada e default-deny do vhub_wow
 
--- server/exports.lua — porta canonica do vhub_wow (auth + validacao, repassa pro client)
+local E = VHubWOW.E
+local operationAt = {}
 
 
 -- ============================================================
--- AUTH (N0-2: default-deny — sem whitelist configurada, ninguem passa)
+-- GUARDS
 -- ============================================================
 
-local _opAt = {}
-
-local function rateLimited(caller)
-  local now = GetGameTimer()
-  if now - (_opAt[caller] or -1e9) < WOW_Config.RateLimitMs then return true end
-  _opAt[caller] = now
-  return false
+local function finite(value, fallback)
+  local number = tonumber(value)
+  if not number or number ~= number or number == math.huge or number == -math.huge then
+    return fallback
+  end
+  return number
 end
 
--- resource chamador esta na whitelist? retorna o nome (ou nil) — N0-2 default-deny
-local function trustedCaller()
+local function trusted_caller()
   local caller = GetInvokingResource()
-  if not caller then return nil end
-
-  for _, name in ipairs(WOW_Config.TrustedResources) do
-    if name == caller then return caller end
+  if type(caller) ~= 'string' then return nil end
+  for _, trusted in ipairs(WOW_Config.TrustedResources) do
+    if trusted == caller then return caller end
   end
   return nil
 end
 
--- gate de PLAYBACK: trusted + rate-limit por resource (janela minima entre disparos)
-local function callAllowed()
-  local caller = trustedCaller()
-  if not caller then return false end
-  return not rateLimited(caller)
+local function targets_of(raw)
+  if type(raw) ~= 'table' then return {} end
+  local out, seen = {}, {}
+  local limit = math.min(#raw, 128)
+  for index = 1, limit do
+    local src = finite(raw[index])
+    if src and src % 1 == 0 and src >= 1 and src <= 65535
+        and not seen[src] and GetPlayerName(src) then
+      seen[src] = true
+      out[#out + 1] = src
+    end
+  end
+  return out
 end
 
-
--- ============================================================
--- PLAYBACK — toca/destroi som em jogadores especificos (targets)
--- ============================================================
-
--- toca som 2D (sem posicao) nos targets informados (lista de server ids)
-local function Play(targets, soundName, url, volume, loop)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-  if not WOW_Config.isPlayableUrl(url) then return false end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:play', src, soundName, url, tonumber(volume) or 0.5, loop == true)
+local function call_allowed(action, targets)
+  local caller = trusted_caller()
+  local recipients = caller and targets_of(targets) or {}
+  if #recipients == 0 then return nil end
+  local now = GetGameTimer()
+  local interval = action == 'volume' and 100 or WOW_Config.RateLimitMs
+  local allowed = {}
+  for _, src in ipairs(recipients) do
+    local key = caller .. ':' .. action .. ':' .. tostring(src)
+    local previous = operationAt[key]
+    if not previous or now - previous >= interval then
+      operationAt[key] = now
+      allowed[#allowed + 1] = src
+    end
   end
+  return #allowed > 0 and allowed or nil
+end
+
+local function volume_of(value)
+  return math.max(0.0, math.min(1.0, finite(value, 0.5)))
+end
+
+local function distance_of(value)
+  return math.max(5.0, math.min(WOW_Config.MaxDistance,
+    finite(value, WOW_Config.DefaultDistance)))
+end
+
+local function emit(recipients, event_name, ...)
+  for _, src in ipairs(recipients) do TriggerClientEvent(event_name, src, ...) end
   return true
 end
 
+
+-- ============================================================
+-- PLAYBACK
+-- ============================================================
+
+-- Toca som 2D nos jogadores validados.
+local function Play(targets, sound_name, url, volume, loop)
+  if not WOW_Config.isValidSoundName(sound_name) or not WOW_Config.isPlayableUrl(url) then return false end
+  local recipients = call_allowed('play', targets)
+  return recipients and emit(recipients, E.PLAY, sound_name, url, volume_of(volume), loop == true) or false
+end
 exports('Play', Play)
 
--- toca som 3D ancorado a uma entidade de rede (netId) — client resolve a posicao localmente
-local function PlayAtEntity(targets, soundName, url, volume, netId, distance, loop)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-  if not WOW_Config.isPlayableUrl(url) then return false end
-  if type(netId) ~= 'number' then return false end
-
-  local dist = tonumber(distance) or WOW_Config.DefaultDistance
-  if dist > WOW_Config.MaxDistance then dist = WOW_Config.MaxDistance end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:playAtEntity', src, soundName, url, tonumber(volume) or 0.5, netId, dist, loop == true)
-  end
-  return true
+-- Toca som 3D ancorado em entidade de rede.
+local function PlayAtEntity(targets, sound_name, url, volume, net_id, distance, loop)
+  net_id = finite(net_id)
+  if not WOW_Config.isValidSoundName(sound_name)
+      or not WOW_Config.isPlayableUrl(url) or not net_id
+      or net_id % 1 ~= 0 or net_id < 1 then return false end
+  local entity = NetworkGetEntityFromNetworkId(net_id)
+  if not entity or entity == 0 or not DoesEntityExist(entity) then return false end
+  local recipients = call_allowed('play_entity', targets)
+  return recipients and emit(recipients, E.PLAY_AT_ENTITY, sound_name, url, volume_of(volume),
+    net_id, distance_of(distance), loop == true) or false
 end
-
 exports('PlayAtEntity', PlayAtEntity)
 
--- destroi som ativo nos targets informados
-local function Destroy(targets, soundName)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:destroy', src, soundName)
-  end
-  return true
+-- Toca som 3D ancorado em coordenada primitiva.
+local function PlayAtCoords(targets, sound_name, url, volume, coords, distance, loop)
+  if not WOW_Config.isValidSoundName(sound_name)
+      or not WOW_Config.isPlayableUrl(url) or type(coords) ~= 'table' then return false end
+  local x, y, z = finite(coords.x), finite(coords.y), finite(coords.z)
+  if not x or not y or not z then return false end
+  local recipients = call_allowed('play_coords', targets)
+  return recipients and emit(recipients, E.PLAY_AT_COORDS, sound_name, url, volume_of(volume),
+    { x = x, y = y, z = z }, distance_of(distance), loop == true) or false
 end
+exports('PlayAtCoords', PlayAtCoords)
 
+-- Destroi um som nos jogadores validados.
+local function Destroy(targets, sound_name)
+  if not WOW_Config.isValidSoundName(sound_name) then return false end
+  local recipients = call_allowed('destroy', targets)
+  return recipients and emit(recipients, E.DESTROY, sound_name) or false
+end
 exports('Destroy', Destroy)
 
 
 -- ============================================================
--- MANIPULATION
+-- CONTROLES
 -- ============================================================
 
-local function Pause(targets, soundName)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:pause', src, soundName)
-  end
-  return true
+-- Pausa um som existente.
+local function Pause(targets, sound_name)
+  if not WOW_Config.isValidSoundName(sound_name) then return false end
+  local recipients = call_allowed('pause', targets)
+  return recipients and emit(recipients, E.PAUSE, sound_name) or false
 end
-
 exports('Pause', Pause)
 
-local function Resume(targets, soundName)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:resume', src, soundName)
-  end
-  return true
+-- Retoma um som existente.
+local function Resume(targets, sound_name)
+  if not WOW_Config.isValidSoundName(sound_name) then return false end
+  local recipients = call_allowed('resume', targets)
+  return recipients and emit(recipients, E.RESUME, sound_name) or false
 end
-
 exports('Resume', Resume)
 
-local function SetVolume(targets, soundName, volume)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:setVolume', src, soundName, tonumber(volume) or 0.5)
-  end
-  return true
+-- Define o volume-base sem incorporar atenuacao ou ducking.
+local function SetVolume(targets, sound_name, volume)
+  if not WOW_Config.isValidSoundName(sound_name) then return false end
+  local recipients = call_allowed('volume', targets)
+  return recipients and emit(recipients, E.SET_VOLUME, sound_name, volume_of(volume)) or false
 end
-
 exports('SetVolume', SetVolume)
 
-local function SetDistance(targets, soundName, distance)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-
-  local dist = tonumber(distance) or WOW_Config.DefaultDistance
-  if dist > WOW_Config.MaxDistance then dist = WOW_Config.MaxDistance end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:setDistance', src, soundName, dist)
-  end
-  return true
+-- Define o alcance espacial validado.
+local function SetDistance(targets, sound_name, distance)
+  if not WOW_Config.isValidSoundName(sound_name) then return false end
+  local recipients = call_allowed('distance', targets)
+  return recipients and emit(recipients, E.SET_DISTANCE, sound_name, distance_of(distance)) or false
 end
-
 exports('SetDistance', SetDistance)
 
 
 -- ============================================================
--- AUDIO EM COORD FIXA — export-first p/ "TV da cidade"/palco/boteco (decisao #35).
--- O VIDEO (telinha) e responsabilidade do consumidor de UI (ex.: vhub_vehcontrol),
--- decisao #53 (fronteira por modalidade: audio=vhub_wow, video=quem tem a NUI).
+-- MUSICA
 -- ============================================================
 
--- toca audio 3D preso a uma COORDENADA fixa (atenua por distancia no client). Aceita
--- qualquer URL tocavel (YouTube/SoundCloud/.mp3). Sem consumidor hoje — superficie pronta.
-local function PlayAtCoords(targets, soundName, url, volume, coords, distance, loop)
-  if not callAllowed() then return false end
-  if not WOW_Config.isValidSoundName(soundName) then return false end
-  if not WOW_Config.isPlayableUrl(url) then return false end
-  if type(coords) ~= 'table' or type(coords.x) ~= 'number'
-     or type(coords.y) ~= 'number' or type(coords.z) ~= 'number' then return false end
+-- Inicia busca e devolve resultados somente ao jogador solicitante.
+local function RequestSearch(player_src, query)
+  if not trusted_caller() then return false end
+  player_src = finite(player_src)
+  local accepted = WOW_Config.acceptSearchInput(query)
+  if not player_src or player_src % 1 ~= 0 or not GetPlayerName(player_src)
+      or not accepted then return false end
 
-  local dist = tonumber(distance) or WOW_Config.DefaultDistance
-  if dist > WOW_Config.MaxDistance then dist = WOW_Config.MaxDistance end
-
-  for _, src in ipairs(targets or {}) do
-    TriggerClientEvent('vhub_wow:playAt', src, soundName, url, tonumber(volume) or 0.5,
-      { x = coords.x, y = coords.y, z = coords.z }, dist, loop == true)
+  if accepted.kind == 'video' then
+    TriggerClientEvent(E.SEARCH_RESULTS, player_src, query, {
+      {
+        id = accepted.id,
+        title = 'Link do YouTube',
+        artist = 'YouTube',
+        url = WOW_Config.buildEmbedUrl(accepted.id),
+        duration = 0,
+      },
+    })
+    return true
   end
-  return true
-end
 
-exports('PlayAtCoords', PlayAtCoords)
-
-
--- ============================================================
--- MUSICA — busca (YouTube: InnerTube + APIv3 fallback) e radio (playlist curada).
--- Sem rate-limit por resource aqui: o cache do music_search.lua + o rate-limit por
--- PLAYER no consumidor ja controlam o egress. So o gate trusted (default-deny).
---
--- NB: NAO passamos callback Lua por export (funcref nao cruza Lua->Lua de forma
--- confiavel). Busca = async via evento de retorno; radio = leitura SINCRONA do cache.
--- ============================================================
-
--- inicia uma busca para um player; o resultado chega no CLIENT dele pelo evento
--- 'vhub_wow:searchResults' (playerSrc, query, items). Retorna so se foi aceita.
-local function RequestSearch(playerSrc, query)
-  if not trustedCaller() then return false end
-
-  playerSrc = tonumber(playerSrc)
-  if not playerSrc then return false end
-
-  -- callback LOCAL (mesmo resource) → funcref ok aqui dentro do vhub_wow
-  WOW_Music.searchTracks(query, function(items)
-    TriggerClientEvent('vhub_wow:searchResults', playerSrc, query, items or {})
+  WOW_Music.searchTracks(accepted.q, function(items)
+    if GetPlayerName(player_src) then
+      TriggerClientEvent(E.SEARCH_RESULTS, player_src, query, items or {})
+    end
   end)
   return true
 end
-
 exports('RequestSearch', RequestSearch)
 
--- retorna 1 faixa aleatoria das mais tocadas (SINCRONO, do cache) ou nil se frio
+-- Retorna uma faixa copiada do cache curado.
 local function GetRadioTrack()
-  if not trustedCaller() then return nil end
+  if not trusted_caller() then return nil end
   return WOW_Music.radioTrackSync()
 end
-
 exports('GetRadioTrack', GetRadioTrack)
 
--- NB: _opAt e indexado por NOME DE RESOURCE (GetInvokingResource), nao por player.
--- Conjunto finito = sem leak; nao precisa de limpeza em playerDropped.
+AddEventHandler('playerDropped', function()
+  local suffix = ':' .. tostring(source)
+  for key in pairs(operationAt) do
+    if key:sub(-#suffix) == suffix then operationAt[key] = nil end
+  end
+end)

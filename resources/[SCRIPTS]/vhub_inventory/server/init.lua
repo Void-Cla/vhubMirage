@@ -3,12 +3,14 @@
 -- server/init.lua — boot, schema, sessoes e net events (intencao do cliente).
 -- Toda entrada de rede passa por cooldown + validacao antes de tocar o backpack.
 
-local Backpack   = Inventory.Bag
-local ItemUse    = Inventory.ItemUse
-local Containers = Inventory.Containers
-local Transfer   = Inventory.Transfer
-local U          = Inventory.Utils
-local E          = VHubInvE
+local Backpack    = Inventory.Bag
+local ItemUse     = Inventory.ItemUse
+local Containers  = Inventory.Containers
+local Transfer    = Inventory.Transfer
+local DropSystem  = Inventory.DropSystem
+local P2PSystem   = Inventory.P2PSystem
+local U           = Inventory.Utils
+local E           = VHubInvE
 
 local _cd = {}   -- [src] = { [action] = expires_ms } — anti double-action
 
@@ -36,6 +38,14 @@ AddEventHandler('onResourceStart', function(res)
   CreateThread(function()
     Inventory.SQL:initSchema()
 
+    -- migrações forward-only (sempre, independente de vnext)
+    local ok = Inventory.Migrations.runAll()
+    if not ok then
+      -- fail-closed: resource não sinaliza ready; mantém estado anterior intacto
+      U.quarantine(0, 'boot:migrations', 'runAll retornou false — resource bloqueado')
+      return
+    end
+
     -- restart com players online: recarrega mochilas e re-sincroniza HUD
     for _, sid in ipairs(GetPlayers()) do
       local src  = tonumber(sid)
@@ -46,6 +56,11 @@ AddEventHandler('onResourceStart', function(res)
         Backpack.pushHotbar(src)
       end
     end
+    -- F6: drops — reconcilia ativos do banco e inicia expiração periódica
+    DropSystem.boot()
+    DropSystem.startExpireLoop()
+
+    TriggerEvent('vhub_inventory:server:ready')
   end)
 end)
 
@@ -62,13 +77,26 @@ AddEventHandler('vHub:characterLoad', function(user)
     -- envia o ID do PERSONAGEM ao HUD (troca de char re-dispara characterLoad)
     TriggerClientEvent(E.HUD, src, { charId = user.char_id })
     Backpack.pushHotbar(src)
+    DropSystem.syncPlayer(src)   -- F6: envia drops ativos do bucket ao entrar
   end)
+end)
+
+-- morte/respawn: fecha bau aberto (spawn = pos-morte = distancia/bucket invalidos)
+AddEventHandler('vHub:playerSpawn', function(user)
+  if not user or not user.source then return end
+  local src = tonumber(user.source)
+  if not src or not GetPlayerName(src) then return end
+  local cid = Containers.openedBy(src)
+  if not cid then return end
+  Containers.close(src)
+  TriggerClientEvent(E.CONTAINER_CLOSE, src)
 end)
 
 AddEventHandler('playerDropped', function()
   local src = source
-  Containers.close(src)  -- sai do baú aberto (flush se foi o ultimo viewer)
-  Backpack.unload(src)   -- flush final (preserva o cliente)
+  Containers.close(src)       -- sai do baú aberto (flush se foi o ultimo viewer)
+  Backpack.unload(src)        -- flush final (preserva o cliente)
+  ItemUse.resetSession(src)   -- limpa contador de request_id (VNext op dedup)
   _cd[src] = nil
 end)
 
@@ -76,6 +104,11 @@ AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
   Backpack.flushAll()    -- flush triplo #3 (resource stop)
   Containers.flushAll()
+end)
+
+-- veículo de porta-malas deletado: fecha UI/lease dos viewers antes do handle expirar
+AddEventHandler('entityRemoved', function(entity)
+  Containers.forceCloseTrunkEntity(entity)
 end)
 
 
@@ -88,6 +121,7 @@ end)
 RegisterNetEvent(E.REQUEST_SYNC)
 AddEventHandler(E.REQUEST_SYNC, function()
   local src = source
+  if not cooled(src, 'request_sync') then return end
   CreateThread(function()
     local snap = Backpack.wireSnapshot(src)
     if snap then TriggerClientEvent(E.OPEN, src, snap) end
@@ -98,6 +132,7 @@ end)
 RegisterNetEvent(E.HUD_REQ)
 AddEventHandler(E.HUD_REQ, function()
   local src = source
+  if not cooled(src, 'hud_req') then return end
   local cid = Backpack.charId(src)
   if cid then TriggerClientEvent(E.HUD, src, { charId = cid }) end
 end)
@@ -124,7 +159,7 @@ AddEventHandler(E.MOVE, function(payload)
 
   local ok = Backpack.move(src, payload.from, payload.to, payload.qty)
   if not ok then
-    -- UI otimista assumiu o movimento; reenviamos o estado real dos slots tocados
+    -- reenviamos o estado real dos slots tocados
     Backpack.rollback(src, { payload.from, payload.to }, 'mov_negado')
   end
 end)
@@ -167,17 +202,71 @@ AddEventHandler(E.RETRIEVE, function(p)
 end)
 
 
--- ============================================================
--- NET EVENTS — HOTBAR
--- ============================================================
-
 -- vincular item a um slot (1-5) da hotbar (ou limpar com id=nil)
 RegisterNetEvent(E.SET_BIND)
 AddEventHandler(E.SET_BIND, function(p)
   local src = source
   if type(p) ~= 'table' then return end
+  if not cooled(src, 'set_bind') then return end
   Backpack.setBind(src, p.slot, p.id)
 end)
+
+
+-- ============================================================
+-- NET EVENTS — DROPS E P2P (F6)
+-- ============================================================
+
+-- jogar item no chão: tira do slot e cria drop na posição do jogador
+RegisterNetEvent(E.DROP)
+AddEventHandler(E.DROP, function(p)
+  local src = source
+  if type(p) ~= 'table' then return end
+  if not cooled(src, 'drop') then return end
+  local slot = U.validSlot(p.slot, Inventory.Backpack and Inventory.Backpack.slots or 30)
+  local qty  = U.validQty(p.qty)
+  if not slot or not qty then return end
+  CreateThread(function()
+    local entry = Backpack.peek(src, slot)
+    if not entry or qty > entry.amount then return end
+    if not Backpack.takeFromSlot(src, slot, qty) then return end
+    local ok = DropSystem.create(src, entry.id, qty, entry.meta)
+    if not ok then
+      -- restituição: drop não persistido, devolve ao slot original
+      Backpack.giveToSlot(src, slot, entry.id, qty, entry.meta)
+    end
+  end)
+end)
+
+-- pegar item do chão (CAS — só um vence)
+RegisterNetEvent(E.PICKUP)
+AddEventHandler(E.PICKUP, function(p)
+  local src = source
+  if type(p) ~= 'table' then return end
+  if not cooled(src, 'pickup') then return end
+  if type(p.id) ~= 'string' or p.id == '' then return end
+  CreateThread(function()
+    DropSystem.pickup(src, p.id)
+  end)
+end)
+
+-- enviar item para jogador próximo (slot-based, meta preservada)
+RegisterNetEvent(E.P2P)
+AddEventHandler(E.P2P, function(p)
+  local src = source
+  if type(p) ~= 'table' then return end
+  if not cooled(src, 'p2p') then return end
+  local slot = U.validSlot(p.slot, Inventory.Backpack and Inventory.Backpack.slots or 30)
+  local qty  = U.validQty(p.qty)
+  if not slot or not qty then return end
+  CreateThread(function()
+    P2PSystem.send(src, tonumber(p.target), slot, qty)
+  end)
+end)
+
+
+-- ============================================================
+-- NET EVENTS — HOTBAR (continuação)
+-- ============================================================
 
 -- usar item pela hotbar: resolve item do bind -> acha slot -> dispara uso
 RegisterNetEvent(E.USE_HOTBAR)

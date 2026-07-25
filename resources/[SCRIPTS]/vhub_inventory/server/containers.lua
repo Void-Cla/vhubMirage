@@ -14,8 +14,10 @@ local Backpack = Inventory.Bag
 local E        = VHubInvE
 
 local _cache   = {}   -- [cid] = { kind, label, slots, capacity, size, dirty, saving }
+local _loading = {}   -- [cid] = promise  — singleflight de carga simultânea
 local _open    = {}   -- [src] = cid (open-guard)
-local _locks   = {}   -- [cid] = expires_ms (mutex)
+local _leases  = {}   -- [src] = desc autorizado + _ent (trunk); revalidado a cada mutação
+local _locks   = {}   -- [cid] = token (mutex sem lease temporal)
 local _viewers = {}   -- [cid] = { [src]=true }
 
 
@@ -37,15 +39,25 @@ local function errMsg(e) return ERR[e] or 'Falha ao abrir o baú' end
 
 -- adquire o mutex do container; false se ja travado
 function M.lock(cid)
-  local now = GetGameTimer()
-  if _locks[cid] and _locks[cid] > now then return false end
-  _locks[cid] = now + (Inventory.Security.container_lock_ms or 300)
-  return true
+  if _locks[cid] then return nil end
+  local token = tostring(GetGameTimer()) .. ':' .. tostring(math.random(100000, 999999))
+  _locks[cid] = token
+  return token
 end
-function M.unlock(cid) _locks[cid] = nil end
+function M.unlock(cid, token) if _locks[cid] == token then _locks[cid] = nil end end
 
 -- container que o servidor autorizou este jogador a abrir (ou nil)
 function M.openedBy(src) return _open[src] end
+
+-- revalida o baú aberto contra posição, permissão, entidade, bucket e chave atuais.
+function M.validateOpen(src, cid)
+  if not cid or _open[src] ~= cid then return false, 'fechado' end
+  local lease = _leases[src]
+  if type(lease) ~= 'table' then return false, 'fechado' end
+  local r, err = M.resolve(src, lease)
+  if not r or r.cid ~= cid then return false, err or 'fechado' end
+  return true
+end
 
 local function addViewer(cid, src) _viewers[cid] = _viewers[cid] or {}; _viewers[cid][src] = true end
 local function removeViewer(cid, src) if _viewers[cid] then _viewers[cid][src] = nil end end
@@ -63,7 +75,7 @@ local function pushDelta(cid, changes)
   end
 end
 
--- reenvia o estado AUTORITATIVO de slots especificos a UM viewer (reverte UI otimista)
+-- reenvia o estado AUTORITATIVO de slots especificos a UM viewer
 function M.resend(src, cid, slotList)
   local c = _cache[cid]; if not c then return end
   local changes = {}
@@ -117,7 +129,8 @@ function M.wireSnapshot(cid)
   local c = _cache[cid]; if not c then return nil end
   local items = {}
   for slot, e in pairs(c.slots) do
-    items[#items + 1] = { slot = slot, id = e.id, amount = e.amount, meta = e.meta }
+    local copy = U.copyEntry(e)
+    items[#items + 1] = { slot = slot, id = copy.id, amount = copy.amount, meta = copy.meta }
   end
   return {
     cid = cid, kind = c.kind, label = c.label, items = items,
@@ -148,12 +161,23 @@ end
 -- coloca em um slot do baú (merge se mesmo id empilhavel); retorna ok
 function M.giveToSlot(cid, slot, id, qty, meta)
   local c = _cache[cid]; if not c then return false end
+  qty = U.validQty(qty); if not qty then return false end
+  slot = U.validSlot(slot, c.size); if not slot then return false end
+  if U.isStackable(id) then
+    if meta ~= nil and qty ~= 1 then return false end
+    if meta == nil and qty > U.stackMax(id) then return false end
+  elseif qty ~= 1 then
+    return false
+  end
   local e = c.slots[slot]
   local changes = {}
   if not e then
-    c.slots[slot] = { id = id, amount = qty, meta = meta }
+    local entry = Inventory.Catalog.makeEntry(id, qty, meta); if not entry then return false end
+    c.slots[slot] = entry
     changes[slot] = U.copyEntry(c.slots[slot])
   elseif e.id == id and U.isStackable(id) then
+    if e.meta or meta then return false end
+    if e.amount + qty > U.stackMax(id) then return false end
     e.amount = e.amount + qty; changes[slot] = U.copyEntry(e)
   else
     return false
@@ -163,14 +187,16 @@ function M.giveToSlot(cid, slot, id, qty, meta)
 end
 
 -- escolhe slot de destino para id/qty: slot pedido (se valido) > stack existente > 1o vazio
-function M.findDest(cid, id, qty, prefer)
+function M.findDest(cid, id, qty, prefer, meta)
   local c = _cache[cid]; if not c then return nil end
   prefer = U.validSlot(prefer, c.size)               -- nunca confiar em slot fora de faixa
   if prefer then
     local e = c.slots[prefer]
     if not e then return prefer end
+    if meta ~= nil then return nil end
     if e.id == id and U.isStackable(id) and (e.amount + qty) <= U.stackMax(id) then return prefer end
   end
+  if meta ~= nil then return U.firstEmpty(c.slots, c.size) end
   local st = U.findStack(c.slots, id, qty); if st then return st end
   return U.firstEmpty(c.slots, c.size)
 end
@@ -187,26 +213,18 @@ local function hasPerm(src, perm)
   return ok and res == true
 end
 
--- registro do veiculo no garage (fonte de verdade do veiculo), ou nil
+-- registro do veiculo no conce (fonte canonica de placa/posse), ou nil
 local function garageVehicle(plate)
-  local ok, veh = pcall(function() return exports.vhub_garage:getVehicle(plate) end)
+  local ok, veh = pcall(function() return exports.vhub_conce:getVehicle(plate) end)
   return (ok and veh) or nil
 end
 
--- chave fisica do veiculo na mochila do jogador?
-local function hasVehKey(src, plate)
-  local snap = Backpack.snapshot(src); if not snap then return false end
-  for _, e in pairs(snap.slots) do
-    if e.id == 'veh_key' and e.meta and e.meta.plate == plate then return true end
-  end
-  return false
-end
+-- acesso a chave fisica pertence ao vhub_conce:canOperate.
 
--- acesso ao porta-malas: chave fisica na mochila OU ser dono no garage (row ja buscada)
-local function trunkAccess(src, plate, veh)
-  if hasVehKey(src, plate) then return true end
-  local cid = Backpack.charId(src)
-  return veh ~= nil and cid ~= nil and tonumber(veh.char_id) == cid
+-- acesso ao porta-malas: contrato canonico exclusivo do conce.
+local function trunkAccess(src, plate)
+  local ok, allowed = pcall(function() return exports.vhub_conce:canOperate(src, plate) end)
+  return ok and allowed == true
 end
 
 -- capacidade pelo TIPO do registro do garage (NAO GetVehicleClass server-side)
@@ -218,17 +236,33 @@ local function trunkCapacity(veh)
   return cap
 end
 
--- proximidade BEST-EFFORT do porta-malas: se a nativa de entidade existir server-side,
--- valida distancia ped<->veiculo; se nao existir (varia por build), confia no key-gate.
+-- valida o porta-malas server-side: entidade, tipo, vida, placa, bucket e distancia.
 -- Coordenada NUNCA vem do cliente — so o netId, que o servidor resolve.
-local function trunkNearby(src, netId)
-  netId = tonumber(netId); if not netId then return true end
+-- Regra efetiva: falha fecha; placa vem da entidade server-side.
+local function resolveTrunkEntity(src, netId)
+  if type(netId) ~= 'number' or netId % 1 ~= 0 or netId < 1 then return nil, 'veiculo' end
+
   local ok, ent = pcall(NetworkGetEntityFromNetworkId, netId)
-  if not ok or not ent or ent == 0 then return true end          -- nativa indisponivel: nao bloqueia
-  local okc, vpos = pcall(GetEntityCoords, ent)
-  if not okc or not vpos then return true end
-  local ped = GetPlayerPed(src); if not ped or ped == 0 then return true end
-  return #(GetEntityCoords(ped) - vpos) <= ((Inventory.Trunk.range or 5.5) + 2.0)
+  if not ok or not ent or ent == 0 or not DoesEntityExist(ent) then return nil, 'veiculo' end
+  if GetEntityType(ent) ~= 2 then return nil, 'veiculo' end
+
+  local ped = GetPlayerPed(src)
+  if not ped or ped == 0 or GetEntityHealth(ped) <= 101 then return nil, 'longe' end
+
+  local okPlate, rawPlate = pcall(GetVehicleNumberPlateText, ent)
+  local plate = okPlate and U.normalizePlate(rawPlate) or nil
+  if not plate then return nil, 'placa' end
+
+  local okVPos, vpos = pcall(GetEntityCoords, ent)
+  local okPPos, ppos = pcall(GetEntityCoords, ped)
+  if not okVPos or not okPPos or not vpos or not ppos then return nil, 'longe' end
+  if #(ppos - vpos) > (Inventory.Trunk.range or 2.5) then return nil, 'longe' end
+
+  local okPB, pBucket = pcall(GetPlayerRoutingBucket, src)
+  local okEB, eBucket = pcall(GetEntityRoutingBucket, ent)
+  if not okPB or not okEB or pBucket ~= eBucket then return nil, 'longe' end
+
+  return { ent = ent, plate = plate, netId = netId }, nil
 end
 
 
@@ -252,21 +286,21 @@ function M.resolve(src, desc)
     if #(ppos - vector3(c.coords.x, c.coords.y, c.coords.z)) > (c.range or 2.5) then return nil, 'longe' end
     if c.permission and not hasPerm(src, c.permission) then return nil, 'sem_permissao' end
     return { cid = desc.kind .. ':' .. key, kind = desc.kind,
-             capacity = c.capacity or 100, size = c.size or 50, label = c.label or key }
+             capacity = c.capacity or 100, size = c.size or 50, label = c.label or key,
+             lease = { kind = desc.kind, name = desc.kind == 'static' and key or nil,
+                       group = desc.kind == 'faction' and key or nil } }
 
-  -- PORTA-MALAS ----------------------------------------------
-  -- Sem nativa de entidade server-side (instaveis/ausentes): o cliente envia a PLACA
-  -- (nativa client-side confiavel) e o servidor decide o ACESSO (chave/dono via garage).
-  -- Como o acesso e gated por chave, placa vinda do cliente nao e vetor economico.
   elseif desc.kind == 'trunk' then
-    local plate = type(desc.plate) == 'string' and (desc.plate:gsub('%s+$', '')) or nil
-    if not plate or plate == '' then return nil, 'placa' end
-    if not trunkNearby(src, desc.netId) then return nil, 'longe' end   -- distancia best-effort
-    local veh = garageVehicle(plate)                          -- consulta unica ao garage
-    if Inventory.Trunk.require_access and not trunkAccess(src, plate, veh) then return nil, 'sem_chave' end
+    local t, terr = resolveTrunkEntity(src, desc.netId)
+    if not t then return nil, terr end
+    local plate = t.plate
+    local veh = garageVehicle(plate)
+    if not veh then return nil, 'veiculo' end
+    if Inventory.Trunk.require_access and not trunkAccess(src, plate) then return nil, 'sem_chave' end
     return { cid = 'trunk:' .. plate, kind = 'trunk',
              capacity = trunkCapacity(veh), size = Inventory.Trunk.size or 40,
-             label = 'Porta-malas ' .. plate }
+             label = 'Porta-malas ' .. plate,
+             lease = { kind = 'trunk', netId = t.netId } }
   end
 
   return nil, 'kind'
@@ -277,17 +311,43 @@ end
 -- LIFECYCLE (carregar / abrir / fechar)
 -- ============================================================
 
--- carrega o baú no cache se ainda nao estiver (usa Await — chamar em thread)
+-- carrega o baú no cache (singleflight por cid — usa Await; chamar em thread)
 function M.load(cid, kind, capacity, size, label)
   if _cache[cid] then return _cache[cid] end
+
+  -- singleflight: aguarda carga em progresso sem duplicar SQL
+  if _loading[cid] then
+    Citizen.Await(_loading[cid])
+    return _cache[cid]
+  end
+
+  local p = promise.new()
+  _loading[cid] = p
+
   local row = Inventory.SQL:loadContainer(cid)
-  _cache[cid] = {
-    kind = kind, label = label,
-    slots = (row and row.slots) or {},
-    capacity = capacity, size = size,
-    dirty = false, saving = false,
-  }
+  if not _cache[cid] then    -- recheck após await (race improvável mas possível)
+    _cache[cid] = {
+      kind = kind, label = label,
+      slots = (row and row.slots) or {},
+      capacity = capacity, size = size,
+      dirty = false, saving = false,
+    }
+  end
+
+  _loading[cid] = nil
+  p:resolve(true)
   return _cache[cid]
+end
+
+-- fecha todos os viewers de porta-malas cuja entidade foi removida (entityRemoved)
+function M.forceCloseTrunkEntity(entity)
+  for src, _ in pairs(_open) do
+    local lease = _leases[src]
+    if lease and lease._ent == entity then
+      M.close(src)
+      TriggerClientEvent(E.CONTAINER_CLOSE, src)
+    end
+  end
 end
 
 -- pedido de abertura vindo do cliente (valida -> carrega -> abre -> snapshot)
@@ -296,8 +356,17 @@ function M.requestOpen(src, desc)
   local r, err = M.resolve(src, desc)
   if not r then TriggerClientEvent(E.NOTIFY, src, errMsg(err)); return end
 
+  -- para trunk: captura handle da entidade para detectar remoção posterior (entityRemoved)
+  if r.kind == 'trunk' and r.lease and r.lease.netId then
+    local ok, ent = pcall(NetworkGetEntityFromNetworkId, r.lease.netId)
+    if ok and ent and ent ~= 0 and DoesEntityExist(ent) then
+      r.lease._ent = ent
+    end
+  end
+
   -- reserva SINCRONA antes do load assincrono (impede 2 OPEN concorrentes)
   _open[src] = r.cid
+  _leases[src] = r.lease
   addViewer(r.cid, src)
 
   CreateThread(function()
@@ -313,6 +382,7 @@ end
 function M.close(src)
   local cid = _open[src]; if not cid then return end
   _open[src] = nil
+  _leases[src] = nil
   removeViewer(cid, src)
 
   local v = _viewers[cid]

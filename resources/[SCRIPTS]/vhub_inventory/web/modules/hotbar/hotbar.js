@@ -36,7 +36,7 @@
         const def = vhub.util.itemDef(id);
         const ic = vhub.util.el('div', 'ic');
         ic.style.backgroundImage = `url(${vhub.util.itemIcon(id)})`;
-        const probe = new Image();                                // fallback se o CDN falhar
+        const probe = new Image();                                // fallback se o icone local faltar
         probe.onerror = () => {
           ic.style.backgroundImage = 'none';
           const ini = vhub.util.el('div', 'ini');
@@ -87,6 +87,10 @@
       root.addEventListener('contextmenu', this._onCtx);
       render();
     },
+
+    onShow() { if (root) root.classList.remove('hidden'); },
+
+    onHide() { if (root) root.classList.add('hidden'); },
 
     onDestroy() {
       offs.forEach((o) => o()); offs.length = 0;

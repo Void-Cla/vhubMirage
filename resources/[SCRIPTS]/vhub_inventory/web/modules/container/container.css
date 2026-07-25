@@ -6,14 +6,21 @@
   background: radial-gradient(ellipse at center, rgba(0,0,0,0.35), rgba(0,0,0,0.55));
 }
 
+/* grid-template-rows: auto 1fr permite ct-insp como 3ª linha (grid-column 1/-1) */
 .mod-container .ct-shell {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 16px;
   width: 920px; max-width: 94vw; max-height: 86vh;
 }
 
+/* inspector ocupa toda a largura (ambas as colunas) abaixo dos dois paineis */
+.mod-container .ct-insp { grid-column: 1 / -1; }
+
 .mod-container .ct-panel {
   background: var(--vh-glass); border: 1px solid var(--vh-border); border-radius: var(--vh-radius);
-  box-shadow: var(--vh-shadow); backdrop-filter: blur(8px); padding: 16px;
+  box-shadow: var(--vh-shadow); padding: 16px;
   display: flex; flex-direction: column; min-height: 0;
 }
 
@@ -21,15 +28,36 @@
 .mod-container .ct-title { font-size: 16px; font-weight: 700; color: var(--vh-gold); letter-spacing: .5px; text-shadow: var(--vh-glow); }
 .mod-container .ct-close { cursor: pointer; color: var(--vh-text-dim); font-size: 20px; line-height: 1; }
 .mod-container .ct-close:hover { color: var(--vh-danger); }
+.mod-container .ct-close:focus-visible { outline: 2px solid var(--vh-gold); outline-offset: 2px; border-radius: 3px; }
 
 .mod-container .ct-grid  { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; overflow: auto; flex: 1; align-content: start; }
+
+/* foco de teclado acessivel nos slots dos grids */
+.mod-container .ct-grid .slot:focus-visible {
+  outline: 2px solid var(--vh-gold);
+  outline-offset: 2px;
+}
 
 .mod-container .ct-foot   { margin-top: 12px; }
 .mod-container .ct-wlabel { display: flex; justify-content: space-between; font-size: 12px; color: var(--vh-text-dim); margin-bottom: 5px; }
 .mod-container .ct-track  { height: 8px; border-radius: 6px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.mod-container .ct-bar    { height: 100%; width: 0%; background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand)); transition: width .18s; }
+/* scaleX substitui width (compositor-only, sem layout recalc — L-18) */
+.mod-container .ct-bar    { height: 100%; width: 100%; background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand)); transform: scaleX(0); transform-origin: left center; transition: transform .18s ease; }
 .mod-container .ct-bar.over { background: var(--vh-danger); }
 
-.mod-container .ct-toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: var(--vh-glass-2); border: 1px solid var(--vh-border-2); border-radius: var(--vh-radius-sm); padding: 10px 16px; color: var(--vh-text); font-size: 13px; box-shadow: var(--vh-shadow); opacity: 0; transition: opacity .2s; }
+.mod-container .ct-toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--vh-glass-2); border: 1px solid var(--vh-border-2); border-radius: var(--vh-radius-sm);
+  padding: 10px 16px; color: var(--vh-text); font-size: 13px; box-shadow: var(--vh-shadow);
+  opacity: 0; transition: opacity .2s;
+}
 .mod-container .ct-toast.show { opacity: 1; }
 .mod-container .ct-toast.err  { border-color: var(--vh-danger); color: #ffd9d2; }
+
+
+/* ---- acessibilidade: motion reduzida ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mod-container .ct-bar   { transition-duration: 1ms !important; }
+  .mod-container .ct-toast { transition-duration: 1ms !important; }
+}

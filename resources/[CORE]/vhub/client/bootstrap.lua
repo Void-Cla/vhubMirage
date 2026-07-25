@@ -1,10 +1,7 @@
 -- client/bootstrap.lua — Entry point client-side
 -- Estratégia (padrão Mirage): aguarda `playerSpawned` natural; se não disparar,
--- usa nativas do GTA (NetworkResurrectLocalPlayer + ShutdownLoadingScreen) para
--- spawnar manualmente — não depende de `spawnmanager` externo.
+-- apenas sinaliza prontidão. O vhub_hss é o único escritor físico do spawn.
 
-local SPAWN_POS   = { x = -538.70, y = -214.91, z = 37.65, h = 0.0 }
-local SPAWN_MODEL = "mp_m_freemode_01"
 local FALLBACK_WINDOW_MS = 60000  -- janela total para detectar player ativo
 local FALLBACK_DELAY_MS  = 2000   -- atraso após ativo para dar chance ao spawnmanager
 local DEBOUNCE_MS        = 5000   -- evita duplo envio de ready (natural + fallback)
@@ -25,49 +22,7 @@ AddEventHandler("playerSpawned", function()
   enviarReady()
 end)
 
--- ── Fallback nativo: spawn via NetworkResurrectLocalPlayer ───────────────────
-
-local function carregarModelo(hash)
-  if not IsModelInCdimage(hash) or not IsModelValid(hash) then return false end
-  RequestModel(hash)
-  for _ = 1, 200 do
-    if HasModelLoaded(hash) then return true end
-    Citizen.Wait(10)
-    RequestModel(hash)
-  end
-  return false
-end
-
-local function spawnNativo()
-  local hash = GetHashKey(SPAWN_MODEL)
-  DoScreenFadeOut(0)
-
-  if carregarModelo(hash) then
-    SetPlayerModel(PlayerId(), hash)
-    SetPedDefaultComponentVariation(PlayerPedId())
-    SetModelAsNoLongerNeeded(hash)
-  end
-
-  RequestCollisionAtCoord(SPAWN_POS.x, SPAWN_POS.y, SPAWN_POS.z)
-  NetworkResurrectLocalPlayer(SPAWN_POS.x, SPAWN_POS.y, SPAWN_POS.z, SPAWN_POS.h, true, true, false)
-
-  local ped = PlayerPedId()
-  ClearPedTasksImmediately(ped)
-  RemoveAllPedWeapons(ped, true)
-  ClearPlayerWantedLevel(PlayerId())
-  SetEntityCoordsNoOffset(ped, SPAWN_POS.x, SPAWN_POS.y, SPAWN_POS.z, false, false, false)
-  SetEntityHeading(ped, SPAWN_POS.h)
-  SetEntityHealth(ped, 200)
-  SetEntityVisible(ped, true, false)
-  FreezeEntityPosition(ped, false)
-  SetPlayerInvincible(PlayerId(), false)
-
-  -- Libera o cliente da tela "Awaiting scripts"
-  if ShutdownLoadingScreen    then ShutdownLoadingScreen()    end
-  if ShutdownLoadingScreenNui then ShutdownLoadingScreenNui() end
-
-  DoScreenFadeIn(500)
-end
+-- ── Fallback de prontidão: sem escrita física ────────────────────────────────
 
 Citizen.CreateThread(function()
   local limite = GetGameTimer() + FALLBACK_WINDOW_MS
@@ -77,8 +32,7 @@ Citizen.CreateThread(function()
     if NetworkIsPlayerActive(PlayerId()) then
       Citizen.Wait(FALLBACK_DELAY_MS)
       if _ultimo_ready > 0 then return end
-      vHub.Logger:info("client", "spawnmanager ausente — usando NetworkResurrectLocalPlayer")
-      spawnNativo()
+      vHub.Logger:info("client", "playerSpawned ausente — sinalizando prontidão ao HSS")
       enviarReady()
       return
     end

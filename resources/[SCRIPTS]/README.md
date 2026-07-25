@@ -13,14 +13,15 @@ vHub Core (autoridade máxima)
   ├── vhub_groups        → permissões e grupos por personagem
   ├── vhub_identity      → nome, registro civil, telefone
   ├── vhub_money         → carteira e banco
-  ├── vhub_survival      → fome e sede
-  │
-  ├── vhub_player_state  → spawn, posição, armas, customização de ped
-  │     └── depende de: vhub_survival (dano por inanição)
-  │
+  ├── vhub_hss           → ped, spawn, posição, buckets e fisiologia por char_id
+  ├── vhub_login         → autenticação e seleção de personagem
+  ├── vhub_sims          → criação/customização e lojas de aparência
+│
   ├── vhub_inventory     → itens, peso, baús, chaves de veículo
-  │     ├── depende de: vhub_survival (callbacks de comida/água)
-  │     └── depende de: vhub_player_state (callbacks de bandagem/medkit)
+│     └── integra opcionalmente com vhub_hss (consumíveis)
+  ├── vhub_voicePMA      → proximidade, rádio, ligação e ducking
+  ├── vhub_wow           → áudio espacial e modo streamer local
+  ├── vhub_vehcontrol    → controle veicular e consumidor do WOW
   │
   ├── vhub_garage        → garagem, concessionária, leilão, aluguel,
   │     │                   impound, IPVA, reparo, clone/empréstimo,
@@ -111,23 +112,15 @@ exports.vhub_money:tryDeposit(src, valor)       → boolean
 exports.vhub_money:tryFullPayment(src, valor)   → boolean  (carteira + banco)
 ```
 
-### vhub_survival
+### vhub_hss
 
 ```lua
-exports.vhub_survival:getVital(src, nome)         → number (0.0–1.0)
-exports.vhub_survival:setVital(src, nome, valor)
-exports.vhub_survival:varyVital(src, nome, delta)
--- nomes canônicos: "food", "water"
-```
-
-### vhub_player_state
-
-```lua
-exports.vhub_player_state:giveWeapons(src, weapons, clear)
-exports.vhub_player_state:setArmour(src, amount)
-exports.vhub_player_state:setHealth(src, amount)
-exports.vhub_player_state:teleport(src, x, y, z, heading)
-exports.vhub_player_state:getPosition(src)        → x, y, z
+exports.vhub_hss:getState(src)                    → table|nil
+exports.vhub_hss:giveWeapons(src, weapons, clear)
+exports.vhub_hss:setArmour(src, amount)
+exports.vhub_hss:setHealth(src, amount)
+exports.vhub_hss:teleport(src, x, y, z, heading)
+exports.vhub_hss:getPosition(src)                 → x, y, z
 ```
 
 ### vhub_inventory
@@ -195,12 +188,8 @@ AddEventHandler("vhub_money:local_update", function(carteira, banco) end)
 -- Inventário atualizado
 AddEventHandler("vhub_inventory:local_update", function(inventario) end)
 
--- Vitais (a cada 1s via vhub_survival)
-AddEventHandler("vhub_survival:hud_tick", function(vitais) end)
--- vitais = { food = 0.0..1.0, water = 0.0..1.0 }
-
 -- Spawn do personagem aplicado
-AddEventHandler("vhub_player_state:spawned", function(first_spawn) end)
+AddEventHandler("vhub_hss:spawned", function(first_spawn) end)
 
 -- Garagem
 AddEventHandler("vhub_garage:entrou_zona",         function(idx, garagem) end)

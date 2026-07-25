@@ -14,8 +14,13 @@ local function _invoker_allowed()
   local caller = GetInvokingResource()
   if not caller then return true end   -- chamada local
   local trusted = Cfg.TRUSTED_RESOURCES
-  if type(trusted) ~= 'table' or next(trusted) == nil then return true end
+  if type(trusted) ~= 'table' or next(trusted) == nil then return false end
   return trusted[caller] == true
+end
+
+local function _invoker_is(expected)
+  local caller = GetInvokingResource()
+  return caller == nil or caller == expected
 end
 
 -- ── Read-only (publicos) ────────────────────────────────────────────────────
@@ -40,19 +45,35 @@ end)
 -- ── try* (publicos — usados por outros resources como vhub_garage) ──────────
 
 exports('tryPayment', function(src, valor, dry)
+  if not _invoker_allowed() then return false, 'forbidden' end
   return Core.try_payment(tonumber(src) or 0, valor, dry == true, 'export_payment')
 end)
 
 exports('tryWithdraw', function(src, valor, dry)
+  if not _invoker_allowed() then return false, 'forbidden' end
   return Core.try_withdraw(tonumber(src) or 0, valor, dry == true, 'export_withdraw')
 end)
 
 exports('tryDeposit', function(src, valor, dry)
+  if not _invoker_allowed() then return false, 'forbidden' end
   return Core.try_deposit(tonumber(src) or 0, valor, dry == true, 'export_deposit')
 end)
 
 exports('tryFullPayment', function(src, valor, dry)
+  if not _invoker_allowed() then return false, 'forbidden' end
   return Core.try_full_payment(tonumber(src) or 0, valor, dry == true, 'export_full_payment')
+end)
+
+-- Debita uma operação identificada; replay devolve o mesmo resultado.
+exports('commitPayment', function(src, amount, operation_id, reason)
+  if not _invoker_is('vhub_sims') then return { ok = false, err = 'forbidden' } end
+  return Core.commit_payment(tonumber(src) or 0, amount, operation_id, reason)
+end)
+
+-- Estorna offline o split original; somente a saga SIMS pode compensar.
+exports('refundPayment', function(operation_id)
+  if not _invoker_is('vhub_sims') then return { ok = false, err = 'forbidden' } end
+  return Core.refund_payment(operation_id)
 end)
 
 -- ── Mutacoes TRUSTED (admin/job/payout) ─────────────────────────────────────
@@ -91,6 +112,7 @@ exports('tryTransfer', function(actor_src, target_raw, valor, reason)
 end)
 
 exports('tryGive', function(actor_src, target_src, valor, reason)
+  if not _invoker_allowed() then return false, 'forbidden' end
   return T.try_give(actor_src, target_src, valor, reason or 'export_give')
 end)
 

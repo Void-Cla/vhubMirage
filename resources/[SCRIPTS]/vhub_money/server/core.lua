@@ -20,6 +20,7 @@ local _ready = false
 Core._by_char = {}
 Core._by_src  = {}
 Core._loading = {}   -- [char_id]=true durante load_entry (guard p/ crédito offline concorrente)
+Core._operation_locks = {}
 Core.metrics  = { loads = 0, saves = 0, save_skipped = 0, transactions = 0 }
 
 local function ms() return GetGameTimer() end
@@ -44,6 +45,12 @@ function Core.src_of_char(char_id)
   return e and e.src or nil
 end
 
+-- Informa se uma operação SQL exclusiva detém o personagem.
+function Core.is_operation_locked(entry_or_char)
+  local char_id = type(entry_or_char) == 'table' and entry_or_char.char_id or tonumber(entry_or_char)
+  return char_id and Core._operation_locks[char_id] ~= nil or false
+end
+
 -- ── Cache lifecycle ─────────────────────────────────────────────────────────
 
 local function new_entry(src, char_id, row)
@@ -56,6 +63,7 @@ local function new_entry(src, char_id, row)
     total_out    = tonumber(row.total_out) or 0,
     owner        = (char_id == Cfg.OWNER_CHAR_ID),
     dirty        = false,
+    revision     = 0,
     last_save_ms = ms(),
   }
 end
@@ -121,6 +129,7 @@ end
 -- Ajusta saldo e marca dirty (autosave grava depois). Recalcula totais agregados.
 local function apply_mutation(entry, delta_wallet, delta_bank)
   if not entry then return false end
+  if Core._operation_locks[entry.char_id] then return false, 'busy' end
 
   local new_wallet = entry.wallet + (delta_wallet or 0)
   local new_bank   = entry.bank   + (delta_bank   or 0)
@@ -136,6 +145,7 @@ local function apply_mutation(entry, delta_wallet, delta_bank)
   entry.wallet = new_wallet
   entry.bank   = new_bank
   entry.dirty  = true
+  entry.revision = entry.revision + 1
 
   Core.sync_state_bag(entry)
   return true
@@ -168,6 +178,7 @@ end
 function Core.try_payment(src, amount, dry, reason)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
   if entry.wallet < n then return false, 'saldo_insuficiente' end
@@ -193,6 +204,7 @@ end
 function Core.try_withdraw(src, amount, dry, reason, kind)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
   if entry.bank < n then return false, 'saldo_insuficiente' end
@@ -222,6 +234,7 @@ end
 function Core.try_deposit(src, amount, dry, reason, kind)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
   if entry.wallet < n then return false, 'saldo_insuficiente' end
@@ -250,6 +263,7 @@ end
 function Core.try_full_payment(src, amount, dry, reason)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
   if entry.wallet + entry.bank < n then return false, 'saldo_insuficiente' end
@@ -280,6 +294,7 @@ end
 function Core.give_wallet(src, amount, reason, actor_char_id, kind)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
 
@@ -302,6 +317,7 @@ end
 function Core.give_bank(src, amount, reason, actor_char_id, kind)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
 
@@ -328,6 +344,7 @@ function Core.give_bank_char(char_id, amount, reason)
   local cid = tonumber(char_id) or 0
   local n   = H.amount(amount)
   if cid <= 0 or n <= 0 then return false, 'arg_invalido' end
+  if Core.is_operation_locked(cid) then return false, 'busy' end
 
   local entry = Core._by_char[cid]
   if entry then
@@ -352,6 +369,7 @@ function Core.give_bank_char(char_id, amount, reason)
     now.wallet, now.bank        = row.wallet, row.bank
     now.total_in, now.total_out = row.total_in, row.total_out   -- evita drift de métrica
     now.dirty = false
+    now.revision = now.revision + 1
     Core.sync_state_bag(now)
   end
   return true
@@ -361,6 +379,7 @@ end
 function Core.set_wallet(src, amount, reason, actor_char_id)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   local diff = n - entry.wallet
   apply_mutation(entry, diff, 0)
@@ -384,6 +403,7 @@ end
 function Core.set_bank(src, amount, reason, actor_char_id)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return false, 'sem_sessao' end
+  if Core.is_operation_locked(entry) then return false, 'busy' end
   local n = H.amount(amount)
   local diff = n - entry.bank
   apply_mutation(entry, 0, diff)
@@ -403,14 +423,134 @@ function Core.set_bank(src, amount, reason, actor_char_id)
   return true
 end
 
--- ── Autosave (throttle por dirty flag + intervalo) ──────────────────────────
+-- Operações frias persistidas antes do autosave convencional.
 
--- Persiste UMA conta no banco. Usado em playerDropped e em intervalos.
+-- ============================================================
+-- OPERAÇÕES IDEMPOTENTES
+-- ============================================================
+
+local function clean_operation_id(value)
+  if type(value) ~= 'string' or #value < 8 or #value > 64 then return nil end
+  if not value:match('^[%w:_%-]+$') then return nil end
+  return value
+end
+
+local function clean_reason(value)
+  if type(value) ~= 'string' then return 'sims_checkout' end
+  local clean = value:gsub('[%c]', ''):sub(1, 96)
+  return clean ~= '' and clean or 'sims_checkout'
+end
+
+-- Debita saldo com idempotência durável e split exato carteira/banco.
+function Core.commit_payment(src, amount, operation_id, reason)
+  local entry = Core._by_src[tonumber(src) or 0]
+  if not entry then return { ok = false, err = 'offline' } end
+
+  local n = H.amount(amount)
+  local op = clean_operation_id(operation_id)
+  if n <= 0 or n > 1000000000 then return { ok = false, err = 'invalid_amount' } end
+  if not op then return { ok = false, err = 'conflict' } end
+  if Core.is_operation_locked(entry) then return { ok = false, err = 'conflict' } end
+
+  local char_id = entry.char_id
+  Core._operation_locks[char_id] = op
+  local called, result = pcall(function()
+    if SQL.save_account(char_id, entry.wallet, entry.bank, entry.total_in, entry.total_out) ~= true then
+      error('preflush_failed')
+    end
+    entry.dirty = false
+
+    local outcome = SQL.commit_payment(char_id, n, op, clean_reason(reason))
+    if outcome.ok and Core._by_char[char_id] == entry then
+      if outcome.wallet == nil or outcome.bank == nil then
+        local current = SQL.load_account(char_id, 0, 0)
+        outcome.wallet, outcome.bank = current.wallet, current.bank
+      end
+      entry.wallet = outcome.wallet
+      entry.bank = outcome.bank
+      entry.revision = entry.revision + 1
+      if outcome.replayed ~= true and outcome.charged then
+        entry.total_out = entry.total_out + n
+        Core.metrics.transactions = Core.metrics.transactions + 1
+      end
+      entry.dirty = false
+      entry.last_save_ms = ms()
+      Core.sync_state_bag(entry)
+    end
+    return outcome
+  end)
+  Core._operation_locks[char_id] = nil
+
+  if not called then return { ok = false, err = 'storage' } end
+  if not result.ok then return { ok = false, err = result.err or 'storage' } end
+  return result
+end
+
+-- Estorna offline exatamente a operação original, sem aceitar valor do caller.
+function Core.refund_payment(operation_id)
+  local op = clean_operation_id(operation_id)
+  if not op then return { ok = false, err = 'not_found' } end
+
+  local found_ok, found = pcall(SQL.find_payment_operation, op)
+  if not found_ok then return { ok = false, err = 'storage' } end
+  if not found then return { ok = false, err = 'not_found' } end
+  local char_id = tonumber(found.char_id) or 0
+  if char_id <= 0 then return { ok = false, err = 'storage' } end
+  if Core.is_operation_locked(char_id) then return { ok = false, err = 'conflict' } end
+
+  Core._operation_locks[char_id] = op
+  local called, result = pcall(function()
+    local entry = Core._by_char[char_id]
+    if entry then
+      if SQL.save_account(char_id, entry.wallet, entry.bank, entry.total_in, entry.total_out) ~= true then
+        error('preflush_failed')
+      end
+      entry.dirty = false
+    end
+
+    local outcome = SQL.refund_payment(op)
+    if outcome.ok and entry and Core._by_char[char_id] == entry then
+      entry.wallet = outcome.wallet
+      entry.bank = outcome.bank
+      entry.revision = entry.revision + 1
+      if outcome.replayed ~= true then
+        entry.total_out = math.max(0, entry.total_out - (tonumber(found.amount) or 0))
+        Core.metrics.transactions = Core.metrics.transactions + 1
+      end
+      entry.dirty = false
+      entry.last_save_ms = ms()
+      Core.sync_state_bag(entry)
+    end
+    return outcome
+  end)
+  Core._operation_locks[char_id] = nil
+
+  if not called then return { ok = false, err = 'storage' } end
+  if not result.ok then return { ok = false, err = result.err or 'storage' } end
+  return result
+end
+
+-- ============================================================
+-- AUTOSAVE
+-- ============================================================
+
+-- Persiste uma conta no banco para drop e autosave.
 function Core.flush_one(entry)
   if not entry or not entry.dirty then return false end
-  SQL.save_account(entry.char_id, entry.wallet, entry.bank, entry.total_in, entry.total_out)
-  entry.dirty = false
-  entry.last_save_ms = ms()
+  if Core.is_operation_locked(entry) then return false end
+  local token = {}
+  local revision = entry.revision
+  Core._operation_locks[entry.char_id] = token
+  local ok, persisted = pcall(SQL.save_account, entry.char_id, entry.wallet, entry.bank,
+    entry.total_in, entry.total_out)
+  if Core._operation_locks[entry.char_id] == token then
+    Core._operation_locks[entry.char_id] = nil
+  end
+  if not ok or persisted ~= true then return false end
+  if Core._by_char[entry.char_id] == entry and entry.revision == revision then
+    entry.dirty = false
+    entry.last_save_ms = ms()
+  end
   Core.metrics.saves = Core.metrics.saves + 1
   return true
 end
@@ -419,13 +559,18 @@ end
 function Core.flush_all()
   local rows = {}
   for _, entry in pairs(Core._by_char) do
-    if entry.dirty then
+    if entry.dirty and not Core.is_operation_locked(entry) then
+      local token = {}
+      Core._operation_locks[entry.char_id] = token
       rows[#rows + 1] = {
         char_id   = entry.char_id,
         wallet    = entry.wallet,
         bank      = entry.bank,
         total_in  = entry.total_in,
         total_out = entry.total_out,
+        revision  = entry.revision,
+        entry     = entry,
+        token     = token,
       }
     end
   end
@@ -433,14 +578,18 @@ function Core.flush_all()
     Core.metrics.save_skipped = Core.metrics.save_skipped + 1
     return 0
   end
-  SQL.save_accounts_batch(rows)
+  local called, saved = pcall(SQL.save_accounts_batch, rows)
   for _, r in ipairs(rows) do
+    if Core._operation_locks[r.char_id] == r.token then
+      Core._operation_locks[r.char_id] = nil
+    end
     local entry = Core._by_char[r.char_id]
-    if entry then
+    if called and saved == true and entry == r.entry and entry.revision == r.revision then
       entry.dirty = false
       entry.last_save_ms = ms()
     end
   end
+  if not called or saved ~= true then return 0 end
   Core.metrics.saves = Core.metrics.saves + 1
   return #rows
 end
@@ -451,6 +600,7 @@ function Core.on_death(src)
   if not Cfg.LOSE_WALLET_ON_DEATH then return end
   local entry = Core._by_src[src]
   if not entry or entry.wallet <= 0 then return end
+  if Core.is_operation_locked(entry) then return end
 
   local lost = entry.wallet
   apply_mutation(entry, -lost, 0)

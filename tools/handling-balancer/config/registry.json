@@ -6,11 +6,11 @@
       "tier_max": "S"
     },
     "TOYOTASUPRA": {
-      "tier_base": "S",
-      "tier_max": "S+"
+      "tier_base": "A",
+      "tier_max": "S"
     },
     "SKYLINER34": {
-      "tier_base": "S",
+      "tier_base": "S+",
       "tier_max": "S+"
     },
     "FERRARIF8": {
@@ -30,7 +30,7 @@
       "tier_max": "S"
     },
     "F8T": {
-      "tier_base": "S",
+      "tier_base": "S+",
       "tier_max": "S+"
     }
   }

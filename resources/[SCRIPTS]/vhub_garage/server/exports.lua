@@ -12,7 +12,6 @@ local TRUSTED = {
   ['vhub_money']     = true,
   ['vhub_identity']  = true,
   ['vhub_groups']    = true,
-  ['vhub_player_state'] = true,
   ['vhub_admin']     = true,
   ['vhub_lspdtool']  = true,   -- apreensão policial via forceImpound (porta declarada)
   ['vhub_conce']     = true,   -- devolução de posse temporária despawna via export (F-031)

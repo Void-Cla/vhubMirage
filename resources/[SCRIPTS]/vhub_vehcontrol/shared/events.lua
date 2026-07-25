@@ -8,6 +8,17 @@
 VHubVeh   = VHubVeh or {}
 VHubVeh.E = {
 
+  -- controle de entidade
+  REQUEST_LOCK = 'vhub_vehcontrol:requestLock',
+  REQUEST_ENGINE = 'vhub_vehcontrol:requestEngine',
+  LOCK_NOTIFY = 'vhub_vehcontrol:lockNotify',
+
+  -- prontuario veicular
+  STATE_SYNC = 'vhub_vehcontrol:stateSync',
+  REQUEST_STATE = 'vhub_vehcontrol:requestState',
+  APPLY_STATE = 'vhub_vehcontrol:applyState',
+  STATE_APPLIED = 'vhub_vehcontrol:stateApplied',
+
   -- skill / redistribuição de pontos
   REQ_SHEET    = 'vhub_vehcontrol:reqSheet',     -- cliente → servidor: pede ficha derivada por placa
   SHEET        = 'vhub_vehcontrol:sheet',        -- servidor → cliente: ficha (flat, primitivos)
@@ -33,4 +44,23 @@ VHubVeh.E = {
   -- telinha DVD no carro (decisão #53) — servidor → cliente: exibe/esconde o iframe do YouTube (mute)
   VIDEO_ATTACH = 'vhub_vehcontrol:soundVideoAttach',  -- (videoId, title)
   VIDEO_DETACH = 'vhub_vehcontrol:soundVideoDetach',  -- ()
+
+  -- som veicular / ponte soft-dependency com vhub_wow
+  SOUND_PLAY = 'vhub_vehcontrol:soundPlay',
+  SOUND_STOP = 'vhub_vehcontrol:soundStop',
+  SOUND_VOLUME = 'vhub_vehcontrol:soundVolume',
+  SOUND_SEARCH = 'vhub_vehcontrol:soundSearch',
+  SOUND_RADIO = 'vhub_vehcontrol:soundRadio',
+  SOUND_VIDEO = 'vhub_vehcontrol:soundVideo',
+  SOUND_VIDEO_OFF = 'vhub_vehcontrol:soundVideoOff',
+  SOUND_REJECTED = 'vhub_vehcontrol:soundRejected',
+  SOUND_NOW = 'vhub_vehcontrol:soundNow',
+  WOW_SEARCH_RESULTS = 'vhub_wow:searchResults',
+  WOW_AUDIO_LIFECYCLE = 'vhub_wow:audioLifecycle',
+}
+
+VHubVeh.B = {
+  LOCK = 'vhub_vc_lock',
+  ENGINE = 'vhub_vc_engine',
+  SEATBELT = 'vhub_seatbelt',
 }

@@ -5,11 +5,30 @@ VHubCoin = VHubCoin or {}
 local Webhooks = {}
 VHubCoin.Webhooks = Webhooks
 
+-- mapa categoria → convar de fallback (lida em runtime para não versionar URL)
+local _convar = {
+    purchases = 'coinshop_webhook_purchases',
+    redeems   = 'coinshop_webhook_redeems',
+    admin     = 'coinshop_webhook_admin',
+}
+
+-- resolve URL: config estática > convar > ausente
+local function resolveUrl(category)
+    local url = VHubCoin.cfg.webhooks[category]
+    if VHubCoin.isNonEmptyStr(url) then return url end
+    local cv = _convar[category]
+    if cv then
+        local v = GetConvar(cv, '')
+        if v ~= '' then return v end
+    end
+    return nil
+end
+
 
 -- envia um embed para o webhook da categoria (purchases|redeems|admin); no-op se URL vazia
 function Webhooks.fire(category, title, description, fields)
-    local url = VHubCoin.cfg.webhooks[category]
-    if not VHubCoin.isNonEmptyStr(url) then return end
+    local url = resolveUrl(category)
+    if not url then return end
 
     local color = VHubCoin.cfg.webhookColors[category] or 16777215
     local embed = {

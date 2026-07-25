@@ -1,253 +1,199 @@
-// audio.js — player híbrido do vhub_wow.
-// Backends por tipo de URL:
-//   • 'audio'      → <audio> HTML5 (Discord/SoundCloud CDN/.mp3 direto) — offline-safe (A-10)
-//   • 'youtube'    → YouTube IFrame Player API (player oficial, sem chave)
-//   • 'soundcloud' → SoundCloud Widget API
-// YT/SC são exceção consciente à A-10 (exigem o domínio acessível). Só o id/permalink
-// validado entra no iframe (nunca string crua) — anti-injeção.
+// audio.js — backends HTML5/YouTube com master gain único e cleanup explícito
 
-var sounds = {};   // [name] = { backend, handle, ready, volume, loop, ... }
+(function () {
+  'use strict';
 
+  var sounds = Object.create(null);
+  var streamerMode = false;
+  var voiceActivity = 0;
 
-// ============================================================
-// PRONTIDÃO DAS APIS DE EMBED (carregam async)
-// ============================================================
+  vhub.listen('nui:wow:audio:play', onPlay);
+  vhub.listen('nui:wow:audio:destroy', function (data) { destroyIfExists(data.name); });
+  vhub.listen('nui:wow:audio:pause', onPause);
+  vhub.listen('nui:wow:audio:resume', onResume);
+  vhub.listen('nui:wow:audio:volume', onVolume);
+  vhub.listen('nui:wow:audio:master', onMaster);
 
-var ytReady = false;
-var ytQueue = [];
+  window.addEventListener('message', onProviderMessage);
+  window.addEventListener('beforeunload', cleanup);
 
-// callback global que a IFrame API chama ao carregar
-window.onYouTubeIframeAPIReady = function () {
-  ytReady = true;
-  while (ytQueue.length) { try { ytQueue.shift()(); } catch (e) {} }
-};
-
-
-// ============================================================
-// LISTENER — dispatch das mensagens do Lua
-// ============================================================
-
-window.addEventListener('message', function (event) {
-  var d = event.data;
-  if (!d || !d.type) return;
-
-  switch (d.type) {
-    case 'play':          onPlay(d); break;
-    case 'destroy':       onDestroy(d); break;
-    case 'pause':         onPauseMsg(d); break;
-    case 'resume':        onResumeMsg(d); break;
-    case 'volume':        onVolume(d); break;
-    case 'distance':      onDistance(d); break;
+  function clamp(value) {
+    value = Number(value);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
   }
-});
 
+  function effective(sourceVolume) {
+    if (streamerMode) return 0;
+    return clamp(sourceVolume) * (1 - 0.5 * clamp(voiceActivity));
+  }
 
-// ============================================================
-// PLAY — detecta o backend pela URL e roteia
-// ============================================================
+  function youtubeCommand(entry, method, args) {
+    if (!entry || !entry.iframe || !entry.iframe.contentWindow) return;
+    entry.iframe.contentWindow.postMessage(JSON.stringify({
+      event: 'command', func: method, args: args || [], id: entry.iframe.id,
+    }), 'https://www.youtube-nocookie.com');
+  }
 
-function onPlay(d) {
-  destroyIfExists(d.name);
+  function applyVolume(entry) {
+    if (!entry) return;
+    var value = effective(entry.sourceVolume);
+    entry.effectiveVolume = value;
 
-  var vol = clampVolume(d.volume);
-  var loop = d.loop === true;
+    if (entry.backend === 'audio') {
+      entry.handle.muted = streamerMode;
+      entry.handle.volume = value;
+    } else if (entry.backend === 'youtube' && entry.ready) {
+      youtubeCommand(entry, 'setVolume', [Math.round(value * 100)]);
+      youtubeCommand(entry, streamerMode || value === 0 ? 'mute' : 'unMute');
+    }
+  }
 
-  var ytId = parseYouTubeId(d.url);
-  if (ytId) { return playYouTube(d.name, ytId, vol, loop, d.title); }
+  function onMaster(data) {
+    if (typeof data.streamer_mode === 'boolean') streamerMode = data.streamer_mode;
+    if (Number.isFinite(Number(data.voice_activity))) voiceActivity = clamp(data.voice_activity);
+    Object.keys(sounds).forEach(function (name) { applyVolume(sounds[name]); });
+  }
 
-  if (isSoundCloud(d.url)) { return playSoundCloud(d.name, d.url, vol, loop); }
+  function onPlay(data) {
+    if (!data || typeof data.name !== 'string' || typeof data.url !== 'string') return;
+    if (typeof data.streamer_mode === 'boolean') streamerMode = data.streamer_mode;
+    destroyIfExists(data.name);
+    var sourceVolume = clamp(data.volume);
+    var youtubeId = parseYouTubeId(data.url);
+    if (youtubeId) playYouTube(data.name, youtubeId, sourceVolume, data.loop === true);
+    else playAudio(data.name, data.url, sourceVolume, data.loop === true);
+  }
 
-  playAudio(d.name, d.url, vol, loop, d);
-}
-
-// backend 'audio' — arquivo direto via <audio> (anti-XSS: src por propriedade DOM)
-function playAudio(name, url, vol, loop, d) {
-  var audio = new Audio();
-  audio.src = url;
-  audio.loop = loop;
-  audio.volume = vol;
-
-  sounds[name] = {
-    backend: 'audio', handle: audio, ready: true, volume: vol, loop: loop,
-    distance: (d && d.distance) || 10.0, dynamic: (d && d.dynamic) === true,
-  };
-
-  audio.play().catch(function () {});
-}
-
-// backend 'youtube' — IFrame Player API (só o id de 11 chars entra)
-function playYouTube(name, videoId, vol, loop, title) {
-  var entry = { backend: 'youtube', handle: null, ready: false, volume: vol, loop: loop,
-                title: (typeof title === 'string' ? title : null) };
-  sounds[name] = entry;
-
-  function build() {
-    if (sounds[name] !== entry) return;   // destruído antes de montar
-
-    var div = document.createElement('div');
-    div.id = 'ytp-' + safeId(name);
-    document.getElementById('wow-players').appendChild(div);
-
-    var pv = {
-      autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1,
-      playsinline: 1, rel: 0, iv_load_policy: 3,
+  function playAudio(name, url, sourceVolume, loop) {
+    var audio = new Audio();
+    var entry = {
+      backend: 'audio', handle: audio, ready: true,
+      sourceVolume: sourceVolume, effectiveVolume: 0, loop: loop,
     };
-    if (loop) { pv.loop = 1; pv.playlist = videoId; }   // loop de 1 vídeo exige playlist=id
-
-    // host nocookie (menos anúncio) — SO no construtor (a IFrame API monta o iframe
-    // interno em youtube-nocookie.com/embed). NAO repetir em playerVars.
-    entry.handle = new YT.Player(div.id, {
-      width: '1', height: '1', videoId: videoId, playerVars: pv,
-      host: 'https://www.youtube-nocookie.com',
-      events: {
-        onReady: function (e) {
-          if (sounds[name] !== entry) { try { e.target.destroy(); } catch (x) {} return; }
-          entry.ready = true;
-          // autoplay robusto no CEF: começa MUTADO, dá play, e desmuta no volume alvo.
-          // (player mutado sempre pode autoplay; unmute logo após já sai com som)
-          try { e.target.mute(); } catch (x) {}
-          try { e.target.playVideo(); } catch (x) {}
-          try { e.target.unMute(); } catch (x) {}
-          try { e.target.setVolume(Math.round(clampVolume(entry.volume) * 100)); } catch (x) {}
-        },
-        onError: function () { /* vídeo bloqueado/embargado: silencioso, não trava a UI */ },
-      },
-    });
+    sounds[name] = entry;
+    audio.loop = loop;
+    audio.preload = 'auto';
+    applyVolume(entry);
+    audio.addEventListener('ended', function () {
+      if (!loop) complete(name, entry, 'ended');
+    }, { once: true });
+    audio.addEventListener('error', function () { complete(name, entry, 'error'); }, { once: true });
+    audio.src = url;
+    audio.play().catch(function () { complete(name, entry, 'error'); });
   }
 
-  if (ytReady) build(); else ytQueue.push(build);
-}
+  function playYouTube(name, videoId, sourceVolume, loop) {
+    var iframe = document.createElement('iframe');
+    iframe.id = 'ytp-' + safeId(name);
+    iframe.width = '1';
+    iframe.height = '1';
+    iframe.setAttribute('allow', 'autoplay');
+    iframe.setAttribute('title', 'Player de áudio');
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId +
+      '?enablejsapi=1&autoplay=0&controls=0&disablekb=1&fs=0&playsinline=1&rel=0' +
+      (loop ? '&loop=1&playlist=' + videoId : '');
 
-// backend 'soundcloud' — Widget API (permalink host-validado, URL-encoded)
-function playSoundCloud(name, url, vol, loop) {
-  var iframe = document.createElement('iframe');
-  iframe.id = 'scp-' + safeId(name);
-  iframe.width = '1'; iframe.height = '1';
-  iframe.setAttribute('frameborder', 'no');
-  iframe.setAttribute('allow', 'autoplay');
-  iframe.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(url) +
-    '&auto_play=true&visual=false&hide_related=true&show_comments=false&show_user=false&download=false&sharing=false&buying=false';
-  document.getElementById('wow-players').appendChild(iframe);
+    var entry = {
+      backend: 'youtube', iframe: iframe, ready: false,
+      sourceVolume: sourceVolume, effectiveVolume: 0, loop: loop,
+    };
+    sounds[name] = entry;
+    document.getElementById('wow-players').appendChild(iframe);
 
-  var entry = { backend: 'soundcloud', handle: null, ready: false, volume: vol, loop: loop, iframe: iframe };
-  sounds[name] = entry;
-
-  (function bind() {
-    if (typeof SC === 'undefined' || !SC.Widget) { setTimeout(bind, 200); return; }
-    if (sounds[name] !== entry) return;
-
-    var widget = SC.Widget(iframe);
-    entry.handle = widget;
-    widget.bind(SC.Widget.Events.READY, function () {
+    iframe.addEventListener('load', function () {
       if (sounds[name] !== entry) return;
       entry.ready = true;
-      try { widget.setVolume(Math.round(entry.volume * 100)); } catch (x) {}
-      if (entry.loop) {
-        widget.bind(SC.Widget.Events.FINISH, function () { try { widget.seekTo(0); widget.play(); } catch (x) {} });
+      iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: iframe.id }),
+        'https://www.youtube-nocookie.com');
+      youtubeCommand(entry, 'addEventListener', ['onStateChange']);
+      youtubeCommand(entry, 'addEventListener', ['onError']);
+      youtubeCommand(entry, 'mute');
+      applyVolume(entry);
+      youtubeCommand(entry, 'playVideo');
+    }, { once: true });
+  }
+
+  function onProviderMessage(event) {
+    if (event.origin !== 'https://www.youtube-nocookie.com'
+        && event.origin !== 'https://www.youtube.com') return;
+    var payload = event.data;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch (error) { return; }
+    }
+    if (!payload || typeof payload.event !== 'string') return;
+
+    Object.keys(sounds).some(function (name) {
+      var entry = sounds[name];
+      if (entry.backend !== 'youtube' || entry.iframe.contentWindow !== event.source) return false;
+      if (payload.event === 'onError') complete(name, entry, 'error');
+      else if (payload.event === 'onStateChange' && Number(payload.info) === 0 && !entry.loop) {
+        complete(name, entry, 'ended');
       }
-      try { widget.play(); } catch (x) {}
+      return true;
     });
-  })();
-}
-
-
-// ============================================================
-// CONTROLES — despacham pelo backend
-// ============================================================
-
-function onDestroy(d) {
-  destroyIfExists(d.name);
-}
-
-function onPauseMsg(d) {
-  var s = sounds[d.name];
-  if (!s) return;
-  if (s.backend === 'audio') { s.handle.pause(); }
-  else if (s.backend === 'youtube')    { if (s.handle && s.ready) try { s.handle.pauseVideo(); } catch (e) {} }
-  else if (s.backend === 'soundcloud') { if (s.handle) try { s.handle.pause(); } catch (e) {} }
-}
-
-function onResumeMsg(d) {
-  var s = sounds[d.name];
-  if (!s) return;
-  if (s.backend === 'audio') { s.handle.play().catch(function () {}); }
-  else if (s.backend === 'youtube')    { if (s.handle && s.ready) try { s.handle.playVideo(); } catch (e) {} }
-  else if (s.backend === 'soundcloud') { if (s.handle) try { s.handle.play(); } catch (e) {} }
-}
-
-function onVolume(d) {
-  var s = sounds[d.name];
-  if (!s) return;
-  var v = clampVolume(d.volume);
-  s.volume = v;   // guardado p/ aplicar no onReady caso o player ainda não esteja pronto
-  if (s.backend === 'audio') { s.handle.volume = v; }
-  else if (s.backend === 'youtube')    { if (s.handle && s.ready) try { s.handle.setVolume(Math.round(v * 100)); } catch (e) {} }
-  else if (s.backend === 'soundcloud') { if (s.handle && s.ready) try { s.handle.setVolume(Math.round(v * 100)); } catch (e) {} }
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-// derruba o backend correto e remove o player do DOM (A-07: cleanup)
-function destroyIfExists(name) {
-  var s = sounds[name];
-  if (!s) return;
-  delete sounds[name];   // marca destruído ANTES (evita onReady tardio reativar)
-
-  if (s.backend === 'audio') {
-    s.handle.pause();
-    s.handle.src = '';
-  } else if (s.backend === 'youtube') {
-    if (s.handle) { try { s.handle.destroy(); } catch (e) {} }
-    removeEl('ytp-' + safeId(name));
-  } else if (s.backend === 'soundcloud') {
-    if (s.iframe && s.iframe.parentNode) s.iframe.parentNode.removeChild(s.iframe);
   }
-}
 
-function removeEl(id) {
-  var el = document.getElementById(id);
-  if (el && el.parentNode) el.parentNode.removeChild(el);
-}
-
-// id de DOM seguro a partir do nome do som
-function safeId(name) {
-  return String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function clampVolume(v) {
-  v = Number(v);
-  if (isNaN(v)) return 0.5;
-  return Math.max(0, Math.min(1, v));
-}
-
-
-// ============================================================
-// DETECÇÃO DE URL — espelha a validação server-side (config.lua)
-// ============================================================
-
-// extrai o id de 11 chars de uma URL do YouTube (ou null)
-function parseYouTubeId(url) {
-  if (typeof url !== 'string') return null;
-  var host = (url.match(/^https:\/\/([\w.-]+)\//) || [])[1];
-  if (!host) return null;
-  if (['youtu.be', 'youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com',
-       'www.youtube-nocookie.com', 'youtube-nocookie.com'].indexOf(host) === -1) {
-    return null;
+  function onPause(data) {
+    var entry = sounds[data.name];
+    if (!entry) return;
+    if (entry.backend === 'audio') entry.handle.pause();
+    else if (entry.ready) youtubeCommand(entry, 'pauseVideo');
   }
-  var m = url.match(/[?&]v=([\w-]+)/) || url.match(/youtu\.be\/([\w-]+)/) ||
-          url.match(/\/shorts\/([\w-]+)/) || url.match(/\/embed\/([\w-]+)/);
-  if (m && m[1] && m[1].length >= 11) return m[1].slice(0, 11);
-  return null;
-}
 
-// true se for permalink do SoundCloud
-function isSoundCloud(url) {
-  if (typeof url !== 'string') return false;
-  var parts = url.match(/^https:\/\/([\w.-]+)(\/.*)$/);
-  if (!parts) return false;
-  var host = parts[1], path = parts[2];
-  if (['soundcloud.com', 'www.soundcloud.com', 'm.soundcloud.com'].indexOf(host) === -1) return false;
-  return /^\/[\w-]+\/[\w-]+/.test(path);
-}
+  function onResume(data) {
+    var entry = sounds[data.name];
+    if (!entry) return;
+    applyVolume(entry);
+    if (entry.backend === 'audio') entry.handle.play().catch(function () {
+      complete(data.name, entry, 'error');
+    });
+    else if (entry.ready) youtubeCommand(entry, 'playVideo');
+  }
+
+  function onVolume(data) {
+    var entry = sounds[data.name];
+    if (!entry) return;
+    entry.sourceVolume = clamp(data.volume);
+    applyVolume(entry);
+  }
+
+  function complete(name, entry, status) {
+    if (sounds[name] !== entry) return;
+    destroyIfExists(name);
+    vhub.native.wow.audioLifecycle(name, status);
+  }
+
+  function destroyIfExists(name) {
+    var entry = sounds[name];
+    if (!entry) return;
+    delete sounds[name];
+    if (entry.backend === 'audio') {
+      entry.handle.pause();
+      entry.handle.removeAttribute('src');
+      entry.handle.load();
+    } else if (entry.iframe && entry.iframe.parentNode) {
+      entry.iframe.parentNode.removeChild(entry.iframe);
+    }
+  }
+
+  function safeId(name) {
+    return String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  function parseYouTubeId(url) {
+    var host = typeof url === 'string' && (url.match(/^https:\/\/([\w.-]+)\//) || [])[1];
+    if (!host || ['youtu.be', 'youtube.com', 'www.youtube.com', 'm.youtube.com',
+      'music.youtube.com', 'www.youtube-nocookie.com', 'youtube-nocookie.com'].indexOf(host) < 0) {
+      return null;
+    }
+    var match = url.match(/[?&]v=([\w-]+)/) || url.match(/youtu\.be\/([\w-]+)/) ||
+      url.match(/\/shorts\/([\w-]+)/) || url.match(/\/embed\/([\w-]+)/);
+    return match && match[1] && match[1].length >= 11 ? match[1].slice(0, 11) : null;
+  }
+
+  function cleanup() {
+    window.removeEventListener('message', onProviderMessage);
+    Object.keys(sounds).forEach(destroyIfExists);
+  }
+})();

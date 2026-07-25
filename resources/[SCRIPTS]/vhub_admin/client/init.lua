@@ -23,6 +23,16 @@ VHubAdmin.state = {
 }
 local S = VHubAdmin.state
 
+local function setAdminCapability(active)
+  active = active == true
+  local revoked = S.is_admin and not active
+  S.is_admin = active
+  if revoked then
+    VHubAdmin.closePanel()
+    TriggerEvent(E.CLEANUP_EFFECTS)
+  end
+end
+
 -- Exibe notificacao local sem usar a NUI como fonte de verdade.
 function VHubAdmin.notify(message)
   BeginTextCommandThefeedPost('STRING')
@@ -47,7 +57,7 @@ AddEventHandler(E.SETUP, function(setup)
   S.hotkey = type(setup.hotkey) == 'string' and setup.hotkey or 'F6'
   S.actions = type(setup.actions) == 'table' and setup.actions or {}
   S.selectors = type(setup.selectors) == 'table' and setup.selectors or {}
-  S.is_admin = setup.is_admin == true
+  setAdminCapability(setup.is_admin)
   S.ready = true
   if setup.open == true and S.is_admin then VHubAdmin.openPanel() end
 end)
@@ -97,21 +107,20 @@ end)
 -- State Bag replica apenas a capacidade; toda acao continua validada no servidor.
 AddStateBagChangeHandler('vhub_is_admin', nil, function(bagName, _, value)
   if bagName ~= ('player:%s'):format(GetPlayerServerId(PlayerId())) then return end
-  S.is_admin = value == true
-  if not S.is_admin then VHubAdmin.closePanel() end
+  setAdminCapability(value)
 end)
 
 Citizen.CreateThread(function()
   Citizen.Wait(0)
-  S.is_admin = LocalPlayer.state.vhub_is_admin == true
+  setAdminCapability(LocalPlayer.state.vhub_is_admin)
 end)
 
-AddEventHandler('vhub_player_state:spawned', function()
-  TriggerEvent('vhub_admin:cleanupEffects')
+AddEventHandler(VHubHSS.E.SPAWNED, function()
+  TriggerEvent(E.CLEANUP_EFFECTS)
 end)
 
 AddEventHandler('onResourceStop', function(resource)
   if resource ~= GetCurrentResourceName() then return end
   VHubAdmin.closePanel()
-  TriggerEvent('vhub_admin:cleanupEffects')
+  TriggerEvent(E.CLEANUP_EFFECTS)
 end)

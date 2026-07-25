@@ -2,7 +2,7 @@
 
 -- client/main.lua — vhub_velo: telemetria + seleção de HUD (camada L2/HAL).
 -- PURO CONSUMIDOR: lê bags (vh_fuel/vh_odo/vhub_seatbelt) + natives efêmeros e envia ao HUD.
--- NUNCA escreve bag nem setVData (sem 2ª fonte de verdade, L-04). Preferência de HUD = KVP client-side.
+-- NUNCA escreve bag nem persistência do CORE (sem 2ª fonte de verdade, L-04). Preferência de HUD = KVP client-side.
 
 local ATIVO_MS    = 80
 local INATIVO_MS  = 350
@@ -12,7 +12,7 @@ local visible   = false   -- HUD visível
 local category  = nil     -- categoria atual (carro/moto/aero)
 local running   = true    -- saída determinística da thread (L-06)
 
-local last = { speed=-1, rpm=-1, gear='', fuel=-1, odo=-1, tl=nil, tr=nil, sb=nil, lk=nil, hd=-1 }
+local last = { speed=-1, rpm=-1, gear='', fuel=-1, odo=-1, tl=nil, tr=nil, sb=nil, lk=nil, hd=-1, eh=-1, ni=-1 }
 
 local odo_km    = 0.0     -- odômetro de EXIBIÇÃO (km); integra local, base do CORE, nunca persiste
 local odo_plate = nil
@@ -145,6 +145,22 @@ local function ler_heading(veh)
     return math.floor((GetEntityHeading(veh) or 0.0) / 2 + 0.5) * 2
 end
 
+-- saúde do motor (nativo 0-1000 → 0-100%); 100 quando native indisponível
+local function ler_engine_health(veh)
+    if type(GetVehicleEngineHealth) ~= 'function' then return 100 end
+    local eh = tonumber(GetVehicleEngineHealth(veh)) or 1000
+    return arredondar(limitar(eh / 10.0, 0, 100))
+end
+
+-- nitro: estado vivo publicado pelo vhub_nitro no MESMO client (evento local 'vhub_nitro:hud',
+-- dedup na origem). 0 sem kit ou sem o resource — fail-safe; o dono do dado é o vhub_nitro.
+local nitro_pct = 0
+AddEventHandler('vhub_nitro:hud', function(d)
+    if type(d) ~= 'table' then return end
+    local q = tonumber(d.qty) or 0
+    nitro_pct = (d.kit == true) and limitar(arredondar(q), 0, 100) or 0
+end)
+
 -- placa limpa do veículo (ou nil)
 local function placa_de(veh)
     local p = GetVehicleNumberPlateText(veh)
@@ -176,10 +192,12 @@ end)
 -- ENVIO AO HUD (dedup — sem spam de 80ms)
 -- ============================================================
 
-local function enviar(ativo, sp, rpm, gear, tl, tr, sb, lk, fuel, odo, hd)
+local function enviar(ativo, sp, rpm, gear, tl, tr, sb, lk, fuel, odo, hd, eh, ni)
     sp   = limitar(arredondar(sp), 0, 999)
     rpm  = limitar(arredondar(rpm), 0, 100)
     fuel = limitar(arredondar(fuel), 0, 100)
+    eh   = limitar(arredondar(eh or 100), 0, 100)
+    ni   = limitar(arredondar(ni or 0), 0, 100)
     gear = ativo and tostring(gear or 'N') or 'N'
     tl = ativo and tl == true; tr = ativo and tr == true
     sb = ativo and sb == true; lk = lk == true
@@ -187,15 +205,17 @@ local function enviar(ativo, sp, rpm, gear, tl, tr, sb, lk, fuel, odo, hd)
 
     if last.speed == sp and last.rpm == rpm and last.gear == gear and last.fuel == fuel
        and last.odo == odo_cmp and last.tl == tl and last.tr == tr and last.sb == sb
-       and last.lk == lk and last.hd == hd then return end
+       and last.lk == lk and last.hd == hd and last.eh == eh and last.ni == ni then return end
 
     last.speed, last.rpm, last.gear, last.fuel, last.odo = sp, rpm, gear, fuel, odo_cmp
     last.tl, last.tr, last.sb, last.lk, last.hd = tl, tr, sb, lk, hd
+    last.eh, last.ni = eh, ni
 
     SendNUIMessage({ type = 'velocimetro:update', data = {
         visible = ativo, active = ativo, speed_kmh = sp, rpm_percent = rpm, gear_label = gear,
         fuel_percent = fuel, odometer_km = odo, turn_left = tl, turn_right = tr,
         seatbelt = sb, locked = lk, heading = hd,
+        engine_health = eh, nitro_percent = ni,
     } })
 end
 
@@ -265,7 +285,9 @@ CreateThread(function()
                 if odo_bag and odo_bag > odo_km then odo_km = odo_bag end
             end
 
-            enviar(true, sp, rpm, gear, tl, tr, sb, lk, fuel, plate and odo_km or nil, hd)
+            local eh = ler_engine_health(veh)
+            local ni = nitro_pct
+            enviar(true, sp, rpm, gear, tl, tr, sb, lk, fuel, plate and odo_km or nil, hd, eh, ni)
             Wait(ATIVO_MS)
         else
             setVisible(false)
@@ -321,6 +343,8 @@ RegisterNUICallback('velo:saveConfig', function(data, cb)
         if bgSpeed ~= nil then cfg.bgSpeed = bgSpeed end
         if bgRpm ~= nil then cfg.bgRpm = bgRpm end
         if accent then cfg.accent = accent end
+        local zoom = tonumber(data.zoom)
+        if zoom and zoom >= 0.5 and zoom <= 1.5 then cfg.zoom = zoom end
         -- grava JSON KVP
         pcall(function() SetResourceKvp('vhub_velo:config:' .. cat, json.encode(cfg)) end)
         -- compatibilidade com chaves legadas

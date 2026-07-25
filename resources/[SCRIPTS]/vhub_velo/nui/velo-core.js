@@ -1,7 +1,7 @@
 // velo-core.js — engine UNIVERSAL do velocímetro vHub. Incluído por TODA HUD via /nui/velo-core.js.
-// Porte do engine validado (vhub_vehcontrol/script-velocimetro.js): gauges binary-search O(log n),
-// odômetro RAF que PARA quando inativo (idle ~0), normalize null-safe, preview fora do FiveM.
-// Cada HUD usa só os IDs padrão que tiver; gauges/calibração via window.veloOpts ou VeloCore.init(opts).
+// Gauges com binary-search O(log n), odômetro RAF que PARA quando inativo (idle ~0),
+// normalize null-safe, nitro arc, saúde do motor, preview fora do FiveM.
+// Cada HUD usa só os IDs padrão que tiver; calibração via VeloCore.init(opts).
 
 (function () {
     'use strict';
@@ -36,20 +36,25 @@
         return { get, min: pts[0][0], max: pts[pts.length - 1][0] };
     }
 
+    // arco do gauge de nitro: r=35, sweep=240° → 2π×35×(240/360) ≈ 146.6
+    const NITRO_ARC = 146.6;
+
     const fallback = {
         visible: false, active: false, speed_kmh: 0, rpm_percent: 0, gear_label: 'N',
         fuel_percent: 0, odometer_km: null, turn_left: false, turn_right: false,
         seatbelt: false, locked: false, heading: 0,
+        nitro_percent: 0, engine_health: 100,
     };
     let state = fallback, gauges = {};
     const ODO_H = 11;
 
     // ---- DOM helpers null-safe ----
-    const $ = id => document.getElementById(id);
-    const setText = (id, v) => { const e = $(id); if (e) e.textContent = v; };
-    const setRot = (id, deg) => { const e = $(id); if (e) e.style.transform = `rotate(${deg}deg)`; };
+    const $        = id        => document.getElementById(id);
+    const setText  = (id, v)   => { const e = $(id); if (e) e.textContent = v; };
+    const setRot   = (id, deg) => { const e = $(id); if (e) e.style.transform = `rotate(${deg}deg)`; };
     const setStatus = (id, on) => { const e = $(id); if (e) e.dataset.status = on ? 'on' : 'off'; };
-    const clampn = (v, a, b) => { const n = Number(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, n)) : a; };
+    const setSVG   = (id, a, v) => { const e = $(id); if (e) e.setAttribute(a, v); };
+    const clampn   = (v, a, b) => { const n = Number(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, n)) : a; };
 
     function gearOf(d) {
         const l = String(d.gear_label || d.gear || '').trim().toUpperCase();
@@ -69,13 +74,16 @@
             visible: d.visible !== false, active: v.active !== false,
             speed_kmh: v.speed_kmh, rpm_percent: v.rpm_percent, gear_label: gearOf(v),
             fuel_percent: v.fuel_percent, odometer_km: v.odometer_km,
-            turn_left: Boolean(v.turn_left ?? v.indicator_left),
+            turn_left:  Boolean(v.turn_left  ?? v.indicator_left),
             turn_right: Boolean(v.turn_right ?? v.indicator_right),
             seatbelt: Boolean(v.seatbelt), locked: Boolean(v.locked), heading: Number(v.heading) || 0,
+            nitro_percent:  clampn(v.nitro_percent  ?? 0,   0, 100),
+            engine_health:  clampn(v.engine_health  ?? 100, 0, 100),
         };
     }
 
-    // ---- odômetro 6 dígitos rolantes (RAF gated: só roda com active) ----
+
+    // ---- odômetro 6 dígitos rolantes (RAF gated: para quando inativo) ----
     let odoKm = 0, lastTick = null, raf = null, lastD = [-1, -1, -1, -1, -1, -1];
     const odoCols = [];
     function renderOdo() {
@@ -95,44 +103,72 @@
     }
     function ensureOdo() { if (raf == null && state.active) { lastTick = null; raf = requestAnimationFrame(tick); } }
 
-    // ---- render (null-safe; o nativo das setas vem trocado → invertemos) ----
+
+    // ---- render (null-safe) ----
     function render() {
         const active = Boolean(state.visible && state.active);
-        // visibilidade UNIVERSAL: marca o <body> (HUDs simples) E o #velo-root (HUDs com root próprio)
         document.body.classList.toggle('velo-active', active);
-        const root = $('velo-root'); if (root) root.classList.toggle('velo-active', active);
+        const vroot = $('velo-root'); if (vroot) vroot.classList.toggle('velo-active', active);
 
-        const sp = clampn(state.speed_kmh, 0, 999), rpm = clampn(state.rpm_percent, 0, 100);
+        const sp   = clampn(state.speed_kmh, 0, 999);
+        const rpm  = clampn(state.rpm_percent, 0, 100);
         const fuel = clampn(state.fuel_percent ?? 0, 0, 100);
         const [pre, val] = splitSpeed(sp);
         setText('vehicle-speed-prefix', pre); setText('vehicle-speed', val);
         setText('speed-value', Math.round(sp));
         setText('vehicle-gear', state.gear_label); setText('gear-value', state.gear_label);
+        setText('vehicle-fuel', Math.round(fuel));
 
         if (gauges.speed) setRot('speed-needle', gauges.speed.get(sp));
-        if (gauges.rpm)   setRot('rpm-needle', gauges.rpm.get(rpm / 10));
-        if (gauges.fuel)  setRot('fuel-needle', gauges.fuel.get(fuel));
+        if (gauges.rpm)   setRot('rpm-needle',   gauges.rpm.get(rpm / 10));
+        if (gauges.fuel)  setRot('fuel-needle',  gauges.fuel.get(fuel));
 
+        // setas: o main.lua envia a leitura CRUA do nativo (lados trocados) — a correção de lado
+        // é CONTRATO desta camada (ver comentário em ler_indicadores). NÃO "consertar" removendo.
         setStatus('status-turn-left',  active && state.turn_right);
         setStatus('status-turn-right', active && state.turn_left);
-        setStatus('status-seatbelt', state.seatbelt);
-        setStatus('status-lock', state.locked);
+        setStatus('status-seatbelt',   state.seatbelt);
+        setStatus('status-lock',       state.locked);
+
+        // saúde do motor: LED tricolor via data-health (ok/warn/crit)
+        const ehEl = $('engine-health-dot');
+        if (ehEl) {
+            const eh = state.engine_health;
+            ehEl.dataset.health = eh > 75 ? 'ok' : eh > 25 ? 'warn' : 'crit';
+        }
+
+        // nitro arc: stroke-dashoffset 146.6 (vazio) → 0 (cheio)
+        const nitro = state.nitro_percent;
+        setSVG('nitro-arc-fill', 'stroke-dashoffset', (NITRO_ARC * (1 - nitro / 100)).toFixed(1));
+        setText('nitro-value', Math.round(nitro) + '%');
 
         if (typeof window.veloCustomRender === 'function') window.veloCustomRender(state);
     }
 
     function apply(d) { state = normalize(d); render(); ensureOdo(); }
 
-    // personalização do jogador (fundo por URL + cor de destaque) via CSS vars null-safe.
-    // O HUD opta usando var(--velo-bg) / var(--velo-accent) no seu CSS — quem não usa, ignora.
+
+    // ---- personalização: fundos por mostrador + cor de destaque + zoom ----
     function applyConfig(c) {
         c = c || {};
         const root = document.documentElement.style;
-        if (typeof c.bg === 'string') root.setProperty('--velo-bg', c.bg ? 'url("' + c.bg + '")' : 'none');
+        function setBg(prop, url) {
+            if (typeof url === 'string')
+                root.setProperty(prop, url ? 'url("' + url + '")' : 'none');
+        }
+        setBg('--velo-bg-speed', c.bgSpeed);
+        setBg('--velo-bg-fuel',  c.bgFuel);
+        setBg('--velo-bg-rpm',   c.bgRpm);
+        // legado: c.bg aplica a todos os três mostradores simultaneamente
+        if (typeof c.bg === 'string') {
+            setBg('--velo-bg-speed', c.bg); setBg('--velo-bg-fuel', c.bg);
+            setBg('--velo-bg-rpm',   c.bg); setBg('--velo-bg',      c.bg);
+        }
         if (typeof c.accent === 'string' && c.accent) root.setProperty('--velo-accent', c.accent);
-        // hook para HUDs aplicarem customizações específicas (logos por mostrador, cores adicionais)
+        if (typeof c.zoom   === 'number') root.setProperty('--velo-zoom', String(c.zoom));
         try { if (typeof window.veloOnConfig === 'function') window.veloOnConfig(c); } catch (_) {}
     }
+
 
     function init(opts) {
         opts = opts || window.veloOpts || {};
@@ -154,6 +190,7 @@
         apply(fivem ? fallback : {
             visible: true, active: true, speed_kmh: 128, rpm_percent: 67,
             gear_label: '4', fuel_percent: 60, locked: true, heading: 90,
+            nitro_percent: 65, engine_health: 88,
         });
         renderOdo();
     }

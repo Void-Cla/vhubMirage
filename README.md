@@ -1,7 +1,7 @@
 # vHub Mirage — Framework FiveM GTARP
 
 Framework server-authoritative para FiveM escrito em Lua 5.4.
-**Core FROZEN v1.0 — selado em 2026-05-22. Próxima revisão: 2027-05-22.**
+**CORE v2.0.0-alpha.6 — descongelamento faseado; produção bloqueada pelo gate runtime.**
 
 > resmon medido: **0.02ms** (alvo < 0.05ms idle, < 0.20ms sob carga).
 
@@ -36,9 +36,13 @@ vhubMirage/
 │   │   ├── vhub_groups/       # Permissões e grupos
 │   │   ├── vhub_identity/     # Nome, registro, telefone
 │   │   ├── vhub_money/        # Carteira e banco
-│   │   ├── vhub_survival/     # Fome e sede
-│   │   ├── vhub_player_state/ # Spawn, posição, armas, customização
+│   │   ├── vhub_hss/          # Ped, spawn, posição, buckets e fisiologia
+│   │   ├── vhub_login/        # Conta, autenticação e seleção de personagem
+│   │   ├── vhub_sims/         # Criação/customização e lojas de aparência
 │   │   ├── vhub_inventory/    # Itens, peso, baús, chaves de veículo
+│   │   ├── vhub_voicePMA/     # Voz, rádio, ligação e ducking
+│   │   ├── vhub_wow/          # Áudio espacial e modo streamer
+│   │   ├── vhub_vehcontrol/   # Controle físico e rádio veicular
 │   │   ├── vhub_garage/       # Garagem, concessionária, leilão, aluguel,
 │   │   │                      #   impound, IPVA, reparo, clone/transferência
 │   │   └── vhub_admin/        # Kick, ban, tp, noclip, give — painel NUI
@@ -282,7 +286,7 @@ ensure vhub_groups
 ensure vhub_identity
 ensure vhub_money
 ensure vhub_survival
-ensure vhub_player_state
+ensure vhub_hss
 ensure vhub_inventory
 ensure vhub_garage
 ensure vhub_admin

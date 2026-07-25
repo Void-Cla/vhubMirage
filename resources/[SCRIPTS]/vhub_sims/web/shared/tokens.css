@@ -1,0 +1,95 @@
+:root {
+  /* color-scheme NÃO pode ficar no :root/html/body: no CEF do FiveM (Chromium)
+     'dark' pinta o CANVAS da página de preto opaco, ignorando background:transparent,
+     e cobre o jogo inteiro (A-09). Fica escopado em #app/#route-layer (ver abaixo)
+     só para os controles nativos herdarem o tema escuro sem afetar o canvas. */
+  --vh-sand: #d9c19a;
+  --vh-sand-dim: #a89572;
+  --vh-sand-deep: #5a4a30;
+  --vh-gold: #f3b53a;
+  --vh-gold-soft: #ffd573;
+  --vh-black: #0c0a06;
+  --vh-black-2: #1a1610;
+  --vh-danger: #e8513f;
+  --vh-ok: #6bbf6b;
+  --vh-line: rgba(230, 200, 132, 0.2);
+  --vh-muted: rgba(168, 149, 114, 0.78);
+  --vh-panel: rgba(26, 22, 16, 0.88);
+  --vh-panel-strong: rgba(18, 15, 11, 0.94);
+  --vh-input: rgba(5, 5, 4, 0.38);
+  --vh-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--vh-sand);
+  font-size: 13px;
+}
+
+body.hidden {
+  display: none !important;
+}
+
+/* tema escuro dos controles nativos, sem tocar o canvas (ver nota no :root) */
+#app,
+#route-layer {
+  color-scheme: dark;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+h1,
+h2,
+.mod-studio__controls h2 {
+  font-family: "Barlow Condensed", Bahnschrift, "Arial Narrow", Inter, sans-serif;
+  text-transform: uppercase;
+}
+
+small {
+  font-size: 11.5px;
+}
+
+:where(button, input, select):focus-visible {
+  outline: 2px solid var(--vh-gold-soft);
+  outline-offset: 2px;
+}
+
+#app,
+#route-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#route-layer {
+  z-index: 20;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}

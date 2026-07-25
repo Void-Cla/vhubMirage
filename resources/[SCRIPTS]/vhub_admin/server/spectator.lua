@@ -6,10 +6,15 @@ local E = VHubAdmin.E
 
 local watching = {}
 
+local function setMovementOverride(src, active)
+  pcall(function() exports.vhub_hss:setMovementOverride(src, active == true) end)
+end
+
 local function stop(src, reason)
   local target = watching[src]
   if not target then return false end
   watching[src] = nil
+  setMovementOverride(src, false)
   TriggerClientEvent(E.SPEC_STOP, src)
   if reason then Core:notify(src, reason, 'info') end
   return true
@@ -31,6 +36,7 @@ AddEventHandler(E.ACT_SPEC, function(rawTarget)
   if not target or target == src then return Core:notify(src, 'Alvo indisponivel.', 'erro') end
 
   watching[src] = target
+  setMovementOverride(src, true)
   TriggerClientEvent(E.SPEC_START, src, { target = target, keep = false })
   Core:notify(src, ('Espectando [%d].'):format(target), 'sucesso')
   Core:audit(src, 'spec_start', target, {})
@@ -47,6 +53,7 @@ AddEventHandler(E.SPEC_UPDATE, function()
     stop(src, 'Alvo desconectou. Espectador encerrado.')
     return
   end
+  setMovementOverride(src, true)
   TriggerClientEvent(E.SPEC_START, src, { target = target, keep = true })
 end)
 

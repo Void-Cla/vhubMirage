@@ -17,7 +17,6 @@ VHubAdmin.Moderation = M
 
 local running = true
 
-
 -- ============================================================
 -- ESTADO DISCIPLINAR
 -- ============================================================
@@ -322,7 +321,8 @@ Citizen.CreateThread(function()
 end)
 
 AddEventHandler('onResourceStop', function(resource)
-  if resource == GetCurrentResourceName() then running = false end
+  if resource ~= GetCurrentResourceName() then return end
+  running = false
 end)
 
 -- Consulta pública e somente leitura da disciplina persistente.

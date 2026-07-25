@@ -1,3 +1,147 @@
+# vhub_ipad — Tablet iOS-style (Plataforma de Apps)
+
+**Versão:** 3.0.2 | **Owner:** vhub_ipad
+
+Plataforma de apps server-authoritative. Registry de apps per-char persistido no servidor. Resources terceiros publicam apps via `registerApp`; o iPad roteia ações via `ipadRelay`.
+
+---
+
+## O que faz
+
+- Tablet visual iOS-style abrível via item `ipad` (soft-dep) ou export
+- Registry de apps (catálogo + estado per-char) persistido server-side
+- Relay de ações entre NUI do iPad e os resources donos dos apps
+- Apps builtin (racha, lspdtool, coinshop) e externos (qualquer resource)
+- Suporte a UI local (resource tem sua própria NUI) e UI remota (iframe no iPad)
+
+---
+
+## Dependências
+
+```
+vhub
+```
+
+Soft-dep: `vhub_inventory` (item `ipad`) — sem o item, o iPad abre via export/comando.
+
+---
+
+## Exports disponíveis (server-side)
+
+### Plataforma — registro de apps
+
+```lua
+-- registra ou atualiza um app no catálogo (chame no onResourceStart do seu resource)
+local ok, err = exports.vhub_ipad:registerApp({
+  id          = 'meudom',
+  label       = 'Meu Domínio',
+  icon        = 'mdi:star',
+  description = 'Descrição do app',
+  resource    = GetCurrentResourceName(),
+  ui_mode     = 'local',   -- 'local' ou 'remote'
+})
+
+-- remove o app ao parar o resource
+exports.vhub_ipad:unregisterApp('meudom')
+```
+
+### Controle do tablet
+
+```lua
+-- abre o iPad para o player (server-side)
+exports.vhub_ipad:openIpad(src)
+
+-- fecha o iPad
+exports.vhub_ipad:closeIpad(src)
+
+-- true se o iPad está aberto para o player
+local ok = exports.vhub_ipad:isOpen(src)
+```
+
+### Relay de ações
+
+```lua
+-- envia ação ao resource dono do app via iPad
+exports.vhub_ipad:ipadRelay(src, 'meudom:abrir', { data = 'qualquer' })
+
+-- push de dados do seu resource para a NUI do iPad
+exports.vhub_ipad:appPush(src, 'meudom', 'update', { dado = 'novo' })
+```
+
+### Exports client-side
+
+```lua
+exports.vhub_ipad:OpenIpad()
+exports.vhub_ipad:CloseIpad()
+exports.vhub_ipad:ipadRelay(src, action, data)
+exports.vhub_ipad:useIpad(src, item_id, slot, meta)
+```
+
+---
+
+## Como criar um app para o iPad
+
+### 1. Registre no boot do seu resource
+
+```lua
+-- server/init.lua do seu resource
+AddEventHandler('onResourceStart', function(res)
+  if res ~= GetCurrentResourceName() then return end
+  exports.vhub_ipad:registerApp({
+    id       = 'meudom',
+    label    = 'Meu App',
+    icon     = 'mdi:gamepad',
+    resource = GetCurrentResourceName(),
+    ui_mode  = 'local',
+  })
+end)
+
+AddEventHandler('onResourceStop', function(res)
+  if res == GetCurrentResourceName() then
+    exports.vhub_ipad:unregisterApp('meudom')
+  end
+end)
+```
+
+### 2. Implemente o relay no seu resource
+
+```lua
+-- server/exports.lua do seu resource
+exports('ipadRelay', function(src, action, data)
+  if action == 'meudom:abrir' then
+    TriggerClientEvent('meudom:client:OpenUI', src, data)
+    return true
+  end
+  return false
+end)
+```
+
+### 3. No cliente, escute o relay
+
+```lua
+AddEventHandler('meudom:client:OpenUI', function(data)
+  SetNuiFocus(true, true)
+  SendNUIMessage({ type = 'open', data = data })
+end)
+```
+
+---
+
+## Regras aplicáveis (manual_dev_vhub.md)
+
+| Lei | Aplicação aqui |
+|-----|---------------|
+| L-07 | Todo app declarado tem owner e lifecycle (`onResourceStop` desregistra) |
+| §3.7 | `ipadRelay` é export gated; resources não autorizados são rejeitados |
+| A-03 | Comunicação inter-app via relay opaco |
+| A-10 | Assets dos apps locais devem estar no `files{}` do fxmanifest do resource dono |
+
+---
+
+> O arquivo abaixo é o prompt de implementação arquivado para referência histórica.
+
+---
+
 # PROMPT MESTRE — `vhub_ipad` v2 (Sistema de Tablet para FiveM)
 
 > **Destinatário**: IA de implementação com acesso ao repositório completo  

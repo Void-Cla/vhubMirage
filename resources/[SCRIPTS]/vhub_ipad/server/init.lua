@@ -159,19 +159,20 @@ end)
 -- ITEM 'ipad' (soft-dep do vhub_inventory)
 -- ============================================================
 
--- handler de uso do item: abre o tablet. Durável (return false = NÃO consome).
-local function onUseIpad(src, _slot, _meta)
-  IpadLog(("item 'ipad' usado por src=%s"):format(tostring(src)))
+-- export chamado pelo inventory dispatcher (kind='export'; string atravessa msgpack).
+-- Durável: return false = NÃO consome o item.
+exports('useIpad', function(src, _item_id, _slot, _meta)
+  IpadLog(("item 'ipad' usado (export) por src=%s"):format(tostring(src)))
   if not rate(src, 'use_ipad', CFG.rates.use_ipad) then return false end
   VHubIpad.openFor(src)
   return false
-end
+end)
 
 -- (re)registra o handler no inventory. Idempotente; retorna true se registrou.
 local function tryRegisterItem()
   if GetResourceState('vhub_inventory') ~= 'started' then return false end
   local ok, ret = pcall(function()
-    return exports.vhub_inventory:registerItemUse('ipad', onUseIpad)
+    return exports.vhub_inventory:registerItemUse('ipad', 'useIpad')
   end)
   if ok and ret then
     IpadLog("item 'ipad' registrado no vhub_inventory")
@@ -190,14 +191,10 @@ CreateThread(function()
   IpadLog("DESISTIU de registrar 'ipad' (vhub_inventory indisponível)")
 end)
 
--- caminho ROBUSTO (sem funcref): o inventory emite este evento server-local no uso do
--- item. Funciona mesmo se o funcref do registerItemUse não atravessar o export.
--- O rate('use_ipad') dedupe caso o handler funcref TAMBÉM dispare (abre só 1x).
-AddEventHandler('vhub_inventory:server:itemUsed', function(src, id, _slot, _meta)
-  if id ~= 'ipad' then return end
-  IpadLog(("item 'ipad' usado (evento) por src=%s"):format(tostring(src)))
-  if not rate(src, 'use_ipad', CFG.rates.use_ipad) then return end
-  VHubIpad.openFor(src)
+-- inventory terminou boot após o ipad → garante registro (complementa onResourceStart,
+-- que dispara quando o resource *inicia* mas antes do initSchema completar).
+AddEventHandler('vhub_inventory:server:ready', function()
+  CreateThread(function() Wait(100); tryRegisterItem() end)
 end)
 
 -- inventory REINICIOU → o _handlers dele foi zerado: precisamos re-registrar

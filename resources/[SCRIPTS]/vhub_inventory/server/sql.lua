@@ -99,3 +99,51 @@ end
 function M:deleteContainer(container_id)
   pexec('DELETE FROM vhub_inv_containers WHERE container_id = ?', { container_id })
 end
+
+
+-- ============================================================
+-- MOCHILA F2 — double-track (v1=LONGTEXT, v2=BLOB+revision)
+-- ============================================================
+
+-- lê slots+hotbar pelo melhor track disponível (v2 tem precedência sobre v1)
+function M:loadPlayerRevision(char_id)
+  local r = pquery([[
+    SELECT data, payload, schema_version, revision
+    FROM vhub_inv_player WHERE char_id = ? LIMIT 1
+  ]], { char_id })
+  local row = r and r[1]
+  if not row then return nil, nil, 0 end
+
+  -- v2: payload BLOB (schema_version >= 2 OU payload presente)
+  if row.payload and #tostring(row.payload) > 0 then
+    local ok, decoded = pcall(json.decode, tostring(row.payload))
+    if ok and type(decoded) == 'table' then
+      return decoded.slots or {}, decoded.hotbar, tonumber(row.revision) or 0
+    end
+  end
+
+  -- v1: data LONGTEXT (fallback)
+  if row.data and #row.data > 0 then
+    local ok, decoded = pcall(json.decode, row.data)
+    if ok and type(decoded) == 'table' then
+      return decoded.slots or {}, decoded.hotbar, tonumber(row.revision) or 0
+    end
+  end
+
+  return nil, nil, 0
+end
+
+-- grava com revision e payload BLOB; mantém coluna data em sincronia (dupla escrita)
+function M:savePlayerRevision(char_id, slots, hotbar, revision)
+  local body    = json.encode({ slots = slots or {}, hotbar = hotbar or {} })
+  local payload = body   -- BLOB recebe o mesmo JSON; v3 pode mudar para msgpack
+  pexec([[
+    INSERT INTO vhub_inv_player (char_id, data, payload, revision, schema_version)
+      VALUES (?, ?, ?, ?, 2)
+    ON DUPLICATE KEY UPDATE
+      data           = VALUES(data),
+      payload        = VALUES(payload),
+      revision       = VALUES(revision),
+      schema_version = 2
+  ]], { char_id, body, payload, revision })
+end

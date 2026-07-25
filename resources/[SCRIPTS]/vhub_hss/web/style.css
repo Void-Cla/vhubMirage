@@ -1,0 +1,172 @@
+/* style.css — HUD biométrico leve do vHub HSS */
+
+:root {
+    --vh-sand: #d9c19a;
+    --vh-sand-dim: #a89572;
+    --vh-gold: #f3b53a;
+    --vh-danger: #e8513f;
+    --vh-track: rgba(217, 193, 154, 0.14);
+    --vh-shadow: rgba(0, 0, 0, 0.88);
+    --font-display: "Barlow Condensed", "Inter", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+
+    /* cores por indicador HSS */
+    --vh-hss-health:  #e05555;
+    --vh-hss-food:    #d4b932;
+    --vh-hss-water:   #5bc3d4;
+    --vh-hss-armour:  #7a9ab5;
+    --vh-hss-energy:  #4caf7d;
+    --vh-hss-oxygen:  #82c8e8;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+    pointer-events: none;
+    user-select: none;
+    font-family: var(--font-body);
+}
+
+#hss-hud {
+    position: fixed;
+    left: 1.55vw;
+    bottom: 20.5vh;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 18px;
+    opacity: 1;
+    transition: opacity 160ms ease;
+}
+
+.hss-hud--hidden,
+.hss-cond--hidden {
+    display: none !important;
+}
+
+.hss-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+}
+
+.hss-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    fill: var(--vh-sand);
+    filter: drop-shadow(0 1px 3px var(--vh-shadow));
+}
+
+.icon-health    { fill: var(--vh-hss-health); }
+.icon-food      { fill: var(--vh-hss-food); }
+.icon-water     { fill: var(--vh-hss-water); }
+.icon-armour    { fill: var(--vh-hss-armour); }
+.icon-energy    { fill: var(--vh-hss-energy); }
+.icon-oxygen    { fill: var(--vh-hss-oxygen); }
+.icon-adrenaline, .svg-bpm { fill: var(--vh-gold); }
+
+.hss-track {
+    width: 62px;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--vh-track);
+    box-shadow: 0 1px 3px var(--vh-shadow);
+    transition: width 180ms ease, opacity 180ms ease;
+}
+
+.hss-track--hidden { width: 0; opacity: 0; }
+
+.hss-track i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform: scaleX(1);
+    transform-origin: left;
+    transition: transform 220ms linear, background-color 180ms ease;
+}
+
+#fill-health    { background: var(--vh-hss-health); }
+#fill-food      { background: var(--vh-hss-food); }
+#fill-water     { background: var(--vh-hss-water); }
+#fill-armour    { background: var(--vh-hss-armour); }
+#fill-energy    { background: var(--vh-hss-energy); }
+#fill-oxygen    { background: var(--vh-hss-oxygen); }
+#fill-adrenaline { background: var(--vh-gold); }
+
+.hss-track i.hss-critical {
+    background: var(--vh-danger);
+    animation: hss-critical 850ms ease-in-out infinite;
+}
+
+.hss-alerts {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 16px;
+}
+
+.hss-alert {
+    min-width: 12px;
+    color: var(--vh-danger);
+    font-size: 12px;
+    line-height: 14px;
+    font-weight: 800;
+    text-align: center;
+    text-shadow: 0 1px 4px var(--vh-shadow);
+}
+
+.hss-bpm {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--vh-gold);
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 800;
+    text-shadow: 0 1px 4px var(--vh-shadow);
+}
+
+.hss-bpm:not(.hss-cond--hidden) .svg-bpm {
+    animation: hss-heartbeat 900ms ease-in-out infinite;
+}
+
+.hss-status {
+    position: absolute;
+    left: 0;
+    bottom: 24px;
+    color: var(--vh-gold);
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    white-space: nowrap;
+    text-shadow: 0 0 7px rgba(243, 181, 58, 0.85), 0 1px 3px var(--vh-shadow);
+}
+
+.hss-status--danger {
+    color: var(--vh-danger);
+    text-shadow: 0 0 8px rgba(232, 81, 63, 0.9), 0 1px 3px var(--vh-shadow);
+    animation: hss-critical 1.2s ease-in-out infinite;
+}
+
+@keyframes hss-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.28; }
+}
+
+@keyframes hss-heartbeat {
+    0%, 100% { transform: scale(1); }
+    18% { transform: scale(1.28); }
+    34% { transform: scale(1); }
+}
+
+@media (min-aspect-ratio: 21/9) {
+    #hss-hud { left: 1.15vw; }
+}

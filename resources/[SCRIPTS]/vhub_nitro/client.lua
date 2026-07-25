@@ -54,6 +54,17 @@ local function levelParams()
   return (NitroCfg.LEVELS and NitroCfg.LEVELS[lv]) or { powerMult = 1.0, consumeMult = 1.0 }
 end
 
+-- publica o estado do nitro para HUDs no MESMO client (evento local, zero rede — vhub_velo consome).
+-- Dedup por assinatura inteira: o drain (50ms) só emite quando a carga muda de número.
+local _hudLast = nil
+local function hudSync()
+  local qty = _kit and math.floor(_qty + 0.5) or 0
+  local sig = qty * 4 + (_kit and 2 or 0) + (_enabled and 1 or 0)
+  if sig == _hudLast then return end
+  _hudLast = sig
+  TriggerEvent('vhub_nitro:hud', { kit = _kit, enabled = _enabled, qty = qty })
+end
+
 -- fogo no escapamento (mantido) — ptfx backfire nos bones de escape do carro
 local _ptfxReady = false
 local function ensurePtfx()
@@ -122,6 +133,7 @@ local function startBoost()
       local now = GetGameTimer()
       _qty = math.max(0, _qty - ratePerSec * (now - last) / 1000.0)
       last = now
+      hudSync()
 
       fireTick = fireTick + 1
       if fireTick % 5 == 0 then exhaustFire(boosted) end
@@ -155,6 +167,7 @@ AddEventHandler('vhub_nitro:state', function(plate, n)
   _enabled = n.enabled == true
   _level   = math.max(1, math.min(10, math.floor(tonumber(n.level) or 1)))
   _qty     = math.max(0, math.min(100, tonumber(n.qty) or 0))
+  hudSync()
 end)
 
 -- aviso do servidor (ex.: usou a garrafa pela mochila → recarga é pela ficha)
@@ -175,13 +188,16 @@ CreateThread(function()
         local pl = plateOf(v)
         if pl and pl ~= _plate then
           _plate, _kit, _enabled, _level, _qty = pl, false, false, 1, 0
+          hudSync()
           TriggerServerEvent('vhub_nitro:request', pl)
         end
       elseif _plate then
         _plate, _kit, _enabled, _level, _qty = nil, false, false, 1, 0   -- virei passageiro
+        hudSync()
       end
     elseif _plate then
       _plate, _kit, _enabled, _level, _qty = nil, false, false, 1, 0     -- saí do veículo
+      hudSync()
     end
     Wait(1000)
   end

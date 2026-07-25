@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_wow'
 author      'vHub Mirage'
-version     '1.1.0'
+version     '2.0.0'
 description 'Motor de audio/video (player YouTube nocookie + busca InnerTube/APIv3 + surface DVD no carro).'
 
 dependencies {
@@ -14,6 +14,7 @@ dependencies {
 
 shared_scripts {
   'shared/config.lua',
+  'shared/events.lua',
 }
 
 server_scripts {
@@ -24,6 +25,7 @@ server_scripts {
 }
 
 client_scripts {
+  'client/settings.lua',
   'client/engine.lua',
 }
 
@@ -32,4 +34,9 @@ ui_page 'html/index.html'
 files {
   'html/index.html',
   'html/audio.js',
+  'html/runtime.js',
+  'html/native.js',
+  'html/settings.js',
+  'html/style.css',
+  'assets/logo.png',
 }

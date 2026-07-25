@@ -1,4 +1,4 @@
--- server/teleport.lua — teleporte autorizado pelo owner vhub_player_state
+-- server/teleport.lua — teleporte autorizado pelo owner vhub_hss
 ---@diagnostic disable: undefined-global
 
 local Core = VHubAdmin.Core
@@ -8,6 +8,7 @@ local U = VHubAdmin.U
 
 local history = {}
 local waypointPending = {}
+local waypointSequence = {}
 
 -- Guarda a posição atual antes de uma movimentação administrativa.
 local function pushHistory(src)
@@ -61,23 +62,71 @@ RegisterNetEvent(E.ACT_TPGO)
 AddEventHandler(E.ACT_TPGO, function()
   local src = source
   if not Core:guard(src, 'tpgo', 'teleport') then return end
-  waypointPending[src] = GetGameTimer() + 15000
-  TriggerClientEvent(E.REQUEST_WAYPOINT, src)
+  local current = Core:coordsOf(src)
+  if not current then return Core:notify(src, 'Posição atual indisponível.', 'erro') end
+
+  local requestId = (waypointSequence[src] or 0) + 1
+  waypointSequence[src] = requestId
+  waypointPending[src] = {
+    source = src,
+    request_id = requestId,
+    heading = current.h,
+    stage = 'marker',
+    expires = GetGameTimer() + 15000,
+  }
+  TriggerClientEvent(E.REQUEST_WAYPOINT, src, requestId)
 end)
 
-RegisterNetEvent(E.ACT_TPWAYPOINT)
-AddEventHandler(E.ACT_TPWAYPOINT, function(pos)
+RegisterNetEvent(E.ACT_TPWAYPOINT_BEGIN)
+AddEventHandler(E.ACT_TPWAYPOINT_BEGIN, function(payload)
   local src = source
-  local expires = waypointPending[src]
-  waypointPending[src] = nil
-  if not expires or expires < GetGameTimer() or not Core.hasPerm(src, 'tpgo') then return end
-  if not Core:rate(src, 'waypoint') or not U.validCoords(pos) then
+  local pending = waypointPending[src]
+  if not pending or pending.source ~= src or pending.stage ~= 'marker' then return end
+  if pending.expires < GetGameTimer() or not Core.hasPerm(src, 'tpgo') then
+    waypointPending[src] = nil
+    return
+  end
+
+  local requestId = type(payload) == 'table' and U.number(payload.request_id, 1) or nil
+  local x = type(payload) == 'table' and U.number(payload.x, -9000, 9000) or nil
+  local y = type(payload) == 'table' and U.number(payload.y, -9000, 9000) or nil
+  if requestId ~= pending.request_id or requestId % 1 ~= 0 or not x or not y
+      or not Core:rate(src, 'waypoint_begin', 250) then
+    waypointPending[src] = nil
     return Core:notify(src, 'Marcador inválido.', 'erro')
   end
 
-  local heading = U.number(pos.h, -3600, 3600) or 0.0
+  pending.x = x
+  pending.y = y
+  pending.stage = 'ground'
+  pending.expires = GetGameTimer() + 10000
+  TriggerClientEvent(E.RESOLVE_WAYPOINT, src, {
+    request_id = requestId,
+    x = x,
+    y = y,
+  })
+end)
+
+RegisterNetEvent(E.ACT_TPWAYPOINT)
+AddEventHandler(E.ACT_TPWAYPOINT, function(payload)
+  local src = source
+  local pending = waypointPending[src]
+  waypointPending[src] = nil
+  if not pending or pending.source ~= src or pending.stage ~= 'ground' then return end
+  if pending.expires < GetGameTimer() or not Core.hasPerm(src, 'tpgo') then return end
+
+  local requestId = type(payload) == 'table' and U.number(payload.request_id, 1) or nil
+  local z = type(payload) == 'table' and U.number(payload.z, -200, 2000) or nil
+  if requestId ~= pending.request_id or requestId % 1 ~= 0 or not z
+      or not Core:rate(src, 'waypoint') then
+    return Core:notify(src, 'Marcador inválido.', 'erro')
+  end
+
+  local pos = { x = pending.x, y = pending.y, z = z, h = pending.heading or 0.0 }
+  if not U.validCoords(pos) then return Core:notify(src, 'Marcador inválido.', 'erro') end
+
   pushHistory(src)
-  move(src, src, { x = pos.x, y = pos.y, z = pos.z, h = heading }, 'tpgo', {})
+  move(src, src, pos, 'tpgo', { request_id = requestId })
 end)
 
 RegisterNetEvent(E.ACT_TPCDS)
@@ -140,4 +189,5 @@ end)
 AddEventHandler('playerDropped', function()
   history[source] = nil
   waypointPending[source] = nil
+  waypointSequence[source] = nil
 end)

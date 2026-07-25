@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_vehcontrol'
 author      'vHub Mirage Adaptation'
-version     '1.3.0'
+version     '1.5.0'
 description 'Controle de veiculo (portas, motor, trava, luzes, banco, camera). Adaptado p/ vHub. Integracao: veh_key.'
 
 -- SOFT-deps (via export com pcall, NAO em dependencies p/ nao travar o boot):

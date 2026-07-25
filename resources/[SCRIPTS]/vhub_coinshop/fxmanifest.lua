@@ -7,7 +7,7 @@ lua54      'yes'
 
 name        'vhub_coinshop'
 author      'vHub Mirage'
-version     '2.4.1'
+version     '2.4.2'
 description 'Loja de moedas, itens, veículos e ofertas — server-authoritative, integrada ao core vHub.'
 
 -- Dependências do core vHub Mirage (exports.vhub:* são a única fronteira)
@@ -16,6 +16,7 @@ dependencies {
     'oxmysql',        -- SQL próprio (vhub_coinshop_*)
     'vhub_groups',    -- checagem de permissão (coinshop.admin)
     'vhub_inventory', -- dar itens/armas ao comprar
+    'vhub_hss',       -- entrega efêmera de armas ao ped
     'vhub_conce',     -- registrar veículo comprado (contrato de commit)
     'vhub_df',        -- gateway Pix central (provider 'vhub_df' — server/pix_df.lua)
 }

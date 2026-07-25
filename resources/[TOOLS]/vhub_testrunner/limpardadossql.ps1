@@ -14,8 +14,8 @@ param(
   [switch]$Force,
   [switch]$DryRun,
   [switch]$SkipServerCheck,
-  [string[]]$Somente = @(),   # se preenchido, limpa SOMENTE estas tabelas
-  [string[]]$Excluir = @()    # tabelas a PRESERVAR (nao truncar)
+  [string[]]$Somente = @(),
+  [string[]]$Excluir = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -386,10 +386,44 @@ if (-not $Force) {
 # revalida cada ident DESCOBERTO antes de injetar no SQL (defesa em profundidade)
 foreach ($t in $alvo) { [void](Sql-Ident $t) }
 
-$truncate = "SET FOREIGN_KEY_CHECKS=0; " + `
-  (($alvo | ForEach-Object { "TRUNCATE TABLE " + (Sql-Ident $_) }) -join "; ") + `
-  "; SET FOREIGN_KEY_CHECKS=1;"
-Invocar-Mysql -MysqlExe $mysql -Conn $conn -Sql $truncate | Out-Null
+# MySQL CLI nao suporta multiplos statements via --execute em uma unica chamada.
+# Solucao: gravar um arquivo SQL temporario e passa-lo via pipe para o mysql.exe,
+# que aceita multi-statement quando recebe via stdin (sem a restricao do --execute).
+$tempSql = [System.IO.Path]::GetTempFileName() + ".sql"
+try {
+  $linhas = @("SET FOREIGN_KEY_CHECKS=0;")
+  foreach ($t in $alvo) { $linhas += "TRUNCATE TABLE " + (Sql-Ident $t) + ";" }
+  $linhas += "SET FOREIGN_KEY_CHECKS=1;"
+  [System.IO.File]::WriteAllLines($tempSql, $linhas, [System.Text.UTF8Encoding]::new($false))
+
+  $mysqlArgs = @(
+    "--protocol=tcp",
+    "--host=$($conn.Host)",
+    "--port=$($conn.Port)",
+    "--user=$($conn.User)",
+    "--database=$($conn.Database)",
+    "--default-character-set=utf8mb4",
+    "--batch",
+    "--force"   # continua mesmo em erro de FK residual
+  )
+
+  $oldPwdExiste = Test-Path Env:MYSQL_PWD
+  $oldPwd = $env:MYSQL_PWD
+  try {
+    if ($conn.Password) { $env:MYSQL_PWD = $conn.Password }
+    elseif ($oldPwdExiste) { Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue }
+
+    Get-Content -LiteralPath $tempSql | & $mysql @mysqlArgs 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "mysql.exe retornou $LASTEXITCODE ao executar truncates via stdin."
+    }
+  } finally {
+    if ($oldPwdExiste) { $env:MYSQL_PWD = $oldPwd }
+    else { Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue }
+  }
+} finally {
+  if (Test-Path -LiteralPath $tempSql) { Remove-Item -LiteralPath $tempSql -Force }
+}
 
 Write-Host "[OK] $($alvo.Count) tabela(s) zerada(s) no banco '$($conn.Database)'."
 Write-Host "[OK] AUTO_INCREMENT resetado (TRUNCATE) - proximo usuario novo deve receber user_id = 1."
