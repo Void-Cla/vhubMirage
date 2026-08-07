@@ -49,6 +49,13 @@ local CUST_KEYS = {
   nitro = true,   -- {kit:bool, qty:0..100} — dono = vhub_nitro (source='nitro'); patch sempre completo
   -- pintura RGB exata + cores de fumaça/xenon (dono cosmético = vhub_custom, source='cosmetic')
   custom_primary = true, custom_secondary = true, tyre_smoke_color = true, xenon_color = true,
+  -- VISUAL persistente (dono = vhub_custom, source='cosmetic'): stance = {r,tf,tr,sz,wd} (notches),
+  -- exhaust_fx = {enabled,r,g,b,scale}, glass_armor = tier 0..3 (RP). ANTES esses 3 eram
+  -- DESCARTADOS aqui → bennys cobrava e aplicava ao vivo mas NUNCA persistia (root cause do
+  -- "altura/cor não salvam"). extras = {["idx"]=bool} (acessórios do modelo).
+  stance = true, exhaust_fx = true, glass_armor = true, extras = true,
+  interior_color = true, dashboard_color = true,   -- cores de interior/painel (índice GTA)
+  drift_capable = true,  -- {bool} Freio de Mão Hidráulico instalado (dono = vhub_custom, source='tune')
 }
 
 -- filtra customization (tabela) → JSON com cap de 8 KB, ou nil
@@ -65,11 +72,15 @@ end
 
 -- mescla customization parcial (patch) sobre a persistida (base), em TABELA NOVA.
 -- Merge raso no topo: chave do patch sobrescreve; ausente preserva a base.
--- EXCEÇÃO `mods`: mescla POR ÍNDICE (mod[i] do patch sobrescreve; ausente preserva),
--- pois é o único campo esparso onde escritas distintas tocam slots disjuntos
--- (bennys=cosmético, oficina=performance). Demais campos (colours/neons/...) são
--- atômicos: trocar a chave inteira é o comportamento desejado.
--- NUNCA muta `base` nem `base.mods` (base é referência VIVA do cache VRAM).
+-- EXCEÇÃO mapas ESPARSOS (`mods`, `extras`): mesclam POR ÍNDICE (item[i] do patch sobrescreve;
+-- ausente preserva), pois a NUI os envia como DELTA (só os índices tocados na sessão) e escritas
+-- distintas tocam slots disjuntos (bennys=cosmético/extras, oficina=performance). Tratar esses
+-- como atômico = replace parcial → índices já pagos e não-tocados somem no respawn (L-04/L-13).
+-- Demais campos (colours/neons/stance/exhaust_fx/...) são ATÔMICOS (enviados sempre completos):
+-- trocar a chave inteira é o comportamento desejado.
+-- NUNCA muta `base` nem `base[mods|extras]` (base é referência VIVA do cache VRAM).
+local MERGE_SPARSE = { mods = true, extras = true }
+
 local function mergeCust(base, patch)
   if type(patch) ~= 'table' then return base end
   if type(base) ~= 'table' then return patch end
@@ -77,17 +88,19 @@ local function mergeCust(base, patch)
   local out = {}
   for k, v in pairs(base) do out[k] = v end       -- cópia rasa da base
   for k, v in pairs(patch) do
-    if k ~= 'mods' then out[k] = v end             -- chaves atômicas: patch vence
+    if not MERGE_SPARSE[k] then out[k] = v end     -- chaves atômicas: patch vence
   end
 
-  -- mods: merge por índice em tabela nova (preserva slots não tocados pelo patch)
-  if type(patch.mods) == 'table' then
-    local m = {}
-    if type(base.mods) == 'table' then
-      for i, lvl in pairs(base.mods) do m[i] = lvl end
+  -- mapas esparsos (mods/extras): merge por índice em tabela nova (preserva o não-tocado)
+  for key in pairs(MERGE_SPARSE) do
+    if type(patch[key]) == 'table' then
+      local m = {}
+      if type(base[key]) == 'table' then
+        for i, val in pairs(base[key]) do m[i] = val end
+      end
+      for i, val in pairs(patch[key]) do m[i] = val end
+      out[key] = m
     end
-    for i, lvl in pairs(patch.mods) do m[i] = lvl end
-    out.mods = m
   end
 
   return out

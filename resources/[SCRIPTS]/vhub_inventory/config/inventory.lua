@@ -21,6 +21,7 @@ Inventory.TrustedResources = {
   ['vhub_ipad'] = true,
   ['vhub_legacyfuel'] = true,
   ['vhub_nitro'] = true,
+  ['vhub_outdoors'] = true,
   ['vhub_survival'] = true,
   ['vhub_vehcontrol'] = true,
 }
@@ -84,9 +85,9 @@ Inventory.Chests = {
 Inventory.Security = {
   action_cooldown_ms = 250,    -- cooldown por jogador por acao (anti double-action)
   p2p_range          = 2.0,    -- distancia maxima para envio P2P (metros)
-  pickup_range       = 2.5,    -- distancia maxima para pegar drop
+  pickup_range       = 2.0,    -- distancia maxima para pegar drop
   antidupe_window_ms = 1000,   -- janela de deteccao de flood
-  antidupe_max       = 8,      -- acoes na janela antes de reagir
+  antidupe_max       = 4,      -- acoes na janela antes de reagir
   antidupe_action    = 'log',  -- log | kick | ban
 }
 
@@ -141,12 +142,12 @@ Inventory.Items = {
     legalidade = 'comum', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'consumivel', consume_policy = 'on_applied',
   },
-  ['sandwich'] = {
+  ['sanduiche'] = {
     nome = 'Sanduíche', peso = 0.30, stack = true, max = 50,
     legalidade = 'comum', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'consumivel', consume_policy = 'on_applied',
   },
-  ['bandage'] = {
+  ['bandagem'] = {
     nome = 'Bandagem', peso = 0.10, stack = true, max = 20,
     legalidade = 'legal', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'medico', consume_policy = 'on_applied',
@@ -158,7 +159,7 @@ Inventory.Items = {
   },
 
   -- FERRAMENTAS ------------------------------------------------
-  ['repairkit'] = {
+  ['kitdereparo'] = {
     nome = 'Kit de Reparo', peso = 1.00, stack = true, max = 5,
     legalidade = 'legal', negociavel = true, perdivel = true,
     permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
@@ -171,6 +172,11 @@ Inventory.Items = {
   ['nitro'] = {
     nome = 'Garrafa de Nitro', peso = 1.50, stack = true, max = 10,
     legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['hydraulic_handbrake'] = {
+    nome = 'Freio de Mão Hidráulico', peso = 3.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
     permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
   ['fuel_can'] = {
@@ -209,6 +215,12 @@ Inventory.Items = {
     nome = 'Rádio Comunicador', peso = 0.45, stack = false,
     legalidade = 'legal', negociavel = true, perdivel = true,
     permitido_bau = true, serial = true, categoria = 'eletronico', consume_policy = 'never',
+  },
+  ['controle_outdoor'] = {
+    nome = 'Controle Remoto de Outdoor', peso = 0.15, stack = false,
+    legalidade = 'legal', negociavel = false, perdivel = false,
+    permitido_bau = false, serial = true, categoria = 'eletronico',
+    consume_policy = 'never',
   },
 }
 

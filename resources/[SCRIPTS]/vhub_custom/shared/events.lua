@@ -4,45 +4,57 @@
 VHubCustom   = VHubCustom or {}
 VHubCustom.E = {
 
+  -- autorização física comum (cliente declara intenção; servidor emite lease efêmero)
+  SERVICE_AUTH    = 'vhub_custom:server:serviceAuth',
+  SERVICE_AUTH_OK = 'vhub_custom:client:serviceAuthOk',
+
   -- bennys (estética)
   BENNYS_APPLY   = 'vhub_custom:server:bennysApply',    -- cliente → servidor: aplicar cosmético
   BENNYS_CONFIRM = 'vhub_custom:client:bennysConfirm',  -- servidor → cliente: confirmar/rollback
-  BENNYS_OPEN    = 'vhub_custom:client:bennysOpen',     -- servidor → cliente: abrir menu
 
   -- mec (reparo / reboque)
   MEC_REPAIR     = 'vhub_custom:server:mecRepair',      -- cliente → servidor: reparar componente
   MEC_TOW_REQ    = 'vhub_custom:server:mecTowReq',      -- cliente → servidor: solicitar reboque
-  MEC_TOW_DO     = 'vhub_custom:client:mecTowDo',       -- servidor → cliente: executar attach/move
   MEC_CONFIRM    = 'vhub_custom:client:mecConfirm',     -- servidor → cliente: confirmar/rollback
 
   -- oficina (tuning)
   OFICINA_TUNE   = 'vhub_custom:server:oficinaTune',    -- cliente → servidor: aplicar stage
   OFICINA_CONFIRM= 'vhub_custom:client:oficinaConfirm', -- servidor → cliente: confirmar/rollback
-  OFICINA_OPEN   = 'vhub_custom:client:oficinaOpen',    -- servidor → cliente: abrir menu
-  OFICINA_AUTH   = 'vhub_custom:server:oficinaAuth',    -- cliente → servidor: pré-checagem de acesso
-  OFICINA_AUTH_OK= 'vhub_custom:client:oficinaAuthOk',  -- servidor → cliente: pode abrir
 
   -- calibração (redistribuição de pontos livres — decisão #27, motor em vhub_vehcontrol)
   OFICINA_PREVIEW    = 'vhub_custom:server:oficinaPreview',   -- cliente → servidor: prévia de alloc (não persiste)
   OFICINA_PREVIEW_OK = 'vhub_custom:client:oficinaPreviewOk', -- servidor → cliente: ficha hipotética
 
+  OFICINA_RECALIBRATE    = 'vhub_custom:server:oficinaRecalibrate',
+  OFICINA_RECALIBRATE_OK = 'vhub_custom:client:oficinaRecalibrateOk',
+
   -- kit nitro (decisão #29 — oficina cobra; escritor real do estado = vhub_nitro via installKit)
   OFICINA_NITRO_KIT    = 'vhub_custom:server:oficinaNitroKit',   -- cliente → servidor: instalar kit nitro
   OFICINA_NITRO_KIT_OK = 'vhub_custom:client:oficinaNitroKitOk', -- servidor → cliente: resultado (ok, msg)
 
-  -- catálogo (bootstrap único por spawn — client recebe cópia read-only do conce)
-  REQ_CATALOG    = 'vhub_custom:server:reqCatalog',     -- cliente → servidor: pede catálogo
-  CATALOG        = 'vhub_custom:client:catalog',        -- servidor → cliente: catálogo recebido
+  -- knobs de handling livre (freio de mão, trava de direção, largada, rigidez) — normalizado 0..1
+  -- persiste customization.handling_ext; motor (vhub_vehcontrol) mapeia p/ banda e aplica
+  OFICINA_HANDLING    = 'vhub_custom:server:oficinaHandling',   -- cliente → servidor: { key=0..1 }
+  OFICINA_HANDLING_OK = 'vhub_custom:client:oficinaHandlingOk', -- servidor → cliente: (ok, msg, knobs)
 
-  -- dados de veículo por placa (lookup autoritativo via prontuário → catálogo)
-  REQ_VEH_DATA   = 'vhub_custom:server:reqVehData',    -- cliente → servidor: pede dados por placa
-  VEH_DATA       = 'vhub_custom:client:vehData',       -- servidor → cliente: dados recebidos
+    -- drift (Freio de Mão Hidráulico — peça instalável, efêmera em runtime; persiste só drift_capable)
+  DRIFT_INSTALL   = 'vhub_custom:server:driftInstall',    -- cliente → servidor: instalar peça
+  DRIFT_REMOVE    = 'vhub_custom:server:driftRemove',     -- cliente → servidor: remover peça
+  DRIFT_CONFIRM   = 'vhub_custom:client:driftConfirm',    -- servidor → cliente: resultado (ok, msg)
 
-  -- zonas (shared)
-  ZONE_ENTER     = 'vhub_custom:client:zoneEnter',      -- servidor → cliente: entrou na zona
-  ZONE_LEAVE     = 'vhub_custom:client:zoneLeave',      -- servidor → cliente: saiu da zona
+  -- estado VISUAL persistido (stance/escapamento) — cliente pede reidratação passando SÓ o netId;
+  -- o servidor (server/visual.lua) deriva a placa da entidade e espelha nos bags abaixo
+  REQUEST_VISUAL = 'vhub_custom:server:requestVisual',
 
   -- notificação (servidor → cliente: feedpost nativo)
   NOTIFY         = 'vhub_custom:client:notify',
 
+}
+
+-- nomes canônicos dos State Bags de entidade (equivalente a R9 p/ eventos — fonte única).
+-- Escritores: server/visual.lua (hydrate) + server/drift.lua (install/remove).
+VHubCustom.BAG = {
+  STANCE  = 'vhub_custom:stance',
+  EXHAUST = 'vhub_custom:exhaust',
+  DRIFT   = 'vhub_custom:drift',   -- bool; true = Freio de Mão Hidráulico instalado
 }

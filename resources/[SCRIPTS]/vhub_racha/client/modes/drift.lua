@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- client/modes/drift.lua — BANCO da pontuacao de drift.
 --
 -- A mecanica + a fabricacao da pontuacao bruta vivem no resource "Drift"
@@ -19,12 +20,16 @@ local BANK_MS = (Cfg.DRIFT and Cfg.DRIFT.BANK_MS) or 5000
 -- TELEMETRIA DO RESOURCE "Drift"
 -- ============================================================
 
--- snapshot nil-safe; degrada sem pontuar se o resource "Drift" nao estiver ativo.
+-- snapshot nil-safe; tenta vhub_custom (canônico FASE 1 ADR #81) com fallback ao shim Drift.
 local function drift_telemetry()
-  if not exports.Drift then return nil end
-  local ok, snap = pcall(function() return exports.Drift:getTelemetry() end)
-  if not ok or type(snap) ~= 'table' then return nil end
-  return snap
+  local ok, snap = pcall(function() return exports.vhub_custom:driftTelemetry() end)
+  if ok and type(snap) == 'table' then return snap end
+  -- fallback ao shim R15 durante transição
+  if exports.Drift then
+    ok, snap = pcall(function() return exports.Drift:getTelemetry() end)
+    if ok and type(snap) == 'table' then return snap end
+  end
+  return nil
 end
 
 
