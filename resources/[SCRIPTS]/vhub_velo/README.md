@@ -41,3 +41,25 @@ A URL é validada no client (`^https?://` + extensão de imagem) antes de salvar
 
 ## Comando
 - `/velo` (no veículo): galeria para trocar o HUD da categoria atual + personalizar fundo/cor (persiste por KVP).
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| — | *sem exports públicos* | `vhub_velo` é consumidor puro (HUD display) | — |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | State Bags: `vh_fuel`, `vh_odo`, `vhub_seatbelt` |
+| *natives FiveM* | velocidade, RPM, marcha, heading via GetVehicle*/GetEntitySpeed |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `velocimetro:update` | client→NUI (SendNUIMessage) | `{speed_kmh, rpm_percent, gear_label, fuel_percent, odometer_km, turn_left, turn_right, seatbelt, locked, heading, visible, active}` |
+| `velocimetro:config` | client→NUI (SendNUIMessage) | `{bg, accent}` |

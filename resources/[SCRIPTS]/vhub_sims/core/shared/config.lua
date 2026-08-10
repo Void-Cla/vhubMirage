@@ -16,6 +16,7 @@ VHubSims.cfg = {
     cancel = 500,
     outfit_list = 1000,
     outfit_save = 1500,
+    outfit_rename = 1000,
     outfit_delete = 1000,
     outfit_apply = 1500,
   },

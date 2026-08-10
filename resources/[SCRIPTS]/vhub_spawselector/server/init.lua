@@ -1,122 +1,172 @@
--- vhub_spawselector/server/init.lua — provedor de coordenada do Spawn Owner
--- PAPEL (Void-Zero/It.1): NÃO toca o ped, NÃO teleporta. Abre a UI quando o
---   vhub_hss pede (chooseSpawn), valida a escolha server-side
---   (index + permissão por local) e devolve via exports.vhub_hss:spawnAt.
--- ROLLBACK: parar este resource → HSS spawna direto.
+-- Provedor de destino. O vhub_hss continua sendo o unico owner de ped e bucket.
 
-local _open = {}  -- [src] = true → UI aberta por este fluxo (anti-spoof do RequestSpawn)
-
--- ── Permissão (uid=1 owner > ACE > vhub_groups) ───────────────────────────────
+local E = VHubSpawnSelector.E
+local _open = {}
+local _openAt = {}
 
 local function hasPerm(src, perm)
   local ok, uid = pcall(function() return exports.vhub:getUID(src) end)
   if ok and uid == 1 then return true end
   if IsPlayerAceAllowed(src, "vhub." .. perm) then return true end
-  local okg, has = pcall(function() return exports.vhub_groups:hasPermission(src, perm) end)
-  return okg and has == true
+  local okGroup, allowed = pcall(function()
+    return exports.vhub_groups:hasPermission(src, perm)
+  end)
+  return okGroup and allowed == true
 end
 
--- Locations visíveis ao jogador (filtra por Config.Location[i].Perm, se definida)
-local function locationsPara(src)
-  local out = {}
-  for i, loc in ipairs(Config.Location) do
-    if not loc.Perm or hasPerm(src, loc.Perm) then
-      out[#out + 1] = {
-        index       = i,            -- index CANÔNICO (pós-filtro a UI não pode renumerar)
-        Name        = loc.Name,
-        Description = loc.Description,
-        Image       = loc.Image,
+local function locationsFor(src)
+  local result = {}
+  for index, location in ipairs(Config.Location) do
+    if not location.Perm or hasPerm(src, location.Perm) then
+      result[#result + 1] = {
+        index = index,
+        Name = location.Name,
+        Description = location.Description,
+        Image = location.Image,
       }
     end
   end
-  return out
+  return result
 end
 
--- ── Abertura: somente quando o Spawn Owner delega ─────────────────────────────
-
--- Cede a abertura ao gate de login quando ele está ATIVO (Opção A do #vhub_login):
---   o login orquestra e reabre o selector via RequestOpen após login+char-select.
---   Evita colisão de contrato (dois resources abrindo no mesmo evento). Gate
---   inativo/ausente → fluxo direto (rollback-safe).
-local function loginGateAtivo()
+local function loginGateActive()
   local ok, active = pcall(function() return exports.vhub_login:isGateActive() end)
   return ok and active == true
 end
 
+local function preparePending(src)
+  src = tonumber(src)
+  if not src or not GetPlayerName(src) then return nil, "player_invalido" end
+
+  if loginGateActive() then
+    local stepOk, step = pcall(function() return exports.vhub_login:getSessionStep(src) end)
+    if not stepOk or step ~= "spawning" then return nil, "gate_invalido" end
+  end
+
+  local pendingOk, pending = pcall(function()
+    return exports.vhub_hss:isPendingSpawn(src)
+  end)
+  if not pendingOk or pending ~= true then return nil, "spawn_nao_pendente" end
+
+  local charOk, charId = pcall(function() return exports.vhub:getCharacterId(src) end)
+  if not charOk or not tonumber(charId) then return nil, "personagem_invalido" end
+
+  local data = locationsFor(src)
+  if #data == 0 then return nil, "sem_destinos" end
+
+  _open[src] = true
+  return { data = data, last = Config.LastLocation, canBack = loginGateActive() }
+end
+
+-- Handoff atomico: o login recebe o payload antes de fechar sua NUI.
+exports("preparePending", function(src)
+  if GetInvokingResource() ~= "vhub_login" then return nil, "nao_autorizado" end
+  return preparePending(src)
+end)
+
 AddEventHandler(VHubHSS.E.SPAWN_CHOOSE, function(src)
-  if loginGateAtivo() then return end
+  if loginGateActive() then return end
   Citizen.CreateThread(function()
-    local char_id = exports.vhub:getCharacterId(src)
-    if not tonumber(char_id) then
-      -- sem sessão válida: devolve o controle imediatamente (timeout não espera)
-      pcall(function() exports.vhub_hss:spawnAt(src, nil) end)
+    local payload = preparePending(src)
+    if payload then
+      TriggerClientEvent(E.OPEN, src, payload)
       return
     end
-    _open[src] = true
-    -- NOTA(IT.1/gate contrato): o CORE FROZEN NÃO expõe setCData via export
-    --   (só global vHub.setCData). 'spawned'/'last_spawn' não tinham leitor algum
-    --   (write-only morto) → removidos. O 1º-spawn é decidido por user.spawns no owner.
-    TriggerClientEvent(VHubSpawnSelector.E.OPEN, src, {
-      data = locationsPara(src),
-      last = Config.LastLocation,
-    })
+    pcall(function() exports.vhub_hss:spawnAt(src, nil) end)
   end)
 end)
 
--- ── Escolha do jogador ────────────────────────────────────────────────────────
--- index válido → coordenada do Config | index nil/inválido (fechar) → pos salva.
+local function sendResult(src, ok, err)
+  TriggerClientEvent(E.RESULT, src, { ok = ok == true, err = err })
+end
 
-RegisterNetEvent(VHubSpawnSelector.E.REQUEST_SPAWN)
-AddEventHandler(VHubSpawnSelector.E.REQUEST_SPAWN, function(index)
+RegisterNetEvent(E.REQUEST_SPAWN)
+AddEventHandler(E.REQUEST_SPAWN, function(index, useLast)
   local src = source
-  if not _open[src] then return end   -- só aceita se fomos nós que abrimos
+  if not _open[src] then return end
   _open[src] = nil
 
   Citizen.CreateThread(function()
-    local idx = tonumber(index)
-    local loc = idx and Config.Location[idx] or nil
-    local pos = nil
+    local position = nil
+    if useLast ~= true then
+      local idx = tonumber(index)
+      if not idx or idx < 1 or idx % 1 ~= 0 then
+        _open[src] = true
+        sendResult(src, false, "destino_invalido")
+        return
+      end
 
-    if loc then
-      -- revalida permissão (o filtro de UI não é fronteira de segurança)
-      if loc.Perm and not hasPerm(src, loc.Perm) then loc = nil end
+      local location = Config.Location[idx]
+      if not location or (location.Perm and not hasPerm(src, location.Perm)) then
+        _open[src] = true
+        sendResult(src, false, "destino_indisponivel")
+        return
+      end
+
+      local coords = location.Coords
+      position = { x = coords.x, y = coords.y, z = coords.z, heading = coords.w }
     end
 
-    if loc then
-      local c = loc.Coords
-      pos = { x = c.x, y = c.y, z = c.z, heading = c.w }
+    local called, spawned = pcall(function()
+      return exports.vhub_hss:spawnAt(src, position)
+    end)
+    if not called or spawned ~= true then
+      _open[src] = true
+      sendResult(src, false, "spawn_recusado")
+      return
     end
-
-    pcall(function() return exports.vhub_hss:spawnAt(src, pos) end)
+    if loginGateActive() then
+      local completedOk, completed = pcall(function()
+        return exports.vhub_login:completeEntry(src)
+      end)
+      if not completedOk or completed ~= true then
+        DropPlayer(tostring(src), "Falha ao concluir o fluxo de entrada.")
+        return
+      end
+    end
+    sendResult(src, true)
   end)
 end)
 
--- ── Abertura manual (export Open / admin) — throttle 5s por src ───────────────
+RegisterNetEvent(E.REQUEST_BACK)
+AddEventHandler(E.REQUEST_BACK, function()
+  local src = source
+  if not _open[src] then return end
+  if not loginGateActive() then
+    sendResult(src, false, "retorno_indisponivel")
+    return
+  end
+  _open[src] = nil
 
-local _open_at = {}
-RegisterNetEvent(VHubSpawnSelector.E.REQUEST_OPEN)
-AddEventHandler(VHubSpawnSelector.E.REQUEST_OPEN, function()
+  Citizen.CreateThread(function()
+    local returnedOk, characters = pcall(function()
+      return exports.vhub_login:returnToCharacters(src)
+    end)
+    if not returnedOk or type(characters) ~= "table" then
+      _open[src] = true
+      sendResult(src, false, "retorno_recusado")
+      return
+    end
+    TriggerClientEvent(E.BACK, src, characters)
+  end)
+end)
+
+RegisterNetEvent(E.REQUEST_OPEN)
+AddEventHandler(E.REQUEST_OPEN, function()
   local src = source
   local now = GetGameTimer()
-  local previous = _open_at[src]
-  if previous and (now - previous) < 5000 then return end
-  _open_at[src] = now
+  local previous = _openAt[src]
+  if previous and now - previous < 5000 then return end
+  _openAt[src] = now
+
   Citizen.CreateThread(function()
-    local pending_ok, pending = pcall(function() return exports.vhub_hss:isPendingSpawn(src) end)
-    if not pending_ok or pending ~= true then return end
-    local char_id = exports.vhub:getCharacterId(src)
-    if not tonumber(char_id) then return end
-    _open[src] = true
-    TriggerClientEvent(VHubSpawnSelector.E.OPEN, src, {
-      data = locationsPara(src),
-      last = Config.LastLocation,
-    })
+    local payload = preparePending(src)
+    if payload then TriggerClientEvent(E.OPEN, src, payload) end
   end)
 end)
 
--- Higiene: jogador caiu com UI aberta → owner resolve via timeout próprio
 AddEventHandler("playerDropped", function()
   local src = source
-  _open[src]    = nil
-  _open_at[src] = nil
+  _open[src] = nil
+  _openAt[src] = nil
 end)

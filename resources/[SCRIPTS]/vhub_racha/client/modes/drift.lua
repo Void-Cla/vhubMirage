@@ -1,8 +1,8 @@
 ---@diagnostic disable: undefined-global
 -- client/modes/drift.lua — BANCO da pontuacao de drift.
 --
--- A mecanica + a fabricacao da pontuacao bruta vivem no resource "Drift"
--- (exports.Drift:getTelemetry). Aqui aplicamos a regra de BANCO:
+-- A mecanica + a fabricacao da pontuacao bruta vivem em vhub_custom (client/drift.lua),
+-- exposta por exports.vhub_custom:driftTelemetry(). Aqui aplicamos a regra de BANCO:
 --   • pontos do drift atual ficam "pendentes" (em risco);
 --   • a cada BANK_MS sem bater, o lote pendente vira pontuacao VALIDA (bancada);
 --   • bater (impacto) descarta o lote pendente — o ja bancado permanece.

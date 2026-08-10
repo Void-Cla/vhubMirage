@@ -49,9 +49,27 @@ Config.windowIndex = { lfdoor = 0, rfdoor = 1, lrdoor = 2, rrdoor = 3 }
 -- hnd NUNCA e persistido (e derivado do alloc; dono = conce). RECALIBRAR o "feel"
 -- do jogo = editar SO as faixas abaixo (min->max por eixo). Seguro ligar/desligar.
 
-Config.skillApplyHandling = true   -- liga a fisica derivada (false = so numeros, .meta intacto)
+Config.skillApplyHandling = false  -- DESLIGADO (dono 2026-08-05): motor de handling em runtime causava instabilidade; física volta ao .meta. Reativar só com o motor de peças (itens) validado in-game.
 Config.skillBruteTest     = false -- F-052: true desligava o anti-P2W (alloc 0..100% por eixo) em produção
 Config.skillGripMinRatio  = 0.85   -- fTractionCurveMin = grip * isto (mantem Min < Max)
+
+-- ADR #85 F2.5-C: baseline JUSTO p/ carro sem p1 explícito (nativo). true = deriva p1 default dos
+-- `stats` autorados no catálogo (vel/acel/freio/dir → classe D..S+ do balancer, base_alloc balanceado,
+-- mass = massBase do tier). Assim nativo e mod entram no MESMO sistema de classes (anti-P2W). p1
+-- EXPLÍCITO (balancer/.meta selado) SEMPRE vence. Kill-switch: false volta ao fail-closed (sem skill
+-- em carro sem p1). Muda invariante "sem p1 = sem skill" → gate vhub_arquiteto PENDENTE (2026-08-09).
+Config.defaultBaselineFromStats = true
+
+-- ============================================================
+-- CAMADA A per-entidade (ADR #82 FASE 2) — sub-flag da física, SEGURA (não model-wide)
+-- ============================================================
+-- Aplica SÓ potência+velocidade máxima derivadas das peças, via natives per-ENTIDADE
+-- (SetVehicleCheatPowerIncrease/ModifyVehicleTopSpeed — confirmadas seguras pelo gate de
+-- natives). NÃO toca CHandlingData (isso é Camada B model-wide = ADR #83, applyModelWide).
+-- Dois carros do mesmo modelo podem ter potências diferentes (objetivo da FASE 2).
+-- DEFAULT false: ligar só após smoke in-game (peça muda aceleração/topo; nitro soma sobre a base).
+Config.applyPerEntity = false
+Config.applyModelWide = false  -- Camada B (peso/grip/freio/susp) — GATED por ADR #83, NÃO ativar aqui
 
 -- eixo -> { field do CHandlingData, valor no alloc MINIMO do eixo, valor no MAXIMO }.
 -- valor aplicado = lerp(min, max, fracao normalizada do eixo na sua faixa). min>max = inverso.
@@ -62,4 +80,21 @@ Config.skillHandling = {
   frenagem  = { field = 'fBrakeForce',        min = 0.55, max = 1.65 },
   aero      = { field = 'fInitialDragCoeff',  min = 6.0,  max = 18.0 },
   suspensao = { field = 'fAntiRollBarForce',  min = 0.05, max = 1.50 },
+}
+
+-- ============================================================
+-- OVERLAY DE HANDLING (tuning livre) — decisão do dono 2026-08-04
+-- ============================================================
+-- Campos DISJUNTOS dos 5 eixos acima (nunca colidem). NÃO são derivados do alloc: vêm de
+-- customization.handling_ext (knobs absolutos). O motor (client/handling.lua) aplica DEPOIS
+-- dos 5 eixos, cada um re-clampado à sua banda (valor absoluto). Ausência no customization =
+-- campo NÃO tocado (base do .meta preservada). Mass/bias FORA (identidade/física crítica).
+-- NB: STANCE saiu daqui (2026-08-06) — altura/rebaixamento é 100% de vhub_custom
+-- (client/stance.lua, per-entidade via State Bag). SetVehicleHandlingFloat(fSuspensionRaise)
+-- era model-wide e instável. Ver [[handling-engine-blueprint]] (linha de stance REVOGADA).
+Config.skillHandlingExt = {
+  handbrake  = { field = 'fHandBrakeForce',            min = 0.50,  max = 3.00 },
+  steering   = { field = 'fSteeringLock',              min = 28.0,  max = 50.0 },
+  low_speed  = { field = 'fLowSpeedTractionLossMult',  min = 0.20,  max = 3.00 },
+  susp_force = { field = 'fSuspensionForce',           min = 2.00,  max = 6.00 },
 }

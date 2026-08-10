@@ -5,8 +5,8 @@ lua54      'yes'
 
 name        'vhub_inventory'
 author      'vHub Mirage'
-version     '2.8.0'
-description 'Inventário server-authoritative: mochila, baús, drops e Player Hub (topbar identidade + sidebar nav).'
+version     '2.9.2'
+description 'Inventário server-authoritative: mochila, baús, drops e Player Hub. NUI remaster (areia dourada + liquid glass + partículas), ícones SVG locais, painel de detalhe.'
 
 -- Hard deps: core + driver SQL. Identity/Survival sao SOFT (via exports com pcall).
 dependencies {

@@ -1,217 +1,295 @@
--- server/mec.lua — domínio de reparo e reboque
--- reparo parcial (pneu/motor/lataria) + reboque (entidade + status via conce)
--- DELEGA reparo total ao caminho do garage (sem duplicar fórmula)
+-- server/mec.lua — reparo persistente e reboque físico autoritativo
 ---@diagnostic disable: undefined-global
 
 local Core = VHubCustom.Core
 local CFG  = VHubCustom.cfg
-local U    = VHubCustom.U
 local E    = VHubCustom.E
 
--- reboque pendente por src: garante que mecTowDone só é aceito após TOW_REQ autorizado
-local _pending_tow = {}   -- [src] = { plate, net_id }
-
--- limpa pendência e reabilita migração se o player desconectar durante um reboque
-AddEventHandler('playerDropped', function()
-  local src = source
-  local p = _pending_tow[src]
-  if p then
-    SetNetworkIdCanMigrate(p.net_id, true)
-    _pending_tow[src] = nil
-  end
-end)
-
-
--- ============================================================
--- REPARO PARCIAL
--- ============================================================
-
--- types aceitos: 'tyre' | 'engine' | 'body'
 local REPAIR_TYPES = { tyre = true, engine = true, body = true }
 
-RegisterNetEvent(E.MEC_REPAIR)
-AddEventHandler(E.MEC_REPAIR, function(plate, repair_type)
-  local src = source
-  Citizen.CreateThread(function()
-    -- 1. rate
-    if not Core.rateOK(src, 'mec_repair') then
-      Core.notify(src, 'Aguarde antes de solicitar outro reparo.', 'error'); return
-    end
+local function itemCount(value)
+  if type(value) ~= 'table' then return 0 end
+  local count = 0
+  for _ in pairs(value) do count = count + 1 end
+  return math.min(count, 16)
+end
 
-    -- 2. sessão
-    local cid = Core.getCharId(src)
-    if not cid then return end
 
-    -- 3. validação básica
-    local p = U.normalizePlate(plate)
-    if not p or not REPAIR_TYPES[repair_type] then return end
+-- ============================================================
+-- DIAGNOSE (FASE 4 ADR #81) — laudo estruturado de danos reais
+-- ============================================================
 
-    -- 4. autorização (ANTES de ler estado — L-01/segurança)
-    if not Core.canOperate(src, p) then
-      Core.notify(src, 'Sem autorização para este veículo.', 'error'); return
-    end
+-- retorna tabela de diagnóstico da placa ou nil se prontuário indisponível.
+-- Campos por componente: { label, ok, detail, cost }
+exports('mecDiagnose', function(plate)
+  local caller = GetInvokingResource()
+  -- permitido apenas por recursos confiáveis ou chamada interna (sem invoker)
+  local DIAG_TRUSTED = { ['vhub_custom'] = true, ['vhub_admin'] = true }
+  if caller and not DIAG_TRUSTED[caller] then return nil end
 
-    -- 5. lê estado real do prontuário
-    local st = Core.getVehicleState(p)
-    if not st then
-      Core.notify(src, 'Veículo não encontrado no sistema.', 'error'); return
-    end
+  local p = type(plate) == 'string' and plate:upper():gsub('%s+', ' '):match('^%s*(.-)%s*$') or nil
+  if not p or #p < 2 then return nil end
 
-    local prices = CFG.prices
-    local patch  = {}
-    local custo  = 0
+  local state
+  pcall(function() state = exports.vhub_conce:getVehicleState(p) end)
+  if not state then return nil end
 
-    if repair_type == 'tyre' then
-      -- reparo de pneu: zera dano de pneus no prontuário
-      local dmg = type(st.damage) == 'table' and st.damage or {}
-      patch.damage = {
-        doors     = dmg.doors,
-        windows   = dmg.windows,
-        tyres     = {},        -- limpa pneus
-        tyres_rim = {},        -- limpa aros
-      }
-      local n_tyres = (dmg.tyres and #dmg.tyres or 0)
-                    + (dmg.tyres_rim and #dmg.tyres_rim or 0)
-      custo = math.max(1, n_tyres) * prices.pneu
+  local damage = type(state.damage) == 'table' and state.damage or {}
+  local tyres_dmg  = itemCount(damage.tyres) + itemCount(damage.tyres_rim)
+  local engine_hp  = tonumber(state.engine_health)
+  local body_hp    = tonumber(state.body_health)
+  local windows_dmg= itemCount(damage.windows)
+  local doors_dmg  = itemCount(damage.doors)
 
-    elseif repair_type == 'engine' then
-      -- campo ausente no prontuário = veículo nunca registrou saúde; tratar como destruído
-      -- (nil mascarado como 1000 causaria "sem danos" com motor realmente destruído — L-03)
-      local cur_health = st.engine_health
-      if cur_health == nil then
-        Core.notify(src, 'Estado do motor indisponível. Tente entrar/sair do veículo.', 'error')
-        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
-      end
-      local dmg_pts = math.max(0, 1000 - cur_health)
-      if dmg_pts < 50 then
-        Core.notify(src, 'Motor sem danos relevantes.', 'info')
-        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
-      end
-      custo = math.ceil(dmg_pts / 100) * prices.motor_parcial
-      patch.engine_health = 1000.0
+  local function healthLabel(hp)
+    if not hp then return 'desconhecido' end
+    if hp >= 950 then return 'perfeito' end
+    if hp >= 700 then return 'leve' end
+    if hp >= 400 then return 'moderado' end
+    return 'grave'
+  end
 
-    elseif repair_type == 'body' then
-      local cur_health = st.body_health
-      if cur_health == nil then
-        Core.notify(src, 'Estado da lataria indisponível. Tente entrar/sair do veículo.', 'error')
-        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
-      end
-      local dmg_pts = math.max(0, 1000 - cur_health)
-      if dmg_pts < 50 then
-        Core.notify(src, 'Lataria sem danos relevantes.', 'info')
-        TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type); return
-      end
-      custo = math.ceil(dmg_pts / 100) * prices.lataria_parcial
-      patch.body_health = 1000.0
-    end
+  local unit_tyre  = CFG.prices.pneu         or 300
+  local unit_motor = CFG.prices.motor_parcial  or 800
+  local unit_body  = CFG.prices.lataria_parcial or 500
 
-    if custo > 0 and not Core.pay(src, custo) then
-      Core.notify(src, ('Saldo insuficiente. Reparo: R$ %d.'):format(custo), 'error')
-      TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type)
-      return
-    end
+  local function engineCost()
+    if not engine_hp or engine_hp ~= engine_hp then return nil end
+    local dmg = math.max(0, 1000 - engine_hp)
+    if dmg < 50 then return 0 end
+    return math.ceil(dmg / 100) * unit_motor
+  end
 
-    -- source='repair': pode elevar health + reescrever damage (contrato do vstate)
-    local ok = Core.saveVehicleState(p, patch, 'repair')
-    if not ok then
-      Core.notify(src, 'Erro ao salvar reparo. Tente novamente.', 'error')
-      TriggerClientEvent(E.MEC_CONFIRM, src, p, false, repair_type)
-      return
-    end
+  local function bodyCost()
+    if not body_hp or body_hp ~= body_hp then return nil end
+    local dmg = math.max(0, 1000 - body_hp)
+    if dmg < 50 then return 0 end
+    return math.ceil(dmg / 100) * unit_body
+  end
 
-    Core.log(p, 'mec_repair_'..repair_type, cid, { custo = custo })
-    TriggerClientEvent(E.MEC_CONFIRM, src, p, true, repair_type)
-    Core.notify(src, ('Reparo de %s concluído! R$ %d cobrados.'):format(repair_type, custo), 'success')
-  end)
+  return {
+    motor  = { label = 'Motor',    ok = (engine_hp or 0) >= 950,
+               detail = healthLabel(engine_hp),
+               cost   = engineCost() },
+    lataria= { label = 'Lataria',  ok = (body_hp or 0) >= 950,
+               detail = healthLabel(body_hp),
+               cost   = bodyCost() },
+    pneus  = { label = 'Pneus',    ok = tyres_dmg == 0,
+               detail = tyres_dmg > 0 and (tyres_dmg .. ' danificado(s)') or 'ok',
+               cost   = tyres_dmg * unit_tyre },
+    vidros = { label = 'Vidros',   ok = windows_dmg == 0,
+               detail = windows_dmg > 0 and (windows_dmg .. ' quebrado(s)') or 'ok',
+               cost   = 0 },
+    portas = { label = 'Portas',   ok = doors_dmg == 0,
+               detail = doors_dmg > 0 and (doors_dmg .. ' danificada(s)') or 'ok',
+               cost   = 0 },
+  }
 end)
 
+local function repairPatch(state, repairType)
+  local damage = type(state.damage) == 'table' and state.damage or {}
+  if repairType == 'tyre' then
+    local count = itemCount(damage.tyres) + itemCount(damage.tyres_rim)
+    local patch = { damage = {
+      doors = damage.doors, windows = damage.windows, tyres = {}, tyres_rim = {},
+    } }
+    if count == 0 then return patch, 0, 'Pneus sem danos registrados.', true end
+    return patch, count * CFG.prices.pneu
+  end
 
--- ============================================================
--- REBOQUE (recuperação de posição)
--- ============================================================
+  local key = repairType == 'engine' and 'engine_health' or 'body_health'
+  local health = tonumber(state[key])
+  if not health or health ~= health or math.abs(health) == math.huge then
+    return nil, 0, 'Estado físico indisponível. Entre e saia do veículo.'
+  end
+  local damagePoints = math.max(0, 1000 - health)
+  if damagePoints < 50 then
+    return { [key] = health }, 0, 'Componente sem danos relevantes.', true
+  end
+  local unit = repairType == 'engine' and CFG.prices.motor_parcial or CFG.prices.lataria_parcial
+  return { [key] = 1000.0 }, math.ceil(damagePoints / 100) * unit
+end
+
+RegisterNetEvent(E.MEC_REPAIR)
+AddEventHandler(E.MEC_REPAIR, function(leaseId, requestId, repairType)
+  local src = source
+  if not Core.rateOK(src, 'mec_repair') then
+    Core.notify(src, 'Aguarde antes de reparar.', 'error')
+    TriggerClientEvent(E.MEC_CONFIRM, src, nil, false, repairType, nil); return
+  end
+  if not REPAIR_TYPES[repairType] then TriggerClientEvent(E.MEC_CONFIRM, src, nil, false, nil, nil); return end
+
+  local context, lock, why = Core.beginMutation(src, 'mec', leaseId)
+  if not context then
+    Core.notify(src, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.', 'error')
+    TriggerClientEvent(E.MEC_CONFIRM, src, nil, false, repairType, nil); return
+  end
+  local function finish(ok, applyPhysical)
+    Core.releaseLock(src, context.plate, lock)
+    TriggerClientEvent(E.MEC_CONFIRM, src, context.plate, ok == true,
+      ok == true and applyPhysical ~= false and repairType or nil, context.net_id)
+  end
+
+  local state = Core.getVehicleState(context.plate)
+  if not state then Core.notify(src, 'Prontuário indisponível.', 'error'); return finish(false) end
+  local patch, cost, invalidMessage, noOp = repairPatch(state, repairType)
+  if not patch then Core.notify(src, invalidMessage, 'error'); return finish(false) end
+  local before = repairType == 'tyre' and { damage = state.damage } or { [repairType .. '_health'] = state[repairType .. '_health'] }
+
+  local paid, operationId, paymentErr, replayed, charged, operation = Core.commitPayment(context,
+    'repair_' .. repairType, requestId, cost, patch, before, patch)
+  if not paid then
+    Core.notify(src, paymentErr == 'insufficient' and ('Saldo insuficiente. Reparo: R$ %d.'):format(cost)
+      or 'Falha ao processar pagamento.', 'error')
+    return finish(false)
+  end
+
+  if replayed then
+    Core.notify(src, 'Operação já concluída.', 'info')
+    return finish(true, false)
+  end
+  cost = tonumber(operation and operation.amount) or cost
+  if noOp or Core.sameSubset(state, patch) then
+    Core.completeOperation(operationId)
+    Core.auditVehicle(context, 'repair_' .. repairType, operationId, before, patch, 'recovered_applied')
+    Core.notify(src, invalidMessage or 'Reparo já aplicado.', 'info')
+    return finish(true, false)
+  end
+
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'repair_' .. repairType, operationId, before, patch,
+      'lease_lost_' .. compensation)
+    Core.notify(src, compensated and 'Sessão encerrada. Valor estornado.'
+      or 'Falha crítica. Operação em reconciliação.', 'error')
+    return finish(false)
+  end
+
+  if not Core.saveVehicleState(context.plate, patch, 'repair') then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'repair_' .. repairType, operationId, before, patch,
+      'save_failed_' .. compensation)
+    Core.notify(src, compensated and 'Falha ao salvar. Valor estornado.'
+      or 'Falha crítica. Operação em reconciliação.', 'error')
+    return finish(false)
+  end
+
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'repair_' .. repairType, operationId, before, patch,
+    replayed and 'replayed' or 'committed')
+  Core.log(context.plate, 'mec_repair_' .. repairType, context.char_id,
+    { cost = cost, operation_id = operationId })
+  Core.notify(src, ('Reparo concluído. R$ %d cobrados.'):format(cost), 'success')
+  finish(true)
+end)
+
+local function moveAndVerify(entity, target)
+  for _ = 1, 5 do
+    if not DoesEntityExist(entity) then return nil end
+    local moved = pcall(SetEntityCoords, entity, target.x, target.y, target.z,
+      false, false, false, false)
+    local headed = pcall(SetEntityHeading, entity, target.h)
+    if not moved or not headed then return nil end
+    Citizen.Wait(100)
+    if DoesEntityExist(entity) then
+      local read, current = pcall(GetEntityCoords, entity)
+      if read and current then
+        local dx, dy, dz = current.x - target.x, current.y - target.y, current.z - target.z
+        if dx * dx + dy * dy + dz * dz <= 4.0 then
+          local headingOk, heading = pcall(GetEntityHeading, entity)
+          if headingOk then return { x = current.x, y = current.y, z = current.z, h = heading } end
+        end
+      end
+    end
+  end
+  return nil
+end
 
 RegisterNetEvent(E.MEC_TOW_REQ)
-AddEventHandler(E.MEC_TOW_REQ, function(plate, net_id)
+AddEventHandler(E.MEC_TOW_REQ, function(leaseId, requestId)
   local src = source
-  Citizen.CreateThread(function()
-    -- 1. rate
-    if not Core.rateOK(src, 'mec_tow') then
-      Core.notify(src, 'Aguarde antes de solicitar outro reboque.', 'error'); return
-    end
+  if not Core.rateOK(src, 'mec_tow') then
+    Core.notify(src, 'Aguarde antes de rebocar.', 'error')
+    TriggerClientEvent(E.MEC_CONFIRM, src, nil, false, 'tow', nil); return
+  end
 
-    -- 2. sessão
-    local cid = Core.getCharId(src)
-    if not cid then return end
+  local context, lock, why = Core.beginMutation(src, 'mec', leaseId)
+  if not context then
+    Core.notify(src, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.', 'error')
+    TriggerClientEvent(E.MEC_CONFIRM, src, nil, false, 'tow', nil); return
+  end
+  local function finish(ok)
+    Core.releaseLock(src, context.plate, lock)
+    TriggerClientEvent(E.MEC_CONFIRM, src, context.plate, ok == true, 'tow', context.net_id)
+  end
 
-    -- 3. placa
-    local p = U.normalizePlate(plate)
-    if not p then return end
+  if Core.vehicleHasOccupants(context.entity) then
+    Core.notify(src, 'Todos devem sair do veículo antes do reboque.', 'error'); return finish(false)
+  end
+  local target = context.zone.tow_drop
+  if type(target) ~= 'table' then Core.notify(src, 'Destino de reboque inválido.', 'error'); return finish(false) end
+  local readOld, old = pcall(GetEntityCoords, context.entity)
+  local readHeading, oldHeading = pcall(GetEntityHeading, context.entity)
+  if not readOld or not old or not readHeading then
+    Core.notify(src, 'Réplica do veículo indisponível.', 'error'); return finish(false)
+  end
+  local before = { x = old.x, y = old.y, z = old.z, h = oldHeading, db = context.vehicle.position }
+  local validRequest, operationId, paymentErr, replayed, charged, operation =
+    Core.commitPayment(context, 'tow', requestId, 0, target, before, target)
+  if not validRequest then
+    Core.notify(src, paymentErr == 'refunded' and 'Operação anterior foi cancelada.'
+      or 'Solicitação de reboque inválida.', 'error')
+    return finish(false)
+  end
+  if replayed then Core.notify(src, 'Reboque já concluído.', 'info'); return finish(true) end
+  if Core.operationApplied(operation) then
+    Core.completeOperation(operationId)
+    Core.auditVehicle(context, 'tow', operationId, before, target, 'recovered_applied')
+    Core.notify(src, 'Reboque já concluído.', 'info')
+    return finish(true)
+  end
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tow', operationId, nil, target, 'lease_lost')
+    Core.notify(src, 'Sessão de reboque encerrada.', 'error'); return finish(false)
+  end
+  if Core.vehicleHasOccupants(context.entity) then
+    Core.compensatePayment(operationId, false, charged)
+    Core.notify(src, 'Todos devem sair do veículo antes do reboque.', 'error'); return finish(false)
+  end
 
-    -- 4. autorização
-    if not Core.canOperate(src, p) then
-      Core.notify(src, 'Sem autorização para este veículo.', 'error'); return
-    end
+  local actual = moveAndVerify(context.entity, target)
+  if not actual then
+    moveAndVerify(context.entity, before)
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tow', operationId, before, target, 'move_failed')
+    Core.notify(src, 'Falha ao assumir a réplica do veículo.', 'error'); return finish(false)
+  end
 
-    -- 5. valida que o veículo está 'out' (não guardado/apreendido)
-    local veh_row
-    pcall(function() veh_row = exports.vhub_conce:getVehicle(p) end)
-    if not veh_row or veh_row.status ~= 'out' then
-      Core.notify(src, 'Veículo não está disponível para reboque.', 'error'); return
-    end
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    local rolledBack = moveAndVerify(context.entity, before) ~= nil
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tow', operationId, before, actual,
+      rolledBack and 'lease_lost_rolled_back' or 'lease_lost_rollback_failed')
+    Core.notify(src, rolledBack and 'Sessão encerrada; posição restaurada.'
+      or 'Falha crítica no reboque.', 'error')
+    return finish(false)
+  end
 
-    -- 6. valida netId → entidade → placa (anti-dupe: servidor resolve, nunca confia no cliente)
-    local nid = tonumber(net_id)
-    if not nid then return end
-    local ent = NetworkGetEntityFromNetworkId(nid)
-    if not ent or ent == 0 then
-      Core.notify(src, 'Veículo não encontrado na rede.', 'error'); return
-    end
-    local plate_ent = GetVehicleNumberPlateText(ent)
-    if U.normalizePlate(plate_ent) ~= p then
-      Core.notify(src, 'Veículo inconsistente. Ação bloqueada.', 'error')
-      Core.log(p, 'mec_tow_ANTI_DUPE', cid, { net_id = nid, plate_ent = tostring(plate_ent) })
-      return
-    end
+  local positionJson = ('{"x":%.3f,"y":%.3f,"z":%.3f,"h":%.3f}')
+    :format(actual.x, actual.y, actual.z, actual.h)
+  if not Core.updatePosition(context.plate, positionJson) then
+    local rolledBack = moveAndVerify(context.entity, before) ~= nil
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tow', operationId, before, actual,
+      rolledBack and 'save_failed_rolled_back' or 'save_failed_rollback_failed')
+    Core.notify(src, rolledBack and 'Falha ao salvar; posição restaurada.' or 'Falha crítica no reboque.', 'error')
+    return finish(false)
+  end
 
-    -- 7. trava migração de ownership durante a operação
-    SetNetworkIdCanMigrate(nid, false)
-
-    -- 8. registra reboque pendente e autoriza o cliente a reposicionar
-    _pending_tow[src] = { plate = p, net_id = nid }
-    TriggerClientEvent(E.MEC_TOW_DO, src, p, nid)
-    Core.log(p, 'mec_tow_authorized', cid, { net_id = nid })
-  end)
-end)
-
--- recebe confirmação do cliente após reposicionamento e salva posição
-RegisterNetEvent('vhub_custom:server:mecTowDone')
-AddEventHandler('vhub_custom:server:mecTowDone', function(plate, net_id, pos)
-  local src = source
-  Citizen.CreateThread(function()
-    local p  = U.normalizePlate(plate)
-    local nid = tonumber(net_id)
-    if not p or not nid then return end
-
-    -- valida sessão de reboque pendente (anti-spoof: só aceita se TOW_REQ foi autorizado)
-    local pending = _pending_tow[src]
-    if not pending or pending.plate ~= p or pending.net_id ~= nid then
-      Core.log(p, 'mec_tow_SPOOF_BLOCKED', Core.getCharId(src) or '?', { net_id = nid }); return
-    end
-    _pending_tow[src] = nil
-
-    -- reabilita migração após operação
-    SetNetworkIdCanMigrate(nid, true)
-
-    -- persiste posição via conce (escritor de posição)
-    if type(pos) == 'table' and tonumber(pos.x) and tonumber(pos.y) and tonumber(pos.z) then
-      pcall(function()
-        local posJson = ('{"x":%.2f,"y":%.2f,"z":%.2f,"h":%.2f}'):format(
-          pos.x, pos.y, pos.z, tonumber(pos.h) or 0.0)
-        exports.vhub_conce:updatePosition(p, posJson)
-      end)
-    end
-
-    Core.notify(src, 'Veículo reposicionado com sucesso.', 'success')
-    Core.log(p, 'mec_tow_done', Core.getCharId(src) or '?', {})
-  end)
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'tow', operationId, before, actual, 'committed')
+  Core.log(context.plate, 'mec_tow', context.char_id, { operation_id = operationId })
+  Core.notify(src, 'Veículo reposicionado com sucesso.', 'success')
+  finish(true)
 end)

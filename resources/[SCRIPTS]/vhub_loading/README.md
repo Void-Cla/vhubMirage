@@ -34,3 +34,23 @@ Edite `config.json` (textos, música, imagens) e os assets em `ui/`. Todo asset 
 |-----|---------------|
 | A-10 | Assets locais cobertos pelos globs do `files{}`; sem CDN externo |
 | L-07 | Ownership: só a tela de load — sem sobreposição com login/spawn |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| — | *sem exports* | `vhub_loading` é UI estática de loadscreen (sem Lua) | — |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| — | *sem dependências de runtime* |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| — | *sem eventos emitidos* | — |

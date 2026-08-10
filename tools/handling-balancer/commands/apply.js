@@ -15,6 +15,7 @@ const meta    = require('../lib/meta');
 const engine  = require('../lib/engine');
 const seal    = require('../lib/seal');
 const emitter = require('../lib/catalogEmitter');
+const catalogPatcher = require('../lib/catalogPatcher');
 const report  = require('../lib/report');
 const { log } = report;
 
@@ -50,7 +51,11 @@ function run(args, cfg) {
 
   // arquivos que terao mudanca real
   const willChange = [...byFile.values()].filter((g) => g.entries.some(hasChange));
+  // inclui catalog.lua no backup junto com os .meta (patcher vai reescrevê-lo)
   const changingPaths = willChange.map((g) => g.abs);
+  if (changingPaths.length > 0 && io.exists(catalogPatcher.CATALOG_PATH)) {
+    changingPaths.push(catalogPatcher.CATALOG_PATH);
+  }
 
   // ----- backup -----
   let backupId = null;
@@ -101,7 +106,12 @@ function run(args, cfg) {
   log.ok(`selo atualizado: ${io.rel(seal.SEAL_PATH)}`);
 
   const patchPath = emitter.writePatch(patchByKey);
-  log.ok(`catalog-patch emitido: ${io.rel(patchPath)} (mesclar manualmente na Fase 2)`);
+  log.ok(`catalog-patch (auditoria): ${io.rel(patchPath)}`);
+
+  const patchResult = catalogPatcher.applyPatch(patchByKey);
+  if (patchResult.skipped.length > 0) {
+    log.warn(`carros sem entrada no catalog.lua (adicionar manualmente): ${patchResult.skipped.join(', ')}`);
+  }
 
   const reportPath = report.writeBuildReport(entries, { backupId });
   log.ok(`build-report: ${io.rel(reportPath)}`);

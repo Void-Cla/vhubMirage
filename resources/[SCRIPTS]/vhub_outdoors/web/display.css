@@ -1,0 +1,39 @@
+html,
+body,
+#outdoor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+#outdoor > .media-viewport {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+  overflow: hidden;
+  transform-origin: center;
+}
+
+.media-viewport > img,
+.media-viewport > video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+
+.media-viewport > iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}

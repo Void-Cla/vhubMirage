@@ -1,6 +1,6 @@
 # vhub_money — Fleeca Camell (Carteira, Banco e Transferências)
 
-**Versão:** 2.1.1 | **Owner:** vhub_money
+**Versão:** 2.3.0 | **Owner:** vhub_money
 
 Economia monetária server-authoritative. Fonte única de verdade para carteira e banco de cada personagem. Integra ATMs, transferências P2P e auditoria completa de transações.
 
@@ -71,6 +71,18 @@ local ok, err = exports.vhub_money:tryDeposit(src, 500, false)
 local ok, err = exports.vhub_money:tryFullPayment(src, 500, false)
 ```
 
+### Sagas idempotentes (somente `vhub_sims` e `vhub_custom`)
+
+```lua
+local result = exports.vhub_money:commitPayment(src, amount, operation_id, reason)
+local refund = exports.vhub_money:refundPayment(operation_id)
+```
+
+`vhub_sims` exige `reason` iniciado por `sims:` e digest hexadecimal de 64 caracteres.
+`vhub_custom` exige `reason` iniciado por `custom.` e operação `vc:`. O estorno valida o
+namespace persistido antes de tocar saldo. O sufixo de digest compõe a operação, mas o
+prefixo de request é serializado: payload divergente na mesma request retorna `conflict`.
+
 ### Mutações (TRUSTED — requer whitelist)
 
 ```lua
@@ -129,3 +141,46 @@ end)
 | L-01 | Servidor valida e processa; cliente nunca calcula saldo |
 | §3.3 | `banco` é chave KV do domínio money; scripts terceiros não escrevem nessa chave |
 | §4.6 | Todo evento de cobrança deve ter rate declarado em `CFG.rates` |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `getWallet` | `(src) → number` | vhub_admin, vhub_racha |
+| 2 | `getBank` | `(src) → number` | vhub_admin |
+| 3 | `getBalance` | `(src) → wallet, bank, total` | vhub_admin |
+| 4 | `isOwner` | `(src) → bool` | vhub_money interno |
+| 5 | `getTransactions` | `(src, limit?) → rows` | vhub_admin |
+| 6 | `getWalletLocal` | `() → number` *(client)* | vhub_money NUI |
+| 7 | `getBankLocal` | `() → number` *(client)* | vhub_money NUI |
+| 8 | `getBalanceLocal` | `() → w, b, t` *(client)* | vhub_money NUI |
+| 9 | `tryPayment` | `(src, valor, dry?) → ok, err` | vhub_conce, vhub_garage, vhub_custom, vhub_vehcontrol, vhub_ferinha |
+| 10 | `tryWithdraw` | `(src, valor, dry?) → ok, err` | vhub_admin (ATM) |
+| 11 | `tryDeposit` | `(src, valor, dry?) → ok, err` | vhub_admin (ATM) |
+| 12 | `tryFullPayment` | `(src, valor, dry?) → ok, err` | vhub_coinshop |
+| 13 | `giveWallet` | `(src, valor, razao) → ok, err` | vhub_racha, vhub_admin |
+| 14 | `giveBank` | `(src, valor, razao) → ok, err` | vhub_racha, vhub_admin |
+| 15 | `giveBankChar` | `(char_id, valor, razao) → ok, err` | vhub_ferinha (reembolso escrow) |
+| 16 | `setWallet` | `(src, valor, razao) → ok, err` | vhub_admin |
+| 17 | `setBank` | `(src, valor, razao) → ok, err` | vhub_admin |
+| 18 | `tryTransfer` | `(actor, target, valor, motivo) → ok, err` | vhub_money NUI (ATM/celular) |
+| 19 | `tryGive` | `(actor, target, valor, motivo) → ok, err` | vhub_money NUI |
+| 20 | `atmWithdraw` | `(src, valor) → ok, err` | vhub_money NUI (ATM) |
+| 21 | `atmDeposit` | `(src, valor) → ok, err` | vhub_money NUI (ATM) |
+| 22 | `commitPayment` | `(src, amount, operation_id, reason) → result` | vhub_sims, vhub_custom |
+| 23 | `refundPayment` | `(operation_id) → result` | vhub_sims, vhub_custom |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `getCData`, `setCData` |
+| `oxmysql` | Transações e logs de auditoria |
+| `vhub_target` | `addEntity` (ATM targets), `addModel` (menus de banco) |
+| `vhub_identity` | `getIdentity` (nome para logs) |
+
+## Eventos emitidos
+
+Nenhum evento público de domínio. A NUI usa apenas os eventos internos declarados no código.

@@ -113,13 +113,8 @@ button { font-family: var(--font-sans); color: inherit; }
   background:
     radial-gradient(120% 90% at 50% 40%, rgba(12,10,6,0.30), rgba(12,10,6,0.72) 90%);
   opacity: 1;
-  transition: opacity 220ms var(--ease-out);
-  animation: mo-overlay-in 240ms var(--ease-out);
 }
-.mod-oficina.overlay.hidden { opacity: 0; pointer-events: none; }
-/* overlay oculta por opacity (não display:none) — pausa toda animação p/ idle 0ms (A-07/L-18) */
-.mod-oficina.overlay.hidden * { animation-play-state: paused !important; }
-@keyframes mo-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.mod-oficina.overlay.hidden { display: none; }
 
 /* ambiente: blueprint + glows + scan line — tudo CSS puro */
 .mod-oficina .env {
@@ -136,7 +131,7 @@ button { font-family: var(--font-sans); color: inherit; }
 }
 .mod-oficina .env-glow {
   position: absolute; width: 900px; height: 600px; border-radius: 50%;
-  filter: blur(48px); opacity: 0.55;
+  opacity: 0.55;
 }
 .mod-oficina .env-glow-a {
   top: -10%; left: 8%;
@@ -153,7 +148,6 @@ button { font-family: var(--font-sans); color: inherit; }
     rgba(255,255,255,0.014) 0 2px,
     transparent 2px 4px
   );
-  mix-blend-mode: overlay;
   pointer-events: none;
 }
 
@@ -176,11 +170,6 @@ button { font-family: var(--font-sans); color: inherit; }
   border-radius: 18px;
   overflow: hidden;
   box-shadow: var(--glass-shadow);
-  animation: mo-panel-in 320ms var(--ease-out);
-}
-@keyframes mo-panel-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.985); }
-  to   { opacity: 1; transform: none; }
 }
 
 /* barra dourada no topo do panel (accent premium — mais presente que hairline) */
@@ -282,37 +271,7 @@ button { font-family: var(--font-sans); color: inherit; }
   display: flex; align-items: center; gap: 14px; flex: 0 0 auto;
 }
 
-.mod-oficina .tier-badge {
-  width: 66px; height: 66px;
-  border-radius: 13px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display);
-  font-size: 38px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  border: 2px solid currentColor;
-  flex-shrink: 0;
-  background:
-    radial-gradient(120% 60% at 50% 0%, rgba(255,255,255,0.10), rgba(0,0,0,0) 55%),
-    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.35));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-  transition: color 300ms, background 300ms, box-shadow 300ms;
-}
-.mod-oficina .tier-badge.t-D  { color: var(--t-D);  }
-.mod-oficina .tier-badge.t-C  { color: var(--t-C);  box-shadow: 0 0 16px rgba(108,198,212,0.28), inset 0 1px 0 rgba(255,255,255,0.10); }
-.mod-oficina .tier-badge.t-B  { color: var(--t-B);  box-shadow: 0 0 18px rgba(143,217,107,0.28), inset 0 1px 0 rgba(255,255,255,0.10); }
-.mod-oficina .tier-badge.t-A  { color: var(--t-A);  box-shadow: 0 0 20px rgba(255,181,71,0.32),  inset 0 1px 0 rgba(255,255,255,0.10); }
-.mod-oficina .tier-badge.t-S  { color: var(--t-S);  text-shadow: 0 0 14px rgba(255,122,106,0.55); box-shadow: 0 0 22px rgba(255,122,106,0.30), inset 0 1px 0 rgba(255,255,255,0.10); }
-.mod-oficina .tier-badge.t-Sp {
-  color: var(--t-Sp);
-  text-shadow: 0 0 16px rgba(243,181,58,0.65);
-  box-shadow: 0 0 28px rgba(243,181,58,0.42), inset 0 1px 0 rgba(255,255,255,0.14);
-  animation: mo-tier-pulse 2.8s var(--ease-in-out) infinite;
-}
-@keyframes mo-tier-pulse {
-  0%, 100% { box-shadow: 0 0 28px rgba(243,181,58,0.42), inset 0 1px 0 rgba(255,255,255,0.14); }
-  50%      { box-shadow: 0 0 40px rgba(243,181,58,0.62), inset 0 1px 0 rgba(255,255,255,0.18); }
-}
+/* ADR #82: .tier-badge removido (DOM eliminado — a NUI não exibe classe/tier do veículo) */
 
 .mod-oficina .hdr-info { min-width: 0; }
 .mod-oficina .veh-nome {
@@ -379,13 +338,11 @@ button { font-family: var(--font-sans); color: inherit; }
   background: rgba(0,0,0,0.42);
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.55);
 }
-.mod-oficina .sm-zone        { flex: 1; height: 100%; }
-.mod-oficina .sm-zone.z-D    { background: linear-gradient(180deg, rgba(185,168,144,0.30), rgba(185,168,144,0.15)); }
-.mod-oficina .sm-zone.z-C    { background: linear-gradient(180deg, rgba(108,198,212,0.30), rgba(108,198,212,0.15)); }
-.mod-oficina .sm-zone.z-B    { background: linear-gradient(180deg, rgba(143,217,107,0.30), rgba(143,217,107,0.15)); }
-.mod-oficina .sm-zone.z-A    { background: linear-gradient(180deg, rgba(255,181,71,0.32),  rgba(255,181,71,0.18));  }
-.mod-oficina .sm-zone.z-S    { background: linear-gradient(180deg, rgba(255,122,106,0.32), rgba(255,122,106,0.18)); }
-.mod-oficina .sm-zone.z-Sp   { background: linear-gradient(180deg, rgba(243,181,58,0.55),  rgba(243,181,58,0.30));  }
+/* ADR #82: faixas de tier (.sm-zone z-*) removidas — trilha contínua com fundo neutro só */
+.mod-oficina .sm-track::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(243,181,58,0.10), rgba(243,181,58,0.30));
+}
 
 .mod-oficina .sm-cursor {
   position: absolute;
@@ -398,20 +355,7 @@ button { font-family: var(--font-sans); color: inherit; }
   box-shadow: 0 0 6px rgba(255,255,255,0.4);
 }
 .mod-oficina .sm-base { background: rgba(255,255,255,0.60); }
-
-.mod-oficina .sm-labels {
-  display: flex; justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-.mod-oficina .sm-labels .t-D  { color: var(--t-D); }
-.mod-oficina .sm-labels .t-C  { color: var(--t-C); }
-.mod-oficina .sm-labels .t-B  { color: var(--t-B); }
-.mod-oficina .sm-labels .t-A  { color: var(--t-A); }
-.mod-oficina .sm-labels .t-S  { color: var(--t-S); }
-.mod-oficina .sm-labels .t-Sp { color: var(--t-Sp); }
+/* ADR #82: .sm-labels (rótulos D..S+) removidos com o DOM */
 
 .mod-oficina .btn-close {
   flex-shrink: 0;
@@ -435,11 +379,9 @@ button { font-family: var(--font-sans); color: inherit; }
 
 
 /* ============================================================
-   BODY — 3 colunas
+   BODY — layout base (sobrescrito pelo bloco AAA no final do arquivo)
    ============================================================ */
 .mod-oficina .body {
-  display: grid;
-  grid-template-columns: 188px 1fr 248px;
   flex: 1;
   overflow: hidden;
   min-height: 0;
@@ -488,16 +430,17 @@ button { font-family: var(--font-sans); color: inherit; }
   align-items: flex-start; gap: 6px;
   padding: 10px 12px 10px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid rgba(243,181,58,0.08);
+  background-color: rgba(12,10,6,0.38);
   cursor: pointer;
-  transition: background 160ms, border-color 160ms, transform 140ms;
+  transition: background-color 160ms, border-color 160ms, box-shadow 160ms;
 }
 .mod-oficina .nav-item::before {
   content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
   width: 2px; border-radius: 2px; background: transparent; transition: background 160ms, box-shadow 160ms;
 }
 .mod-oficina .nav-item:hover {
-  background: rgba(243,181,58,0.07);
+  background-color: rgba(243,181,58,0.10);
   border-color: rgba(243,181,58,0.16);
 }
 .mod-oficina .nav-item.active {
@@ -520,15 +463,7 @@ button { font-family: var(--font-sans); color: inherit; }
 }
 .mod-oficina .nav-item.active .nav-label { color: var(--vh-gold-soft); }
 
-.mod-oficina .nav-stage-dots { display: flex; gap: 4px; }
-.mod-oficina .nav-dot {
-  width: 14px; height: 4px;
-  border-radius: 2px;
-  background: rgba(217,193,154,0.18);
-  transition: background 200ms, box-shadow 200ms;
-}
-.mod-oficina .nav-dot.filled  { background: var(--vh-gold-deep); }
-.mod-oficina .nav-dot.current { background: var(--vh-gold); box-shadow: 0 0 8px rgba(243,181,58,0.65); }
+/* (nav-stage-dots/nav-dot REMOVIDOS — ADR #82 F2.3: nav de famílias usa .nav-fam-dot) */
 
 
 /* ---- COL 2 ---- */
@@ -555,135 +490,8 @@ button { font-family: var(--font-sans); color: inherit; }
   margin-bottom: 4px;
 }
 
-/* stage card */
-.mod-oficina .stage-card {
-  position: relative;
-  border: 1px solid rgba(243,181,58,0.12);
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, rgba(26,22,16,0.86), rgba(12,10,6,0.65));
-  padding: 14px 16px 14px 18px;
-  cursor: pointer;
-  transition: border-color 160ms, background 160ms, transform 160ms, box-shadow 160ms;
-  overflow: hidden;
-  animation: mo-card-in 260ms var(--ease-out);
-}
-@keyframes mo-card-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
-}
-.mod-oficina .stage-card::before {
-  content: ''; position: absolute; top: 0; left: 0;
-  width: 3px; height: 100%;
-  background: transparent; transition: background 160ms, box-shadow 160ms;
-}
-/* specular highlight discreto no topo */
-.mod-oficina .stage-card::after {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,213,115,0.20), transparent);
-  pointer-events: none;
-}
-.mod-oficina .stage-card:hover {
-  border-color: rgba(243,181,58,0.36);
-  background: linear-gradient(180deg, rgba(37,30,20,0.92), rgba(18,14,8,0.78));
-  transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(0,0,0,0.35);
-}
-.mod-oficina .stage-card.selected {
-  border-color: var(--vh-gold);
-  background: linear-gradient(180deg, rgba(243,181,58,0.14), rgba(243,181,58,0.04));
-  box-shadow:
-    0 0 0 1px rgba(243,181,58,0.24),
-    0 0 28px rgba(243,181,58,0.14),
-    inset 0 1px 0 rgba(255,213,115,0.14);
-  transform: translateY(-1px);
-}
-.mod-oficina .stage-card.selected::before { background: var(--vh-gold); box-shadow: 0 0 12px rgba(243,181,58,0.65); }
-.mod-oficina .stage-card.installed {
-  border-color: rgba(107,191,107,0.45);
-  background: linear-gradient(180deg, rgba(107,191,107,0.08), rgba(12,10,6,0.65));
-}
-.mod-oficina .stage-card.installed::before { background: var(--vh-ok); box-shadow: 0 0 10px rgba(107,191,107,0.55); }
-.mod-oficina .stage-card.disabled-cap {
-  opacity: 0.32;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* card header */
-.mod-oficina .sc-header {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-}
-.mod-oficina .sc-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  border: 1px solid currentColor;
-}
-.mod-oficina .sc-badge-default { color: var(--t-D); background: rgba(185,168,144,0.10); }
-.mod-oficina .sc-badge-1       { color: var(--t-C); background: rgba(108,198,212,0.10); }
-.mod-oficina .sc-badge-2       { color: var(--t-A); background: rgba(255,181,71,0.10);  }
-.mod-oficina .sc-badge-3       { color: var(--t-S); background: rgba(255,122,106,0.10); }
-
-.mod-oficina .sc-name {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--vh-sand-soft);
-  text-transform: uppercase;
-  flex: 1;
-}
-.mod-oficina .sc-price {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--vh-gold);
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.mod-oficina .sc-installed-tag {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--vh-ok);
-  background: rgba(107,191,107,0.12);
-  border: 1px solid rgba(107,191,107,0.40);
-  padding: 3px 7px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.mod-oficina .sc-desc {
-  font-size: 12px;
-  color: var(--vh-sand-dim);
-  line-height: 1.6;
-  margin-bottom: 10px;
-}
-
-/* boost pills */
-.mod-oficina .sc-boosts { display: flex; gap: 6px; flex-wrap: wrap; }
-.mod-oficina .boost-pill {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 3px 9px;
-  border-radius: 11px;
-  background: rgba(243,181,58,0.10);
-  border: 1px solid rgba(243,181,58,0.32);
-  color: var(--vh-gold-soft);
-  font-variant-numeric: tabular-nums;
-}
-.mod-oficina .boost-pill.neutral {
-  color: var(--text-3);
-  border-color: rgba(217,193,154,0.16);
-  background: transparent;
-}
+/* (stage-card/sc-*/boost-pill CSS REMOVIDO — ADR #82 F2.3: NUI migrou p/ modelo de peças;
+    o card de peça é .part-card, estilizado no bloco de ENGENHARIA no fim deste arquivo.) */
 
 
 /* ---- COL 3 ---- */
@@ -868,15 +676,7 @@ button { font-family: var(--font-sans); color: inherit; }
   color: var(--vh-gold);
   text-shadow: 0 0 14px rgba(243,181,58,0.55);
 }
-.mod-oficina .sc-tier {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 800;
-  padding: 2px 9px;
-  border-radius: 5px;
-  border: 1px solid currentColor;
-  letter-spacing: 0.04em;
-}
+/* ADR #82: .sc-tier removido (comparação de calibração mostra só o SCORE, sem letra de tier) */
 
 /* tier hint */
 .mod-oficina .tier-hint {
@@ -1042,4 +842,477 @@ button { font-family: var(--font-sans); color: inherit; }
   .mod-oficina .body  { grid-template-columns: 156px 1fr 212px; }
   .mod-oficina .hdr   { gap: 14px; padding: 14px 18px; }
   .mod-oficina .hdr-brand { padding-right: 12px; }
+}
+
+
+/* ============================================================
+   ENGENHARIA — catálogo de peças por família + vetor de deltas (ADR #82)
+   read-only na FASE 1; escopado em .mod-oficina (A-11)
+   ============================================================ */
+/* EFEITO DERIVADO (Camada A) — topo da COL 3, read-only */
+.mod-oficina .eng-effect {
+  padding: 10px 12px; margin-bottom: 12px; border-radius: var(--radius-sm, 8px);
+  background: rgba(0,0,0,0.28); border: 1px solid rgba(243,181,58,0.16);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.mod-oficina .ee-title {
+  font-family: var(--font-display, sans-serif); font-size: 10px; font-weight: 800;
+  letter-spacing: 0.22em; color: var(--vh-gold); text-transform: uppercase; margin-bottom: 2px;
+}
+.mod-oficina .ee-row { display: flex; justify-content: space-between; align-items: baseline; }
+.mod-oficina .ee-lbl { font-family: var(--font-sans, sans-serif); font-size: 11px; color: var(--vh-sand-dim); }
+.mod-oficina .ee-val {
+  font-family: var(--font-mono, monospace); font-size: 13px; font-weight: 700;
+  color: var(--vh-gold-soft); font-variant-numeric: tabular-nums;
+}
+.mod-oficina .ee-note {
+  margin-top: 4px; font-family: var(--font-sans, sans-serif); font-size: 9px;
+  line-height: 1.4; color: var(--text-3, #6a5d44);
+}
+
+/* ponto "sistema com peça instalada" no nav de famílias */
+.mod-oficina .nav-fam-dot {
+  width: 6px; height: 6px; border-radius: 999px; margin-left: auto;
+  background: var(--vh-ok); box-shadow: 0 0 6px rgba(107,191,107,0.55);
+}
+
+/* PEÇA (COL 2) — card com estado + ação instalar */
+.mod-oficina .part-card {
+  padding: 11px 13px; border-radius: var(--radius-sm, 8px);
+  background: rgba(0,0,0,0.30); border: 1px solid rgba(243,181,58,0.12);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color 0.18s var(--ease-out, ease), background 0.18s var(--ease-out, ease);
+}
+.mod-oficina .part-card:hover { border-color: rgba(243,181,58,0.30); background: rgba(0,0,0,0.36); }
+.mod-oficina .part-card.installed {
+  border-color: rgba(107,191,107,0.35); background: rgba(107,191,107,0.05);
+}
+.mod-oficina .part-row { display: flex; align-items: baseline; gap: 8px; }
+.mod-oficina .part-name {
+  flex: 1; font-size: 13px; font-weight: 600; color: var(--vh-sand);
+  font-family: var(--font-sans, sans-serif);
+}
+.mod-oficina .part-price {
+  font-family: var(--font-mono, monospace); font-size: 12px; color: var(--vh-gold);
+  font-variant-numeric: tabular-nums;
+}
+.mod-oficina .part-badge.on {
+  font-family: var(--font-display, sans-serif); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.14em; color: var(--vh-ok); text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(107,191,107,0.45);
+}
+.mod-oficina .part-desc {
+  font-family: var(--font-sans, sans-serif); font-size: 10px;
+  line-height: 1.4; color: var(--vh-sand-dim);
+}
+.mod-oficina .part-replaces {
+  font-family: var(--font-mono, monospace); font-size: 9px; letter-spacing: 0.04em;
+  color: var(--vh-amber); opacity: 0.85;
+}
+.mod-oficina .part-install {
+  margin-top: 4px; align-self: flex-start;
+  font-family: var(--font-display, sans-serif); font-size: 11px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--vh-black); background: var(--vh-gold);
+  padding: 7px 18px; border: none; border-radius: var(--radius-sm, 8px); cursor: pointer;
+  transition: filter 0.16s var(--ease-out, ease), transform 0.1s var(--ease-out, ease);
+}
+.mod-oficina .part-install:hover:not(:disabled) { filter: brightness(1.08); }
+.mod-oficina .part-install:active:not(:disabled) { transform: scale(0.96); }
+.mod-oficina .part-install:disabled { opacity: 0.5; cursor: default; }
+
+/* ESTADOS HONESTOS por peça (ADR #85 F2.5-A) — paleta global, escopo local .mod-oficina (A-11).
+   ok=instalável · already=installed(verde) · conflict/requires=blocked(vermelho) · missing_item=need-item */
+.mod-oficina .part-card.blocked   { border-color: rgba(217,90,90,0.28); background: rgba(217,90,90,0.05); }
+.mod-oficina .part-card.need-item { border-color: rgba(243,181,58,0.22); }
+.mod-oficina .part-badge.warn {
+  font-family: var(--font-display, sans-serif); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.14em; color: var(--vh-danger); text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(217,90,90,0.45);
+}
+.mod-oficina .part-badge.muted {
+  font-family: var(--font-display, sans-serif); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.14em; color: var(--vh-sand-dim); text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(243,181,58,0.25);
+}
+.mod-oficina .part-hint {
+  font-family: var(--font-sans, sans-serif); font-size: 9px; line-height: 1.4;
+  color: var(--vh-amber); opacity: 0.9;
+}
+.mod-oficina .part-note {
+  font-family: var(--font-sans, sans-serif); font-size: 9px; line-height: 1.4;
+  color: var(--vh-sand-dim);
+}
+.mod-oficina .part-remove {
+  margin-top: 4px; align-self: flex-start;
+  font-family: var(--font-display, sans-serif); font-size: 11px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--vh-danger); background: transparent;
+  padding: 6px 16px; border: 1px solid rgba(217,90,90,0.45); border-radius: var(--radius-sm, 8px);
+  cursor: pointer; transition: filter 0.16s var(--ease-out, ease), transform 0.1s var(--ease-out, ease);
+}
+.mod-oficina .part-remove:hover:not(:disabled)  { filter: brightness(1.12); background: rgba(217,90,90,0.10); }
+.mod-oficina .part-remove:active:not(:disabled) { transform: scale(0.96); }
+.mod-oficina .part-remove:disabled { opacity: 0.5; cursor: default; }
+
+.mod-oficina .eng-deltas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.mod-oficina .eng-pill {
+  font-family: var(--font-mono, monospace); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.mod-oficina .eng-pill.pos     { color: var(--vh-ok); }
+.mod-oficina .eng-pill.neg     { color: var(--vh-danger); }
+.mod-oficina .eng-pill.neutral { color: var(--vh-sand-dim); }
+
+
+/* ============================================================
+   BANCADA DE ENGENHARIA AAA — redesign (ADR #82 F2.3 visual)
+   LAYOUT NOVO: diagrama SVG + gaveta horizontal + aside (preservado)
+   A-11: tokens escopados em .mod-oficina, nunca em :root
+   A-09: nenhum backdrop-filter; glass = rgba em camadas
+   CEF: var() NÃO funciona em atributo SVG → estados por classe CSS
+   ============================================================ */
+
+.mod-oficina {
+  /* tokens locais de diagrama/tray — A-11: escopados aqui, nunca em :root */
+  --slot-bg:          rgba(20,20,24,0.78);
+  --slot-shine:       rgba(255,255,255,0.04);
+  --slot-border:      rgba(243,181,58,0.18);
+  --slot-active-border: rgba(243,181,58,0.85);
+  --slot-installed-fill: rgba(107,191,107,0.15);
+  --slot-active-fill: rgba(243,181,58,0.08);
+  --slot-empty-opacity: 0.38;
+  --slot-icon-stroke: rgba(243,181,58,0.50);
+  --slot-icon-stroke-active: rgba(243,181,58,0.95);
+  --slot-label-color: rgba(228,208,156,0.60);
+  --slot-label-active: rgba(243,181,58,1);
+  --slot-dot-color:   rgba(107,191,107,0.90);
+  --rail-color:       rgba(243,181,58,0.15);
+
+  --tray-card-w:      200px;
+  --tray-card-h:      auto;
+  --tray-bg:          rgba(16,16,20,0.75);
+  --tray-card-bg:     rgba(28,26,22,0.82);
+  --tray-card-hover:  rgba(40,36,28,0.92);
+  --tray-card-border: rgba(243,181,58,0.15);
+  --tray-inst-border: rgba(107,191,107,0.35);
+  --tray-inst-bg:     rgba(107,191,107,0.07);
+  --tray-block-border:rgba(217,90,90,0.30);
+  --tray-block-bg:    rgba(217,90,90,0.05);
+}
+
+
+/* ── BODY: novo grid — diagrama+tray à esquerda, aside à direita ── */
+
+.mod-oficina .body {
+  display: grid;
+  grid-template-columns: 1fr 268px;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "diagram stats"
+    "tray    stats";
+  gap: 0;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+
+/* ── ZONA CENTRAL: wrapper do diagrama SVG ── */
+
+.mod-oficina .comp-diagram-wrap {
+  grid-area: diagram;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid rgba(243,181,58,0.10);
+}
+
+.mod-oficina .diagram-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 8px;
+  flex-shrink: 0;
+}
+
+.mod-oficina .diagram-fam-label {
+  font-family: var(--font-display, sans-serif);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
+  color: var(--slot-label-active);
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.mod-oficina .diagram-hint {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 10px; color: var(--vh-sand-dim); opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.mod-oficina .diagram-svg {
+  flex: 1;
+  width: 100%;
+  overflow: visible;
+  cursor: default;
+}
+
+
+/* ── SLOTS SVG — estados via classes CSS (var() em atributo não resolve no CEF) ── */
+
+/* trilhos de conexão */
+.mod-oficina .diagram-rails line {
+  stroke: var(--rail-color);
+}
+
+/* placa base do slot */
+.mod-oficina .slot .slot-plate {
+  fill: var(--slot-bg);
+  stroke: var(--slot-border);
+  stroke-width: 1;
+  rx: 10;
+  transition: fill 0.2s, stroke 0.2s;
+}
+
+/* brilho interno (gradient simulado via elemento) */
+.mod-oficina .slot .slot-shine {
+  fill: var(--slot-shine);
+  pointer-events: none;
+}
+
+/* ícone vetorial do sistema */
+.mod-oficina .slot .slot-icon {
+  fill: none;
+  stroke: var(--slot-icon-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.2s;
+}
+
+/* label textual do slot */
+.mod-oficina .slot .slot-label {
+  font-family: var(--font-display, sans-serif);
+  font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+  fill: var(--slot-label-color);
+  text-anchor: middle;
+  text-transform: uppercase;
+  transition: fill 0.2s;
+  pointer-events: none;
+}
+
+/* ponto de status (instalada) */
+.mod-oficina .slot .slot-dot {
+  fill: transparent;
+  transition: fill 0.18s;
+}
+
+
+/* ── Estado: FAMÍLIA SEM PEÇAS ── */
+.mod-oficina .slot.empty {
+  opacity: var(--slot-empty-opacity);
+  pointer-events: none;
+}
+
+
+/* ── Estado: TEM PEÇA INSTALADA ── */
+.mod-oficina .slot.installed .slot-plate {
+  fill: var(--slot-installed-fill);
+  stroke: rgba(107,191,107,0.45);
+}
+.mod-oficina .slot.installed .slot-dot {
+  fill: var(--slot-dot-color);
+}
+
+
+/* ── Estado: SLOT ATIVO (selecionado) ── */
+.mod-oficina .slot.active .slot-plate {
+  fill: var(--slot-active-fill);
+  stroke: var(--slot-active-border);
+  stroke-width: 1.5;
+}
+.mod-oficina .slot.active .slot-icon {
+  stroke: var(--slot-icon-stroke-active);
+}
+.mod-oficina .slot.active .slot-label {
+  fill: var(--slot-label-active);
+}
+
+
+/* ── Estado: HOVER (interativo, não ativo) ── */
+.mod-oficina .slot:not(.empty):not(.active):hover .slot-plate {
+  fill: rgba(243,181,58,0.04);
+  stroke: rgba(243,181,58,0.42);
+}
+.mod-oficina .slot:not(.empty):not(.active):hover .slot-icon {
+  stroke: rgba(243,181,58,0.75);
+}
+.mod-oficina .slot:not(.empty):not(.active):hover .slot-label {
+  fill: rgba(228,208,156,0.90);
+}
+
+
+/* ── Estado: DROP TARGET (durante drag) ── */
+.mod-oficina .slot.drop-target .slot-plate {
+  stroke-width: 2;
+  animation: slot-pulse 0.5s ease infinite alternate;
+}
+.mod-oficina .slot.drop-target.drop-ok .slot-plate {
+  fill: rgba(107,191,107,0.18);
+  stroke: rgba(107,191,107,0.85);
+}
+.mod-oficina .slot.drop-target.drop-bad .slot-plate {
+  fill: rgba(217,90,90,0.12);
+  stroke: rgba(217,90,90,0.70);
+}
+
+@keyframes slot-pulse {
+  from { opacity: 0.75; }
+  to   { opacity: 1.00; }
+}
+
+/* foco via teclado nos slots */
+.mod-oficina .slot:focus-visible .slot-plate {
+  stroke: var(--slot-active-border);
+  stroke-width: 2;
+  outline: none;
+}
+
+
+/* ── ZONA INFERIOR: gaveta de peças ── */
+
+.mod-oficina .comp-tray-wrap {
+  grid-area: tray;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(243,181,58,0.12);
+  border-right: 1px solid rgba(243,181,58,0.10);
+  max-height: 200px;
+  min-height: 100px;
+  overflow: hidden;
+}
+
+.mod-oficina .parts-tray {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  align-items: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243,181,58,0.25) transparent;
+}
+
+.mod-oficina .parts-tray::-webkit-scrollbar       { height: 4px; }
+.mod-oficina .parts-tray::-webkit-scrollbar-track  { background: transparent; }
+.mod-oficina .parts-tray::-webkit-scrollbar-thumb  { background: rgba(243,181,58,0.25); border-radius: 2px; }
+
+.mod-oficina .tray-empty {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 11px; color: var(--vh-sand-dim); opacity: 0.55;
+  align-self: center; padding: 8px 0;
+  white-space: nowrap;
+}
+
+/* ── cards da gaveta ── */
+.mod-oficina .tray-card {
+  flex-shrink: 0;
+  width: var(--tray-card-w);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  background: var(--tray-card-bg);
+  border: 1px solid var(--tray-card-border);
+  border-radius: 10px;
+  cursor: default;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mod-oficina .tray-card:not(.blocked):not(.need-item):hover {
+  background: var(--tray-card-hover);
+  border-color: rgba(243,181,58,0.32);
+}
+
+.mod-oficina .tray-card.installed {
+  background: var(--tray-inst-bg);
+  border-color: var(--tray-inst-border);
+}
+
+.mod-oficina .tray-card.blocked {
+  background: var(--tray-block-bg);
+  border-color: var(--tray-block-border);
+  opacity: 0.75;
+}
+
+.mod-oficina .tray-card.need-item {
+  border-color: rgba(243,181,58,0.22);
+  opacity: 0.82;
+}
+
+/* nome da peça no card da gaveta */
+.mod-oficina .tray-name {
+  font-family: var(--font-display, sans-serif);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--vh-sand);
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* badge de estado no card da gaveta */
+.mod-oficina .tray-badge {
+  font-family: var(--font-display, sans-serif);
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--vh-sand-dim); text-transform: uppercase;
+  align-self: flex-start;
+}
+.mod-oficina .tray-badge.on   { color: var(--vh-ok); }
+.mod-oficina .tray-badge.warn { color: var(--vh-danger); }
+.mod-oficina .tray-badge.muted{ color: var(--vh-amber); opacity: 0.75; }
+
+/* hint não-bloqueante no card da gaveta */
+.mod-oficina .tray-hint {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 9px; line-height: 1.4;
+  color: var(--vh-amber); opacity: 0.88;
+}
+
+/* row de botões no card da gaveta */
+.mod-oficina .tray-btns {
+  margin-top: 2px;
+  display: flex;
+  gap: 6px;
+}
+
+
+/* ── DRAG GHOST — elemento fixo criado no document.body durante drag ── */
+
+.drag-ghost {
+  position: fixed;
+  z-index: 10000;       /* acima do overlay 9999 */
+  pointer-events: none; /* não bloqueia hit-test do elementFromPoint */
+  padding: 7px 14px;
+  background: rgba(28,26,22,0.96);
+  border: 1.5px solid var(--vh-gold, #f3b53a);
+  border-radius: 8px;
+  font-family: var(--font-display, sans-serif);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.10em;
+  color: var(--vh-gold, #f3b53a);
+  text-transform: uppercase;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.60);
+  white-space: nowrap;
+  transform: rotate(-2deg);
+}
+
+
+/* ── ASIDE: col de telemetria — grid-area preservada ── */
+
+.mod-oficina .comp-stats {
+  grid-area: stats;
+  grid-row: 1 / span 2;  /* ocupa diagrama + tray */
 }

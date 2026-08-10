@@ -10,9 +10,7 @@
   // ============================================================
 
   function render() {
-    if (!root) return;
-    const id = player.get('id');
-    root.querySelector('.hud-id').textContent    = (id !== undefined && id !== null) ? ('ID ' + id) : '';
+    // hud-pill removida: ID não é exibido em jogo; render reservada para futuras adições visuais
   }
 
   // ============================================================
@@ -35,8 +33,7 @@
     onMount() {
       root = document.getElementById('hud-root');
       root.className = 'mod-hud';
-      root.innerHTML = '<div class="hud-line"><span class="hud-id"></span></div>';
-      root.classList.remove('hidden');
+      // hud-pill removida: ID do personagem não é exibido na tela durante o jogo
       render();
     },
 

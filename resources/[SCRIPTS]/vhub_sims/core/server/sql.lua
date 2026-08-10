@@ -192,6 +192,16 @@ function SQL.insertOutfit(charId, label, outfit)
   return ok == true and affected == 1
 end
 
+-- renomeia outfit próprio (label já normalizado pelo chamador)
+function SQL.renameOutfit(charId, outfitId, label)
+  local ok, result = execute(
+    'UPDATE vhub_sims_outfits SET label = ? WHERE id = ? AND char_id = ?',
+    { label, outfitId, charId }
+  )
+  local affected = type(result) == 'table' and tonumber(result.affectedRows) or tonumber(result)
+  return ok == true and affected == 1
+end
+
 -- remove outfit próprio
 function SQL.deleteOutfit(charId, outfitId)
   local ok, result = execute('DELETE FROM vhub_sims_outfits WHERE id = ? AND char_id = ?',

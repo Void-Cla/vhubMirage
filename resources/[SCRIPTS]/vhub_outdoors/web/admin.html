@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'self';
+    style-src 'self';
+    connect-src https:;
+    img-src 'none';
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none';
+  ">
+  <title>Criador de outdoor</title>
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="remote.css">
+  <script src="admin.js" defer></script>
+  <script src="remote.js" defer></script>
+</head>
+<body>
+  <main id="creator" class="creator" hidden>
+    <form id="creator-form" class="panel" novalidate>
+      <header class="heading">
+        <p class="eyebrow">vHub mídia urbana</p>
+        <button id="close" class="close" type="button" aria-label="Fechar">×</button>
+        <h1>Novo outdoor</h1>
+        <p>Escolha a escala e cole a mídia.</p>
+      </header>
+
+      <fieldset>
+        <legend>Tamanho</legend>
+        <div id="sizes" class="sizes"></div>
+      </fieldset>
+
+      <label class="url-field" for="media-url">
+        <span>URL do Discord CDN, Imgur direto ou YouTube</span>
+        <input id="media-url" name="url" type="url" maxlength="768"
+          placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+        <small>Cole a URL pura, sem &lt; &gt; ou [ ].</small>
+      </label>
+
+      <p id="error" class="error" role="alert" aria-live="polite"></p>
+      <button id="submit" class="submit" type="submit">Criar e posicionar</button>
+      <p class="footnote">Depois, mire na parede e pressione E.</p>
+
+      <section class="active-section" aria-labelledby="active-title">
+        <div class="section-heading">
+          <h2 id="active-title">Outdoors ativos</h2>
+          <span id="active-count">0</span>
+        </div>
+        <div id="active-items" class="active-items"></div>
+        <p id="active-empty" class="active-empty">Nenhum outdoor ativo.</p>
+      </section>
+    </form>
+  </main>
+
+  <main id="remote" class="remote-shell" hidden>
+    <form id="remote-form" class="remote-panel" novalidate>
+      <header class="remote-heading">
+        <p class="eyebrow">controle remoto</p>
+        <button id="remote-close" class="close" type="button" aria-label="Fechar">×</button>
+        <h1 id="remote-title">Outdoor</h1>
+        <p id="remote-meta" class="remote-meta"></p>
+      </header>
+
+      <label class="remote-field" for="remote-url">
+        <span>Canal</span>
+        <input id="remote-url" type="url" maxlength="768"
+          placeholder="Discord CDN, Imgur direto ou YouTube" autocomplete="off" required>
+      </label>
+
+      <label class="remote-field" for="remote-volume">
+        <span class="remote-volume-line">
+          <span>Volume</span>
+          <output id="remote-volume-text">45%</output>
+        </span>
+        <input id="remote-volume" type="range" min="0" max="100" step="1" value="45">
+      </label>
+
+      <div class="remote-actions">
+        <button id="remote-channel" type="submit">Trocar canal</button>
+        <button id="remote-move" type="button">Mover tela</button>
+      </div>
+      <p id="remote-status" class="remote-status" role="status" aria-live="polite"></p>
+    </form>
+  </main>
+</body>
+</html>

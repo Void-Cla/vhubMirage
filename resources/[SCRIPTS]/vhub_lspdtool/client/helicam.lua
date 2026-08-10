@@ -31,6 +31,11 @@ local hudAt    = 0            -- último envio de HUD
 
 local VISION_LABEL = { [0] = 'HDEO', [1] = 'HDNV', [2] = 'HDIR' }
 
+local function suppressRadar(suppressed)
+    assert(exports.vhub_hss:setNativeHudSuppressed('radar', suppressed),
+        'vhub_hss recusou controle do radar')
+end
+
 -- IDs de controle:
 --   1 = LOOK_LR · 2 = LOOK_UD · 14/15 = WEAPON_WHEEL_NEXT/PREV = scroll do mouse in-game.
 --   NOTA: 241/242 (CURSOR_SCROLL) só funcionam com NuiFocus — a câmera é PASSIVA, então usamos 14/15.
@@ -213,7 +218,7 @@ local function openCam()
     active = true
     lockEnt, spotOn, vision = 0, false, 0
     createCam()
-    DisplayRadar(false)
+    suppressRadar(true)
     SendNUIMessage({ type = UI.HELI_OPEN })
 end
 
@@ -225,7 +230,7 @@ local function closeCam()
     SetNightvision(false)
     SetSeethrough(false)
     destroyCam()
-    DisplayRadar(true)
+    suppressRadar(false)
     hudSnap = ''
     SendNUIMessage({ type = UI.HELI_CLOSE })
 end

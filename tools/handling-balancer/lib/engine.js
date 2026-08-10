@@ -99,6 +99,7 @@ function processBlock(cfg, file, b) {
     return entry;
   }
   warnIfMassOutOfBand(entry, cfg, mass);
+  warnDangerousDamageProfile(entry, b.block);
 
   const { targets, clampInfo } = tiers.resolveTargets(b.handlingName, cfg);
   if (clampInfo) {
@@ -141,6 +142,32 @@ function warnIfMassOutOfBand(entry, cfg, mass) {
       `massa ${mass}kg muito fora da base do tier ${entry.tier} (${base}kg) — ` +
       `confirmar classificacao`);
   }
+}
+
+// avisa quando o perfil de DANO e perigoso: motor fragil (fEngineDamageMult alto) somado
+// a pouca absorcao de impacto na carroceria (fCollisionDamageMult/fDeformationDamageMult
+// baixos) roteia a energia da colisao pro MOTOR — engine_health despenca a cada batida leve
+// e a telemetria server-authoritative persiste o valor baixo como verdade (monotonia).
+// Foi o fingerprint do Toyota Supra (motor quebrando/superaquecendo pos-wipe). O balancer NAO
+// reescreve dano (fora do NUCLEO-8, preservado por desenho) — apenas ALERTA e sugere o alvo.
+const DMG_ENGINE_HI  = 1.5;   // >= aqui o motor ja e fragil
+const DMG_ABSORB_LO  = 1.0;   // < aqui a carroceria absorve pouco (norma da frota = 1.0)
+function warnDangerousDamageProfile(entry, block) {
+  const engine    = meta.readValue(block, 'fEngineDamageMult');
+  const collision = meta.readValue(block, 'fCollisionDamageMult');
+  const deform    = meta.readValue(block, 'fDeformationDamageMult');
+  if (!isNum(engine) || engine < DMG_ENGINE_HI) return;
+
+  const lowAbsorb = [];
+  if (isNum(collision) && collision < DMG_ABSORB_LO)  lowAbsorb.push(`fCollisionDamageMult=${collision}`);
+  if (isNum(deform)    && deform    < DMG_ABSORB_LO)  lowAbsorb.push(`fDeformationDamageMult=${deform}`);
+  if (lowAbsorb.length === 0) return;
+
+  entry.warnings.push(
+    `PERFIL DE DANO PERIGOSO: fEngineDamageMult=${engine} (motor fragil) com ` +
+    `${lowAbsorb.join(' + ')} (pouca absorcao) — colisao rotea energia pro motor; ` +
+    `engine_health despenca e a telemetria persiste o dano. Sugestao: elevar absorcao ` +
+    `para >= ${DMG_ABSORB_LO.toFixed(6)} OU baixar fEngineDamageMult para <= 1.0.`);
 }
 
 // handlingName que aparece em mais de um arquivo (registro fica ambiguo)

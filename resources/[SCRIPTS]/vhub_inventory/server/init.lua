@@ -228,6 +228,8 @@ AddEventHandler(E.DROP, function(p)
   CreateThread(function()
     local entry = Backpack.peek(src, slot)
     if not entry or qty > entry.amount then return end
+    local def = U.itemDef(entry.id)
+    if not def or def.perdivel == false then return end
     if not Backpack.takeFromSlot(src, slot, qty) then return end
     local ok = DropSystem.create(src, entry.id, qty, entry.meta)
     if not ok then

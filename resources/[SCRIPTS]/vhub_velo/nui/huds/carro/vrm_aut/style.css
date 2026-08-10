@@ -271,8 +271,7 @@ body.velo-active #velocimetro { opacity: 1; transform: translateY(0); }
    ================================================================= */
 .velo-config {
     position: fixed; inset: 0;
-    background: rgba(2, 4, 8, 0.72);
-    backdrop-filter: blur(6px);
+    background: rgba(2, 4, 8, 0.86);
     display: none;
     align-items: center; justify-content: center;
     z-index: 999;

@@ -1,4 +1,8 @@
-# vhub_custom — Plano de Ação (oficina mecânica / estética / reparo)
+# vhub_custom — Plano histórico (substituído)
+
+> Arquivo de decisão 1.x preservado apenas como histórico. O contrato executável 2.0,
+> ownerships, eventos e exports vigentes estão em `README.md`, `fxmanifest.lua` e
+> `shared/events.lua`. Nenhuma assinatura abaixo deve orientar implementação nova.
 
 **Versão:** 1.0.0 · **Status:** Plano aprovado pela arquitetura (decisão #26 candidata) · **Modelo:** Opus 4.8
 **Escopo:** `resources/[SCRIPTS]/vhub_custom` = UM resource, três domínios — `bennys` (estética), `mec` (reparo + reboque), `oficina` (performance/tuning).

@@ -1,172 +1,354 @@
-/* style.css — HUD biométrico leve do vHub HSS */
-
-:root {
-    --vh-sand: #d9c19a;
-    --vh-sand-dim: #a89572;
-    --vh-gold: #f3b53a;
-    --vh-danger: #e8513f;
-    --vh-track: rgba(217, 193, 154, 0.14);
-    --vh-shadow: rgba(0, 0, 0, 0.88);
-    --font-display: "Barlow Condensed", "Inter", system-ui, sans-serif;
-    --font-body: "Inter", system-ui, sans-serif;
-
-    /* cores por indicador HSS */
-    --vh-hss-health:  #e05555;
-    --vh-hss-food:    #d4b932;
-    --vh-hss-water:   #5bc3d4;
-    --vh-hss-armour:  #7a9ab5;
-    --vh-hss-energy:  #4caf7d;
-    --vh-hss-oxygen:  #82c8e8;
-}
+/* style.css — HUD biométrico do vHub HSS.
+   A-09: HUD sem backdrop-filter, fundo transparente.
+   A-11: tokens locais no seletor raiz #hss-hud, não em :root.
+   Tokens globais (--vh-gold, --vh-sand, etc.) vêm de tokens.css se importado,
+   mas o HUD é independente: usa vars próprias em escopo. */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    background: transparent;
-    pointer-events: none;
-    user-select: none;
-    font-family: var(--font-body);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+  user-select: none;
+  font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
 #hss-hud {
-    position: fixed;
-    left: 1.55vw;
-    bottom: 20.5vh;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    height: 18px;
-    opacity: 1;
-    transition: opacity 160ms ease;
+  /* tokens locais do HUD (A-11) */
+  --hud-gold:    #f3b53a;
+  --hud-sand:    #d9c19a;
+  --hud-danger:  #e8513f;
+  --hud-track:   rgba(217, 193, 154, 0.14);
+  --hud-shadow:  rgba(0, 0, 0, 0.88);
+
+  /* cores por indicador biométrico */
+  --hud-health:  #e05555;
+  --hud-food:    #d4b932;
+  --hud-water:   #5bc3d4;
+  --hud-armour:  #7a9ab5;
+  --hud-energy:  #4caf7d;
+  --hud-oxygen:  #82c8e8;
+
+  /* font display inline */
+  --hud-font-display: 'Barlow Condensed', 'Bahnschrift', 'Segoe UI Semibold', system-ui, sans-serif;
+
+  position: fixed;
+  left: 1.55vw;
+  bottom: 1.5vh;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  opacity: 1;
+  transition: opacity 160ms ease;
 }
 
 .hss-hud--hidden,
-.hss-cond--hidden {
-    display: none !important;
-}
+.hss-cond--hidden { display: none !important; }
 
 .hss-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 16px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .hss-icon {
-    width: 14px;
-    height: 14px;
-    flex: 0 0 14px;
-    fill: var(--vh-sand);
-    filter: drop-shadow(0 1px 3px var(--vh-shadow));
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: var(--hud-sand);
+  filter: drop-shadow(0 1px 3px var(--hud-shadow));
 }
 
-.icon-health    { fill: var(--vh-hss-health); }
-.icon-food      { fill: var(--vh-hss-food); }
-.icon-water     { fill: var(--vh-hss-water); }
-.icon-armour    { fill: var(--vh-hss-armour); }
-.icon-energy    { fill: var(--vh-hss-energy); }
-.icon-oxygen    { fill: var(--vh-hss-oxygen); }
-.icon-adrenaline, .svg-bpm { fill: var(--vh-gold); }
+.icon-health   { fill: var(--hud-health); }
+.icon-food     { fill: var(--hud-food); }
+.icon-water    { fill: var(--hud-water); }
+.icon-armour   { fill: var(--hud-armour); }
+.icon-energy   { fill: var(--hud-energy); }
+.icon-oxygen   { fill: var(--hud-oxygen); }
+.icon-adrenaline, .svg-bpm { fill: var(--hud-gold); }
 
 .hss-track {
-    width: 62px;
-    height: 3px;
-    overflow: hidden;
-    border-radius: 2px;
-    background: var(--vh-track);
-    box-shadow: 0 1px 3px var(--vh-shadow);
-    transition: width 180ms ease, opacity 180ms ease;
+  width: 70px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--hud-track);
+  box-shadow: 0 1px 3px var(--hud-shadow);
+  transition: width 180ms ease, opacity 180ms ease;
 }
 
 .hss-track--hidden { width: 0; opacity: 0; }
 
 .hss-track i {
-    display: block;
-    width: 100%;
-    height: 100%;
-    transform: scaleX(1);
-    transform-origin: left;
-    transition: transform 220ms linear, background-color 180ms ease;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(1);
+  transform-origin: left;
+  transition: transform 220ms linear, background-color 180ms ease;
 }
 
-#fill-health    { background: var(--vh-hss-health); }
-#fill-food      { background: var(--vh-hss-food); }
-#fill-water     { background: var(--vh-hss-water); }
-#fill-armour    { background: var(--vh-hss-armour); }
-#fill-energy    { background: var(--vh-hss-energy); }
-#fill-oxygen    { background: var(--vh-hss-oxygen); }
-#fill-adrenaline { background: var(--vh-gold); }
+#fill-health   { background: var(--hud-health); }
+#fill-food     { background: var(--hud-food); }
+#fill-water    { background: var(--hud-water); }
+#fill-armour   { background: var(--hud-armour); }
+#fill-energy   { background: var(--hud-energy); }
+#fill-oxygen   { background: var(--hud-oxygen); }
+#fill-adrenaline { background: var(--hud-gold); }
 
 .hss-track i.hss-critical {
-    background: var(--vh-danger);
-    animation: hss-critical 850ms ease-in-out infinite;
+  background: var(--hud-danger);
+  animation: hss-critical 850ms ease-in-out infinite;
 }
 
 .hss-alerts {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 16px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 16px;
 }
 
 .hss-alert {
-    min-width: 12px;
-    color: var(--vh-danger);
-    font-size: 12px;
-    line-height: 14px;
-    font-weight: 800;
-    text-align: center;
-    text-shadow: 0 1px 4px var(--vh-shadow);
+  min-width: 12px;
+  color: var(--hud-danger);
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 1px 4px var(--hud-shadow);
 }
 
 .hss-bpm {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    color: var(--vh-gold);
-    font-family: var(--font-display);
-    font-size: 10px;
-    font-weight: 800;
-    text-shadow: 0 1px 4px var(--vh-shadow);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--hud-gold);
+  font-family: var(--hud-font-display);
+  font-size: 10px;
+  font-weight: 800;
+  text-shadow: 0 1px 4px var(--hud-shadow);
 }
 
 .hss-bpm:not(.hss-cond--hidden) .svg-bpm {
-    animation: hss-heartbeat 900ms ease-in-out infinite;
+  animation: hss-heartbeat 900ms ease-in-out infinite;
 }
 
 .hss-status {
-    position: absolute;
-    left: 0;
-    bottom: 24px;
-    color: var(--vh-gold);
-    font-family: var(--font-display);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    white-space: nowrap;
-    text-shadow: 0 0 7px rgba(243, 181, 58, 0.85), 0 1px 3px var(--vh-shadow);
+  position: absolute;
+  left: 0;
+  bottom: 24px;
+  color: var(--hud-gold);
+  font-family: var(--hud-font-display);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  text-shadow: 0 0 7px rgba(243, 181, 58, 0.85), 0 1px 3px var(--hud-shadow);
 }
 
 .hss-status--danger {
-    color: var(--vh-danger);
-    text-shadow: 0 0 8px rgba(232, 81, 63, 0.9), 0 1px 3px var(--vh-shadow);
-    animation: hss-critical 1.2s ease-in-out infinite;
+  color: var(--hud-danger);
+  text-shadow: 0 0 8px rgba(232, 81, 63, 0.9), 0 1px 3px var(--hud-shadow);
+  animation: hss-critical 1.2s ease-in-out infinite;
 }
 
 @keyframes hss-critical {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.28; }
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.28; }
 }
 
 @keyframes hss-heartbeat {
-    0%, 100% { transform: scale(1); }
-    18% { transform: scale(1.28); }
-    34% { transform: scale(1); }
+  0%, 100% { transform: scale(1); }
+  18%      { transform: scale(1.28); }
+  34%      { transform: scale(1); }
 }
 
+/* ============================================================
+   OVERLAYS — rua (superior-esquerdo) + hora/voz (superior-direito)
+   Tokens locais em #hud-street e #hud-topright (A-11).
+   A-09: backgrounds transparentes, sem backdrop-filter.
+   ============================================================ */
+
+#hud-street,
+#hud-topright {
+  --ov-gold:   #f3b53a;
+  --ov-sand:   #d9c19a;
+  --ov-danger: #e8513f;
+  --ov-green:  #4caf7d;
+  --ov-shadow: rgba(0, 0, 0, 0.92);
+  --ov-font:   'Barlow Condensed', 'Bahnschrift', 'Segoe UI Semibold', system-ui, sans-serif;
+}
+
+/* --- Rua (dentro do #hud-topright, abaixo da voz) --- */
+
+#hud-street {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(217, 193, 154, 0.10);
+}
+
+#hud-street.visible { opacity: 1; }
+
+#hud-street-name {
+  font-family: var(--ov-font);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ov-sand);
+  text-shadow: 0 1px 5px var(--ov-shadow);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  text-align: right;
+  line-height: 1;
+}
+
+#hud-zone-name {
+  font-family: var(--ov-font);
+  font-size: 9px;
+  font-weight: 400;
+  color: rgba(217, 193, 154, 0.55);
+  text-shadow: 0 1px 4px var(--ov-shadow);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  text-align: right;
+  line-height: 1;
+}
+
+/* --- Hora + Voz (superior-direito) --- */
+
+#hud-topright {
+  position: fixed;
+  top: 0.5vh;
+  right: 1.55vw;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  pointer-events: none;
+}
+
+#hud-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-tr-icon {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  fill: none;
+  stroke: rgba(217, 193, 154, 0.55);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+#hud-time-value {
+  font-family: var(--ov-font);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ov-sand);
+  text-shadow: 0 1px 5px var(--ov-shadow);
+  letter-spacing: 2px;
+  min-width: 38px;
+  text-align: right;
+  line-height: 1;
+}
+
+#hud-voice {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+#hud-voice-label {
+  font-family: var(--ov-font);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-shadow: 0 1px 4px var(--ov-shadow);
+  text-transform: uppercase;
+  line-height: 1;
+  color: rgba(217, 193, 154, 0.55);
+  transition: color 220ms ease;
+}
+
+.hud-voice-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(217, 193, 154, 0.35);
+  flex-shrink: 0;
+  transition: background 220ms ease;
+}
+
+/* modo 1 — sussurro */
+#hud-voice[data-mode="1"] #hud-voice-label { color: rgba(217, 193, 154, 0.38); }
+#hud-voice[data-mode="1"] .hud-voice-dot   { background: rgba(217, 193, 154, 0.25); }
+
+/* modo 2 — normal */
+#hud-voice[data-mode="2"] #hud-voice-label { color: rgba(217, 193, 154, 0.55); }
+#hud-voice[data-mode="2"] .hud-voice-dot   { background: var(--ov-green); }
+
+/* modo 3 — gritando */
+#hud-voice[data-mode="3"] #hud-voice-label { color: var(--ov-danger); }
+#hud-voice[data-mode="3"] .hud-voice-dot   { background: var(--ov-danger); }
+
+/* pulsação ao falar */
+#hud-voice[data-talking="true"] .hud-voice-dot {
+  background: var(--ov-gold) !important;
+  animation: hud-talk-pulse 560ms ease-in-out infinite;
+}
+#hud-voice[data-talking="true"] #hud-voice-label {
+  color: var(--ov-gold) !important;
+}
+
+@keyframes hud-talk-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.8); opacity: 0.55; }
+}
+
+/* porcentagem das barras de status — cor igual ao ícone da linha */
+
+.hss-pct {
+  font-family: var(--hud-font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--hud-sand);
+  text-shadow: 0 1px 3px var(--hud-shadow);
+  line-height: 1;
+  min-width: 30px;
+  opacity: 0.90;
+}
+
+#row-health  .hss-pct { color: var(--hud-health); }
+#row-food    .hss-pct { color: var(--hud-food);   }
+#row-water   .hss-pct { color: var(--hud-water);  }
+#row-armour  .hss-pct { color: var(--hud-armour); }
+#row-energy  .hss-pct { color: var(--hud-energy); }
+#row-oxygen  .hss-pct { color: var(--hud-oxygen); }
+
+.hss-pct--hidden { opacity: 0 !important; }
+
 @media (min-aspect-ratio: 21/9) {
-    #hss-hud { left: 1.15vw; }
+  #hss-hud      { left: 1.15vw; }
+  #hud-topright { right: 1.15vw; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hss-track i, .hss-track { transition-duration: 1ms !important; }
+  .hss-critical, .hss-status--danger, .hss-bpm .svg-bpm {
+    animation: none !important;
+  }
 }

@@ -13,6 +13,16 @@ WOW_Config = {}
 -- resources autorizados a chamar os exports server-side (fail-closed: vazio = ninguem passa)
 WOW_Config.TrustedResources = {
   'vhub_vehcontrol',
+  'vhub_outdoors',
+}
+
+WOW_Config.TrustedActions = {
+  vhub_vehcontrol = { ['*'] = true },
+  vhub_outdoors = {
+    play_coords = true,
+    destroy = true,
+    volume = true,
+  },
 }
 
 -- consumers client-side autorizados a alterar preferencias locais do WOW
@@ -21,7 +31,7 @@ WOW_Config.TrustedClientResources = {
 }
 
 -- dominios permitidos para URL de AUDIO DIRETO (tocavel no <audio> HTML5).
--- Pagina de YouTube NAO entra aqui: e tratada a parte (parseYouTubeId + embed nocookie).
+-- Pagina de YouTube NAO entra aqui: e tratada a parte (parseYouTubeId + embed).
 WOW_Config.AllowedDomains = {
   -- Discord CDN (anexos diretos)
   'cdn%.discordapp%.com',
@@ -45,7 +55,11 @@ WOW_Config.AllowedDomains = {
 
 WOW_Config.MaxDistance     = 80.0   -- distancia maxima de audicao (metros)
 WOW_Config.DefaultDistance = 10.0   -- distancia padrao quando nao informada
+WOW_Config.DefaultDuckStrength = 0.5 -- reducao maxima durante voz ativa
 WOW_Config.RateLimitMs     = 350    -- janela minima entre chamadas por resource (padrao _opAt do projeto)
+WOW_Config.RateLimitBurst  = 16     -- teto de eventos por resource/jogador em cada janela
+WOW_Config.MaxRateEntries  = 8192   -- limite absoluto da memoria de deduplicacao
+WOW_Config.MaxClientSounds = 16     -- defesa final contra acumulo de players NUI
 
 
 -- ============================================================
@@ -63,7 +77,7 @@ WOW_Config.YouTube = {
   apiv3       = { enabled = true },
 
   searchLimit = 20,        -- resultados retornados por busca
-  embedHost   = 'www.youtube-nocookie.com',  -- embed sem cookie/tracking (menos anuncio)
+  embedHost   = 'www.youtube.com',
 
   searchCacheMs = 1800000, -- 30 min: mesma busca nao repete egress (InnerTube nao tem cota)
   radioCacheMs  = 3600000, -- 60 min: playlist da radio refrescada lazy (L-06)
@@ -91,7 +105,7 @@ end
 
 -- valida URL contra a allowlist de dominio (host completo ancorado, nao substring)
 function WOW_Config.isValidUrl(url)
-  if type(url) ~= 'string' or #url == 0 or #url > 512 then return false end
+  if type(url) ~= 'string' or #url == 0 or #url > 768 then return false end
   local host = url:match('^https://([%w%.%-]+)/')
   if not host then return false end
 
@@ -113,12 +127,12 @@ end
 
 
 -- ============================================================
--- YOUTUBE — parse/validacao de id e URL de embed (sem <audio>)
+-- YOUTUBE — parse/validacao de id e URL de embed
 -- ============================================================
 
 -- extrai o id de 11 chars de uma URL do YouTube (watch/youtu.be/shorts/embed/music/nocookie) ou nil
 function WOW_Config.parseYouTubeId(url)
-  if type(url) ~= 'string' or #url == 0 or #url > 512 then return nil end
+  if type(url) ~= 'string' or #url == 0 or #url > 768 then return nil end
 
   local host = url:match('^https://([%w%.%-]+)/')
   if not host then return nil end
@@ -143,7 +157,7 @@ function WOW_Config.isValidVideoId(id)
   return type(id) == 'string' and #id == 11 and id:match('^[%w_%-]+$') ~= nil
 end
 
--- monta a URL de embed sem anuncio (nocookie) a partir de um videoId ja validado
+-- monta a URL de embed a partir de um videoId ja validado
 function WOW_Config.buildEmbedUrl(videoId)
   if not WOW_Config.isValidVideoId(videoId) then return nil end
   return ('https://%s/embed/%s'):format(WOW_Config.YouTube.embedHost, videoId)

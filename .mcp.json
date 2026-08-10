@@ -7,6 +7,17 @@
     "git": {
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "."]
+    },
+    "codegraph": {
+      "command": "npx",
+      "args": ["-y", "code-graph-mcp"],
+      "env": {
+        "CGM_ROOT": "."
+      }
+    },
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-mcp"]
     }
   }
 }

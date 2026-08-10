@@ -1,0 +1,366 @@
+:root {
+  --ink: #151713;
+  --paper: #f1eadb;
+  --paper-soft: #d8cfbe;
+  --gold: #d6ad60;
+  --rust: #a4492f;
+  --line: rgba(241, 234, 219, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.creator {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  place-items: center;
+  color: var(--paper);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(214, 173, 96, 0.12), transparent 34%),
+    rgba(7, 9, 7, 0.6);
+  overflow-y: auto;
+}
+
+.creator[hidden] {
+  display: none;
+}
+
+.panel {
+  width: min(700px, 100%);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    var(--ink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  animation: panel-in 180ms ease-out both;
+}
+
+.heading {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.eyebrow,
+.footnote,
+.url-field small {
+  color: var(--paper-soft);
+  font-family: "Trebuchet MS", sans-serif;
+}
+
+.eyebrow {
+  margin: 0 0 7px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font: 700 32px/1 Georgia, serif;
+  letter-spacing: -0.04em;
+}
+
+.heading > p:last-child {
+  margin: 9px 0 0;
+  color: var(--paper-soft);
+  font: 14px/1.4 "Trebuchet MS", sans-serif;
+}
+
+.close {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  border: 0;
+  color: var(--paper-soft);
+  background: transparent;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+fieldset {
+  padding: 0;
+  border: 0;
+  margin: 0 0 22px;
+}
+
+legend,
+.url-field > span {
+  display: block;
+  margin-bottom: 9px;
+  font: 700 12px/1 "Trebuchet MS", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sizes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+
+.size-option {
+  position: relative;
+}
+
+.size-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.size-option label {
+  display: grid;
+  min-height: 100px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.size-option label:hover {
+  border-color: rgba(214, 173, 96, 0.58);
+  transform: translateY(-2px);
+}
+
+.size-option input:focus-visible + label {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+
+.size-option input:checked + label {
+  border-color: var(--gold);
+  background: rgba(214, 173, 96, 0.11);
+}
+
+.size-name {
+  color: var(--paper);
+  font: 700 17px/1 Georgia, serif;
+  text-transform: capitalize;
+}
+
+.size-measure,
+.size-hint {
+  color: var(--paper-soft);
+  font: 11px/1.35 "Trebuchet MS", sans-serif;
+}
+
+.size-measure {
+  margin-top: 8px;
+  color: var(--gold);
+}
+
+.size-hint {
+  align-self: end;
+}
+
+.url-field {
+  display: block;
+}
+
+.url-field input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  outline: 0;
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.24);
+  font-family: "Trebuchet MS", sans-serif;
+}
+
+.url-field input:focus {
+  border-color: var(--gold);
+}
+
+.url-field small {
+  display: block;
+  margin-top: 7px;
+  font-size: 11px;
+}
+
+.error {
+  min-height: 17px;
+  margin: 12px 0 6px;
+  color: #ef9b7e;
+  font: 12px/1.4 "Trebuchet MS", sans-serif;
+}
+
+.submit {
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  color: var(--ink);
+  background: var(--gold);
+  font: 800 13px/1 "Trebuchet MS", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.submit:hover {
+  background: var(--paper);
+}
+
+.submit:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.footnote {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 11px;
+}
+
+.active-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font: 700 15px/1 Georgia, serif;
+}
+
+.section-heading span {
+  color: var(--gold);
+  font: 700 12px/1 "Trebuchet MS", sans-serif;
+}
+
+.active-items {
+  display: grid;
+  max-height: 176px;
+  gap: 7px;
+  overflow-y: auto;
+}
+
+.active-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.active-copy {
+  min-width: 0;
+}
+
+.active-name,
+.active-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-name {
+  font: 700 13px/1.2 "Trebuchet MS", sans-serif;
+}
+
+.active-meta,
+.active-empty {
+  color: var(--paper-soft);
+  font: 11px/1.4 "Trebuchet MS", sans-serif;
+}
+
+.active-meta {
+  margin-top: 4px;
+}
+
+.active-empty {
+  margin: 0;
+  text-align: center;
+}
+
+.remove {
+  min-width: 84px;
+  padding: 8px 10px;
+  border: 1px solid rgba(239, 155, 126, 0.45);
+  color: #ef9b7e;
+  background: transparent;
+  font: 700 11px/1 "Trebuchet MS", sans-serif;
+  cursor: pointer;
+}
+
+.remove:hover,
+.remove.confirming {
+  color: var(--paper);
+  background: var(--rust);
+}
+
+.remove:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+}
+
+@media (max-width: 560px) {
+  .panel {
+    padding: 22px;
+  }
+
+  .sizes {
+    grid-template-columns: 1fr;
+  }
+
+  .size-option label {
+    min-height: 76px;
+  }
+
+  .active-row {
+    grid-template-columns: 1fr;
+  }
+
+  .remove {
+    width: 100%;
+  }
+}
+
+@media (max-height: 700px) {
+  .creator {
+    place-items: start center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}

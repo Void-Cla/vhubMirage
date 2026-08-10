@@ -3,6 +3,7 @@
 VHubAnimacao = VHubAnimacao or {}
 
 VHubAnimacao.E = {
-    PLAY_EMOTE = 'vhub_animacao:playEmote',
-    STOP_EMOTE = 'vhub_animacao:stopEmote',
+    PLAY_EMOTE      = 'vhub_animacao:playEmote',
+    STOP_EMOTE      = 'vhub_animacao:stopEmote',
+    SIT_FORCE_STAND = 'vhub_animacao:sitForceStand',
 }

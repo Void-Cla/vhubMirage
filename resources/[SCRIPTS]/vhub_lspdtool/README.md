@@ -1,6 +1,6 @@
 # vhub_lspdtool — Ferramentas LSPD
 
-**Versão:** 2.0.0 | **Owner:** vhub_lspdtool
+**Versão:** 2.0.1 | **Owner:** vhub_lspdtool
 
 Kit policial completo: radar automático de velocidade, leitura de placa (radar + helicam), BOLO (alerta de placa), MDT, procurados, prisão/detenção, apreensão de veículo e o app "Central LSPD" no iPad.
 
@@ -105,3 +105,38 @@ exports.vhub_lspdtool:reportPlate(src, plate, { source = 'radar' })
 | L-04 | Apreensão delega ao garage (dono do status); detenção integra HSS (dono das algemas) |
 | §2.5 | Integrações via soft-dep + pcall — sem helicam/radar externo o resto funciona |
 | A-10 | Assets do app iPad declarados em `files{}` (UI remota) |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `addBolo` | `(plate, motivo, opts?) → ok` | qualquer resource TRUSTED |
+| 2 | `removeBolo` | `(plate) → ok` | qualquer resource TRUSTED |
+| 3 | `checkBolo` | `(plate) → bolo\|nil` | vhub_racha (alerta de placa em corrida) |
+| 4 | `listBolos` | `() → lista` | vhub_admin |
+| 5 | `reportPlate` | `(src, plate, opts?) → ok` | radar externo / helicam |
+| 6 | `getRecentScans` | `(limit?) → lista` | vhub_admin |
+| 7 | `checkWanted` | `(char_id) → wanted\|nil` | vhub_admin |
+| 8 | `listWanted` | `() → lista` | vhub_admin |
+| 9 | `ipadRelay` | `(src, action, data) → resp` | vhub_ipad (broker app LSPD) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `oxmysql` | Persistência de BOLOs, scans, procurados |
+| `vhub_groups` | `hasPermission`, `getGroupLevel` (permissões LSPD) — soft-dep |
+| `vhub_ipad` | registro do app "Central LSPD" no catálogo — soft-dep |
+| `vhub_garage` | `forceImpound` (apreensão) — soft-dep |
+| `vhub_identity` | `getIdentity`, `getCharByRegistration` (prontuário) — soft-dep |
+| `vhub_hss` | `setHandcuffed`, `revive` (prisão/detenção) — soft-dep |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_lspdtool:boloAlert` | server→policiais online | `{plate, motivo, by}` |
+| `vhub_lspdtool:plateScan` | server→policiais online | `{plate, source, officer}` |

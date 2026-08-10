@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_vehcontrol'
 author      'vHub Mirage Adaptation'
-version     '1.5.0'
+version     '1.10.0'
 description 'Controle de veiculo (portas, motor, trava, luzes, banco, camera). Adaptado p/ vHub. Integracao: veh_key.'
 
 -- SOFT-deps (via export com pcall, NAO em dependencies p/ nao travar o boot):
@@ -20,6 +20,7 @@ shared_scripts {
   'shared/config.lua',
   'shared/events.lua',      -- nomes de eventos do engine de skill (anti-fantasma)
   'shared/tier_rules.lua',  -- regras PURAS de tier/score/alloc/afinidade (server + client)
+  'shared/engineering.lua', -- ADR #82 F2.1: derivador PURO peças→física Camada A (sheet.eng)
 }
 
 server_scripts {
@@ -33,7 +34,8 @@ server_scripts {
 
 client_scripts {
   'client/main.lua',
-  'client/handling.lua',         -- F5: aplica fisica derivada (sheet.hnd) no carro dirigido (decisao #28)
+  'client/handling.lua',         -- F5: Camada B model-wide (sheet.hnd) DESLIGADA — skillApplyHandling=false (decisao #28)
+  'client/engineering.lua',      -- ADR #82 FASE 2: Camada A per-entidade (sheet.eng: potencia+velocidade), gated applyPerEntity
   'client/sound.lua',            -- radio → vhub_wow: callbacks NUI + ponte server (decisao #34)
 }
 

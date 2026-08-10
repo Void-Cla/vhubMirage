@@ -29,6 +29,27 @@ VHubLogin.Config = {
   -- fallback que spawnaria um não-autenticado (GAP de segurança #4 do arquiteto).
   auth_deadline = 120,         -- segundos
 
+  -- Palco privado de selecao. O mapa e iniciado como dependencia do resource;
+  -- os peds sao locais e cada sessao autenticada recebe bucket exclusivo no HSS.
+  selection = {
+    map_resource = "depzitamadasptlnd",
+    positions = {
+      { x = -80.4353, y = 3.2092, z = 1.0001, heading = 174.4306 },
+      { x = -76.6213, y = 3.2019, z = 1.0001, heading = 182.2863 },
+      { x = -72.7645, y = 2.9722, z = 1.0001, heading = 180.8838 },
+    },
+    camera = {
+      x = -77.0000, y = -4.2500, z = 2.5500,
+      target_x = -77.0000, target_y = 3.1400, target_z = 1.6500,
+      fov = 48.0,
+        focus_distance = 2.95,
+        focus_height = 1.02,
+        focus_target_height = 0.68,
+        focus_fov = 44.0,
+        transition_ms = 850,
+    },
+  },
+
   -- Anti brute-force
   rate = {
     login = { max = 6, window = 15000 },
@@ -39,6 +60,9 @@ VHubLogin.Config = {
   },
   lockout = { fails = 5, ms = 60000 },     -- por UID: 5 falhas → trava 60s
 
-  -- Export default-deny (export-first): vazio = só consumo interno.
-  login_trusted = {},
+  -- Export default-deny; HSS e selector consultam somente o estado do gate.
+  login_trusted = {
+    vhub_hss = true,
+    vhub_spawselector = true,
+  },
 }

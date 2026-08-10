@@ -1,17 +1,44 @@
-/* modules/hotbar/hotbar.css — barra de atalhos (sempre visivel, base-centro). */
+/* modules/hotbar/hotbar.css — barra de atalhos (sempre visível, base-centro). */
 
 .mod-hotbar {
-  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
-  display: flex; gap: 8px; z-index: 50;
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 50;
+  padding: 7px;
+  background: linear-gradient(180deg, rgba(16, 13, 9, 0.42), rgba(10, 8, 5, 0.5));
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
-/* usa .slot (de slots.css) p/ ser alvo do drag; aqui so o tamanho fixo */
+/* usa .slot (de slots.css) p/ ser alvo do drag; aqui só o tamanho fixo */
 .mod-hotbar .hb-cell {
-  width: 52px; height: 52px; aspect-ratio: auto;
-  background: rgba(20, 18, 14, 0.55);
+  width: 54px;
+  height: 54px;
+  aspect-ratio: auto;
+  background: rgba(20, 18, 14, 0.5);
+}
+.mod-hotbar .hb-cell:not([data-filled]) {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .mod-hotbar .hb-key {
-  position: absolute; left: 4px; top: 2px; z-index: 2;
-  font-size: 10px; font-weight: 700; color: var(--vh-gold); text-shadow: 0 1px 2px #000;
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  z-index: 2;
+  font-family: var(--vh-font-title);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--vh-gold);
+  text-shadow: 0 1px 2px #000;
 }
+.mod-hotbar .hb-cell:not([data-filled]) .hb-key { color: var(--vh-text-mut); }
+
+/* contagem 0 = item vinculado mas sem estoque na mochila (fica esmaecido) */
+.mod-hotbar .qt.hb-empty { color: var(--vh-text-mut); opacity: 0.7; }

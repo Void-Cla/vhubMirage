@@ -21,6 +21,7 @@
       patch: {},
       prices: payload.prices || {},
       catalog: payload.catalog || {},
+      palettes: payload.palettes || {},
       outfits: [],
       wizardDone: false,
       busy: false,
@@ -34,6 +35,9 @@
         if (token !== lifecycle) return;
       }
       document.body.classList.remove('hidden');
+      // página visível: pede ao Lua para reassegurar foco/cursor (SetNuiFocus feito com o body
+      // ainda display:none pode não revelar o cursor no CEF). Fire-and-forget.
+      vhub.native.post('studioReady');
     } catch (_) {
       if (token !== lifecycle) return;
       close();

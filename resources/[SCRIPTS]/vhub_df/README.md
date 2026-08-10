@@ -127,3 +127,31 @@ O gateway roteia pelo prefixo antes do `:`.
 | L-07 | Resource consumidor declara ownership do prefixo no Registro de Ownership |
 | §3.7 | Exports gated via `vhub_trusted_resources` (default-deny) |
 | §4.6 | Rate de criação de cobrança declarado em `CFG.rates` do consumidor |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `isReady` | `() → bool` | vhub_coinshop (verifica antes de criar cobrança) |
+| 2 | `registerHandler` | `(prefix, fn) → ok` | vhub_coinshop (prefixo 'coins') |
+| 3 | `createPayment` | `(src, opts, cb) → void` | vhub_coinshop |
+| 4 | `getPlayerPending` | `(src, cb) → void` | vhub_coinshop |
+| 5 | `getOrderStatus` | `(txid, cb) → void` | vhub_coinshop |
+| 6 | `cancelPayment` | `(src, txid, cb) → void` | vhub_coinshop |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `oxmysql` | Fila de cobranças (`vhub_df_orders`) |
+| `vhub_groups` | `hasPermission` (verificações admin) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_df:paymentConfirmed` | server→handler registrado | `{charId, orderId, meta}` |
+| `vhub_df:checkoutOpen` | server→client (player) | `{txid, qrBase64, copiaECola, expiresAt}` |

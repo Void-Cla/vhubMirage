@@ -137,8 +137,9 @@
             ehEl.dataset.health = eh > 75 ? 'ok' : eh > 25 ? 'warn' : 'crit';
         }
 
-        // nitro arc: stroke-dashoffset 146.6 (vazio) → 0 (cheio)
+        // nitro: ponteiro padrão (nitro-needle) + compat com arco legado (nitro-arc-fill) — ambos null-safe
         const nitro = state.nitro_percent;
+        if (gauges.nitro) setRot('nitro-needle', gauges.nitro.get(nitro));
         setSVG('nitro-arc-fill', 'stroke-dashoffset', (NITRO_ARC * (1 - nitro / 100)).toFixed(1));
         setText('nitro-value', Math.round(nitro) + '%');
 
@@ -177,6 +178,8 @@
                        : ($('rpm-needle') ? createGauge([[0, -135], [10, 60]]) : null);
         gauges.fuel  = opts.fuelPoints ? createGauge(opts.fuelPoints)
                        : ($('fuel-needle') ? createGauge([[0, -120], [50, -25], [100, 70]]) : null);
+        gauges.nitro = opts.nitroPoints ? createGauge(opts.nitroPoints)
+                       : ($('nitro-needle') ? createGauge([[0, -135], [100, 135]]) : null);
         document.querySelectorAll('[data-odo-digit] .odoColumn').forEach(c => odoCols.push(c));
 
         window.addEventListener('message', e => {

@@ -103,14 +103,19 @@ function Veh:register(plate, key_uid)
   return vd
 end
 
-function Veh:unregister(plate)
+-- Solta a placa da VRAM. skipSave=true (fluxo de DELETE) NÃO persiste — a row está
+-- prestes a sumir; salvar re-envenenaria o batch com uma op cuja FK vai quebrar (ADR #82).
+-- Sempre invalida `anchored`/`dirty` na FONTE: qualquer referência viva a este vd que
+-- tente salvar depois cai no guard fail-closed de _save (sem I/O, custo O(1) — L-18).
+function Veh:unregister(plate, skipSave)
   plate = normalizePlate(plate)
   if not plate then return end
   local vd = self._veh[plate]; if not vd then return end
-  self:_save(vd)
+  if not skipSave then self:_save(vd) end
   if vd.key_uid then self._byKey[vd.key_uid] = nil end
   if vd.netid   then self._byNet[vd.netid]   = nil end
   self._veh[plate] = nil
+  vd.anchored = false; vd.dirty = false   -- ADR #82: âncora inválida na fonte (mata o stale-anchor)
 end
 
 function Veh:transferKey(plate, new_key_uid)
@@ -312,6 +317,10 @@ end
 
 function Veh:_save(vd)
   if not vd.dirty then return end
+  -- ADR #82: fail-closed sem I/O — vd fora do registry (unregistered/deletado) NUNCA persiste.
+  -- Cobre referência viva ao vd antigo (ex.: handler de vehicleDespawned) que tente salvar
+  -- pós-delete. Guard barato (lookup de tabela, O(1)) — NÃO revalida âncora por query (L-18).
+  if self._veh[vd.plate] ~= vd then vd.dirty = false; return end
   self:_atualizarPosicao(vd)
   -- ADR #47: efêmero (sem âncora FK) nunca vai ao SQL — evita op envenenada no batch
   if not vd.anchored then vd.dirty = false; return end

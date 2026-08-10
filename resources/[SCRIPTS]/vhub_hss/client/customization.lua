@@ -8,15 +8,17 @@ local _preview = nil
 local _camera = nil
 local _base_heading = 0.0
 local _stage_failed = false
+local _loaded_ipls = {}
 
 local CAMERA_PRESETS = {
-    full = { bone = 24818, offset = { x = 0.0, y = 2.35, z = 0.15 }, fov = 38.0 },
-    face = { bone = 31086, offset = { x = 0.0, y = 0.82, z = 0.05 }, fov = 24.0 },
-    body = { bone = 24818, offset = { x = 0.0, y = 1.45, z = 0.02 }, fov = 32.0 },
-    legs = { bone = 11816, offset = { x = 0.0, y = 1.55, z = 0.10 }, fov = 34.0 },
+    full = { bone = 24818, dist = 2.35, height = 0.15, pitch = 0.0, fov = 38.0 },
+    face = { bone = 31086, dist = 0.82, height = 0.05, pitch = 0.0, fov = 24.0 },
+    body = { bone = 24818, dist = 1.45, height = 0.02, pitch = 0.0, fov = 32.0 },
+    legs = { bone = 11816, dist = 1.55, height = 0.10, pitch = -6.0, fov = 34.0 },
 }
 CAMERA_PRESETS.head = CAMERA_PRESETS.face
 CAMERA_PRESETS.torso = CAMERA_PRESETS.body
+CAMERA_PRESETS.chest = CAMERA_PRESETS.body
 CAMERA_PRESETS.feet = CAMERA_PRESETS.legs
 
 
@@ -41,8 +43,27 @@ local function cleanup_camera()
     _camera = nil
 end
 
+-- Carrega best-effort os IPLs da cena do interior; guarda os nomes para remover depois.
+local function request_scene_ipls(list)
+    _loaded_ipls = {}
+    if type(list) ~= 'table' then return end
+    for _, name in ipairs(list) do
+        if type(name) == 'string' and name ~= '' then
+            RequestIpl(name)
+            _loaded_ipls[#_loaded_ipls + 1] = name
+        end
+    end
+end
+
+-- Remove os IPLs da cena carregados nesta sessão (idempotente).
+local function remove_scene_ipls()
+    for _, name in ipairs(_loaded_ipls) do RemoveIpl(name) end
+    _loaded_ipls = {}
+end
+
 local function abort_stage()
     cleanup_camera()
+    remove_scene_ipls()
     _stage_active = false
     _stage_ready = false
     _preview_active = false
@@ -75,6 +96,7 @@ RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_BEGIN, function(payload)
     if type(payload) ~= 'table' or type(payload.position) ~= 'table' then return end
     Citizen.CreateThread(function()
         cleanup_camera()
+        remove_scene_ipls()
         _snapshot = VHubHSS.Appearance.sanitize(payload.customization)
         _preview = VHubHSS.Appearance.copy(_snapshot)
         _base_heading = tonumber(payload.position.heading) or tonumber(payload.position.h) or 0.0
@@ -89,13 +111,30 @@ RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_BEGIN, function(payload)
             abort_stage()
             return
         end
+
+        -- Cena premium: carrega o interior e posiciona o ped (VHubHSS_MovePed já espera a colisão).
+        request_scene_ipls(payload.ipl)
         local ped = current_ped()
         if not ped or not VHubHSS_MovePed(ped, payload.position) then
             abort_stage()
             return
         end
         SetEntityCollision(ped, true, true)
-        _stage_ready = true   -- ped está na posição; câmera pode ser configurada
+        -- Interior não carregou a colisão a tempo → cai no void (que sempre existe), sem esperar de novo.
+        if not HasCollisionLoadedAroundEntity(ped) and type(payload.fallback) == 'table' then
+            remove_scene_ipls()
+            if VHubHSS_MovePed(ped, payload.fallback) then
+                _base_heading = tonumber(payload.fallback.heading) or _base_heading
+                SetEntityCollision(ped, true, true)
+            end
+        end
+
+        SetEntityVisible(ped, true, false)   -- garante ped visível ao revelar (anti-fantasma)
+        -- Reaplica a aparência na entidade já assentada. Um SetPlayerModel feito no 1º apply pode
+        -- NÃO renderizar head-blend/componentes no frame imediato (ped "só aparece após atualizar").
+        -- Depois do MovePed (que já esperou colisão = vários frames) o modelo está pronto → reaplica.
+        VHubHSS_ApplyCustomization(ped, _preview)
+        _stage_ready = true   -- ped na posição e renderizado; câmera pode ser configurada
         DoScreenFadeIn(250)
     end)
 end)
@@ -104,6 +143,7 @@ RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_END, function(payload)
     if type(payload) ~= 'table' then return end
     Citizen.CreateThread(function()
         cleanup_camera()
+        remove_scene_ipls()
         _stage_failed = false
         local authoritative = VHubHSS.Appearance.sanitize(payload.customization)
         VHubHSS_ApplyModelAndCustomization(authoritative)
@@ -175,42 +215,125 @@ exports('restoreCustomizationPreview', function()
     return { ok = true, customization = VHubHSS.Appearance.copy(_preview) }
 end)
 
--- Posiciona câmera HSS em preset fechado e callback-driven.
+-- Estado orbital da câmera; recalculado só sob input (sem thread permanente, L-18).
+local _cam_state = {
+    bone = 24818, base_heading = 0.0,
+    yaw = 0.0, pitch = 0.0,
+    dist = 2.35, base_dist = 2.35, height = 0.15, fov = 38.0,
+}
+
+local PITCH_MIN, PITCH_MAX = -25.0, 35.0
+local DIST_MIN_FACTOR, DIST_MAX_FACTOR = 0.55, 2.2
+
+local function clampf(value, lo, hi)
+    if value < lo then return lo end
+    if value > hi then return hi end
+    return value
+end
+
+-- Posiciona a câmera a partir do estado orbital ao redor do bone-alvo (heading base fixo).
+-- O alvo é deslocado lateralmente para o ped ficar centrado na ÁREA LIVRE (painel largo à direita).
+local function apply_orbit_to(cam)
+    local ped = current_ped()
+    if not ped or not cam or not DoesCamExist(cam) then return false end
+    local target = GetPedBoneCoords(ped, _cam_state.bone, 0.0, 0.0, 0.0)
+    local ang = math.rad(_cam_state.base_heading + 180.0 + _cam_state.yaw)
+    local pitch = math.rad(_cam_state.pitch)
+    local horiz = _cam_state.dist * math.cos(pitch)
+    local px = target.x + horiz * math.sin(ang)
+    local py = target.y + horiz * math.cos(ang)
+    local pz = target.z + _cam_state.height + _cam_state.dist * math.sin(pitch)
+    SetCamCoord(cam, px, py, pz)
+    -- vetor "direita" horizontal da câmera; mover o alvo p/ a direita joga o ped à esquerda da tela
+    local dirx, diry = target.x - px, target.y - py
+    local rlen = math.sqrt(dirx * dirx + diry * diry)
+    local lat = _cam_state.dist * 0.12
+    if rlen > 0.001 then
+        PointCamAtCoord(cam, target.x + (diry / rlen) * lat, target.y - (dirx / rlen) * lat, target.z)
+    else
+        PointCamAtCoord(cam, target.x, target.y, target.z)
+    end
+    SetCamFov(cam, _cam_state.fov)
+    return true
+end
+
+-- Enquadra uma região (preset) com transição suave; a câmera orbita, o ped fica parado.
 exports('setCustomizationCamera', function(preset_name)
     if not invoker_ok() or not _preview_active then return { ok = false, err = 'inactive' } end
     local preset = type(preset_name) == 'string' and CAMERA_PRESETS[preset_name] or nil
     local ped = current_ped()
     if not preset or not ped then return { ok = false, err = 'invalid_camera' } end
+    SetEntityVisible(ped, true, false)   -- ped visível quando a câmera engata (anti-fantasma)
 
-    local position = GetOffsetFromEntityInWorldCoords(
-        ped,
-        preset.offset.x,
-        preset.offset.y,
-        preset.offset.z
-    )
-    local target = GetPedBoneCoords(ped, preset.bone, 0.0, 0.0, 0.0)
+    _cam_state.bone = preset.bone
+    _cam_state.dist = preset.dist
+    _cam_state.base_dist = preset.dist
+    _cam_state.height = preset.height
+    _cam_state.fov = preset.fov
+    _cam_state.pitch = preset.pitch or 0.0
+
     if not _camera or not DoesCamExist(_camera) then
+        -- primeira montagem: fixa o heading base (frente do ped) e zera a órbita.
+        _cam_state.base_heading = _base_heading
+        _cam_state.yaw = 0.0
         _camera = CreateCam('DEFAULT_SCRIPTED_CAMERA', true)
+        if not _camera or not DoesCamExist(_camera) then return { ok = false, err = 'native' } end
+        apply_orbit_to(_camera)
+        SetCamActive(_camera, true)
+        RenderScriptCams(true, false, 0, true, true)
+        return { ok = true }
     end
-    if not _camera or not DoesCamExist(_camera) then return { ok = false, err = 'native' } end
-    SetCamCoord(_camera, position.x, position.y, position.z)
-    PointCamAtCoord(_camera, target.x, target.y, target.z)
-    SetCamFov(_camera, preset.fov)
-    SetCamActive(_camera, true)
+
+    -- troca de região: interpola da câmera atual para uma destino (yaw/base_heading preservados).
+    local dest = CreateCam('DEFAULT_SCRIPTED_CAMERA', true)
+    if not dest or not DoesCamExist(dest) then
+        apply_orbit_to(_camera)   -- fallback: sem interp
+        return { ok = true }
+    end
+    apply_orbit_to(dest)
+    SetCamActiveWithInterp(dest, _camera, 350, 1, 1)
     RenderScriptCams(true, false, 0, true, true)
+    local previous = _camera
+    _camera = dest
+    Citizen.CreateThread(function()
+        Citizen.Wait(400)
+        if previous ~= _camera and DoesCamExist(previous) then DestroyCam(previous, false) end
+    end)
     return { ok = true }
 end)
 
--- Rotaciona o ped dentro do estágio sem thread permanente.
+-- Órbita livre por delta abstrato (drag = dyaw/dpitch, scroll = dzoom); clamps server-side.
+exports('updateCustomizationCamera', function(delta)
+    if not invoker_ok() or not _preview_active then return { ok = false, err = 'inactive' } end
+    if type(delta) ~= 'table' or not _camera or not DoesCamExist(_camera) then
+        return { ok = false, err = 'inactive' }
+    end
+    local dyaw = tonumber(delta.dyaw) or 0.0
+    local dpitch = tonumber(delta.dpitch) or 0.0
+    local dzoom = tonumber(delta.dzoom) or 0.0
+    if dyaw ~= dyaw or dpitch ~= dpitch or dzoom ~= dzoom then
+        return { ok = false, err = 'invalid_camera' }
+    end
+    -- clamp de delta por chamada (anti-spike) + clamp absoluto do estado
+    _cam_state.yaw = ((_cam_state.yaw + clampf(dyaw, -30.0, 30.0) + 180.0) % 360.0) - 180.0
+    _cam_state.pitch = clampf(_cam_state.pitch + clampf(dpitch, -20.0, 20.0), PITCH_MIN, PITCH_MAX)
+    _cam_state.dist = clampf(_cam_state.dist - clampf(dzoom, -0.6, 0.6),
+        _cam_state.base_dist * DIST_MIN_FACTOR, _cam_state.base_dist * DIST_MAX_FACTOR)
+    apply_orbit_to(_camera)
+    return { ok = true }
+end)
+
+-- Compat: gira a câmera em torno do ped por passo fixo (botões ↶↷) — mesmo canal de órbita.
 exports('rotateCustomizationPed', function(delta)
     if not invoker_ok() or not _preview_active then return { ok = false, err = 'inactive' } end
     local number = tonumber(delta)
-    local ped = current_ped()
-    if not number or number ~= number or not ped then return { ok = false, err = 'invalid_rotation' } end
-    number = math.max(-45.0, math.min(45.0, number))
-    _base_heading = (_base_heading + number) % 360.0
-    SetEntityHeading(ped, _base_heading)
-    return { ok = true, heading = _base_heading }
+    if not number or number ~= number or not _camera or not DoesCamExist(_camera) then
+        return { ok = false, err = 'invalid_rotation' }
+    end
+    number = clampf(number, -45.0, 45.0)
+    _cam_state.yaw = ((_cam_state.yaw + number + 180.0) % 360.0) - 180.0
+    apply_orbit_to(_camera)
+    return { ok = true, yaw = _cam_state.yaw }
 end)
 
 -- Encerra câmera/preview local; o hold autoritativo termina somente no servidor HSS.
@@ -237,6 +360,7 @@ end
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     cleanup_camera()
+    remove_scene_ipls()
     _stage_active = false
     _preview_active = false
     _stage_failed = false

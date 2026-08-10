@@ -1,6 +1,6 @@
--- client/mec.lua — L2 HAL: animação de reparo, execução de reboque (reposicionamento)
+-- client/mec.lua — L2 HAL: animação de reparo e interface da mecânica
 -- Animação: veh@repair / fixing_a_player (vanilla confirmado, com timeout de carregamento)
--- Reboque: solicita ao servidor, recebe autorização, controla entidade e confirma posição final.
+-- Reboque: o cliente declara intenção; movimento e posição pertencem ao servidor.
 ---@diagnostic disable: undefined-global
 
 local E   = VHubCustom.E
@@ -55,14 +55,13 @@ end
 -- ============================================================
 
 -- abre seleção de reparo para o veículo ativo na zona
-function VHubCustom.openMec()
+function VHubCustom.openMec(auth)
   local veh = VHubCustom.activeVeh
   if not DoesEntityExist(veh) or veh == 0 then return end
   if VHubCustom.inMenu then return end
+  if type(auth) ~= 'table' or not VHubCustom.service or VHubCustom.service.domain ~= 'mec' then return end
 
   local model    = GetEntityModel(veh)
-  local dispName = string.lower(GetDisplayNameFromVehicleModel(model) or '')
-  local catEntry = (VHubCustom.catalog or {})[dispName] or {}
   local prices   = CFG.prices
 
   VHubCustom.inMenu = true
@@ -70,8 +69,8 @@ function VHubCustom.openMec()
   SendNUIMessage({
     action = 'openMec',
     data   = {
-      plate         = GetVehicleNumberPlateText(veh):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$'),
-      nome          = catEntry.nome or GetDisplayNameFromVehicleModel(model) or '—',
+      plate         = auth.plate,
+      nome          = auth.name or GetDisplayNameFromVehicleModel(model) or '—',
       -- preços de exibição (verdade autoritativa continua server-side)
       prices        = {
         tyre   = prices.pneu,
@@ -90,6 +89,7 @@ end
 -- fecha o menu de mecânica e libera foco da NUI
 function VHubCustom.closeMec()
   VHubCustom.inMenu = false
+  VHubCustom.endService('mec')
   SetNuiFocus(false, false)
 end
 
@@ -111,7 +111,9 @@ RegisterNUICallback('mec:repair', function(data, cb)
 
   if plate == '' or repair_type == '' then cb({ ok = false }); return end
 
-  TriggerServerEvent(E.MEC_REPAIR, plate, repair_type)
+  local service = VHubCustom.service
+  if not service or service.domain ~= 'mec' then cb({ ok = false }); return end
+  TriggerServerEvent(E.MEC_REPAIR, service.lease_id, VHubCustom.nextRequestId(), repair_type)
   cb({ ok = true })
 end)
 
@@ -120,9 +122,9 @@ RegisterNUICallback('mec:tow', function(_, cb)
   local veh = VHubCustom.activeVeh
   if not DoesEntityExist(veh) or veh == 0 then cb({ ok = false }); return end
 
-  local plate = GetVehicleNumberPlateText(veh):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
-  local netId = NetworkGetNetworkIdFromEntity(veh)
-  TriggerServerEvent(E.MEC_TOW_REQ, plate, netId)
+  local service = VHubCustom.service
+  if not service or service.domain ~= 'mec' then cb({ ok = false }); return end
+  TriggerServerEvent(E.MEC_TOW_REQ, service.lease_id, VHubCustom.nextRequestId())
   cb({ ok = true })
 end)
 
@@ -135,7 +137,7 @@ end)
 local _repairActive = false
 
 RegisterNetEvent(E.MEC_CONFIRM)
-AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type)
+AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type, netId)
   -- captura veh ANTES de qualquer Wait (evita race condition com activeVeh)
   local veh = VHubCustom.activeVeh
 
@@ -143,8 +145,9 @@ AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type)
   VHubCustom.closeMec()
   SendNUIMessage({ action = 'fecharMec' })
 
-  if not ok then return end
-  if not veh or not DoesEntityExist(veh) then return end
+  if not ok or repair_type == nil then return end
+  if repair_type == 'tow' then return end
+  if not veh or not DoesEntityExist(veh) or NetworkGetNetworkIdFromEntity(veh) ~= tonumber(netId) then return end
   if _repairActive then return end
 
   _repairActive = true
@@ -174,48 +177,5 @@ AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type)
     end
 
     _repairActive = false
-  end)
-end)
-
-
--- ============================================================
--- REBOQUE: EXECUÇÃO CLIENT-SIDE
--- ============================================================
-
-RegisterNetEvent(E.MEC_TOW_DO)
-AddEventHandler(E.MEC_TOW_DO, function(plate, net_id)
-  Citizen.CreateThread(function()
-    local nid = tonumber(net_id)
-    if not nid then return end
-
-    local ent = NetworkGetEntityFromNetId(nid)
-    if not ent or ent == 0 then
-      TriggerServerEvent('vhub_custom:server:mecTowDone', plate, net_id, nil)
-      return
-    end
-
-    -- pede controle da entidade com timeout (L-06: sem loop infinito)
-    if not awaitControl(ent, 5000) then
-      TriggerServerEvent('vhub_custom:server:mecTowDone', plate, net_id, nil)
-      return
-    end
-
-    -- reposiciona próximo do jogador (estrada mais próxima)
-    local pPos   = GetEntityCoords(PlayerPedId())
-    local groundZ = 0.0
-    local _, gz  = GetGroundZFor_3dCoord(pPos.x + 5.0, pPos.y, pPos.z, groundZ, false)
-    local newZ   = gz > 0 and gz or pPos.z
-
-    SetEntityCoords(ent, pPos.x + 5.0, pPos.y, newZ + 0.5, false, false, false, false)
-    SetEntityHeading(ent, GetEntityHeading(PlayerPedId()))
-
-    Citizen.Wait(200)  -- estabiliza física
-
-    -- confirma posição ao servidor para persistência
-    local finalPos = GetEntityCoords(ent)
-    local finalH   = GetEntityHeading(ent)
-    TriggerServerEvent('vhub_custom:server:mecTowDone', plate, net_id, {
-      x = finalPos.x, y = finalPos.y, z = finalPos.z, h = finalH,
-    })
   end)
 end)

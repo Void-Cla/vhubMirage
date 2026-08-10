@@ -65,10 +65,14 @@ function VHubGarage.U.jdec(s)
 end
 
 -- whitelist de chaves aceitas em customization (payload do cliente e hostil)
+-- ESPELHA o CUST_KEYS de vhub_conce/server/vstate.lua (defesa em profundidade). VISUAL persistente
+-- (stance/exhaust_fx/glass_armor) + extras: dono = vhub_custom; aqui só p/ não estripar no store.
 local CUST_KEYS = {
   colours = true, extra_colours = true, plate_index = true, wheel_type = true,
   window_tint = true, livery = true, turbo = true, smoke = true, xenon = true,
   mods = true, neons = true, neon_colour = true, model = true,
+  stance = true, exhaust_fx = true, glass_armor = true, extras = true,
+  interior_color = true, dashboard_color = true,
 }
 
 -- filtra customization vinda do cliente: whitelist de chaves + cap de 8 KB no JSON

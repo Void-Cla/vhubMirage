@@ -18,9 +18,34 @@ local function _invoker_allowed()
   return trusted[caller] == true
 end
 
-local function _invoker_is(expected)
+local PAYMENT_SAGA_CALLERS = {
+  vhub_sims   = { reason_prefix = 'sims:', digest_operation = true },
+  vhub_custom = { reason_prefix = 'custom.', operation_prefix = 'vc:', request_conflict = true },
+}
+
+local function _payment_saga_scope()
   local caller = GetInvokingResource()
-  return caller == nil or caller == expected
+  if caller == nil then return {} end
+  return PAYMENT_SAGA_CALLERS[caller]
+end
+
+local function _payment_contract(scope, operation_id, reason)
+  if not scope or type(operation_id) ~= 'string' or type(reason) ~= 'string' then return false end
+  if scope.reason_prefix and reason:sub(1, #scope.reason_prefix) ~= scope.reason_prefix then return false end
+  if scope.operation_prefix and operation_id:sub(1, #scope.operation_prefix) ~= scope.operation_prefix then
+    return false
+  end
+  if scope.digest_operation and (#operation_id ~= 64 or not operation_id:match('^[%x]+$')) then return false end
+  if scope.request_conflict then
+    local suffix = operation_id:match(':([%x]+)$')
+    if not suffix or #suffix ~= 8 then return false end
+  end
+  return true
+end
+
+local function _request_conflict_key(scope, operation_id)
+  if not scope.request_conflict then return nil end
+  return operation_id:sub(1, -10)
 end
 
 -- ── Read-only (publicos) ────────────────────────────────────────────────────
@@ -66,14 +91,22 @@ end)
 
 -- Debita uma operação identificada; replay devolve o mesmo resultado.
 exports('commitPayment', function(src, amount, operation_id, reason)
-  if not _invoker_is('vhub_sims') then return { ok = false, err = 'forbidden' } end
-  return Core.commit_payment(tonumber(src) or 0, amount, operation_id, reason)
+  local scope = _payment_saga_scope()
+  if not _payment_contract(scope, operation_id, reason) then return { ok = false, err = 'forbidden' } end
+  return Core.commit_payment(tonumber(src) or 0, amount, operation_id, reason,
+    _request_conflict_key(scope, operation_id))
 end)
 
--- Estorna offline o split original; somente a saga SIMS pode compensar.
+-- Estorna offline o split original; somente sagas explicitamente autorizadas compensam.
 exports('refundPayment', function(operation_id)
-  if not _invoker_is('vhub_sims') then return { ok = false, err = 'forbidden' } end
-  return Core.refund_payment(operation_id)
+  local scope = _payment_saga_scope()
+  if not scope or type(operation_id) ~= 'string'
+      or (scope.operation_prefix and operation_id:sub(1, #scope.operation_prefix) ~= scope.operation_prefix)
+      or (scope.digest_operation and (#operation_id ~= 64 or not operation_id:match('^[%x]+$')))
+      or (scope.request_conflict and not (operation_id:match(':([%x]+)$') or ''):match('^........$')) then
+    return { ok = false, err = 'forbidden' }
+  end
+  return Core.refund_payment(operation_id, scope.reason_prefix)
 end)
 
 -- ── Mutacoes TRUSTED (admin/job/payout) ─────────────────────────────────────

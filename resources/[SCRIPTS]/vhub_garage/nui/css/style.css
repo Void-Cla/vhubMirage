@@ -1,45 +1,12 @@
-/* vhub_garage — tema oficial vHub: Liquid Glass + Areia + Dourado
-   Aplicado conforme .claude/agents/vhub_guardiao_designer.md (L-D1..L-D10) */
+/* vhub_garage — tema oficial vHub: Liquid Glass + Areia + Dourado.
+   A-09: backdrop-filter APENAS em #vhub-bg (camada opaca com bg.png — permitido).
+   A-11: tokens de módulo no seletor raiz .vhub-view, não em :root.
+   Tokens globais (--vh-gold, --vh-sand, etc.) vêm de tokens.css compartilhado. */
 
-:root {
-  --vh-sand:        #d9c19a;
-  --vh-sand-dim:    #a89572;
-  --vh-sand-deep:   #5a4a30;
-  --vh-gold:        #f3b53a;
-  --vh-gold-soft:   #ffd573;
-  --vh-amber:       #ff9a1f;
-  --vh-black:       #0c0a06;
-  --vh-black-2:     #1a1610;
-  --vh-danger:      #e8513f;
-  --vh-ok:          #6bbf6b;
-
-  --vh-text:        #f0e6d2;
-  --vh-text-dim:    #c4ad84;
-  --vh-text-dim2:   #8a7a5a;
-
-  --vh-glass-bg:    linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
-  --vh-glass-bg-2:  linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.40));
-  --vh-glass-border:rgba(243,181,58,0.18);
-  --vh-glass-line:  rgba(243,181,58,0.10);
-
-  --vh-shadow-1:    0 4px 12px rgba(243,181,58,0.10);
-  --vh-shadow-2:    0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
-  --vh-shadow-3:    0 24px 60px rgba(0,0,0,0.60), 0 0 32px rgba(243,181,58,0.12);
-  --vh-shadow-glow: 0 0 20px rgba(255,213,115,0.45);
-
-  --vh-r-pan:  16px;
-  --vh-r-card: 12px;
-  --vh-r-btn:  8px;
-  --vh-r-pill: 999px;
-
-  --vh-font-display: 'Barlow Condensed', 'Inter', sans-serif;
-  --vh-font-body:    'Inter', system-ui, sans-serif;
-}
-
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0; width: 100vw; height: 100vh;
-  font-family: var(--vh-font-body); color: var(--vh-text);
+  font-family: 'Segoe UI', system-ui, sans-serif; color: #f0e6d2;
   background: transparent; overflow: hidden; user-select: none;
 }
 .hidden { display: none !important; }
@@ -60,14 +27,38 @@ html, body {
 
 /* ----- View container (.vhub-view = painel principal) ------------------ */
 .vhub-view {
+  /* tokens locais do módulo (A-11) */
+  --g-gold:       #f3b53a;
+  --g-gold-soft:  #ffd573;
+  --g-amber:      #ff9a1f;
+  --g-sand:       #d9c19a;
+  --g-sand-dim:   #a89572;
+  --g-text:       #f0e6d2;
+  --g-text-dim:   #c4ad84;
+  --g-text-dim2:  #8a7a5a;
+  --g-danger:     #e8513f;
+  --g-ok:         #6bbf6b;
+  --g-glass-bg:   linear-gradient(180deg, rgba(217,193,154,0.10), rgba(12,10,6,0.55));
+  --g-glass-bg-2: linear-gradient(180deg, rgba(217,193,154,0.06), rgba(12,10,6,0.40));
+  --g-border:     rgba(243,181,58,0.18);
+  --g-line:       rgba(243,181,58,0.10);
+  --g-shadow-sm:  0 4px 12px rgba(243,181,58,0.10);
+  --g-shadow-md:  0 10px 28px rgba(0,0,0,0.45), 0 0 18px rgba(243,181,58,0.08);
+  --g-shadow-lg:  0 24px 60px rgba(0,0,0,0.60), 0 0 32px rgba(243,181,58,0.12);
+  --g-glow:       0 0 20px rgba(255,213,115,0.45);
+  --g-r-pan:      16px;
+  --g-r-card:     12px;
+  --g-r-btn:      8px;
+  --g-r-pill:     999px;
+  --g-font-title: 'Barlow Condensed', 'Bahnschrift', 'Segoe UI Semibold', system-ui, sans-serif;
+  --g-font-body:  'Segoe UI', system-ui, sans-serif;
+
   position: fixed; inset: 5vh 5vw; z-index: 2;
   display: grid; grid-template-rows: auto 1fr;
-  border-radius: var(--vh-r-pan);
-  background: var(--vh-glass-bg);
-  border: 1px solid var(--vh-glass-border);
-  box-shadow: var(--vh-shadow-3);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: var(--g-r-pan);
+  background: var(--g-glass-bg);
+  border: 1px solid var(--g-border);
+  box-shadow: var(--g-shadow-lg);
   overflow: hidden;
 }
 
@@ -76,54 +67,54 @@ html, body {
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 18px;
   background: linear-gradient(180deg, rgba(243,181,58,0.06), transparent);
-  border-bottom: 1px solid var(--vh-glass-line);
+  border-bottom: 1px solid var(--g-line);
 }
 .vhub-logo {
   display: flex; align-items: center; gap: 10px;
-  font-family: var(--vh-font-display); font-weight: 700;
+  font-family: var(--g-font-title); font-weight: 700;
   font-size: clamp(18px, 1.6vw, 22px);
   letter-spacing: 0.8px; text-transform: uppercase;
-  color: var(--vh-sand);
+  color: var(--g-sand);
 }
 .vhub-logo img {
   height: 32px; width: auto;
   filter: drop-shadow(0 0 8px rgba(243,181,58,0.55));
 }
 .vhub-logo i {
-  font-size: 1.4em; color: var(--vh-gold);
+  font-size: 1.4em; color: var(--g-gold);
   text-shadow: 0 0 14px rgba(243,181,58,0.6);
 }
-.vhub-logo strong { color: var(--vh-gold); margin-left: 4px; }
+.vhub-logo strong { color: var(--g-gold); margin-left: 4px; }
 .vhub-logo small  {
-  margin-left: 12px; color: var(--vh-text-dim); font-weight: 400;
-  text-transform: none; font-family: var(--vh-font-body); font-size: 0.78em;
+  margin-left: 12px; color: var(--g-text-dim); font-weight: 400;
+  text-transform: none; font-family: var(--g-font-body); font-size: 0.78em;
 }
 
 .vhub-actions { display: flex; gap: 8px; }
 
 /* ----- Buttons --------------------------------------------------------- */
 .btn {
-  font-family: var(--vh-font-body); font-weight: 600;
-  padding: 9px 16px; border-radius: var(--vh-r-btn);
-  background: var(--vh-glass-bg-2); color: var(--vh-text);
-  border: 1px solid var(--vh-glass-border); cursor: pointer;
+  font-family: var(--g-font-body); font-weight: 600;
+  padding: 9px 16px; border-radius: var(--g-r-btn);
+  background: var(--g-glass-bg-2); color: var(--g-text);
+  border: 1px solid var(--g-border); cursor: pointer;
   font-size: 13px; letter-spacing: 0.2px;
   display: inline-flex; align-items: center; gap: 7px;
-  transition: transform 0.14s, background 0.22s, border-color 0.22s, box-shadow 0.22s;
+  transition: transform 140ms ease, background 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
 }
-.btn:hover  { background: rgba(243,181,58,0.10); border-color: var(--vh-gold); }
+.btn:hover  { background: rgba(243,181,58,0.10); border-color: var(--g-gold); }
 .btn:active { transform: scale(0.97); }
 .btn.ghost   { background: transparent; }
 .btn.primary {
-  background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
-  color: var(--vh-black); border-color: var(--vh-gold);
+  background: linear-gradient(180deg, var(--g-gold-soft), var(--g-gold));
+  color: #0c0a06; border-color: var(--g-gold);
   text-shadow: 0 1px 0 rgba(255,255,255,0.18);
 }
-.btn.primary:hover { box-shadow: var(--vh-shadow-glow); }
-.btn.warn    { background: rgba(255,154,31,0.16); color: var(--vh-amber); border-color: rgba(255,154,31,0.32); }
-.btn.danger  { background: rgba(232,81,63,0.14); color: var(--vh-danger); border-color: rgba(232,81,63,0.32); }
+.btn.primary:hover { box-shadow: var(--g-glow); }
+.btn.warn    { background: rgba(255,154,31,0.16); color: var(--g-amber); border-color: rgba(255,154,31,0.32); }
+.btn.danger  { background: rgba(232,81,63,0.14); color: var(--g-danger); border-color: rgba(232,81,63,0.32); }
 .btn.danger:hover { background: rgba(232,81,63,0.22); }
-.btn.ok      { background: rgba(107,191,107,0.14); color: var(--vh-ok); border-color: rgba(107,191,107,0.32); }
+.btn.ok      { background: rgba(107,191,107,0.14); color: var(--g-ok); border-color: rgba(107,191,107,0.32); }
 .btn.full    { width: 100%; justify-content: center; }
 
 /* ----- Body / grid 3 cols --------------------------------------------- */
@@ -135,28 +126,28 @@ html, body {
 
 .vhub-side {
   display: flex; flex-direction: column; gap: 6px;
-  padding: 12px; border: 1px solid var(--vh-glass-line);
-  border-radius: var(--vh-r-card);
-  background: var(--vh-glass-bg-2);
+  padding: 12px; border: 1px solid var(--g-line);
+  border-radius: var(--g-r-card);
+  background: var(--g-glass-bg-2);
   overflow-y: auto;
 }
 .vhub-cat-title {
-  font-family: var(--vh-font-display); text-transform: uppercase; letter-spacing: 1px;
-  color: var(--vh-text-dim); font-size: 12px; padding: 4px 6px 8px;
+  font-family: var(--g-font-title); text-transform: uppercase; letter-spacing: 1px;
+  color: var(--g-text-dim); font-size: 12px; padding: 4px 6px 8px;
 }
 .cat {
-  font-family: var(--vh-font-body); font-size: 13px;
-  background: transparent; border: 0; color: var(--vh-text-dim);
-  text-align: left; padding: 9px 10px; border-radius: var(--vh-r-btn);
+  font-family: var(--g-font-body); font-size: 13px;
+  background: transparent; border: 0; color: var(--g-text-dim);
+  text-align: left; padding: 9px 10px; border-radius: var(--g-r-btn);
   cursor: pointer; display: flex; align-items: center; gap: 8px;
-  transition: color 0.16s, background 0.16s;
+  transition: color 160ms ease, background 160ms ease;
 }
 .cat i { width: 18px; text-align: center; }
-.cat:hover  { color: var(--vh-text); background: rgba(243,181,58,0.06); }
+.cat:hover  { color: var(--g-text); background: rgba(243,181,58,0.06); }
 .cat.active {
-  color: var(--vh-gold);
+  color: var(--g-gold);
   background: rgba(243,181,58,0.14);
-  border-left: 2px solid var(--vh-gold); padding-left: 8px;
+  border-left: 2px solid var(--g-gold); padding-left: 8px;
 }
 
 /* ----- Cards ---------------------------------------------------------- */
@@ -169,23 +160,23 @@ html, body {
 .vhub-list.wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 
 .card {
-  position: relative; border: 1px solid var(--vh-glass-line);
-  border-radius: var(--vh-r-card); background: var(--vh-glass-bg-2);
+  position: relative; border: 1px solid var(--g-line);
+  border-radius: var(--g-r-card); background: var(--g-glass-bg-2);
   padding: 12px; cursor: pointer;
-  transition: transform 0.14s, border-color 0.22s, box-shadow 0.22s;
+  transition: transform 140ms ease, border-color 220ms ease, box-shadow 220ms ease;
   display: flex; flex-direction: column; gap: 8px;
 }
 .card:hover {
   transform: translateY(-2px);
-  border-color: var(--vh-gold);
-  box-shadow: var(--vh-shadow-2);
+  border-color: var(--g-gold);
+  box-shadow: var(--g-shadow-md);
 }
 .card.selected {
-  border-color: var(--vh-gold);
-  box-shadow: 0 0 0 1px var(--vh-gold) inset, var(--vh-shadow-glow);
+  border-color: var(--g-gold);
+  box-shadow: 0 0 0 1px var(--g-gold) inset, var(--g-glow);
 }
 .card .thumb {
-  width: 100%; aspect-ratio: 16/9; border-radius: var(--vh-r-btn);
+  width: 100%; aspect-ratio: 16/9; border-radius: var(--g-r-btn);
   background: linear-gradient(135deg, rgba(243,181,58,0.10), rgba(255,154,31,0.06));
   overflow: hidden; position: relative;
 }
@@ -195,47 +186,47 @@ html, body {
   font-size: 38px; color: rgba(243,181,58,0.28);
 }
 .card h4 {
-  margin: 0; font-family: var(--vh-font-display); text-transform: uppercase;
+  margin: 0; font-family: var(--g-font-title); text-transform: uppercase;
   font-weight: 700; letter-spacing: 0.6px; font-size: 16px;
-  color: var(--vh-sand);
+  color: var(--g-sand);
 }
 .card .meta {
   display: flex; justify-content: space-between; font-size: 12px;
-  color: var(--vh-text-dim);
+  color: var(--g-text-dim);
 }
-.card .meta .preco { color: var(--vh-gold); font-weight: 600; }
+.card .meta .preco { color: var(--g-gold); font-weight: 600; }
 
 .card .status {
   position: absolute; top: 10px; right: 10px; padding: 3px 8px;
   font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
-  border-radius: var(--vh-r-pill); background: rgba(12,10,6,0.65);
-  border: 1px solid var(--vh-glass-border);
+  border-radius: var(--g-r-pill); background: rgba(12,10,6,0.65);
+  border: 1px solid var(--g-border);
 }
-.card .status.garage  { color: var(--vh-ok);     border-color: rgba(107,191,107,0.32); }
-.card .status.out     { color: var(--vh-gold);   border-color: rgba(243,181,58,0.32); }
-.card .status.impound { color: var(--vh-danger); border-color: rgba(232,81,63,0.32); }
-.card .status.auction { color: var(--vh-amber);  border-color: rgba(255,154,31,0.32); }
-.card .status.rental  { color: var(--vh-gold-soft); border-color: rgba(255,213,115,0.32); }
+.card .status.garage  { color: var(--g-ok);     border-color: rgba(107,191,107,0.32); }
+.card .status.out     { color: var(--g-gold);   border-color: rgba(243,181,58,0.32); }
+.card .status.impound { color: var(--g-danger); border-color: rgba(232,81,63,0.32); }
+.card .status.auction { color: var(--g-amber);  border-color: rgba(255,154,31,0.32); }
+.card .status.rental  { color: var(--g-gold-soft); border-color: rgba(255,213,115,0.32); }
 
 /* ----- Detail painel -------------------------------------------------- */
 .vhub-detail {
-  border: 1px solid var(--vh-glass-line); border-radius: var(--vh-r-card);
-  background: var(--vh-glass-bg-2); overflow-y: auto;
+  border: 1px solid var(--g-line); border-radius: var(--g-r-card);
+  background: var(--g-glass-bg-2); overflow-y: auto;
   display: flex; flex-direction: column; gap: 12px; padding: 14px;
 }
 .vhub-detail .empty {
-  flex: 1; display: grid; place-items: center; color: var(--vh-text-dim2);
-  font-family: var(--vh-font-display); text-transform: uppercase; letter-spacing: 1px;
+  flex: 1; display: grid; place-items: center; color: var(--g-text-dim2);
+  font-family: var(--g-font-title); text-transform: uppercase; letter-spacing: 1px;
 }
 .vhub-detail .empty i { font-size: 64px; margin-bottom: 10px; display: block; color: rgba(243,181,58,0.25); }
 .vhub-detail .head { display: flex; align-items: center; justify-content: space-between; }
 .vhub-detail .head h2 {
-  font-family: var(--vh-font-display); margin: 0; font-size: 26px;
-  text-transform: uppercase; letter-spacing: 1px; color: var(--vh-sand);
+  font-family: var(--g-font-title); margin: 0; font-size: 26px;
+  text-transform: uppercase; letter-spacing: 1px; color: var(--g-sand);
 }
-.vhub-detail .head .preco { color: var(--vh-gold); font-weight: 700; font-size: 18px; }
+.vhub-detail .head .preco { color: var(--g-gold); font-weight: 700; font-size: 18px; }
 .vhub-detail .img {
-  width: 100%; aspect-ratio: 16/9; border-radius: var(--vh-r-btn);
+  width: 100%; aspect-ratio: 16/9; border-radius: var(--g-r-btn);
   background: linear-gradient(135deg, rgba(243,181,58,0.12), rgba(255,154,31,0.08));
   display: grid; place-items: center;
 }
@@ -243,26 +234,26 @@ html, body {
 
 .stats { display: grid; gap: 8px; }
 .stat { display: grid; grid-template-columns: 80px 1fr 36px; gap: 8px; align-items: center; font-size: 12px; }
-.stat .label { color: var(--vh-text-dim); text-transform: uppercase; letter-spacing: 0.6px; }
+.stat .label { color: var(--g-text-dim); text-transform: uppercase; letter-spacing: 0.6px; }
 .stat .bar {
-  height: 6px; border-radius: var(--vh-r-pill); background: rgba(255,255,255,0.04);
+  height: 6px; border-radius: var(--g-r-pill); background: rgba(255,255,255,0.04);
   overflow: hidden; position: relative;
 }
 .stat .bar > span {
   display: block; height: 100%;
-  background: linear-gradient(90deg, var(--vh-gold-soft), var(--vh-gold), var(--vh-amber));
-  border-radius: var(--vh-r-pill);
+  background: linear-gradient(90deg, var(--g-gold-soft), var(--g-gold), var(--g-amber));
+  border-radius: var(--g-r-pill);
 }
-.stat .v { color: var(--vh-text); text-align: right; font-variant-numeric: tabular-nums; }
+.stat .v { color: var(--g-text); text-align: right; font-variant-numeric: tabular-nums; }
 
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
   padding: 3px 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.7px;
-  border-radius: var(--vh-r-pill);
-  background: rgba(243,181,58,0.14); color: var(--vh-gold);
+  border-radius: var(--g-r-pill);
+  background: rgba(243,181,58,0.14); color: var(--g-gold);
   border: 1px solid rgba(243,181,58,0.30);
 }
-.tag.warn { background: rgba(255,154,31,0.16); color: var(--vh-amber); border-color: rgba(255,154,31,0.32); }
+.tag.warn { background: rgba(255,154,31,0.16); color: var(--g-amber); border-color: rgba(255,154,31,0.32); }
 
 .detail-actions {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto;
@@ -271,69 +262,72 @@ html, body {
 
 .info-line {
   display: flex; justify-content: space-between; font-size: 12px;
-  padding: 6px 0; border-bottom: 1px dashed var(--vh-glass-line);
+  padding: 6px 0; border-bottom: 1px dashed var(--g-line);
 }
 .info-line:last-child { border-bottom: 0; }
-.info-line .k { color: var(--vh-text-dim); }
-.info-line .v { color: var(--vh-text); }
+.info-line .k { color: var(--g-text-dim); }
+.info-line .v { color: var(--g-text); }
 
-/* ----- Toast ---------------------------------------------------------- */
+/* ----- Toast (sem backdrop-filter — A-09) ------------------------------ */
 .vhub-toast {
   position: fixed; top: 22px; right: 22px; z-index: 9;
-  background: var(--vh-glass-bg); border: 1px solid var(--vh-gold);
-  color: var(--vh-text); padding: 12px 16px; border-radius: var(--vh-r-card);
-  font-size: 13px; box-shadow: var(--vh-shadow-2);
+  background:
+    linear-gradient(180deg, rgba(243,181,58,0.06), rgba(243,181,58,0) 40%),
+    rgba(18, 15, 10, 0.95);
+  border: 1px solid var(--g-gold);
+  color: var(--g-text); padding: 12px 16px; border-radius: var(--g-r-card);
+  font-size: 13px; box-shadow: var(--g-shadow-md);
   max-width: 340px;
-  backdrop-filter: blur(10px) saturate(140%);
 }
 
-/* ----- Modal ---------------------------------------------------------- */
+/* ----- Modal (sem backdrop-filter — A-09) ------------------------------ */
 .modal-bg {
-  position: fixed; inset: 0; background: rgba(12,10,6,0.55);
+  position: fixed; inset: 0; background: rgba(6, 5, 3, 0.60);
   z-index: 10; display: grid; place-items: center;
-  backdrop-filter: blur(4px);
 }
 .modal {
   width: min(520px, 92vw);
-  background: var(--vh-glass-bg); border: 1px solid var(--vh-glass-border);
-  border-radius: var(--vh-r-pan); padding: 24px;
-  box-shadow: var(--vh-shadow-3);
-  backdrop-filter: blur(14px) saturate(140%);
+  background:
+    linear-gradient(180deg, rgba(243,181,58,0.05), rgba(243,181,58,0) 40%),
+    linear-gradient(180deg, rgba(26, 22, 14, 0.97), rgba(15, 12, 8, 0.98));
+  border: 1px solid var(--g-border);
+  border-radius: var(--g-r-pan); padding: 24px;
+  box-shadow: var(--g-shadow-lg);
 }
 .modal h3 {
-  margin: 0 0 14px; font-family: var(--vh-font-display);
+  margin: 0 0 14px; font-family: var(--g-font-title);
   text-transform: uppercase; letter-spacing: 1px; font-size: 18px;
-  color: var(--vh-gold);
+  color: var(--g-gold);
 }
 .modal label {
-  display: block; font-size: 12px; color: var(--vh-text-dim);
+  display: block; font-size: 12px; color: var(--g-text-dim);
   margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.6px;
 }
 .modal input, .modal select, .modal textarea {
-  width: 100%; padding: 10px 12px; border-radius: var(--vh-r-btn);
-  background: rgba(12,10,6,0.55); border: 1px solid var(--vh-glass-border);
-  color: var(--vh-text); font-family: var(--vh-font-body); font-size: 13px;
+  width: 100%; padding: 10px 12px; border-radius: var(--g-r-btn);
+  background: rgba(12,10,6,0.55); border: 1px solid var(--g-border);
+  color: var(--g-text); font-family: var(--g-font-body); font-size: 13px;
 }
 .modal input:focus, .modal select:focus, .modal textarea:focus {
-  border-color: var(--vh-gold); outline: none;
+  border-color: var(--g-gold); outline: none;
   box-shadow: 0 0 0 3px rgba(243,181,58,0.18);
 }
 .modal textarea { min-height: 80px; resize: vertical; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-.modal p { color: var(--vh-text-dim); font-size: 13px; line-height: 1.5; }
+.modal p { color: var(--g-text-dim); font-size: 13px; line-height: 1.5; }
 
 /* ----- Scrollbar ------------------------------------------------------ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(243,181,58,0.18); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--vh-gold); }
+::-webkit-scrollbar-thumb:hover { background: var(--g-gold); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ----- Auction-specific ----------------------------------------------- */
 .auc-card { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .auc-card .left  { display: flex; flex-direction: column; gap: 4px; }
 .auc-card .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.auc-card .lance { color: var(--vh-gold); font-size: 18px; font-weight: 700; }
-.auc-card .timer { font-size: 11px; color: var(--vh-amber); font-family: var(--vh-font-display); letter-spacing: 1px; }
+.auc-card .lance { color: var(--g-gold); font-size: 18px; font-weight: 700; }
+.auc-card .timer { font-size: 11px; color: var(--g-amber); font-family: var(--g-font-title); letter-spacing: 1px; }
 .auc-card .row { display: flex; gap: 6px; align-items: center; }
 .auc-card input { width: 110px; padding: 6px 8px; }
 

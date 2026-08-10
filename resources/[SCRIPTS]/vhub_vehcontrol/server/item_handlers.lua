@@ -34,10 +34,8 @@ CreateThread(function()
   end)
 
   -- Handler: caixadeferramentas — abre a Ficha já em modo edição perto do veículo.
-  -- Distância/seleção do veículo é a MESMA regra do painel normal (controlledVehicle no
-  -- client, Config.distance) — sem 2ª verificação de proximidade aqui (L-04). Autoridade
-  -- real (chave/dono) é provada no RECALIBRATE via canOperate quando o player confirma
-  -- (decisão #27); aqui só abre a UI, então não consome o item.
+  -- Abertura é efêmera. No RECALIBRATE o servidor revalida netId, placa, modelo, bucket,
+  -- distância e chave/dono antes de consumir o item e persistir.
   inv:registerItemUse('caixadeferramentas', function(src)
     TriggerClientEvent(VHubVeh.E.OPEN_EDIT, src)
     return false, nil   -- false = não consome (a recalibração consome, se confirmada)

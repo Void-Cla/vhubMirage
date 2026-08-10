@@ -5,7 +5,24 @@
 -- Derivação on-read pura via VHubVeh.TR; persiste-se só o alloc (customization.handling).
 ---@diagnostic disable: undefined-global, lowercase-global
 
-local TR = VHubVeh.TR
+local TR  = VHubVeh.TR
+local ENG = VHubVeh.Engineering   -- ADR #82 F2.1: derivador puro peças→física (Camada A)
+
+-- oficina autorizada: reserva antes de cobrar; commit/cancel encerram o lock por placa
+exports('reserveWorkshopRecalibration', function(src, plate, alloc)
+  if GetInvokingResource() ~= 'vhub_custom' then return { ok = false, err = 'forbidden' } end
+  return VHubVeh.reserveWorkshopRecalibration(src, plate, alloc)
+end)
+
+exports('commitWorkshopRecalibration', function(src, token)
+  if GetInvokingResource() ~= 'vhub_custom' then return { ok = false, err = 'forbidden' } end
+  return VHubVeh.commitWorkshopRecalibration(src, token)
+end)
+
+exports('cancelWorkshopRecalibration', function(src, token)
+  if GetInvokingResource() ~= 'vhub_custom' then return false end
+  return VHubVeh.cancelWorkshopRecalibration(src, token)
+end)
 
 
 -- ============================================================
@@ -36,13 +53,36 @@ local function buildIndex()
   return idx
 end
 
--- entrada p1 (identidade física) da placa: resolve model → índice lowercase → .p1
+-- catálogo de deltas das peças (dono = vhub_custom). Cache read-through no MESMO idioma do
+-- _index do conce: nil-sentinel até o primeiro pcall retornar não-vazio; sobrevive a restart do
+-- custom (reconstrói na próxima leitura). É catálogo estático (não estado por placa) — L-04 ok.
+local _partsDeltas = nil
+local function partsDeltas()
+  if _partsDeltas then return _partsDeltas end
+  local ok, raw = pcall(function() return exports.vhub_custom:getPartsDeltas() end)
+  if not ok or type(raw) ~= 'table' or not next(raw) then return {} end  -- custom ainda carregando
+  _partsDeltas = raw
+  return raw
+end
+
+
+-- ADR #85 F2.5-C: p1 EFETIVO da entrada do catálogo. p1 EXPLÍCITO (balancer/.meta selado) SEMPRE
+-- vence; na ausência, deriva baseline JUSTO dos stats (Config.defaultBaselineFromStats) — nativo e
+-- mod no MESMO sistema de classes (anti-P2W). Carro sem p1 nem stats → nil (fail-closed preservado).
+-- PURO/derivado — nunca persiste.
+local function effectiveP1(entry)
+  if type(entry) ~= 'table' then return nil end
+  if entry.p1 then return entry.p1 end
+  if Config and Config.defaultBaselineFromStats then return TR.defaultP1(entry) end
+  return nil
+end
+
+-- entrada p1 (identidade física) da placa: resolve model → índice lowercase → p1 efetivo
 local function p1ByPlate(plate)
   local veh
   pcall(function() veh = exports.vhub_conce:getVehicle(plate) end)
   if not veh or not veh.model then return nil end
-  local entry = buildIndex()[string.lower(tostring(veh.model))]
-  return entry and entry.p1 or nil
+  return effectiveP1(buildIndex()[string.lower(tostring(veh.model))])
 end
 
 
@@ -58,8 +98,7 @@ local function sheetOf(plate, dbgSrc, overrideAlloc)
   local veh
   pcall(function() veh = exports.vhub_conce:getVehicle(plate) end)
   local model = veh and veh.model or nil
-  local base  = model and buildIndex()[string.lower(tostring(model))]
-  base = base and base.p1 or nil
+  local base  = model and effectiveP1(buildIndex()[string.lower(tostring(model))]) or nil
 
   if Config and Config.skillDebug and dbgSrc then
     TriggerClientEvent('chat:addMessage', dbgSrc, { args = {
@@ -75,13 +114,39 @@ local function sheetOf(plate, dbgSrc, overrideAlloc)
 
   local sheet = TR.buildSheet(base, cust.mods, cust.turbo, alloc)
 
-  -- nitro derivado da placa (read-only; fonte única = vhub_nitro). A ficha exibe e calibra;
-  -- a ESCRITA é delegada aos exports do vhub_nitro (decisão #30). Aditivo: consumidores
-  -- antigos da sheet ignoram este campo. defaults seguros vêm do próprio getNitro.
+  -- ADR #82: leitor de `handling_ext` REMOVIDO (código zumbi L-15) — o campo nunca foi persistido
+  -- (fora de CUST_KEYS), então este overlay lia sempre vazio. Os knobs de handling (freio de mão,
+  -- direção, largada, rigidez) migram p/ as PEÇAS de engenharia na Camada B (ADR #83, model-wide
+  -- gated). O motor de handling runtime (Config.skillHandling*/client/handling.lua) permanece
+  -- intocado e desligado (skillApplyHandling=false) — FASE 1 não reativa física.
+
+  -- nitro derivado da placa (read-only; fonte única = vhub_custom após FASE 2 ADR #81).
   if sheet then
     local nitro
-    pcall(function() nitro = exports.vhub_nitro:getNitro(plate) end)
+    pcall(function() nitro = exports.vhub_custom:getNitro(plate) end)
     sheet.nitro = (type(nitro) == 'table') and nitro or nil
+  end
+
+  -- ADR #82 F2.1: física derivada das PEÇAS (Camada A per-entidade). DERIVADO — NUNCA PERSISTIR
+  -- (recomposto on-read igual a tier/score/hnd/nitro; o dado bruto são as peças no vhub_custom).
+  -- `cust.parts` é referência VIVA do cache VRAM do conce (getVehicleState = cópia RASA): o
+  -- derivador itera read-only e NÃO muta. Só anexa quando há peça (evita payload vazio na ficha).
+  if sheet and ENG and ENG.hasParts(cust.parts) then
+    sheet.eng = ENG.derive(cust.parts, partsDeltas(), base)
+  end
+
+  -- ADR #85 F2.5-B: massa DERIVADA = base_mass (catálogo p1) + Σ deltas de peso das peças instaladas.
+  -- Efêmero, NUNCA persistido (igual eng/score/tier). A física de massa é model-wide (fMass) → a
+  -- APLICAÇÃO fica GATED na Camada B (ADR #83); aqui só compomos o número p/ a NUI e a Camada B futura.
+  -- Carro sem base_mass no p1 (ex.: nativo antes da F2.5-C) → ficha sem massa (NUI mostra "—").
+  if sheet then
+    local baseMass = tonumber(base.mass) or tonumber(base.base_mass)
+    if baseMass then
+      local delta = (ENG and ENG.massDelta) and ENG.massDelta(cust.parts, partsDeltas()) or 0
+      sheet.base_mass  = baseMass
+      sheet.mass_delta = delta
+      sheet.mass       = baseMass + delta
+    end
   end
 
   return sheet

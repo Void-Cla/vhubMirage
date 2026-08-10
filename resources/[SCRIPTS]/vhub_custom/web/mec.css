@@ -17,12 +17,8 @@
   background: transparent;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 220ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
 }
-.mod-mec.mec-overlay.hidden { opacity: 0; pointer-events: none; }
-/* overlay oculta por opacity (não display:none) — pausa toda animação (health-pulse)
-   p/ idle 0ms com o card fechado exibindo barra low (A-07/L-18) */
-.mod-mec.mec-overlay.hidden * { animation-play-state: paused !important; }
+.mod-mec.mec-overlay.hidden { display: none; }
 .mod-mec.mec-overlay:not(.hidden) { pointer-events: auto; }
 
 .mod-mec .mec-card {
@@ -38,11 +34,6 @@
   border-radius: var(--radius);
   box-shadow: var(--glass-shadow);
   overflow: hidden;
-  animation: mec-card-in 300ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
-}
-@keyframes mec-card-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: none; }
 }
 
 .mod-mec .mec-card::before {
@@ -96,7 +87,7 @@
   border: 1px solid rgba(243,181,58,0.14);
   background: linear-gradient(180deg, rgba(26,22,16,0.72), rgba(12,10,6,0.55));
   cursor: pointer;
-  transition: border-color 160ms, background 160ms, transform 160ms, box-shadow 160ms;
+  transition: border-color 160ms, box-shadow 160ms;
   overflow: hidden;
 }
 /* specular highlight discreto */
@@ -108,7 +99,6 @@
 .mod-mec .mc-opt:hover:not(.mc-opt-disabled) {
   border-color: rgba(243,181,58,0.36);
   background: linear-gradient(180deg, rgba(37,30,20,0.82), rgba(18,14,8,0.66));
-  transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0,0,0,0.35);
 }
 .mod-mec .mc-opt:active:not(.mc-opt-disabled) {

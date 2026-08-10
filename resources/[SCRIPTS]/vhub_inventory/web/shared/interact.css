@@ -1,55 +1,187 @@
-/* shared/interact.css — fantasma do arraste + modal de quantidade. */
+/* shared/interact.css — fantasma do arraste + modal de quantidade + menu de contexto. */
 
-/* ---- ghost (segue o cursor; nao captura mouse) ---- */
+/* ============================================================
+   GHOST (segue o cursor; não captura mouse)
+   ============================================================ */
+
 .vh-ghost {
-  position: fixed; z-index: 9999; width: 54px; height: 54px;
-  margin-left: -27px; margin-top: -27px; pointer-events: none;
-  background-size: contain; background-repeat: no-repeat; background-position: center;
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6)); opacity: 0.92;
+  position: fixed;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  margin-top: -28px;
+  pointer-events: none;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.65));
+  opacity: 0.95;
+  transform: scale(1.05) rotate(-3deg);
 }
 
-/* ---- modal de quantidade ---- */
+body.vh-dragging, body.vh-dragging * { cursor: grabbing !important; }
+
+
+/* ============================================================
+   MODAL DE QUANTIDADE
+   ============================================================ */
+
 #qty-modal {
-  position: fixed; inset: 0; z-index: 9998;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.45);
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vh-scrim);
+  opacity: 0;
+  transition: opacity var(--vh-med) var(--vh-ease-soft);
 }
+#qty-modal.show { opacity: 1; }
+
 #qty-modal .qm-box {
-  width: 300px; background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
-  border-radius: var(--vh-radius); box-shadow: var(--vh-shadow);
-  padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  width: 320px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background:
+    var(--vh-sheen),
+    linear-gradient(180deg, rgba(30, 26, 18, 0.96), rgba(16, 13, 9, 0.96));
+  border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-r-lg);
+  box-shadow: var(--vh-shadow);
+  transform: translateY(10px) scale(0.97);
+  transition: transform var(--vh-med) var(--vh-ease);
 }
-#qty-modal .qm-title { font-size: 15px; font-weight: 700; color: var(--vh-gold); text-align: center; letter-spacing: .5px; }
-#qty-modal .qm-row   { display: flex; align-items: baseline; gap: 8px; justify-content: center; }
+#qty-modal.show .qm-box { transform: translateY(0) scale(1); }
+
+#qty-modal .qm-title {
+  font-family: var(--vh-font-title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--vh-gold);
+  text-shadow: var(--vh-glow);
+}
+
+#qty-modal .qm-row { display: flex; align-items: baseline; gap: 8px; justify-content: center; }
+
 #qty-modal .qm-input {
-  width: 90px; text-align: center; font-size: 22px; font-weight: 700; color: var(--vh-text);
-  background: rgba(0,0,0,0.3); border: 1px solid var(--vh-border); border-radius: var(--vh-radius-sm);
-  padding: 6px 4px; outline: none;
+  width: 104px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--vh-text);
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--vh-border);
+  border-radius: var(--vh-r-sm);
+  padding: 6px 4px;
+  outline: none;
+  transition: border-color var(--vh-fast);
 }
-#qty-modal .qm-input:focus { border-color: var(--vh-gold); }
-#qty-modal .qm-max   { font-size: 14px; color: var(--vh-text-dim); }
-#qty-modal .qm-slider { width: 100%; accent-color: var(--vh-gold); }
+#qty-modal .qm-input:focus { border-color: var(--vh-gold); box-shadow: var(--vh-glow-soft); }
+#qty-modal .qm-max { font-size: 14px; color: var(--vh-text-dim); }
+
+/* slider com trilho preenchido no tom dourado */
+#qty-modal .qm-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--vh-gold), var(--vh-sand)) 0 / var(--fill, 100%) 100% no-repeat,
+    rgba(255, 255, 255, 0.09);
+  outline: none;
+}
+#qty-modal .qm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--vh-gold);
+  border: 2px solid #1a1710;
+  box-shadow: var(--vh-glow);
+  cursor: pointer;
+}
+
+#qty-modal .qm-quick { display: flex; gap: 8px; }
+#qty-modal .qm-quick button {
+  flex: 1;
+  padding: 7px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--vh-sand);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-sm);
+  cursor: pointer;
+  transition: border-color var(--vh-fast), color var(--vh-fast), background var(--vh-fast);
+}
+#qty-modal .qm-quick button:hover { border-color: var(--vh-border-2); color: var(--vh-gold); }
+
 #qty-modal .qm-actions { display: flex; gap: 8px; }
 #qty-modal .qm-actions button {
-  flex: 1; padding: 9px 0; border-radius: var(--vh-radius-sm); border: 1px solid var(--vh-border);
-  background: rgba(255,255,255,0.04); color: var(--vh-text); font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: background .12s, border-color .12s;
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--vh-r-sm);
+  border: 1px solid var(--vh-hair);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--vh-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--vh-fast), border-color var(--vh-fast), transform var(--vh-fast);
 }
-#qty-modal .qm-actions button:hover { border-color: var(--vh-gold); }
-#qty-modal .qm-ok  { background: var(--vh-gold); color: #1a1710; border-color: var(--vh-gold); }
-#qty-modal .qm-all { color: var(--vh-sand); }
+#qty-modal .qm-actions button:hover  { border-color: var(--vh-border-2); }
+#qty-modal .qm-actions button:active { transform: scale(0.97); }
+#qty-modal .qm-ok {
+  background: var(--vh-gold);
+  color: #1a1710;
+  border-color: var(--vh-gold);
+  font-weight: 700;
+}
+#qty-modal .qm-ok:hover { background: var(--vh-gold-soft); }
 
-/* ---- menu de contexto (right-click) ---- */
+
+/* ============================================================
+   MENU DE CONTEXTO (right-click)
+   ============================================================ */
+
 .vh-ctx {
-  position: fixed; z-index: 9997; min-width: 130px;
-  background: var(--vh-glass-2); border: 1px solid var(--vh-border-2);
-  border-radius: var(--vh-radius-sm); box-shadow: var(--vh-shadow);
-  padding: 5px; overflow: hidden;
+  position: fixed;
+  z-index: 9997;
+  min-width: 148px;
+  padding: 6px;
+  background:
+    var(--vh-sheen),
+    linear-gradient(180deg, rgba(28, 24, 17, 0.97), rgba(16, 13, 9, 0.97));
+  border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-r-md);
+  box-shadow: var(--vh-shadow);
+  animation: ctx-in 120ms var(--vh-ease);
 }
+@keyframes ctx-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+
 .vh-ctx-item {
-  padding: 8px 12px; font-size: 13px; color: var(--vh-text); cursor: pointer;
-  border-radius: 6px; transition: background .1s;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--vh-text);
+  cursor: pointer;
+  border-radius: var(--vh-r-sm);
+  transition: background var(--vh-fast), color var(--vh-fast);
 }
-.vh-ctx-item:hover { background: rgba(248,200,105,0.14); color: var(--vh-gold); }
-.vh-ctx-item.disabled { color: var(--vh-text-dim); opacity: .5; cursor: default; }
-.vh-ctx-item.disabled:hover { background: transparent; color: var(--vh-text-dim); }
+.vh-ctx-item:hover { background: rgba(243, 181, 58, 0.14); color: var(--vh-gold); }
+.vh-ctx-item.danger:hover { background: rgba(224, 120, 90, 0.16); color: var(--vh-danger); }
+.vh-ctx-item.disabled { color: var(--vh-text-mut); cursor: default; }
+.vh-ctx-item.disabled:hover { background: transparent; color: var(--vh-text-mut); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  #qty-modal, #qty-modal .qm-box { transition-duration: 1ms !important; }
+  .vh-ctx { animation: none; }
+  .vh-ghost { transform: none; }
+}

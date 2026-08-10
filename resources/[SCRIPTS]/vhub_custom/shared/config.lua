@@ -71,18 +71,10 @@ VHubCustom.cfg = {
   },
 
 
-  -- ============================================================
-  -- KNOBS DE HANDLING LIVRE (oficina) — valor NORMALIZADO 0..1 por knob
-  -- As CHAVES abaixo DEVEM espelhar vhub_vehcontrol/shared/config.lua::Config.skillHandlingExt
-  -- (menos 'stance', que vem do bennys). A FÍSICA (bandas) mora no motor; aqui só rótulo+chave.
-  -- ============================================================
-
-  handling_knobs = {
-    { key = 'handbrake',  label = 'Freio de mão',        hint = 'Força do freio de mão (drift)' },
-    { key = 'steering',   label = 'Trava de direção',    hint = 'Ângulo máximo de esterço' },
-    { key = 'low_speed',  label = 'Tração na largada',   hint = 'Perda de tração em baixa velocidade' },
-    { key = 'susp_force', label = 'Rigidez da suspensão', hint = 'Firmeza da suspensão' },
-  },
+  -- (handling_knobs REMOVIDO — ADR #82: alimentava o handler zumbi OFICINA_HANDLING que gravava
+  --  handling_ext fora de CUST_KEYS. Os ajustes finos de handling (freio de mão, direção, largada,
+  --  rigidez) passam a ser PEÇAS de engenharia declaradas em shared/parts_catalog.lua, com efeito
+  --  físico na Camada B model-wide gated (ADR #83). ZERO handling runtime na FASE 1.)
 
 
   -- ============================================================
@@ -122,6 +114,9 @@ VHubCustom.cfg = {
     oficina_nitro   = { max = 2,  window = 60000 },
     drift_install   = { max = 2,  window = 120000 },
     drift_remove    = { max = 2,  window = 120000 },
+    oficina_install_part = { max = 5, window = 60000 },  -- instalar peça de inventário
+    oficina_remove_part  = { max = 5, window = 60000 },  -- remover peça (ADR #85 F2.5-A — remoção 1ª classe)
+    engine_bay_inspect   = { max = 15, window = 10000 }, -- leitura do motor (ADR #82 F2.2) — anti-enumeração
   },
 
   service_lease_ms       = 600000,
@@ -176,7 +171,6 @@ VHubCustom.cfg = {
     turbo          = 12000,
     recalibration  = 2500,
     nitro_kit      = 5000,
-    handling_tune  = 3000,   -- ajuste dos knobs de handling livre (freio/direção/largada/rigidez)
     drift_install  = 4500,   -- instalação do Freio de Mão Hidráulico (mão de obra) — item p/ inventário
     drift_remove   = 500,    -- remoção (devolve peça ao inventário)
   },

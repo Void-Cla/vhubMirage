@@ -1,4 +1,4 @@
-// hud.js — lifecycle e render delta do HUD HSS
+// hud.js — lifecycle e render delta do HUD HSS + overlays (rua / hora / voz)
 
 'use strict';
 
@@ -26,6 +26,7 @@ const numericFields = new Set([
 ]);
 
 let elements = null;
+let ov = null;  // overlay elements (street / time / voice)
 
 
 // ============================================================
@@ -36,16 +37,23 @@ const EXPAND_MS = 5000;
 const _timers   = {};
 const _tracked  = {};
 
-// expande a track se o valor mudou; agenda colapso após EXPAND_MS
-function tryExpand(key, value, trackEl, epsilon) {
+// atualiza % sempre visível; expande a track por 5s quando valor muda
+function tryExpand(key, value, trackEl, epsilon, pctEl) {
     if (!trackEl) return;
     epsilon = (epsilon !== undefined) ? epsilon : 0.005;
+
+    // % sempre atualizado — independente de mudança
+    if (pctEl && typeof value === 'number') {
+        pctEl.textContent = Math.round(Math.max(0, Math.min(1, value)) * 100) + '%';
+    }
+
     const prev    = _tracked[key];
     const changed = prev === undefined
         || (typeof value === 'number' ? Math.abs(value - prev) > epsilon : value !== prev);
     _tracked[key] = value;
     if (!changed) return;
 
+    // track expande por mudança, colapsa após EXPAND_MS; % permanece visível
     if (_timers[key]) clearTimeout(_timers[key]);
     trackEl.classList.remove('hss-track--hidden');
     _timers[key] = setTimeout(function () {
@@ -76,33 +84,33 @@ function bar(fill, value, critical) {
 }
 
 function render() {
-    // barras principais — ícones sempre visíveis, tracks expandem por mudança
+    // barras principais — ícones sempre visíveis, tracks + % expandem por mudança
     bar(elements.fillHealth, state.health, 0.25);
-    tryExpand('health', state.health, elements.barHealth);
+    tryExpand('health', state.health, elements.barHealth, undefined, elements.pctHealth);
 
     bar(elements.fillFood, state.food, 0.18);
-    tryExpand('food', state.food, elements.barFood);
+    tryExpand('food', state.food, elements.barFood, undefined, elements.pctFood);
 
     bar(elements.fillWater, state.water, 0.18);
-    tryExpand('water', state.water, elements.barWater);
+    tryExpand('water', state.water, elements.barWater, undefined, elements.pctWater);
 
-    // colete — row some quando zerado; track expande por timer
+    // colete — row some quando zerado; track + % expandem por timer
     var hasArmour = state.armour > 0.01;
     conditional(elements.rowArmour, hasArmour);
     if (hasArmour) {
         bar(elements.fillArmour, state.armour, 0.15);
-        tryExpand('armour', state.armour, elements.barArmour);
+        tryExpand('armour', state.armour, elements.barArmour, undefined, elements.pctArmour);
     }
 
-    // energia — row sempre visível; track expande por timer
+    // energia — row sempre visível; track + % expandem por timer
     bar(elements.fillEnergy, state.effective_energy, 0.20);
-    tryExpand('energy', state.effective_energy, elements.barEnergy);
+    tryExpand('energy', state.effective_energy, elements.barEnergy, undefined, elements.pctEnergy);
 
-    // oxigênio — row condicional; track expande por timer quando visível
+    // oxigênio — row condicional; track + % expandem quando visível
     conditional(elements.rowOxygen, state.oxygen_visible);
     if (state.oxygen_visible) {
         bar(elements.fillOxygen, state.oxygen, 0.25);
-        tryExpand('oxygen', state.oxygen, elements.barOxygen);
+        tryExpand('oxygen', state.oxygen, elements.barOxygen, undefined, elements.pctOxygen);
     }
 
     // adrenalina — row condicional; track expande por timer quando visível
@@ -145,6 +153,52 @@ function render() {
 
 
 // ============================================================
+// OVERLAYS — rua / hora / voz
+// ============================================================
+
+function initOverlays() {
+    var id = function (v) { return document.getElementById(v); };
+    ov = {
+        street:     id('hud-street'),
+        streetName: id('hud-street-name'),
+        zoneName:   id('hud-zone-name'),
+        timeValue:  id('hud-time-value'),
+        voice:      id('hud-voice'),
+        voiceLabel: id('hud-voice-label'),
+    };
+}
+
+function onHudStreet(msg) {
+    if (!ov) return;
+    ov.street.classList.toggle('visible', msg.visible === true);
+    if (msg.street !== undefined) ov.streetName.textContent = msg.street;
+    if (msg.zone   !== undefined) ov.zoneName.textContent   = msg.zone;
+}
+
+function onHudTime(msg) {
+    if (!ov) return;
+    ov.timeValue.textContent = msg.time || '--:--';
+}
+
+function onHudVoice(msg) {
+    if (!ov) return;
+    ov.voice.dataset.mode  = msg.mode  || 2;
+    ov.voiceLabel.textContent = msg.label || '';
+}
+
+function onHudVoiceTalking(msg) {
+    if (!ov) return;
+    ov.voice.dataset.talking = msg.talking ? 'true' : 'false';
+}
+
+function clearOverlays() {
+    if (!ov) return;
+    ov.street.classList.remove('visible');
+    ov.voice.dataset.talking = 'false';
+}
+
+
+// ============================================================
 // LIFECYCLE
 // ============================================================
 
@@ -154,15 +208,16 @@ vhub.createModule('hss', {
     },
 
     onMount() {
+        initOverlays();
         var id = function (v) { return document.getElementById(v); };
         elements = {
             root:          id('hss-hud'),
-            rowHealth:     id('row-health'),     barHealth:     id('bar-health'),     fillHealth:     id('fill-health'),
-            rowFood:       id('row-food'),        barFood:       id('bar-food'),       fillFood:       id('fill-food'),
-            rowWater:      id('row-water'),       barWater:      id('bar-water'),      fillWater:      id('fill-water'),
-            rowArmour:     id('row-armour'),      barArmour:     id('bar-armour'),     fillArmour:     id('fill-armour'),
-            rowEnergy:     id('row-energy'),      barEnergy:     id('bar-energy'),     fillEnergy:     id('fill-energy'),
-            rowOxygen:     id('row-oxygen'),      barOxygen:     id('bar-oxygen'),     fillOxygen:     id('fill-oxygen'),
+            rowHealth:     id('row-health'),     barHealth:     id('bar-health'),     fillHealth:     id('fill-health'),     pctHealth:     id('pct-health'),
+            rowFood:       id('row-food'),        barFood:       id('bar-food'),       fillFood:       id('fill-food'),       pctFood:       id('pct-food'),
+            rowWater:      id('row-water'),       barWater:      id('bar-water'),      fillWater:      id('fill-water'),      pctWater:      id('pct-water'),
+            rowArmour:     id('row-armour'),      barArmour:     id('bar-armour'),     fillArmour:     id('fill-armour'),     pctArmour:     id('pct-armour'),
+            rowEnergy:     id('row-energy'),      barEnergy:     id('bar-energy'),     fillEnergy:     id('fill-energy'),     pctEnergy:     id('pct-energy'),
+            rowOxygen:     id('row-oxygen'),      barOxygen:     id('bar-oxygen'),     fillOxygen:     id('fill-oxygen'),     pctOxygen:     id('pct-oxygen'),
             rowAdrenaline: id('row-adrenaline'),  barAdrenaline: id('bar-adrenaline'), fillAdrenaline: id('fill-adrenaline'),
             alerts:          id('hss-alerts'),
             alertBleeding:   id('alert-bleeding'), alertPain:        id('alert-pain'),
@@ -188,8 +243,10 @@ vhub.createModule('hss', {
     onDestroy() {
         window.removeEventListener('message', onMessage);
         clearAllTimers();
+        clearOverlays();
         this.onHide();
         elements = null;
+        ov = null;
     },
 });
 
@@ -222,8 +279,15 @@ function applyDelta(delta) {
 function onMessage(event) {
     var message = event.data;
     if (!message || typeof message !== 'object') return;
+
+    if (message.type === 'hud:street')        { onHudStreet(message);       return; }
+    if (message.type === 'hud:time')           { onHudTime(message);         return; }
+    if (message.type === 'hud:voice')          { onHudVoice(message);        return; }
+    if (message.type === 'hud:voice_talking')  { onHudVoiceTalking(message); return; }
+
     if (message.type === 'hss:hide') {
         vhub.hide('hss');
+        clearOverlays();
         return;
     }
     if (message.type !== 'hss:update') return;

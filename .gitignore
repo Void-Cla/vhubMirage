@@ -24,9 +24,25 @@ log.txt
 node_modules/
 dist/
 
+# Python local
+.venv/
+__pycache__/
+*.py[cod]
+.bootstrap.lock
+.sidecar.lock
+.sidecar-token
+
+# vhub_npcai — artefatos gerados em runtime (sobrevivem a restart, mas NÃO versionam)
+# colchetes de [SCRIPTS] escapados (senão viram classe de caractere glob)
+resources/\[SCRIPTS\]/vhub_npcai/sidecar/audio_cache/
+resources/\[SCRIPTS\]/vhub_npcai/sidecar/logs/
+
 # Variáveis de ambiente
 .env
 *.env
 
 # Segredos locais do FXServer
 config/local.cfg
+
+# MCP config (pode conter tokens de API)
+.mcp.json

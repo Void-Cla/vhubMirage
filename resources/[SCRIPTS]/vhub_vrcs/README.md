@@ -40,7 +40,7 @@ Nenhum vídeo é renderizado aqui — isso é o renderer isolado (Fase 2+).
 1. `ensure vhub_vrcs` no `resources.cfg` (já adicionado, logo após `vhub_racha`).
 2. Webhook do Discord via **convar** no `server.cfg` (**já configurado** com a URL do canal de replays):
    ```cfg
-   set vrcs_discord_webhook "https://discord.com/api/webhooks/...."
+   set vrcs_discord_webhook "<URL_PRIVADA>"
    ```
    Vazio = publisher desligado (fail-closed).
 3. Tabelas criadas automaticamente no boot (`sql/schema.sql`, idempotente).
@@ -65,3 +65,26 @@ config/    config.lua    sql/ schema.sql    replays/ (.vhr em runtime)
 
 `F2` renderer isolado (`[TOOLS]/vhub_vrcs_renderer`) · `F3` câmeras cinematográficas ·
 `F4` FFmpeg → `.mp4` · `F5` publisher de vídeo (move o HTTP para fora do main).
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `onRaceStart` | `(race_id, participants) → ok` | vhub_racha (hook pré-corrida) |
+| 2 | `onRaceClose` | `(race_id, results) → ok` | vhub_racha (hook pós-corrida) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId` |
+| `vhub_racha` | hooks registrados via pcall (soft-dep) |
+| `vhub_hss` | `getPosition` (amostragem de trajetória) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_vrcs:sessionSaved` | server interno | `{race_id, file_path}` |

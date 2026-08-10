@@ -22,7 +22,8 @@ VHubVeh.E = {
   -- skill / redistribuição de pontos
   REQ_SHEET    = 'vhub_vehcontrol:reqSheet',     -- cliente → servidor: pede ficha derivada por placa
   SHEET        = 'vhub_vehcontrol:sheet',        -- servidor → cliente: ficha (flat, primitivos)
-  RECALIBRATE  = 'vhub_vehcontrol:recalibrate',  -- cliente → servidor: aplicar alloc redistribuído
+  SHEET_UPDATED= 'vhub_vehcontrol:sheetUpdated', -- servidor → SÓ motorista: ficha nova (plate, sheet) live
+  RECALIBRATE  = 'vhub_vehcontrol:recalibrate',  -- cliente → servidor: netId, placa, alloc
   RECAL_DONE   = 'vhub_vehcontrol:recalDone',    -- servidor → cliente: resultado (ok, msg, kind, ficha nova)
   OPEN_EDIT    = 'vhub_vehcontrol:openEdit',     -- servidor → cliente: abre painel já em modo edição (item)
 
@@ -40,6 +41,12 @@ VHubVeh.E = {
   -- client/handling.lua escuta (gatilho event-driven, sem polling novo — L-06)
   BECAME_DRIVER = 'vhub_vehcontrol:becameDriver',  -- (veh, plate) virei motorista desta placa
   LEFT_VEHICLE  = 'vhub_vehcontrol:leftVehicle',   -- (veh) saí do banco do motorista (restaura base)
+
+  -- Camada A per-entidade (ADR #82 FASE 2) — client/engineering.lua é o ESCRITOR ÚNICO de
+  -- SetVehicleCheatPowerIncrease. Escritores de overlay efêmero (nitro) restauram a BASE via
+  -- este evento em vez de hardcode 0.0. CROSS-RESOURCE: emissor externo (vhub_custom) usa a
+  -- STRING LITERAL 'vhub_vehcontrol:reapplyBase' (VHubVeh.E não é visível fora deste resource).
+  REAPPLY_BASE  = 'vhub_vehcontrol:reapplyBase',   -- (veh) restaura a base de potência per-entidade
 
   -- telinha DVD no carro (decisão #53) — servidor → cliente: exibe/esconde o iframe do YouTube (mute)
   VIDEO_ATTACH = 'vhub_vehcontrol:soundVideoAttach',  -- (videoId, title)

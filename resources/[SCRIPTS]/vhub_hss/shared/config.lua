@@ -9,7 +9,10 @@ VHubHSS.Cfg = {
 
     PED = {
         spawn = vec4(-538.70, -214.91, 37.65, 0.0),
-        customization_stage = vec4(402.60, -997.20, -98.30, 180.0),
+        -- Palco do criador SIMS no mapa depzitamadasptlnd.
+        customization_stage = vec4(80.7225, 1.3156, 1.0001, 186.6230),
+        customization_ipl = {},
+        customization_void = vec4(402.60, -997.20, -98.30, 180.0),
         default_model = 'mp_m_freemode_01',
         default_health = 200,
         default_armour = 0,
@@ -20,6 +23,9 @@ VHubHSS.Cfg = {
         world_bucket = 1,
         activity_bucket_first = 1000,
         activity_bucket_last = 65535,
+        -- pool exclusivo do estúdio de criação (disjunto: world=1, entry=999, activity=1000+)
+        creation_bucket_first = 100,
+        creation_bucket_last = 998,
         monitor_hz = 1,
         max_foot_speed = 18.0,
         max_vehicle_speed = 180.0,

@@ -1510,3 +1510,46 @@ end, {
 -- Disparar do cliente:
 TriggerServerEvent("meu:evento", a, b, c)
 ```
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `getUser` | `(src) → {user_id,char_id,name,…}` | quase todos os resources |
+| 2 | `getUID` | `(src) → user_id` | vhub_groups, vhub_login, vhub_identity |
+| 3 | `getCharacterId` | `(src) → char_id` | vhub_hss, vhub_money, vhub_conce, vhub_coinshop |
+| 4 | `hasPerm` | `(src, perm) → bool` | vhub_groups, vhub_admin, vhub_coinshop |
+| 5 | `grantPerm` | `(src, perm) → ok` | vhub_admin |
+| 6 | `getCData` | `(src, key) → value` | vhub_coinshop (coins), vhub_hss (fisiologia) |
+| 7 | `setCData` | `(src, key, value) → ok` | vhub_coinshop (gated), CORE internamente |
+| 8 | `getVData` | `(key) → value` | CORE internamente |
+| 9 | `setVData` | `(key, value) → ok` | CORE internamente (L-13) |
+| 10 | `getUData` | `(src, key) → value` | CORE internamente |
+| 11 | `setUData` | `(src, key, value) → ok` | CORE internamente (L-13) |
+| 12 | `getVehicle` | `(plate) → veh_table` | vhub_conce (leitura interna) |
+| 13 | `commitVehicleState` | `(plate, patch, src) → ok` | vhub_conce, vhub_custom, vhub_nitro |
+| 14 | `getVehicleState` | `(plate) → cópia serializada` | vhub_conce, vhub_vehcontrol |
+| 15 | `spawnAt` | `(src, coord) → ok` | vhub_hss |
+| 16 | `banPlayer` | `(src, motivo, dur) → ok` | vhub_admin |
+| 17 | `isAdmin` | `(src) → bool` | vhub_admin, vhub_lspdtool |
+| 18 | `notify` | `(src, tipo, msg) → void` | todos os resources (vhub:notify) |
+| 19 | `vh_audit` | `(action, src, payload) → void` | CORE internamente |
+| 20 | `isTrusted` | `(resource) → bool` | via convar `vhub_trusted_resources` |
+
+## Consome de
+
+| Resource | Exports/contratos usados |
+|----------|--------------------------|
+| `oxmysql` | Driver SQL direto (S:prepare, S:query) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vHub:ready` | server→client (player) | `{char_id, user_id}` |
+| `vHub:characterLoad` | server broadcast ao player | `{char_id}` |
+| `vHub:playerSpawn` | server broadcast ao player | `{coord}` |
+| `vHub:notify` | server→client (player) | `{tipo, msg}` |
+| `vHub:vehicleCommitted` | server→todos | `{plate, char_id}` |

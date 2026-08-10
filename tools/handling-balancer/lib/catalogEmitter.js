@@ -1,7 +1,7 @@
-// catalogEmitter.js — gera out/catalog-patch.json (a ponte Fase 1 -> Fase 2)
+// catalogEmitter.js — gera out/catalog-patch.json + aplica p1 em catalog.lua via catalogPatcher
 //
-// O patch e um ARTEFATO INERTE: proposta de extensao do catalogo do conce, mesclada
-// MANUALMENTE pelo dev na Fase 2 (carskill.md §4.1). A Fase 1 NUNCA edita catalog.lua.
+// O patch e TRILHA DE AUDITORIA do apply (nao mais artefato inerte): o catalogPatcher
+// aplica automaticamente em vhub_conce/shared/catalog.lua ao final do apply.
 //
 // Convencoes de chave (travadas pelo guardiao de contrato):
 //   - key do patch        = handlingName em LOWERCASE (casa 1:1 com a key do catalogo,
@@ -10,10 +10,12 @@
 //   - handling_name (dentro) = handlingName REAL do .meta (a80 / SKYLINE / 370Z) — ancora
 //                           ao arquivo fisico.
 //
-// Nomes do bloco `p1` espelham carskill.md §4.1 EXATAMENTE (snake_case curto):
-//   handling_name, tier_base, tier_max, archetype, grip_modifier,
+// Nomes do bloco `p1` (snake_case curto — runtime vhub_vehcontrol/tier_rules.lua):
+//   handling_name, class_budget, tier_max, archetype, grip_modifier,
 //   base_alloc{potencia,grip,frenagem,aero,suspensao}, drive_bias, susp_raise, mass,
 //   inertia_z, low_speed_loss, seal.
+//   NOTA: campo renomeado tier_base -> class_budget (ADR #82; shim R15 em tier_rules.lua
+//   ainda aceita tier_base por 1 versao, mas o emitter ja nao emite o alias).
 
 const path = require('path');
 const io   = require('./io');
@@ -83,16 +85,16 @@ function buildEntry(handlingNameRaw, block, cfg, seal) {
   const budget    = cfg.tiers[reg.tier_base].budget;
 
   return {
-    handling_name: handlingNameRaw.trim(),     // real (NAO uppercased) — ancora ao .meta
-    tier_base:     reg.tier_base,
-    tier_max:      reg.tier_max || reg.tier_base,
+    handling_name:  handlingNameRaw.trim(),     // real (NAO uppercased) — ancora ao .meta
+    class_budget:   reg.tier_base,              // era tier_base; campo do runtime (ADR #82)
+    tier_max:       reg.tier_max || reg.tier_base,
     archetype,
-    grip_modifier: round2(ov.grip_modifier ?? archMod),
-    base_alloc:    ov.base_alloc || balancedAlloc(budget),
-    drive_bias:    round3(driveBias),
-    susp_raise:    round3(suspRaise),
-    mass:          round1(mass),
-    inertia_z:     round3(inertiaZ),
+    grip_modifier:  round2(ov.grip_modifier ?? archMod),
+    base_alloc:     ov.base_alloc || balancedAlloc(budget),
+    drive_bias:     round3(driveBias),
+    susp_raise:     round3(suspRaise),
+    mass:           round1(mass),
+    inertia_z:      round3(inertiaZ),
     low_speed_loss: round3(lowSpeedLoss),
     seal,                                       // copia de auditoria do hash do apply
   };
@@ -103,13 +105,13 @@ function buildEntry(handlingNameRaw, block, cfg, seal) {
 // ESCRITA DO PATCH
 // ============================================================
 
-// grava out/catalog-patch.json (chaves ordenadas para diff estavel).
+// grava out/catalog-patch.json (trilha de auditoria; apply grava automaticamente no catalog.lua).
 function writePatch(entriesByKey) {
   const out = {
-    _doc: 'Proposta de extensao do catalogo do conce (bloco p1 por veiculo). ARTEFATO ' +
-          'INERTE: mesclar MANUALMENTE em vhub_conce/shared/catalog.lua na Fase 2 (gate ' +
-          'do conce). key = modelName minusculo (casa com a entrada existente). NAO ' +
-          'commitado (gerado por `apply`; veja `plan` para preview).',
+    _doc: 'Trilha de auditoria do apply (gerado automaticamente). O catalogPatcher aplica ' +
+          'este bloco em vhub_conce/shared/catalog.lua de forma cirurgica (merge por campo). ' +
+          'Campos do balancer vencem; campos manuais extras em p1 sao preservados. ' +
+          'key = modelName lowercase. NAO commitado.',
   };
   for (const key of Object.keys(entriesByKey).sort()) out[key] = entriesByKey[key];
   io.writeJson(PATCH_PATH, out);

@@ -1,0 +1,35 @@
+<title>vHub NPC AI</title>
+<meta charset="utf-8">
+<link rel="stylesheet" href="css/style.css">
+
+<!-- ============================================================
+     MOD: npcai — overlay HUD (sem cursor, sem block de input)
+     CEF: transparent body (A-09); todos os assets em files{} (A-10)
+     ============================================================ -->
+
+<div class="mod-npcai" id="npcai-root">
+
+    <!-- hint de aproximação -->
+    <div class="npcai-hint" id="hint-panel" hidden>
+        <span class="hint-key" id="hint-key">G</span>
+        <span class="hint-label" id="hint-label">Falar</span>
+    </div>
+
+    <!-- painel de gravação (push-to-talk ativo) -->
+    <div class="npcai-rec" id="rec-panel" hidden>
+        <div class="rec-vu" id="vu-bar">
+            <div class="vu-fill" id="vu-fill"></div>
+        </div>
+        <span class="rec-label">Ouvindo…</span>
+        <div class="rec-timer" id="rec-timer">0s</div>
+    </div>
+
+    <!-- legenda da fala do NPC -->
+    <div class="npcai-caption" id="caption-panel" hidden>
+        <span class="caption-name" id="caption-name"></span>
+        <span class="caption-text" id="caption-text"></span>
+    </div>
+
+</div>
+
+<script src="js/app.js"></script>

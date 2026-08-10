@@ -226,6 +226,14 @@ local function creation_complete(src)
     return ok and type(result) == 'table' and result.ok == true and result.created == true
 end
 
+local function login_gate_step(src)
+    if GetResourceState('vhub_login') ~= 'started' then return nil end
+    local ok, step = pcall(function() return exports.vhub_login:getSessionStep(src) end)
+    if not ok then return 'indisponivel' end
+    if step == 'ready' then return nil end
+    return type(step) == 'string' and step or nil
+end
+
 local function release_spawn(src, position, first_spawn)
     local char_id = resolve_online(src)
     if not char_id then return false end
@@ -241,7 +249,8 @@ local function release_spawn(src, position, first_spawn)
     _pending[src] = nil
     _customization_stages[src] = nil
     _ended_stage_tokens[src] = nil
-    Buckets.world(src)
+    -- Libera qualquer bucket exclusivo (criação) de volta ao pool e leva ao mundo.
+    if not Buckets.end_activity(src, true) then Buckets.world(src) end
     local destination = valid_position(position)
     if destination then
         local profile = profile_for(src, char_id)
@@ -253,6 +262,22 @@ local function release_spawn(src, position, first_spawn)
     return true
 end
 
+local function automatic_release(src, position, first_spawn, reason)
+    local gate_step = login_gate_step(src)
+    if gate_step then
+        if Logger then
+            Logger('error', 'Release automático bloqueado pelo gate.', {
+                src = src,
+                step = gate_step,
+                reason = reason,
+            })
+        end
+        DropPlayer(tostring(src), 'Fluxo de entrada indisponível. Reconecte.')
+        return false
+    end
+    return release_spawn(src, position, first_spawn)
+end
+
 local function schedule_pending_timeout(src, pending)
     _pending_generation = _pending_generation + 1
     pending.token = _pending_generation
@@ -260,7 +285,8 @@ local function schedule_pending_timeout(src, pending)
     SetTimeout(Cfg.PED.selector_timeout_ms, function()
         local current = _pending[src]
         if current and current.token == token and not _customization_stages[src] then
-            release_spawn(src, effective_position(profile_for(src, current.char_id)), current.first_spawn)
+            automatic_release(src, effective_position(profile_for(src, current.char_id)),
+                current.first_spawn, 'pending_timeout')
         end
     end)
 end
@@ -272,6 +298,17 @@ local function stage_position()
         y = finite(position.y) or -997.20,
         z = finite(position.z) or -98.30,
         heading = finite(position.w) or 180.0,
+    }
+end
+
+-- Posição de fallback (void subterrâneo) quando a cena do interior não carrega no cliente.
+local function stage_void()
+    local position = Cfg.PED.customization_void
+    return {
+        x = finite(position and position.x) or 402.60,
+        y = finite(position and position.y) or -997.20,
+        z = finite(position and position.z) or -98.30,
+        heading = finite(position and position.w) or 180.0,
     }
 end
 
@@ -332,7 +369,7 @@ local function begin_pending_stage(src, session_id)
         pending = {
             token = _pending_generation,
             char_id = char_id,
-            first_spawn = (pending and pending.first_spawn == true) or false,
+            first_spawn = not creation_complete(src),
         }
         _pending[src] = pending
     end
@@ -351,8 +388,8 @@ local function begin_pending_stage(src, session_id)
     -- load físico do char recém-selecionado ainda em voo (assíncrono) → transitório, NÃO conflito;
     -- o consumidor (SIMS) reespera. Conflito só para colisão real acima.
     if not State or not State.is_loaded(char_id) then return { ok = false, err = 'not_ready' } end
-    if not Buckets.enter(src) then
-        if Logger then Logger('warn', 'beginPendingStage: Buckets.enter falhou.', { src = src, char_id = char_id }) end
+    if not Buckets.begin_creation(src) then
+        if Logger then Logger('warn', 'beginPendingStage: Buckets.begin_creation falhou.', { src = src, char_id = char_id }) end
         return { ok = false, err = 'native' }
     end
     local ped = owned_player_ped(src)
@@ -380,6 +417,8 @@ local function begin_pending_stage(src, session_id)
     }
     TriggerClientEvent(VHubHSS.E.CUSTOMIZATION_STAGE_BEGIN, src, {
         position = destination,
+        ipl = Cfg.PED.customization_ipl,
+        fallback = stage_void(),
         customization = profile_for(src, char_id).customization,
     })
     return { ok = true, stage_token = stage_token }
@@ -404,7 +443,7 @@ local function end_pending_stage(src, stage_token)
     if not pending or pending.char_id ~= char_id then return { ok = false, err = 'conflict' } end
     local profile = profile_for(src, char_id)
     local destination = effective_position(profile)
-    if not Buckets.enter(src) then
+    if not Buckets.begin_creation(src) then
         return { ok = false, err = 'native' }
     end
     local ped = owned_player_ped(src)
@@ -434,7 +473,7 @@ function Ped.handle_spawn(user, first_spawn)
         _pending[src] = nil
         _observed[src] = nil
         _ledger[src] = nil
-        Buckets.end_activity(src, true)
+        if not Buckets.is_creation(src) then Buckets.end_activity(src, true) end
     end
     _active_char[src] = char_id
     _revive_generation[src] = (_revive_generation[src] or 0) + 1
@@ -449,14 +488,19 @@ function Ped.handle_spawn(user, first_spawn)
         and GetResourceState('vhub_spawselector') == 'started'
         and (Cfg.PED.selector_mode == 'always' or spawns <= 1)
     -- hold explícito de criação (vhub_login chamou holdForCreation antes de selectCore).
-    local creation_hold = _creation_hold[src] == true and not select_spawn
-    local isolate = (select_spawn or creation_hold) and first_spawn == true
+    local creation_hold = _creation_hold[src] == true
+    local gate_step = login_gate_step(src)
+    local isolate = select_spawn or creation_hold or gate_step ~= nil
 
-    if isolate then Buckets.enter(src) else Buckets.world(src) end
+    if isolate then
+        if not Buckets.begin_creation(src) then return false end
+    else
+        Buckets.world(src)
+    end
     seed_baseline(src, profile, position, true)
     TriggerClientEvent(VHubHSS.E.PED_APPLY, src, {
         position = position,
-        hold = select_spawn,
+        hold = select_spawn or creation_hold or gate_step ~= nil,
         health = profile.health,
         armour = profile.armour,
         customization = profile.customization,
@@ -477,7 +521,7 @@ function Ped.handle_spawn(user, first_spawn)
         SetTimeout(Cfg.PED.selector_timeout_ms, function()
             local pending = _pending[src]
             if pending and pending.token == token then
-                release_spawn(src, position, pending.first_spawn)
+                automatic_release(src, position, pending.first_spawn, 'selector_timeout')
             end
         end)
     end
@@ -661,7 +705,8 @@ local function export_spawn_at(src, position)
     src = tonumber(src)
     local pending = src and _pending[src] or nil
     local char_id = src and resolve_online(src) or nil
-    if not pending or _customization_stages[src] or not char_id or pending.char_id ~= char_id then
+    if not pending or not Buckets.is_creation(src) or _customization_stages[src]
+        or not char_id or pending.char_id ~= char_id then
         return false
     end
     if pending.first_spawn == true and not creation_complete(src) then return false end
@@ -821,7 +866,21 @@ exports('holdForCreation', function(src)
     _creation_hold[src] = true
     return true
 end)
--- Libera hold de criação; limpa estágio residual; só dispara release se criação concluída.
+-- Subinstancia exclusiva do gate autenticado. O bucket 999 permanece como entrada-base;
+-- cada sessao ocupa temporariamente um bucket do pool privado 100..998.
+exports('isolateEntrySession', function(src)
+    if not creation_invoker_ok() then return nil end
+    src = tonumber(src)
+    if not src or not GetPlayerName(src) then return nil end
+    return Buckets.begin_creation(src)
+end)
+exports('releaseEntrySession', function(src)
+    if not creation_invoker_ok() then return false end
+    src = tonumber(src)
+    if not src or not GetPlayerName(src) then return false end
+    return Buckets.begin_creation(src) ~= nil
+end)
+-- Libera o flag de criação, preservando pending e bucket privado até o selector concluir.
 exports('releaseCreationHold', function(src)
     if not creation_invoker_ok() then return false end
     src = tonumber(src)
@@ -835,24 +894,20 @@ exports('releaseCreationHold', function(src)
         -- Com o selector ATIVO, NÃO spawnar aqui: preserva _pending para o selector abrir
         -- (isPendingSpawn=true) e mover 999→1 via spawnAt no local ESCOLHIDO. Spawnar direto
         -- consumiria o pending e o selector nunca abriria (o player caía na posição salva).
-        -- Sem selector (rollback), spawna direto para não prender o player no 999 — mesma
-        -- política do handle_profile_loaded. first_spawn=true sem sims_created NUNCA spawna.
+        -- Sem selector, falha fechado: o gate mantém o jogador isolado e retorna erro.
         local selector_ready = Cfg.PED.selector_enabled
             and GetResourceState('vhub_spawselector') == 'started'
-        local can_spawn = pending.first_spawn ~= true or creation_complete(src)
-        if not selector_ready and can_spawn then
-            local position = effective_position(profile_for(src, pending.char_id))
-            release_spawn(src, position, pending.first_spawn)
-        end
+        if not selector_ready then return false end
     end
-    return true
+    return Buckets.begin_creation(src) ~= nil
 end)
 exports('spawnAt', export_spawn_at)
 exports('beginPendingStage', begin_pending_stage)
 exports('endPendingStage', end_pending_stage)
 exports('isPendingSpawn', function(src)
     if not ped_invoker_ok() then return false end
-    return _pending[tonumber(src)] ~= nil
+    src = tonumber(src)
+    return src ~= nil and _pending[src] ~= nil and Buckets.is_creation(src)
 end)
 exports('beginActivity', function(src)
     if not activity_invoker_ok() then return nil end
@@ -963,7 +1018,7 @@ function Ped.handle_character_load(user)
         if _creation_hold[src] ~= true then return true end
         local pending = _pending[src]
         if pending and pending.char_id == char_id then return true end
-        if not Buckets.enter(src) then return false end
+        if not Buckets.begin_creation(src) then return false end
 
         pending = {
             char_id = char_id,
@@ -985,7 +1040,7 @@ function Ped.handle_character_load(user)
     _observed[src] = nil
     _ledger[src] = nil
     _movement_override[src] = nil
-    Buckets.end_activity(src, true)
+    if not Buckets.is_creation(src) then Buckets.end_activity(src, true) end
 
     -- Estabelece o hold físico SEMPRE que o player carrega um char ainda não spawnado:
     -- troca de personagem OU primeiro-char via gate de login. No primeiro-char o CORE já pôs
@@ -1008,14 +1063,15 @@ function Ped.handle_character_load(user)
             char_id = char_id,
             spawns = math.max(0, tonumber(user.spawns) or 0),
         }
-        Buckets.enter(src)
+        if not Buckets.begin_creation(src) then return false end
         -- No primeiro-char o CORE (boot.lua:203) já disparou chooseSpawn; não duplicar.
         if not pending and not first_char_on_gate then TriggerEvent(VHubHSS.E.SPAWN_CHOOSE, src) end
         local token = _pending_generation
         SetTimeout(Cfg.PED.selector_timeout_ms, function()
             local current = _pending[src]
             if current and current.token == token and current.char_id == ResolveCharacter(src) then
-                release_spawn(src, effective_position(profile_for(src, current.char_id)), current.first_spawn)
+                automatic_release(src, effective_position(profile_for(src, current.char_id)),
+                    current.first_spawn, 'character_load_timeout')
             end
         end)
     end
@@ -1052,7 +1108,7 @@ function Ped.handle_profile_loaded(src, char_id)
         end
         local creation_hold = _creation_hold[src] == true
         if not creation_hold and GetResourceState('vhub_spawselector') ~= 'started' then
-            release_spawn(src, position, pending.first_spawn)
+            automatic_release(src, position, pending.first_spawn, 'selector_unavailable')
         end
         return true
     end
@@ -1130,7 +1186,7 @@ function Ped.drop(src, known_char_id)
     end
 end
 
--- Libera holds e atividades antes do stop para não prender jogadores em dimensão isolada.
+-- Encerra holds de forma fail-safe; gate/char incompleto nunca são liberados no mundo.
 function Ped.shutdown()
     for src, pending in pairs(_pending) do
         local stage = _customization_stages[src]
@@ -1143,8 +1199,9 @@ function Ped.shutdown()
         _creation_hold[src] = nil
         _customization_stages[src] = nil
         _ended_stage_tokens[src] = nil
-        if pending.first_spawn == true and not creation_complete(src) then
-            DropPlayer(src, 'Criação de personagem incompleta. Reconecte para continuar.')
+        if login_gate_step(src) or (pending.first_spawn == true and not creation_complete(src)) then
+            DropPlayer(src, 'Serviço de personagem reiniciado. Reconecte.')
+            Buckets.drop(src)
         else
             Buckets.world(src)
         end

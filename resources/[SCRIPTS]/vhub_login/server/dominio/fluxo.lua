@@ -53,7 +53,25 @@ end
 
 -- libera hold (e pending, se ainda ativo) em todos os caminhos que não entram em criação
 local function releaseCreation(src)
-  pcall(function() exports.vhub_hss:releaseCreationHold(src) end)
+  local ok, released = pcall(function() return exports.vhub_hss:releaseCreationHold(src) end)
+  return ok and released == true
+end
+
+local function prepareSpawnSelector(src)
+  if GetResourceState("vhub_spawselector") ~= "started" then return nil, "dependency" end
+  local ok, payload, err = pcall(function()
+    return exports.vhub_spawselector:preparePending(src)
+  end)
+  if not ok or type(payload) ~= "table" or type(payload.data) ~= "table" then
+    return nil, err or "dependency"
+  end
+  return payload
+end
+
+local function isolateEntry(src)
+  if GetResourceState("vhub_hss") ~= "started" then return false end
+  local ok, bucket = pcall(function() return exports.vhub_hss:isolateEntrySession(src) end)
+  return ok and type(bucket) == "number" and bucket > 1 and bucket % 1 == 0
 end
 
 local function newRequestId(session, purpose)
@@ -124,6 +142,7 @@ local function mergeSummary(cards, items, kind)
       local customization = type(item.customization) == "table" and item.customization or nil
       card.model = customization and type(customization.model) == "string"
         and customization.model or nil
+      card.customization = customization
       card.appearance_revision = math.max(0, tonumber(item.revision) or 0)
     end
   end
@@ -140,6 +159,46 @@ function F.get(src) return F.sessions[src] end
 function F.isAuth(src)
   local s = F.sessions[src]
   return s ~= nil and s.step ~= "login"
+end
+
+
+function F.isolarEntrada(src)
+  local s = F.sessions[src]
+  return s ~= nil and s.step == "charselect" and isolateEntry(src)
+end
+
+function F.prepararSeletor(src)
+  local s = F.sessions[src]
+  if not s or s.step ~= "spawning" then return nil, "estado_invalido" end
+  return prepareSpawnSelector(src)
+end
+
+function F.concluirEntrada(src)
+  local s = F.sessions[src]
+  if not s or s.step ~= "spawning" then return false end
+  s.step = "ready"
+  s.deadline = nil
+  return true
+end
+
+function F.voltarPersonagens(src)
+  local s = F.sessions[src]
+  if not s or s.step ~= "spawning" then return nil, "estado_invalido" end
+  s.step = "charselect"
+  s.deadline = GetGameTimer() + (CFG.auth_deadline * 1000)
+  if not isolateEntry(src) then
+    s.step = "spawning"
+    s.deadline = nil
+    return nil, "hss_indisponivel"
+  end
+  local characters = F.personagens(src)
+  if type(characters) ~= "table" then
+    s.step = "spawning"
+    s.deadline = nil
+    return nil, "core_indisponivel"
+  end
+  F.armarDeadline(src)
+  return characters
 end
 
 -- encerra e descarta a sessão do jogador (disconnect ou drop)
@@ -193,6 +252,7 @@ function F.autenticar(src, username, password)
   local acc, err = VHubLogin.Contas.autenticar(
     s.uid, username, password, GetPlayerEndpoint(src))
   if not acc then uidFail(s.uid); return false, err end
+  if not isolateEntry(src) then return false, "hss_indisponivel" end
   uidOK(s.uid)
   s.account = acc
   s.step    = "charselect"
@@ -208,6 +268,7 @@ function F.registrar(src, data)
   local acc = VHubLogin.Contas.autenticar(
     s.uid, data.username, data.password, GetPlayerEndpoint(src))
   if not acc then return false, "falha_pos_registro" end
+  if not isolateEntry(src) then return false, "hss_indisponivel" end
   s.account = acc
   s.step    = "charselect"
   return true
@@ -282,9 +343,14 @@ function F.selecionar(src, cid)
   end
   if not needed then
     -- Personagem completo: libera pending para o selector ou posição salva.
-    releaseCreation(src)
+    if not releaseCreation(src) then return false, "dependency" end
     s.step = "spawning"
-    return true, nil, "spawning"
+    local selector, selectorErr = prepareSpawnSelector(src)
+    if not selector then
+      s.step = "charselect"
+      return false, selectorErr
+    end
+    return true, nil, "spawning", selector
   end
 
   if s.pick_char_id ~= cid then
@@ -366,5 +432,5 @@ function F.concluirCriacao(char_id)
   s.create_request_id = nil
   s.pick_char_id = nil
   s.pick_request_id = nil
-  return src
+  return src, isolateEntry(src)
 end

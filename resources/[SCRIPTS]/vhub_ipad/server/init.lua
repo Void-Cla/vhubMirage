@@ -168,14 +168,18 @@ exports('useIpad', function(src, _item_id, _slot, _meta)
   return false
 end)
 
--- (re)registra o handler no inventory. Idempotente; retorna true se registrou.
-local function tryRegisterItem()
+-- (re)registra o handler no inventory. Idempotente; loga só na primeira vez ou após reset.
+local _item_registered = false
+local function tryRegisterItem(force_log)
   if GetResourceState('vhub_inventory') ~= 'started' then return false end
   local ok, ret = pcall(function()
     return exports.vhub_inventory:registerItemUse('ipad', 'useIpad')
   end)
   if ok and ret then
-    IpadLog("item 'ipad' registrado no vhub_inventory")
+    if not _item_registered or force_log then
+      IpadLog("item 'ipad' registrado no vhub_inventory")
+    end
+    _item_registered = true
     return true
   end
   IpadLog(("registerItemUse falhou (ok=%s ret=%s)"):format(tostring(ok), tostring(ret)))
@@ -201,7 +205,8 @@ end)
 -- (senão usar o item para de funcionar em silêncio até reiniciar o ipad).
 AddEventHandler('onResourceStart', function(res)
   if res == 'vhub_inventory' then
-    CreateThread(function() Wait(500); tryRegisterItem() end)
+    _item_registered = false
+    CreateThread(function() Wait(500); tryRegisterItem(true) end)
   end
 end)
 

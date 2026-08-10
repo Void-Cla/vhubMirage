@@ -9,6 +9,7 @@ VHubSims.E = {
   SRV_CANCEL = 'vhub_sims:server:cancel',
   SRV_OUTFIT_LIST = 'vhub_sims:server:outfitList',
   SRV_OUTFIT_SAVE = 'vhub_sims:server:outfitSave',
+  SRV_OUTFIT_RENAME = 'vhub_sims:server:outfitRename',
   SRV_OUTFIT_DELETE = 'vhub_sims:server:outfitDelete',
   SRV_OUTFIT_APPLY = 'vhub_sims:server:outfitApply',
   CLI_STUDIO_OPEN = 'vhub_sims:client:studioOpen',

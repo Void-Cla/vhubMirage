@@ -840,15 +840,33 @@ function State.set_customization(char_id, customization)
     return true
 end
 
+-- Aguarda (bounded) o flush de fundo (in_flight) e qualquer CAS concorrente liberarem a entrada,
+-- para que a reserva de aparência ocorra numa janela limpa. O chamador DEVE preparar a CAS de forma
+-- SÍNCRONA logo após retorno true (sem yield entre esta chamada e prepare_customization), senão um
+-- novo flush pode reentrar. Budget L-18: 40 × 25ms = 1s por chamada; o commit reinvoca até 4× em
+-- 'busy' (pior caso ~4s sob stall de DB sustentado), sempre na coroutine daquele checkout (não é
+-- hot loop, O(1) por commit de aparência — raro).
+function State.await_customization_idle(char_id)
+    char_id = tonumber(char_id)
+    local entry = char_id and _entries[char_id] or nil
+    if not entry then return false end
+    for _ = 1, 40 do
+        if not entry.in_flight and not _customization_locks[char_id] then return true end
+        Citizen.Wait(25)
+        entry = _entries[char_id]
+        if not entry then return false end
+    end
+    return not entry.in_flight and not _customization_locks[char_id]
+end
+
 -- Reserva CAS de aparência e materializa bundle completo para persistência atômica.
+-- Erro 'busy' (transitório: flush/CAS em voo) é distinto de 'conflict' (revisão divergente, terminal).
 function State.prepare_customization(char_id, customization, expected_revision)
     char_id, expected_revision = tonumber(char_id), tonumber(expected_revision)
     local entry = char_id and _entries[char_id] or nil
     if not entry or not expected_revision or expected_revision % 1 ~= 0 then return nil, 'conflict' end
-    if _customization_locks[char_id] or entry.in_flight
-        or entry.customization_revision ~= expected_revision then
-        return nil, 'conflict'
-    end
+    if _customization_locks[char_id] or entry.in_flight then return nil, 'busy' end
+    if entry.customization_revision ~= expected_revision then return nil, 'conflict' end
 
     _customization_sequence = _customization_sequence + 1
     local profile = copy_table(entry.profile)

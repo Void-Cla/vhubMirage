@@ -1,6 +1,6 @@
-// modules/backpack/backpack.js — player hub: topbar identidade + sidebar de navegação + tabs.
-// Slice: store('inventory') e store('player'). Verdade vem do servidor; aqui só renderizamos
-// e disparamos INTENÇÃO. Servidor confirma por delta ou corrige por rollback.
+// modules/backpack/backpack.js — Player Hub: identidade + grade + detalhe + ações.
+// Slice: store('inventory') e store('player'). A verdade vem do servidor; aqui só
+// renderizamos e disparamos INTENÇÃO. Servidor confirma por delta ou corrige por rollback.
 
 (function () {
 
@@ -12,8 +12,9 @@
   const player = vhub.store('player');
 
   let root = null, gridEl = null, toastEl = null, toastT = 0;
-  let sidebarEl = null, lojaBtnEl = null;
-  let filterText = '', filterCat = 'all', activeTab = 'bag';
+  let detailEl = null, inspEl = null, actUseEl = null, actSplitEl = null;
+  let sandEl = null;
+  let filterText = '', filterCat = 'all', activeTab = 'bag', selSlot = null;
 
   const offs          = [];
   const pendingTimers = new Map();
@@ -38,6 +39,8 @@
     }
     return w;
   }
+
+  function usedSlots(s) { let n = 0; for (const k in s) n++; return n; }
 
 
   // ============================================================
@@ -66,12 +69,34 @@
   function switchTab(tab) {
     activeTab = tab;
     if (!root) return;
-    root.querySelectorAll('.bp-nav').forEach((b) => {
-      b.classList.toggle('bp-nav--active', b.dataset.tab === tab);
-    });
-    root.querySelectorAll('.bp-tab').forEach((p) => {
-      p.classList.toggle('bp-tab--hidden', p.dataset.pane !== tab);
-    });
+    root.querySelectorAll('.bp-nav').forEach((b) => b.classList.toggle('bp-nav--active', b.dataset.tab === tab));
+    root.querySelectorAll('.bp-tab').forEach((p) => p.classList.toggle('bp-tab--hidden', p.dataset.pane !== tab));
+  }
+
+
+  // ============================================================
+  // SELEÇÃO / DETALHE
+  // ============================================================
+
+  // seleciona um slot: realça, abre inspector e habilita as ações
+  function select(slot) {
+    const entry = slots()[slot];
+    if (!entry) { deselect(); return; }
+    selSlot = slot;
+    if (gridEl) gridEl.querySelectorAll('.slot--sel').forEach((c) => c.classList.remove('slot--sel'));
+    const cell = gridEl && gridEl.querySelector(`.slot[data-slot="${slot}"]`);
+    if (cell) cell.classList.add('slot--sel');
+    vhub.inspect.show(entry);
+    if (detailEl) detailEl.classList.remove('bp-detail--empty');
+    if (actSplitEl) actSplitEl.disabled = (entry.amount || 1) <= 1;
+  }
+
+  // limpa a seleção e volta o detalhe ao estado vazio
+  function deselect() {
+    selSlot = null;
+    if (gridEl) gridEl.querySelectorAll('.slot--sel').forEach((c) => c.classList.remove('slot--sel'));
+    vhub.inspect.hide();
+    if (detailEl) detailEl.classList.add('bp-detail--empty');
   }
 
 
@@ -92,12 +117,14 @@
 
   function renderWeight() {
     if (!root) return;
-    const valEl = root.querySelector('.bp-weight-val');
-    const bar   = root.querySelector('.bp-weight-bar');
+    const valEl  = root.querySelector('.bp-weight-val');
+    const slotEl = root.querySelector('.bp-slot-count');
+    const bar    = root.querySelector('.bp-weight-bar');
     if (!valEl || !bar) return;
-    const w = weightOf(slots()), m = maxW();
+    const s = slots(), w = weightOf(s), m = maxW();
     const pctRaw = m > 0 ? (w / m) * 100 : 0;
-    valEl.textContent    = `${vhub.util.fmtWeight(w)} / ${vhub.util.fmtWeight(m)} kg`;
+    valEl.textContent   = `${vhub.util.fmtWeight(w)} / ${vhub.util.fmtWeight(m)} kg`;
+    if (slotEl) slotEl.textContent = `${usedSlots(s)}/${size()} slots`;
     bar.style.transform  = 'scaleX(' + Math.min(1, pctRaw / 100) + ')';
     bar.style.background = vhub.util.weightColor(pctRaw);
   }
@@ -115,6 +142,7 @@
       if (e) {
         vhub.util.fillSlot(cell, e);
         cell.setAttribute('aria-label', (vhub.util.itemDef(e.id) || {}).nome || e.id);
+        if (i === selSlot) cell.classList.add('slot--sel');
       } else {
         cell.setAttribute('aria-label', 'Slot vazio ' + i);
       }
@@ -159,6 +187,12 @@
 
   function renderAll() { renderTopbar(); renderWeight(); renderGrid(); }
 
+  // re-sincroniza a seleção após um delta (slot pode ter esvaziado)
+  function reselect() {
+    if (selSlot == null) return;
+    if (slots()[selSlot]) select(selSlot); else deselect();
+  }
+
 
   // ============================================================
   // PENDING OVERLAY (otimismo visual antes do ACK do servidor)
@@ -178,6 +212,27 @@
     if (!gridEl) return;
     const cell = gridEl.querySelector(`.slot[data-slot="${slot}"]`);
     if (cell) cell.classList.remove('slot--pending');
+  }
+
+
+  // ============================================================
+  // AÇÕES
+  // ============================================================
+
+  function doUse(slot) {
+    const entry = slots()[slot]; if (!entry) return;
+    setPending(slot);
+    vhub.post('use', { slot: slot, id: entry.id });
+  }
+
+  async function doSplit(slot) {
+    const entry = slots()[slot]; if (!entry || (entry.amount || 1) <= 1) return;
+    const qty = await vhub.interact.qtyModal(entry.amount - 1); if (!qty) return;
+    const s = slots(); let empty = null;
+    for (let i = 1; i <= size(); i++) { if (!s[i]) { empty = i; break; } }
+    if (!empty) { toast(LANG.full, true); return; }
+    setPending(slot); setPending(empty);
+    vhub.post('move', { from: slot, to: empty, qty: qty });
   }
 
 
@@ -219,7 +274,7 @@
         if (!d.delta || d.delta.scope !== 'backpack') return;
         (d.delta.items || []).forEach((it) => clearPending(it.slot));
         applyItems(d.delta.items);
-        renderGrid(); renderWeight();
+        renderGrid(); renderWeight(); reselect();
       }));
 
       offs.push(vhub.listen('nui:rollback', (d) => {
@@ -227,7 +282,7 @@
         if (data.scope && data.scope !== 'backpack') return;
         (data.items || []).forEach((it) => clearPending(it.slot));
         applyItems(data.items);
-        renderGrid(); renderWeight();
+        renderGrid(); renderWeight(); reselect();
         toast(LANG[data.reason] || LANG.erro, true);
       }));
 
@@ -235,18 +290,20 @@
     },
 
     onMount() {
-      filterText = ''; filterCat = 'all'; activeTab = 'bag';
+      filterText = ''; filterCat = 'all'; activeTab = 'bag'; selSlot = null;
       root = document.getElementById('backpack-root');
       root.className = 'mod-backpack';
       root.innerHTML = `
+        <canvas class="vh-sand" aria-hidden="true"></canvas>
         <div class="bp-shell">
 
           <div class="bp-topbar">
             <div class="bp-avatar"></div>
             <div class="bp-idbk">
               <span class="bp-pname"></span>
-              <span class="bp-pmeta">#<b class="bp-pid"></b> &middot; <b class="bp-pphone"></b></span>
+              <span class="bp-pmeta">ID <b class="bp-pid"></b><i class="bp-dot"></i><b class="bp-pphone"></b></span>
             </div>
+            <div class="bp-hint"><kbd>I</kbd> ou <kbd>Esc</kbd> para fechar</div>
             <div class="bp-close" tabindex="0" role="button" aria-label="Fechar mochila">&#x2715;</div>
           </div>
 
@@ -271,17 +328,35 @@
 
               <div class="bp-tab" data-pane="bag">
                 <div class="bp-tools">
-                  <input class="bp-search" type="text" placeholder="Buscar item..." />
+                  <div class="bp-search-wrap">
+                    <svg class="bp-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                    <input class="bp-search" type="text" placeholder="Buscar item..." aria-label="Buscar item" />
+                  </div>
                   <div class="bp-cats" role="group" aria-label="Categorias"></div>
                 </div>
+
                 <div class="bp-body">
-                  <div class="bp-grid" role="grid" aria-label="Grade de itens da mochila"></div>
-                  <div class="bp-insp"></div>
+                  <div class="bp-grid-wrap">
+                    <div class="bp-grid" role="grid" aria-label="Grade de itens da mochila"></div>
+                  </div>
+
+                  <aside class="bp-detail bp-detail--empty">
+                    <div class="bp-detail-empty">
+                      <svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="12" rx="2"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/></svg>
+                      <span>Selecione um item<br/>para ver detalhes</span>
+                    </div>
+                    <div class="bp-insp"></div>
+                    <div class="bp-actions">
+                      <button class="bp-act bp-act--use" type="button">Usar</button>
+                      <button class="bp-act" type="button" data-act="split">Dividir</button>
+                    </div>
+                  </aside>
                 </div>
+
                 <div class="bp-footer">
                   <div class="bp-weight-wrap">
                     <div class="bp-weight-label">
-                      <span>Peso</span>
+                      <span>Peso · <b class="bp-slot-count"></b></span>
                       <span class="bp-weight-val"></span>
                     </div>
                     <div class="bp-weight-track"><div class="bp-weight-bar"></div></div>
@@ -317,30 +392,33 @@
       `;
       root.classList.remove('hidden');
 
-      gridEl    = root.querySelector('.bp-grid');
-      toastEl   = root.querySelector('.bp-toast');
-      sidebarEl = root.querySelector('.bp-sidebar');
-      lojaBtnEl = root.querySelector('.bp-promo-btn');
+      sandEl     = root.querySelector('.vh-sand');
+      gridEl     = root.querySelector('.bp-grid');
+      toastEl    = root.querySelector('.bp-toast');
+      detailEl   = root.querySelector('.bp-detail');
+      inspEl     = root.querySelector('.bp-insp');
+      actUseEl   = root.querySelector('.bp-act--use');
+      actSplitEl = root.querySelector('.bp-act[data-act="split"]');
+      const sidebarEl = root.querySelector('.bp-sidebar');
+      const lojaBtnEl = root.querySelector('.bp-promo-btn');
 
-      this._inspectOff = vhub.inspect.init(root.querySelector('.bp-insp'));
+      if (vhub.sand && sandEl) vhub.sand.start(sandEl);
+      this._inspectOff = vhub.inspect.init(inspEl);
 
-      // atualiza topbar quando dados de identidade chegam enquanto a mochila está aberta
+      // topbar reage a chegada de identidade enquanto a mochila está aberta
       this._hudOff = vhub.listen('nui:hud', () => renderTopbar());
 
+      // clique num slot: seleciona (inspeciona + habilita ações); vazio: deseleciona
       this._onClick = (e) => {
         const c = e.target.closest('.slot');
-        if (!c || !c.dataset.filled) { vhub.inspect.hide(); return; }
-        const entry = slots()[+c.dataset.slot];
-        if (entry) vhub.inspect.show(entry);
+        if (!c || !c.dataset.filled) { deselect(); return; }
+        select(+c.dataset.slot);
       };
 
       this._cleanupDrag = vhub.interact.enableDrag(gridEl, {
         getEntry: (pane, slot) => slots()[slot],
         onTransfer: async (src, dst, entry) => {
-          if (dst.pane === 'hotbar') {
-            vhub.post('set_bind', { slot: dst.slot, id: entry.id });
-            return;
-          }
+          if (dst.pane === 'hotbar') { vhub.post('set_bind', { slot: dst.slot, id: entry.id }); return; }
           if (src.slot === dst.slot) return;
           let qty = entry.amount;
           if (qty > 1) { qty = await vhub.interact.qtyModal(entry.amount); if (!qty) return; }
@@ -351,24 +429,17 @@
 
       this._onDblClick = (e) => {
         const c = e.target.closest('.slot'); if (!c || !c.dataset.filled) return;
-        const slot = +c.dataset.slot, entry = slots()[slot];
-        if (entry) { setPending(slot); vhub.post('use', { slot: slot, id: entry.id }); }
+        doUse(+c.dataset.slot);
       };
 
       this._onCtx = (e) => {
         const c = e.target.closest('.slot'); if (!c || !c.dataset.filled) return;
         e.preventDefault();
         const slot = +c.dataset.slot, entry = slots()[slot]; if (!entry) return;
+        select(slot);
         vhub.interact.contextMenu(e.clientX, e.clientY, [
-          { label: 'Usar', onClick: () => { setPending(slot); vhub.post('use', { slot: slot, id: entry.id }); } },
-          { label: 'Dividir', disabled: entry.amount <= 1, onClick: async () => {
-              const qty = await vhub.interact.qtyModal(entry.amount - 1); if (!qty) return;
-              const s = slots(); let empty = null;
-              for (let i = 1; i <= size(); i++) { if (!s[i]) { empty = i; break; } }
-              if (!empty) return;
-              setPending(slot); setPending(empty);
-              vhub.post('move', { from: slot, to: empty, qty: qty });
-            } },
+          { label: 'Usar', onClick: () => doUse(slot) },
+          { label: 'Dividir', disabled: (entry.amount || 1) <= 1, onClick: () => doSplit(slot) },
         ]);
       };
 
@@ -378,12 +449,12 @@
         filterCat = chip.dataset.cat; renderChips(); applyFilter();
       };
       this._onClose    = () => vhub.post('close');
-      this._onNavClick = (e) => {
-        const btn = e.target.closest('.bp-nav');
-        if (btn && btn.dataset.tab) switchTab(btn.dataset.tab);
-      };
+      this._onNavClick = (e) => { const b = e.target.closest('.bp-nav'); if (b && b.dataset.tab) switchTab(b.dataset.tab); };
       this._onLojaBtn  = () => vhub.post('open_loja');
-      this._onKey      = (e) => {
+      this._onUse      = () => { if (selSlot != null) doUse(selSlot); };
+      this._onSplit    = () => { if (selSlot != null) doSplit(selSlot); };
+
+      this._onKey = (e) => {
         if (e.key === 'Escape') { vhub.post('close'); return; }
         if (activeTab !== 'bag' || !gridEl) return;
         const focused = document.activeElement;
@@ -391,17 +462,14 @@
         const all = Array.from(gridEl.querySelectorAll('.slot'));
         const idx = all.indexOf(focused);
         if (idx === -1) return;
-        const cols = 6;
+        // colunas reais do grid (robusto a mudanças de layout)
+        const cols = getComputedStyle(gridEl).gridTemplateColumns.split(' ').length || 5;
         let next = -1;
         if (e.key === 'ArrowRight') next = idx + 1;
         else if (e.key === 'ArrowLeft') next = idx - 1;
         else if (e.key === 'ArrowDown') next = idx + cols;
         else if (e.key === 'ArrowUp') next = idx - cols;
-        else if (e.key === 'Enter' && focused.dataset.filled) {
-          const entry = slots()[+focused.dataset.slot];
-          if (entry) vhub.inspect.show(entry);
-          return;
-        }
+        else if (e.key === 'Enter' && focused.dataset.filled) { select(+focused.dataset.slot); return; }
         if (next >= 0 && next < all.length) { e.preventDefault(); all[next].focus(); }
       };
 
@@ -413,6 +481,8 @@
       root.querySelector('.bp-close').addEventListener('click', this._onClose);
       sidebarEl.addEventListener('click', this._onNavClick);
       lojaBtnEl.addEventListener('click', this._onLojaBtn);
+      actUseEl.addEventListener('click', this._onUse);
+      actSplitEl.addEventListener('click', this._onSplit);
       window.addEventListener('keydown', this._onKey);
 
       renderTopbar();
@@ -423,14 +493,13 @@
     onHide() { if (vhub.inspect) vhub.inspect.hide(); },
 
     onDestroy() {
+      if (vhub.sand) vhub.sand.stop();
       if (this._cleanupDrag) this._cleanupDrag();
       if (gridEl) {
         gridEl.removeEventListener('click', this._onClick);
         gridEl.removeEventListener('dblclick', this._onDblClick);
         gridEl.removeEventListener('contextmenu', this._onCtx);
       }
-      if (sidebarEl) { sidebarEl.removeEventListener('click', this._onNavClick); sidebarEl = null; }
-      if (lojaBtnEl) { lojaBtnEl.removeEventListener('click', this._onLojaBtn); lojaBtnEl = null; }
       if (this._hudOff) { this._hudOff(); this._hudOff = null; }
       window.removeEventListener('keydown', this._onKey);
       clearTimeout(toastT);
@@ -438,7 +507,8 @@
       pendingTimers.clear();
       if (this._inspectOff) { this._inspectOff(); this._inspectOff = null; }
       if (root) { root.innerHTML = ''; root.classList.add('hidden'); }
-      root = null; gridEl = null; toastEl = null;
+      root = null; gridEl = null; toastEl = null; detailEl = null; inspEl = null;
+      actUseEl = null; actSplitEl = null; sandEl = null; selSlot = null;
     },
   });
 

@@ -56,6 +56,10 @@ local CUST_KEYS = {
   stance = true, exhaust_fx = true, glass_armor = true, extras = true,
   interior_color = true, dashboard_color = true,   -- cores de interior/painel (índice GTA)
   drift_capable = true,  -- {bool} Freio de Mão Hidráulico instalado (dono = vhub_custom, source='tune')
+  -- ADR #82: peças de engenharia = mapa ESPARSO string-keyed { [part_id]=def } (vetor de deltas
+  -- físicos, ortogonal ao `mods` GTA visual). Escritor único = vhub_custom source='tune'. Merge
+  -- por chave (ver MERGE_SPARSE) — cada peça é um slot; escritas disjuntas não se apagam.
+  parts = true,
 }
 
 -- filtra customization (tabela) → JSON com cap de 8 KB, ou nil
@@ -79,7 +83,9 @@ end
 -- Demais campos (colours/neons/stance/exhaust_fx/...) são ATÔMICOS (enviados sempre completos):
 -- trocar a chave inteira é o comportamento desejado.
 -- NUNCA muta `base` nem `base[mods|extras]` (base é referência VIVA do cache VRAM).
-local MERGE_SPARSE = { mods = true, extras = true }
+-- ADR #82: `parts` entra como esparso — a NUI da oficina envia DELTA (só a peça instalada na
+-- sessão); tratar como atômico apagaria peças já pagas e não-tocadas no respawn (L-04/L-13).
+local MERGE_SPARSE = { mods = true, extras = true, parts = true }
 
 local function mergeCust(base, patch)
   if type(patch) ~= 'table' then return base end

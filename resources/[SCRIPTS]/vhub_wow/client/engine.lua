@@ -3,6 +3,7 @@
 local E = VHubWOW.E
 local sounds = {}
 local engineRunning = false
+local report_rejected
 
 local NEAR_RADIUS = 4.0
 
@@ -21,6 +22,11 @@ end
 
 local function volume_of(value)
   return math.max(0.0, math.min(1.0, finite(value, 0.5)))
+end
+
+local function duck_strength_of(value)
+  return math.max(0.0, math.min(1.0,
+    finite(value, WOW_Config.DefaultDuckStrength or 0.5)))
 end
 
 local function distance_of(value)
@@ -44,6 +50,12 @@ local function active_count()
   return count
 end
 
+local function sound_count()
+  local count = 0
+  for _ in pairs(sounds) do count = count + 1 end
+  return count
+end
+
 local function has_active_positional()
   for _, data in pairs(sounds) do
     if data.playing and positional(data) then return true end
@@ -52,8 +64,12 @@ local function has_active_positional()
 end
 
 local function replace_sound(name, data)
+  if not sounds[name] and sound_count() >= WOW_Config.MaxClientSounds then
+    return false
+  end
   sounds[name] = data
   VHubWOWClient.setSoundCount(active_count())
+  return true
 end
 
 local function remove_sound(name)
@@ -100,6 +116,7 @@ local function start_engine()
   CreateThread(function()
     while has_active_positional() do
       local listener = GetEntityCoords(PlayerPedId())
+      local volume_updates = {}
 
       for name, data in pairs(sounds) do
         if positional(data) and data.playing then
@@ -110,9 +127,12 @@ local function start_engine()
             and ((source_volume == 0.0) ~= (data.lastSent == 0.0))
           if data.lastSent == nil or math.abs(source_volume - data.lastSent) > 0.02 or crossed_zero then
             data.lastSent = source_volume
-            send('wow:audio:volume', { name = name, volume = source_volume })
+            volume_updates[name] = source_volume
           end
         end
+      end
+      if next(volume_updates) then
+        send('wow:audio:volumes', { items = volume_updates })
       end
       Wait(150)
     end
@@ -131,24 +151,39 @@ local function valid_play(name, url)
   return WOW_Config.isValidSoundName(name) and WOW_Config.isPlayableUrl(url)
 end
 
-local function play_message(name, url, volume, loop)
+local function play_message(name, url, volume, loop, duck_strength)
   send('wow:audio:play', {
     name = name,
     url = url,
     volume = volume,
     loop = loop == true,
+    duck_strength = duck_strength_of(duck_strength),
     streamer_mode = VHubWOWClient.isStreamerMode(),
   })
 end
 
-RegisterNetEvent(E.PLAY, function(name, url, volume, loop)
+report_rejected = function(name)
+  TriggerEvent(E.AUDIO_LIFECYCLE_LOCAL, name, 'error')
+  TriggerServerEvent(E.AUDIO_LIFECYCLE_REPORT, name, 'error')
+end
+
+RegisterNetEvent(E.PLAY, function(name, url, volume, loop, duck_strength)
   if not valid_play(name, url) then return end
   local base = volume_of(volume)
-  replace_sound(name, { url = url, baseVolume = base, loop = loop == true, playing = true })
-  play_message(name, url, base, loop)
+  if not replace_sound(name, {
+    url = url,
+    baseVolume = base,
+    loop = loop == true,
+    playing = true,
+  }) then
+    report_rejected(name)
+    return
+  end
+  play_message(name, url, base, loop, duck_strength)
 end)
 
-RegisterNetEvent(E.PLAY_AT_ENTITY, function(name, url, volume, net_id, distance, loop)
+RegisterNetEvent(E.PLAY_AT_ENTITY, function(name, url, volume, net_id, distance, loop,
+    duck_strength)
   net_id = finite(net_id)
   if not valid_play(name, url) or not net_id or net_id % 1 ~= 0 or net_id < 1 then return end
   local base = volume_of(volume)
@@ -161,14 +196,18 @@ RegisterNetEvent(E.PLAY_AT_ENTITY, function(name, url, volume, net_id, distance,
     playing = true,
     lastSent = nil,
   }
-  replace_sound(name, data)
+  if not replace_sound(name, data) then
+    report_rejected(name)
+    return
+  end
   local initial = positional_volume(data)
   data.lastSent = initial
-  play_message(name, url, initial, loop)
+  play_message(name, url, initial, loop, duck_strength)
   start_engine()
 end)
 
-RegisterNetEvent(E.PLAY_AT_COORDS, function(name, url, volume, coords, distance, loop)
+RegisterNetEvent(E.PLAY_AT_COORDS, function(name, url, volume, coords, distance, loop,
+    duck_strength)
   if not valid_play(name, url) or type(coords) ~= 'table' then return end
   local x, y, z = finite(coords.x), finite(coords.y), finite(coords.z)
   if not x or not y or not z then return end
@@ -182,10 +221,13 @@ RegisterNetEvent(E.PLAY_AT_COORDS, function(name, url, volume, coords, distance,
     playing = true,
     lastSent = nil,
   }
-  replace_sound(name, data)
+  if not replace_sound(name, data) then
+    report_rejected(name)
+    return
+  end
   local initial = positional_volume(data)
   data.lastSent = initial
-  play_message(name, url, initial, loop)
+  play_message(name, url, initial, loop, duck_strength)
   start_engine()
 end)
 
@@ -243,13 +285,18 @@ end)
 RegisterNUICallback('audioLifecycle', function(data, cb)
   local name = type(data) == 'table' and data.name
   local status = type(data) == 'table' and data.status
-  if not WOW_Config.isValidSoundName(name) or (status ~= 'ended' and status ~= 'error') then
+  if not WOW_Config.isValidSoundName(name)
+      or (status ~= 'ready' and status ~= 'ended' and status ~= 'error') then
     cb({ ok = false, err = 'invalid_payload' })
     return
   end
-  local removed = remove_sound(name)
-  if removed then TriggerEvent(E.AUDIO_LIFECYCLE_LOCAL, name, status) end
-  cb({ ok = removed, err = removed and nil or 'sound_not_found' })
+  local accepted = sounds[name] ~= nil
+  if accepted and status ~= 'ready' then accepted = remove_sound(name) end
+  if accepted then
+    TriggerEvent(E.AUDIO_LIFECYCLE_LOCAL, name, status)
+    TriggerServerEvent(E.AUDIO_LIFECYCLE_REPORT, name, status)
+  end
+  cb({ ok = accepted, err = accepted and nil or 'sound_not_found' })
 end)
 
 

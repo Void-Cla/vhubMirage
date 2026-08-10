@@ -99,6 +99,8 @@ local function openingPayload(session)
       components = AP.copy(Catalog.component_labels),
       props = AP.copy(Catalog.prop_labels),
       tattoos = session.mode == 'tattoo' and AP.copy(VHubSims.tattoos) or {},
+      face_groups = AP.copy(Catalog.face_groups or {}),
+      presets = AP.copy(Catalog.presets or {}),
     },
     session_id = session.session_id,
   }
@@ -398,6 +400,14 @@ local function commitCustomization(src, session, saga, patch)
   end
   local ok, result = Core.call('vhub_hss', 'commitCustomization', src, patch,
     expectedRevision, saga.digest)
+  -- 'busy' é transitório; retenta uma vez preservando a MESMA revisão CAS.
+  -- Nunca adota revisão fresca para aplicar patch antigo: conflito exige rebase explícito.
+  if ok and type(result) == 'table' and result.ok ~= true
+    and result.err == 'busy' then
+    Citizen.Wait(50)
+    ok, result = Core.call('vhub_hss', 'commitCustomization', src, patch,
+      expectedRevision, saga.digest)
+  end
   if not ok or not Core.resultOk(result) then
     return nil, Core.resultError(result, 'dependency')
   end

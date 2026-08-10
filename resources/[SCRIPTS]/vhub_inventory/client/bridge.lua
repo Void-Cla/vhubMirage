@@ -114,10 +114,12 @@ RegisterNUICallback('set_bind', function(d, cb)
 end)
 
 -- teclas configuraveis: usar item da hotbar (nao enquanto ha NUI no foco)
+-- peek: mostra a hotbar por 5 s ao pressionar a tecla do slot
 for i = 1, (Inventory.Hotbar.slots or 5) do
   RegisterCommand('vhub_hb' .. i, function()
     if IsNuiFocused() then return end
     TriggerServerEvent(E.USE_HOTBAR, { slot = i })
+    SendNUIMessage({ action = 'hotbar_peek' })
   end, false)
   RegisterKeyMapping('vhub_hb' .. i, 'Inventario: atalho ' .. i, 'keyboard',
     (Inventory.Hotbar.keys and Inventory.Hotbar.keys[i]) or tostring(i))

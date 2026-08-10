@@ -212,9 +212,20 @@ local function criar_driver()
       return false
     end
 
-    local ok_ping, resultado = self:_executar("scalar", "SELECT 1", {})
+    -- Retry com backoff: oxmysql pode estar `started` antes de conectar ao MariaDB.
+    local ok_ping, resultado
+    local tentativas = { 500, 1000, 2000, 3000 }
+    for i, espera in ipairs(tentativas) do
+      ok_ping, resultado = self:_executar("scalar", "SELECT 1", {})
+      if ok_ping and tonumber(resultado) == 1 then break end
+      if i < #tentativas then
+        logar("WARN", "ping SQL falhou, tentando novamente",
+          {tentativa = i, proximo_ms = espera, resultado = resultado})
+        Wait(espera)
+      end
+    end
     if not ok_ping or tonumber(resultado) ~= 1 then
-      logar("ERROR", "ping SQL falhou", {resultado = resultado})
+      logar("ERROR", "ping SQL falhou apos todas as tentativas", {resultado = resultado})
       return false
     end
 

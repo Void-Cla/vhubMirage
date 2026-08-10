@@ -1,0 +1,166 @@
+/* style.css — vhub_npcai NUI (A-09: transparent; A-10: local; A-11: scoped) */
+
+/* ── reset de base exigido pelo CEF (A-09) ─────────────────────────────── */
+html, body {
+    margin: 0; padding: 0;
+    background: transparent;    /* OBRIGATÓRIO — CEF canvas fica transparente */
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    
+}
+
+/* ── raiz do módulo (A-11: tokens locais, não em :root) ─────────────────── */
+.mod-npcai {
+    /* tokens de cor Mirage (Areia + MG7) */
+    --clr-bg:       rgba(12, 8, 4, 0);   /* vidro fosco dark */
+    --clr-border:   rgba(210, 168, 90, 0.30); /* dourado MG7 */
+    --clr-accent:   #d2a85a;                  /* dourado MG7 */
+    --clr-text:     #e8ddc8;                  /* areia claro */
+    --clr-dim:      rgba(232, 221, 200, 0.55);
+    --clr-rec:      #e05050;                  /* vermelho gravação */
+    --clr-vu:       #50c878;                  /* verde VU */
+    --radius:       8px;
+    --pad-sm:       8px 14px;
+    --pad-md:       12px 20px;
+    --shadow:       0 4px 24px rgba(0, 0, 0, 0.55);
+
+    position: fixed;
+    inset: 0;
+    pointer-events: none;   /* não bloqueia input do jogo */
+}
+
+/* ── hint de proximidade ─────────────────────────────────────────────────── */
+.npcai-hint {
+    position: absolute;
+    bottom: 180px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--clr-bg);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius);
+    padding: var(--pad-sm);
+    box-shadow: var(--shadow);
+    animation: fadeInUp 0.18s ease;
+}
+
+.hint-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    background: var(--clr-accent);
+    color: #1a120000;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 4px;
+    letter-spacing: 0;
+}
+
+.hint-label {
+    font-size: 14px;
+    color: var(--clr-text);
+    letter-spacing: 0.03em;
+}
+
+/* ── painel de gravação ──────────────────────────────────────────────────── */
+.npcai-rec {
+    position: absolute;
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--clr-bg);
+    border: 1px solid var(--clr-rec);
+    border-radius: var(--radius);
+    padding: var(--pad-md);
+    min-width: 180px;
+    box-shadow: var(--shadow);
+    animation: fadeInUp 0.15s ease;
+}
+
+.rec-vu {
+    width: 140px;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.vu-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--clr-vu);
+    border-radius: 3px;
+    transition: width 0.04s linear;
+}
+
+.rec-label {
+    font-size: 12px;
+    color: var(--clr-rec);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.rec-timer {
+    font-size: 11px;
+    color: var(--clr-dim);
+}
+
+/* ── legenda — pílula minimalista estilo legenda de filme ────────────────── */
+.npcai-caption {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 600px;
+    width: max-content;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    background: rgba(6, 4, 2, 0.55);
+    border-radius: 24px;
+    padding: 7px 18px;
+    animation: fadeIn 0.18s ease;
+}
+
+.caption-name {
+    font-size: 12px;
+    color: var(--clr-accent);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.caption-name::after {
+    content: ':';
+}
+
+.caption-text {
+    font-size: 14px;
+    color: var(--clr-text);
+    font-style: italic;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+/* ── animações ───────────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ── [hidden] override (display:none via HTML attr) ─────────────────────── */
+[hidden] { display: none !important; }

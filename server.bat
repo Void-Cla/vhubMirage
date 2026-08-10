@@ -41,10 +41,43 @@ if defined PORTPID (
   exit /b 1
 )
 
-:: ── [3] FXServer ──────────────────────────────────────────────────────────────
+:: ── [3] Sidecar de IA (vhub_npcai) ────────────────────────────────────────────
+
+set "NPCAI_DIR=%RESOURCE_ROOT%\[SCRIPTS]\vhub_npcai"
+set "NPCAI_PID="
+for /f %%P in ('powershell -NoProfile -Command "$p=(Get-NetTCPConnection -LocalPort 7513 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($p){$p}"') do set "NPCAI_PID=%%P"
+if defined NPCAI_PID (
+  call :aguardar_sidecar 5
+  if errorlevel 1 (
+    echo [ERRO] Porta 7513 ocupada por processo que nao e o sidecar autorizado.
+    exit /b 1
+  )
+  echo [npcai] Sidecar autorizado ja ativo na porta 7513 ^(PID %NPCAI_PID%^).
+) else (
+  if exist "%NPCAI_DIR%\start_npcai.bat" (
+    echo [npcai] Iniciando sidecar de IA ^(porta 7513, carrega Whisper ~10s^)...
+    start "vHub NPCAI Sidecar" /min /D "%NPCAI_DIR%" cmd /c start_npcai.bat
+    call :aguardar_sidecar 300
+    if errorlevel 1 (
+      echo [ERRO] Sidecar NPCAI nao ficou pronto em 300 segundos.
+      exit /b 1
+    )
+  ) else (
+    echo [ERRO] start_npcai.bat ausente.
+    exit /b 1
+  )
+)
+
+:: ── [4] FXServer ──────────────────────────────────────────────────────────────
 
 start "FXSERVER" /min /D "%BASE_DIR%" ".\build\FXServer.exe" +exec "%SERVER_CFG%"
 exit /b 0
+
+:: aguarda o sidecar autenticado responder /health
+:aguardar_sidecar
+set "NPCAI_TIMEOUT=%~1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%NPCAI_DIR%\verificar_sidecar.ps1" -LimiteSegundos %NPCAI_TIMEOUT%
+exit /b %errorlevel%
 
 :: ─────────────────────────────────────────────────────────────────────────────
 :validar_recurso_core

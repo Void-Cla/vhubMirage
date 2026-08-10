@@ -46,7 +46,7 @@
     --vh-glass-border: rgba(243,181,58,0.18);
     --vh-glass-line:   rgba(243,181,58,0.10);
 
-    --vh-glass-blur:   blur(14px) saturate(140%);
+    /* --vh-glass-blur removido: A-09 — sem backdrop-filter direto sobre o jogo */
 
 
     /* ============================================================

@@ -2,7 +2,7 @@
 -- ║ vHub Mirage — CORE v2.0 (DESCONGELAMENTO — FASE 2 fuel)       ║
 -- ║ Freeze v1.0: 2026-05-22 → descongelado sob gate em 2026-07-02 ║
 -- ║ Toda alteração segue GATED: arquiteto + revisão + ADR + bump.  ║
--- ║ ADRs desta fase: #37..#50, #61, #65, #70, #74                  ║
+-- ║ ADRs desta fase: #37..#50, #61, #65, #70, #74, #80             ║
 -- ╚════════════════════════════════════════════════════════════════╝
 -- fxmanifest.lua — vHub Mirage
 -- Ordem de carga garantida pelo runtime FiveM:
@@ -13,8 +13,8 @@ lua54     'yes'
 
 name        'vhub'
 author      'vHub Mirage'
-version     '2.0.0-alpha.7'
-description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (v2 FASE 2: fuel autoritativo).'
+version     '2.0.0-alpha.9'
+description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (ADR #82: fix FK stale-anchor + unregisterVehicle).'
 
 dependency 'oxmysql'
 

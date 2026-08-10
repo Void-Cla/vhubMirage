@@ -191,6 +191,12 @@ RegisterNUICallback('transfer', function(data, cb)
   cb({ ok = true })
 end)
 
+-- relay: conce dispara evento local, garage encaminha ao servidor
+AddEventHandler('vhub_conce:abrirCatalogo', function(concId)
+  TriggerServerEvent(E.REQ_CATALOG, concId)
+end)
+
+
 -- comandos r pidos
 RegisterCommand('garagem', function()
   if VHubGarage.state.zona and VHubGarage.state.zona.kind == 'garage' then

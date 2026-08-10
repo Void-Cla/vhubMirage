@@ -31,5 +31,10 @@ VHubHSS.E = {
     CUSTOMIZATION_STAGE_BEGIN = 'vhub_hss:customizationStageBegin',
     CUSTOMIZATION_STAGE_END = 'vhub_hss:customizationStageEnd',
     SPAWN_CHOOSE = 'vhub_hss:chooseSpawn',
-    SPAWNED = 'vhub_hss:spawned',
+    SPAWNED      = 'vhub_hss:spawned',
+
+    REQUEST_CROUCH = 'vhub_hss:requestCrouch',
+    SET_CROUCH     = 'vhub_hss:setCrouch',
+
+    AFK_HEARTBEAT  = 'vhub_hss:afkHeartbeat',
 }

@@ -1,9 +1,9 @@
-// shared/inspect.js — helper presentacional de inspecao de item.
-// Nao e um createModule(); o modulo dono injeta o container e chama:
+// shared/inspect.js — helper presentacional de inspeção de item (detalhe rico).
+// Não é um createModule(); o módulo dono injeta o container e chama:
 //   const off = vhub.inspect.init(el)  — registra listeners; retorna cleanup (A-07)
 //   vhub.inspect.show(entry)           — renderiza entry
 //   vhub.inspect.hide()                — limpa e oculta
-// O dono guarda off() e chama em onDestroy.
+// O dono guarda off() e chama em onDestroy. Só textContent/createElement (anti-XSS).
 
 (function () {
 
@@ -23,8 +23,28 @@
     return '' + val;
   }
 
-  let _el     = null;
-  let _offKey = null;
+  let _el = null, _offKey = null;
+
+
+  // ============================================================
+  // HELPERS DE RENDER
+  // ============================================================
+
+  // cria um elemento com classe + texto (createElement -> sem HTML injetado)
+  function node(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls)  e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  // linha rótulo/valor da grade de metadados
+  function metaRow(label, value) {
+    const row = node('div', 'insp-row');
+    row.appendChild(node('span', 'insp-lbl', label));
+    row.appendChild(node('span', 'insp-val', value));
+    return row;
+  }
 
 
   // ============================================================
@@ -33,7 +53,7 @@
 
   const inspect = {
 
-    // monta o helper no elemento fornecido pelo modulo dono
+    // monta o helper no elemento fornecido pelo módulo dono
     init(containerEl) {
       _el = containerEl;
       _el.classList.add('vh-inspector', 'insp-empty');
@@ -46,16 +66,15 @@
       window.addEventListener('keydown', onKey);
       _offKey = onKey;
 
-      // retorna cleanup para o dono chamar em onDestroy (A-07)
-      return function off() {
-        window.removeEventListener('keydown', _offKey);
+      return function off() {                       // cleanup para o dono (A-07)
+        window.removeEventListener('keydown', onKey);   // fecha sobre o handler LOCAL (robusto)
         _offKey = null;
         if (_el) { _el.innerHTML = ''; _el.classList.add('insp-empty'); }
         _el = null;
       };
     },
 
-    // renderiza entry no painel — textContent/createElement apenas (sem innerHTML c/ var)
+    // renderiza entry no painel de detalhe
     show(entry) {
       if (!_el || !entry) return;
       const def = (vhub.util && vhub.util.itemDef(entry.id)) || {};
@@ -63,59 +82,51 @@
       _el.innerHTML = '';
       _el.classList.remove('insp-empty');
 
-      // icone
-      const ic = document.createElement('div');
-      ic.className = 'insp-ic';
-      ic.style.backgroundImage = 'url(' + ((vhub.util && vhub.util.itemIcon(entry.id)) || '') + ')';
-      _el.appendChild(ic);
+      // ---- cabeçalho: ícone + nome + legalidade ----
+      const head = node('div', 'insp-head');
 
-      // corpo de texto
-      const body = document.createElement('div');
-      body.className = 'insp-body';
-      _el.appendChild(body);
+      const ic = node('div', 'insp-ic');
+      head.appendChild(ic);
+      if (vhub.util) vhub.util.applyIcon(ic, entry.id);   // SVG local + PNG do repo se carregar
 
-      const nm = document.createElement('div');
-      nm.className = 'insp-name';
-      nm.textContent = (def.nome) || entry.id;
-      body.appendChild(nm);
+      const htext = node('div', 'insp-htext');
+      htext.appendChild(node('div', 'insp-name', def.nome || entry.id));
 
-      if (def.descricao) {
-        const dc = document.createElement('div');
-        dc.className = 'insp-desc';
-        dc.textContent = def.descricao;
-        body.appendChild(dc);
+      const tags = node('div', 'insp-tags');
+      const leg = def.legalidade || 'comum';
+      const legPill = node('span', 'insp-pill insp-pill--' + leg, vhub.util.legalityLabel(leg));
+      tags.appendChild(legPill);
+      if (def.categoria) tags.appendChild(node('span', 'insp-pill insp-pill--cat', def.categoria));
+      if ((entry.amount || 1) > 1) tags.appendChild(node('span', 'insp-pill insp-pill--qty', 'x' + entry.amount));
+      htext.appendChild(tags);
+      head.appendChild(htext);
+      _el.appendChild(head);
+
+      // ---- grade de propriedades ----
+      const grid = node('div', 'insp-meta');
+
+      if (typeof def.peso === 'number') {
+        grid.appendChild(metaRow('Peso', vhub.util.fmtWeight(def.peso) + ' kg' +
+          ((entry.amount || 1) > 1 ? ' · ' + vhub.util.fmtWeight(def.peso * entry.amount) + ' total' : '')));
       }
 
-      if ((entry.amount || 1) > 1) {
-        const qt = document.createElement('div');
-        qt.className = 'insp-qty';
-        qt.textContent = 'x' + entry.amount;
-        body.appendChild(qt);
-      }
-
-      // metadata (whitelist — nunca campos livres)
+      // metadados de instância (whitelist — nunca campos livres do payload)
       const meta = entry.meta || {};
-      const hasMeta = WHITELIST.some((k) => meta[k] !== undefined && meta[k] !== null);
-      if (hasMeta) {
-        const md = document.createElement('div');
-        md.className = 'insp-meta';
-        WHITELIST.forEach((key) => {
-          const val = meta[key];
-          if (val === undefined || val === null) return;
-          const row = document.createElement('div');
-          row.className = 'insp-row';
-          const lbl = document.createElement('span');
-          lbl.className = 'insp-lbl';
-          lbl.textContent = LABELS[key] || key;
-          const vl = document.createElement('span');
-          vl.className = 'insp-val';
-          vl.textContent = fmt(key, val);
-          row.appendChild(lbl);
-          row.appendChild(vl);
-          md.appendChild(row);
-        });
-        if (md.children.length > 0) body.appendChild(md);
-      }
+      WHITELIST.forEach((key) => {
+        const val = meta[key];
+        if (val === undefined || val === null) return;
+        grid.appendChild(metaRow(LABELS[key] || key, fmt(key, val)));
+      });
+
+      if (grid.children.length > 0) _el.appendChild(grid);
+
+      // ---- selo de restrições (só quando há algo relevante a avisar) ----
+      const flags = node('div', 'insp-flags');
+      if (def.negociavel === false)    flags.appendChild(node('span', 'insp-flag', 'Não negociável'));
+      if (def.perdivel === false)      flags.appendChild(node('span', 'insp-flag', 'Não perde na morte'));
+      if (def.permitido_bau === false) flags.appendChild(node('span', 'insp-flag', 'Fora do baú'));
+      if (def.serial === true)         flags.appendChild(node('span', 'insp-flag insp-flag--gold', 'Item único'));
+      if (flags.children.length > 0) _el.appendChild(flags);
     },
 
     // oculta o painel sem destruir o helper
@@ -124,9 +135,7 @@
       _el.innerHTML = '';
       _el.classList.add('insp-empty');
     },
-
   };
 
   vhub.inspect = inspect;
-
 })();

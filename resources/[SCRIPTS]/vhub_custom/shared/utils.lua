@@ -17,6 +17,7 @@ function U.normalizePlate(plate)
   if type(plate) ~= 'string' then return nil end
   local p = plate:upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
   if not p or #p < 2 or #p > 8 then return nil end
+  if not p:match('^[A-Z0-9][A-Z0-9 ]*[A-Z0-9]$') then return nil end
   return p
 end
 
@@ -24,6 +25,14 @@ end
 function U.clamp(v, lo, hi)
   if type(v) ~= 'number' or v ~= v or math.abs(v) == math.huge then return nil end
   return math.max(lo, math.min(hi, v))
+end
+
+-- inteiro finito no intervalo [lo, hi], ou nil
+function U.integer(v, lo, hi)
+  local n = tonumber(v)
+  if not n or n ~= n or math.abs(n) == math.huge or n ~= math.floor(n) then return nil end
+  if n < lo or n > hi then return nil end
+  return n
 end
 
 

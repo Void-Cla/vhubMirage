@@ -125,3 +125,52 @@ O racha EMPURRA telemetria ao VRCS por 2 hooks sob `pcall` (se o VRCS cair, a co
 | §3.7 | Mutações default-deny (#32): sem whitelist configurada, ninguém passa |
 | R-9 | Nomes de evento centralizados em `shared/events.lua` (VHubRachaE) |
 | A-10 | NUI 100% local: ícones SVG inline (`web/shared/icons.js`), sem CDN |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `catalog` | `() → lista de pistas` | vhub_ipad |
+| 2 | `lobbies` | `() → lobbies ativos` | vhub_ipad |
+| 3 | `isInRace` | `(src) → bool` *(server)* | vhub_vrcs, vhub_hss (autorizePosition) |
+| 4 | `isReady` | `(src) → bool` | vhub_ipad |
+| 5 | `topRanking` | `(mode, limit?) → lista` | vhub_ipad |
+| 6 | `historyRecent` | `(char_id, limit?) → lista` | vhub_ipad |
+| 7 | `resultsOf` | `(race_id) → resultado` | vhub_ipad |
+| 8 | `statsOfChar` | `(char_id) → stats` | vhub_ipad |
+| 9 | `recordsOfChar` | `(char_id) → records` | vhub_ipad |
+| 10 | `rankedLadder` | `(mode, limit?) → ladder` | vhub_ipad |
+| 11 | `profile` | `(char_id) → perfil` | vhub_ipad |
+| 12 | `createLobby` | `(src, cfg) → ok` | vhub_ipad |
+| 13 | `cancelLobby` | `(src) → ok` | vhub_ipad |
+| 14 | `deleteTrack` | `(src, track_id) → ok` | vhub_ipad |
+| 15 | `ipadRelay` | `(src, action, data) → resp` | vhub_ipad (broker) |
+| 16 | `isInRace` | `() → bool` *(client)* | vhub_vrcs client |
+| 17 | `isInLobby` | `() → bool` *(client)* | vhub_racha NUI |
+| 18 | `currentKind` | `() → 'sprint'\|'drift'\|…` *(client)* | vhub_racha NUI |
+| 19 | `driftScore` | `() → number` *(client)* | vhub_racha NUI |
+| 20 | `isReady` | `() → bool` *(client)* | vhub_racha NUI |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `oxmysql` | Persistência de resultados, pistas, ranking |
+| `vhub_money` | `giveWallet` (premiação), `tryPayment` (taxa de inscrição) |
+| `vhub_identity` | `getFullName` (placar/ranking) |
+| `vhub_groups` | `hasPermission` (criar pista admin) |
+| `vhub_hss` | `beginActivity`, `endActivity`, `authorizePosition`, `beginPendingStage`, `endPendingStage` |
+| `vhub_vehcontrol` | `getVehicleTier`, `getVehicleScore`, `getVehicleAffinity` (gate e ranqueamento) |
+| `vhub_vrcs` | hooks `onRaceStart`, `onRaceClose` — soft-dep |
+| `Drift` | `getTelemetry` (client, modo drift) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_racha:raceStart` | server→participantes | `{race_id, pistas, tipo}` |
+| `vhub_racha:raceEnd` | server→participantes | `{race_id, resultados}` |
+| `vhub_racha:lobbyUpdate` | server→lobby | `{jogadores, cfg}` |

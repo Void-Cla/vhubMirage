@@ -1,4 +1,4 @@
-/* shared/reset.css — base minima; fundo SEMPRE transparente (NUI sobre o jogo). */
+/* shared/reset.css — base mínima; fundo SEMPRE transparente (NUI sobre o jogo, A-09). */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -6,12 +6,20 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: transparent;          /* nunca janela preta */
-  font-family: var(--vh-font);
+  background: transparent;                /* nunca janela preta no CEF */
+  font-family: var(--vh-font-body);
   color: var(--vh-text);
   user-select: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 img { -webkit-user-drag: none; }
+
+/* rolagem discreta, no tom da identidade (Chromium/CEF) */
+::-webkit-scrollbar        { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb  { background: rgba(243, 181, 58, 0.18); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(243, 181, 58, 0.30); }
+::-webkit-scrollbar-track  { background: transparent; }
 
 .hidden { display: none !important; }

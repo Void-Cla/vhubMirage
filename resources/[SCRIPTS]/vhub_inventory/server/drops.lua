@@ -75,7 +75,9 @@ end
 
 -- cria drop na posição do jogador e persiste no banco (chamar em thread)
 function M.create(src, item_id, amount, meta)
-  if not U.itemDef(item_id) then return false, 'item' end
+  local def = U.itemDef(item_id)
+  if not def then return false, 'item' end
+  if def.perdivel == false then return false, 'bloqueado' end
   amount = U.validQty(amount); if not amount then return false, 'qty' end
 
   local ped = GetPlayerPed(src)

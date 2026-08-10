@@ -4,9 +4,9 @@
 -- Sem vhub_wow rodando, o radio so nao funciona (resto do vehcontrol intacto).
 --
 -- SEGURANCA: soundName NUNCA vem do payload do cliente (deriva sempre de src — um
--- player não pode forjar o nome de outro e parar/alterar o som dele). netId só é
--- aceito após hasAccess(src, plate) confirmar que o player tem chave/posse do veiculo
--- com aquela placa (mesmo padrao de requestLock em main.lua).
+-- player não pode forjar o nome de outro e parar/alterar o som dele). netId aceito
+-- apos resolveVehicleByProximity: valida entidade, placa, bucket e distancia sem
+-- exigir chave/ownership — qualquer player proximo pode controlar o som do carro.
 
 local function wowAvailable()
   return GetResourceState('vhub_wow') == 'started'
@@ -67,7 +67,7 @@ RegisterNetEvent(VHubVeh.E.SOUND_PLAY, function(netId, plate, url, volume, title
   if not rateOk(src, 'play', 750) then return end
   if not wowAvailable() then rejectSound(src); return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' or type(url) ~= 'string' then rejectSound(src); return end
-  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then rejectSound(src); return end
+  if not VHubVeh.resolveVehicleByProximity(src, netId, plate, 15.0) then rejectSound(src); return end
 
   -- title e cosmetico (rotulo da telinha): sanea tamanho, aceita nil
   local tt = (type(title) == 'string' and #title <= 120) and title or nil
@@ -109,7 +109,7 @@ RegisterNetEvent(VHubVeh.E.SOUND_VIDEO, function(netId, plate, show)
   local src = source
   if not rateOk(src, 'video', 250) then return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' then return end
-  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then return end
+  if not VHubVeh.resolveVehicleByProximity(src, netId, plate, 15.0) then return end
 
   if show ~= true then detachVideo(src); return end
 
@@ -155,7 +155,7 @@ RegisterNetEvent(VHubVeh.E.SOUND_RADIO, function(netId, plate, volume)
   if not rateOk(src, 'radio', 750) then return end
   if not wowAvailable() then rejectSound(src); return end
   if type(netId) ~= 'number' or type(plate) ~= 'string' then rejectSound(src); return end
-  if not VHubVeh.resolveAccessibleVehicle(src, netId, plate, 15.0) then rejectSound(src); return end
+  if not VHubVeh.resolveVehicleByProximity(src, netId, plate, 15.0) then rejectSound(src); return end
 
   local vol = tonumber(volume) or 0.5
   if vol < 0 then vol = 0 elseif vol > 1 then vol = 1 end

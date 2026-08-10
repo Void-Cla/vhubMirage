@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>vHub Inventory</title>
 
   <!-- identidade + reset (fundo transparente; sem CDN de fontes — usa stack local) -->
@@ -29,23 +29,27 @@
     <div class="qm-box">
       <div class="qm-title">QUANTIDADE</div>
       <div class="qm-row">
-        <input type="number" class="qm-input" min="1" />
+        <input type="number" class="qm-input" min="1" aria-label="Quantidade" />
         <span class="qm-max"></span>
       </div>
-      <input type="range" class="qm-slider" min="1" />
+      <input type="range" class="qm-slider" min="1" aria-label="Ajustar quantidade" />
+      <div class="qm-quick">
+        <button class="qm-half" type="button">Metade</button>
+        <button class="qm-all" type="button">Tudo</button>
+      </div>
       <div class="qm-actions">
-        <button class="qm-all">Tudo</button>
-        <button class="qm-cancel">Cancelar</button>
-        <button class="qm-ok">Confirmar</button>
+        <button class="qm-cancel" type="button">Cancelar</button>
+        <button class="qm-ok" type="button">Confirmar</button>
       </div>
     </div>
   </div>
 
-  <!-- L3 — engine (ordem: bus -> store -> bridge -> core) -->
+  <!-- L3 — engine (ordem: bus -> store -> bridge -> core -> sand) -->
   <script src="runtime/bus.js"></script>
   <script src="runtime/store.js"></script>
   <script src="runtime/bridge.js"></script>
   <script src="runtime/core.js"></script>
+  <script src="runtime/sand.js"></script>
 
   <!-- helpers compartilhados -->
   <script src="shared/utils.js"></script>

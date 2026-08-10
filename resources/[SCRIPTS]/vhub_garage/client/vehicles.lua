@@ -42,6 +42,8 @@ local function applyCustomization(veh, c)
   SetVehicleModKit(veh, 0)
   if c.colours        then SetVehicleColours(veh, table.unpack(c.colours)) end
   if c.extra_colours  then SetVehicleExtraColours(veh, table.unpack(c.extra_colours)) end
+  if c.interior_color  ~= nil then SetVehicleInteriorColour(veh, c.interior_color) end
+  if c.dashboard_color ~= nil then SetVehicleDashboardColour(veh, c.dashboard_color) end
   -- pintura RGB exata (custom paint) — sobrepoe o indice acima (ordem importa). vhub_custom
   if type(c.custom_primary) == 'table'   then SetVehicleCustomPrimaryColour(veh, table.unpack(c.custom_primary)) end
   if type(c.custom_secondary) == 'table' then SetVehicleCustomSecondaryColour(veh, table.unpack(c.custom_secondary)) end
@@ -66,12 +68,21 @@ local function applyCustomization(veh, c)
     end
   end
   if c.neon_colour then SetVehicleNeonLightsColour(veh, table.unpack(c.neon_colour)) end
+  -- acessorios extras do modelo (vhub_custom) — 3o param do native e "disable", nao "enable"
+  if type(c.extras) == 'table' then
+    for k, enabled in pairs(c.extras) do
+      local idx = tonumber(k)
+      if idx and DoesExtraExist(veh, idx) then SetVehicleExtra(veh, idx, not enabled) end
+    end
+  end
 end
 
 local function collectCustomization(veh)
   local c = {
     colours       = { GetVehicleColours(veh) },
     extra_colours = { GetVehicleExtraColours(veh) },
+    interior_color  = GetVehicleInteriorColour(veh),
+    dashboard_color = GetVehicleDashboardColour(veh),
     plate_index   = GetVehicleNumberPlateTextIndex(veh),
     wheel_type    = GetVehicleWheelType(veh),
     window_tint   = GetVehicleWindowTint(veh),
@@ -90,6 +101,11 @@ local function collectCustomization(veh)
   if GetIsVehicleSecondaryColourCustom(veh) then c.custom_secondary = { GetVehicleCustomSecondaryColour(veh) } end
   for i = 0, 49 do c.mods[i] = GetVehicleMod(veh, i) end
   for i = 0, 3  do c.neons[i] = IsVehicleNeonLightEnabled(veh, i) end
+  -- extras existentes do modelo (chave string p/ round-trip JSON estavel)
+  c.extras = {}
+  for i = 0, 13 do
+    if DoesExtraExist(veh, i) then c.extras[tostring(i)] = IsVehicleExtraTurnedOn(veh, i) end
+  end
   return c
 end
 
@@ -141,6 +157,14 @@ local function spawnVehicle(snap, pos, entrar)
   SetEntityAsMissionEntity(veh, true, true)
   SetVehicleHasBeenOwnedByPlayer(veh, true)
   applyCustomization(veh, snap.customization)
+  -- reidrata os State Bags visuais (stance/escapamento) da placa — dono = vhub_custom. Zero-trust:
+  -- passa só o netId; o servidor deriva a placa da entidade. Atraso p/ o netId propagar ao servidor.
+  if NetworkGetEntityIsNetworked(veh) then
+    local _nid = NetworkGetNetworkIdFromEntity(veh)
+    if _nid and _nid ~= 0 then
+      SetTimeout(600, function() TriggerServerEvent('vhub_custom:server:requestVisual', _nid) end)
+    end
+  end
   applyPhysicalState(veh, snap.state)   -- PRONTU RIO: fuel/health/dano (p s-customization)
   if snap.locked then
     SetVehicleDoorsLocked(veh, 2)

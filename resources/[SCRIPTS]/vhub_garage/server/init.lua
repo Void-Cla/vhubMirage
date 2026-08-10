@@ -58,6 +58,14 @@ end
 -- ----------------------------------------------------------------------------
 AddEventHandler('onResourceStart', function(res)
   if res ~= GetCurrentResourceName() then return end
+
+  -- PULL síncrono de zonas (config estática, zero SQL — getZones não usa Citizen.Await).
+  -- Feito ANTES do CreateThread para que VHubGarage.concessionarias/leilao já estejam
+  -- populados quando qualquer vHub:playerSpawn disparar (o scheduler só entrega outros
+  -- eventos após o fiber atual ceder controle; sem yield aqui = sem corrida).
+  pcall(function() VHubGarage.concessionarias = exports.vhub_conce:getZones() or {} end)
+  pcall(function() VHubGarage.leilao          = exports.vhub_ferinha:getZones() end)
+
   Citizen.CreateThread(function()
     SQL:initSchema()
     -- Backfill da ancora fisica: vhub_vehicles JA existe aqui (initSchema acabou de criar).
@@ -74,13 +82,6 @@ AddEventHandler('onResourceStart', function(res)
     -- Cache read-only do catalogo canonico (dono = vhub_conce desde a FASE 2).
     -- Todos os read-sites de VHubGarage.catalog passam a ler este cache.
     VHubGarage.catalog = exports.vhub_conce:getCatalog() or VHubGarage.catalog
-
-    -- PULL das zonas dos donos de negocio (decisao #25): concessionaria do conce,
-    -- leilao do ferinha. Custo UNICO de boot; getZones devolve config estatica ja
-    -- ACHATADA (vec nao cruza fronteira). Ambos sao dependencia no manifest; pcall
-    -- defensivo p/ que falha de export nao aborte o boot (fallback = sem zona ate restart).
-    pcall(function() VHubGarage.concessionarias = exports.vhub_conce:getZones() or {} end)
-    pcall(function() VHubGarage.leilao          = exports.vhub_ferinha:getZones() end)
 
     -- ── Boot-scan do patio (IT.3 / Void-Zero) ───────────────────────────────
     -- Só roda em BOOT REAL do servidor (0 players). Em restart do resource com

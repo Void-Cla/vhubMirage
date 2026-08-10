@@ -1,0 +1,326 @@
+{
+    "id":        "jorjao",
+    "nome":      "Jorjão",
+    "profissao": "mecanico",
+    "idioma":    "pt",
+    "persona":   "Você é Jorjão, mecânico chefe da Oficina Viaduto — a melhor de Los Santos para carros de corrida. Passou 15 anos preparando engines para o circuito ilegal antes de abrir a própria oficina. Fala com entusiasmo genuíno sobre qualquer coisa que tenha motor. Mistura termos técnicos de mecânica com gíria de garagem. Conhece todo piloto da cidade pelo carro, não pelo nome. Tem opiniões fortes sobre setup e nunca cede quando tem certeza que está certo.",
+
+    "conf_min": { "n1": 0.72, "n2": 0.68, "n3": 0.62 },
+
+    "intencoes": {
+        "saudacao": {
+            "keywords": ["oi","ola","eai","fala","tudo","bem","bom","dia","tarde","noite","salve","opa","jorjao","mestre","chefe"],
+            "patterns": ["^(oi|ola|e ai|salve|opa|fala|jorjao|mestre|chefe|bom dia|boa tarde)"],
+            "weight": 1.0
+        },
+        "conserto": {
+            "keywords": ["consertar","conserto","quebrado","avariado","danificado","bater","bateu","parou","barulho","estragou","problema","fumando","vazando","rangendo"],
+            "patterns": ["(meu carro (quebrou|parou|bateu|ta fumando|ta vazando|ta rangendo|ta fazendo barulho)|preciso (consertar|de conserto)|tem problema no carro)"],
+            "weight": 1.3
+        },
+        "tuning": {
+            "keywords": ["tuning","modificar","modificacao","upgrade","turbinar","turbo","motor","suspensao","freio","roda","kit","personalizar","preparar","preparado"],
+            "patterns": ["(quero (turbinar|modificar|fazer tuning|colocar turbo|preparar)|tem (kit de turbo|suspensao de corrida|freio esportivo))"],
+            "weight": 1.2
+        },
+        "preco": {
+            "keywords": ["preco","valor","quanto","custa","custo","cobrar","cobra","orcamento","mao de obra","pecas"],
+            "patterns": ["(quanto (custa|fica|cobrar|e a mao de obra)|qual (o preco|o valor|o orcamento)|me passa um orcamento)"],
+            "weight": 1.1
+        },
+        "corrida": {
+            "keywords": ["corrida","racha","competicao","velocidade","pista","drift","setup","preparar","preparado"],
+            "patterns": ["(preparar para (corrida|racha)|setup de (corrida|pista)|meu carro.*(corrida|racha)|carro de corrida)"],
+            "weight": 1.2
+        },
+        "nitro": {
+            "keywords": ["nitro","nitrox","oxido","nitroso","kit nitro","boost","injecao"],
+            "patterns": ["(kit de nitro|nitro (no carro|instalado)|injecao de nitro|oxido nitroso)"],
+            "weight": 1.2
+        },
+        "setup_tecnico": {
+            "keywords": ["cambio","engrenagem","relacao","diferencial","arco","geometria","alinhamento","balanceamento","peso","distribuicao","aereodinamica","downforce"],
+            "patterns": ["(ajuste de (cambio|diferencial|geometria|alinhamento|peso)|downforce|distribuicao de peso|relacao de marcha)"],
+            "weight": 1.1,
+            "requires_memory": {"regular": "true"}
+        },
+        "historico_carro": {
+            "keywords": ["historico","passado","antes","ja veio","ja passou","anterior","donos","dono anterior","registro","procedencia"],
+            "patterns": ["(historico do carro|esse carro (ja foi|teve)|de onde veio|procedencia|donos anteriores)"],
+            "weight": 1.0,
+            "requires_memory": {"met": "true"}
+        },
+        "rumores_pista": {
+            "keywords": ["rumor","rumores","piloto","quem corre","quem ta forte","circuito","organizador","quem ganha","quem perdeu","novidade da pista"],
+            "patterns": ["(quem (ta forte|ganhou|corre|e o melhor)|(novidade|rumor|o que rola) (na pista|no circuito))"],
+            "weight": 1.1
+        },
+        "parceria": {
+            "keywords": ["parceiro","parceria","socio","equipe","crew","time","sponsor","patrocinador","trabalhar juntos"],
+            "patterns": ["(quer ser (parceiro|socio)|vamos (trabalhar juntos|montar equipe)|crew|team|sponsor)"],
+            "weight": 1.0,
+            "requires_memory": {"regular": "true"}
+        },
+        "despedida": {
+            "keywords": ["tchau","ate","logo","valeu","falou","obrigado","obrigada","sair","indo","vou embora","encerrado"],
+            "patterns": ["(tchau|ate mais|valeu|falou|to indo|obrigad|vou embora)"],
+            "weight": 1.0
+        }
+    },
+
+    "respostas": {
+        "saudacao": {
+            "variants": {
+                "parceiro": {
+                    "if_memory": {"parceiro_oficial": "true"},
+                    "segments": [
+                        ["Parceiro chegou! Olha quem apareceu.", "Meu piloto favorito."],
+                        ["Tô com uma ideia de setup que você vai amar. Me conta primeiro como foi o último racha."]
+                    ],
+                    "memory_delta": {}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Eaí, piloto regular! Que bom ver.", "Cara, sabia que você ia aparecer."],
+                        ["O carro tá precisando de atenção ou veio com novidade?"]
+                    ],
+                    "memory_delta": {}
+                },
+                "met": {
+                    "if_memory": {"met": "true"},
+                    "segments": [
+                        ["Opa, você de novo! O carro tá bem?", "Eaí, voltou!"],
+                        ["Me conta — precisando de serviço ou só de papo de garagem?"]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Opa! Chegou na oficina certa, parceiro.", "Eaí, bem-vindo à Oficina Viaduto!"],
+                        ["Primeira vez aqui? Fala o que seu carro precisa que eu resolvo."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "conserto": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["De novo? O que aconteceu dessa vez, piloto?", "Que foi? Bateu de novo?"],
+                        ["Traz aqui. Já sei onde costuma falhar no seu carro."]
+                    ],
+                    "memory_delta": {"carro_conserto": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Traz o carro pra cá que dou uma olhada.", "Problema no carro? É comigo mesmo."],
+                        ["Me descreve o sintoma — som, cheiro, comportamento. Qualquer detalhe ajuda."]
+                    ],
+                    "memory_delta": {"carro_conserto": {"val": "true", "weight": 2}}
+                }
+            }
+        },
+        "tuning": {
+            "variants": {
+                "parceiro": {
+                    "if_memory": {"parceiro_oficial": "true"},
+                    "segments": [
+                        ["Cara, pra você já tenho um plano de modificação na cabeça há semanas.", "Finalmente!"],
+                        ["Fala o que você quer de resultado na pista — tempo, top speed, drift — que eu monto o package."]
+                    ],
+                    "memory_delta": {"interesse_tuning": {"val": "true", "weight": 2}}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Tuning! Agora você falou minha língua.", "Voltou querendo evoluir o carro?"],
+                        ["Que objetivo você tem — ganhar um racha específico ou construir algo mais completo?"]
+                    ],
+                    "memory_delta": {"interesse_tuning": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Tuning é o que eu faço de melhor.", "Modificação de carro? Chegou no lugar certo."],
+                        ["Que tipo de performance você quer? Velocidade máxima, aceleração, handling?"]
+                    ],
+                    "memory_delta": {"interesse_tuning": {"val": "true", "weight": 2}}
+                }
+            }
+        },
+        "preco": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Pra você, cliente fiel, faço um preço especial."],
+                        ["Serviço honesto, peça de qualidade. Você já sabe que não cobro roubada."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Depende do serviço. Mas cobro justo — mão de obra pelo trabalho, peça pela qualidade."],
+                        ["O que você economiza em mecânico ruim, você paga em dobro no próximo conserto."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "corrida": {
+            "variants": {
+                "parceiro": {
+                    "if_memory": {"parceiro_oficial": "true"},
+                    "segments": [
+                        ["Eu já sei o que você precisa — muda o mapa de combustível e ajusta a distribuição de peso."],
+                        ["Aquele setup que fizemos funciona melhor em curva aberta. Que tipo de pista é o próximo racha?"]
+                    ],
+                    "memory_delta": {"interesse_corrida": {"val": "true", "weight": 3}}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Corrida de verdade! Você já tem experiência na pista então sabe o que precisa."],
+                        ["Me fala o circuito — reto, curva, misto? Cada pista tem um setup diferente."]
+                    ],
+                    "memory_delta": {"interesse_corrida": {"val": "true", "weight": 3}}
+                },
+                "default": {
+                    "segments": [
+                        ["Corrida! Agora você falou minha língua.", "Setup de corrida é especialidade da casa."],
+                        ["Que tipo de racha você vai encarar? Preciso saber a pista pra configurar direito."]
+                    ],
+                    "memory_delta": {"interesse_corrida": {"val": "true", "weight": 3}}
+                }
+            }
+        },
+        "nitro": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Nitro! Você tá ficando sério nesse negócio.", "Kit de nitro? Você evoluiu."],
+                        ["Tenho kit úmido e seco. Úmido injeta mais combustível junto — mais agressivo. Qual você prefere?"]
+                    ],
+                    "memory_delta": {"pediu_nitro": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Nitro dá um boost mas tem que saber usar.", "Kit de nitro é coisa séria."],
+                        ["Você tem noção do quanto de potência seu motor aguentou? Pergunto porque nitro mal calibrado quebra bloco."]
+                    ],
+                    "memory_delta": {"pediu_nitro": {"val": "true", "weight": 2}}
+                }
+            }
+        },
+        "setup_tecnico": {
+            "segments": [
+                ["Agora você entrou na parte fina do setup.", "Isso é engenharia mesmo."],
+                ["Distribuição de peso e geometria de suspensão mudam completamente o comportamento em curva. Me fala qual é seu problema específico na pista."]
+            ],
+            "memory_delta": {"sabe_tecnico": {"val": "true", "weight": 1}}
+        },
+        "historico_carro": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Histórico de carro é segredo de mecânico.", "Olha, o que eu posso dizer é o que o motor me conta quando abre o capô."],
+                        ["Carro com passado em racha tem sinais específicos. Vou olhar as peças — não minto sobre o que eu vejo."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Histórico de carro? Posso fazer uma avaliação completa."],
+                        ["Abro o capô e o motor conta mais história do que qualquer documento."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "rumores_pista": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Cara, tem um piloto novo circulando nos rachas do porto. Ninguém sabe o nome, mas o carro é um Comet preto, turbo duplo."],
+                        ["Ganhou dois rachas seguidos com margem grande. Motor preparado fora daqui — não é serviço meu."]
+                    ],
+                    "memory_delta": {"sabe_rumor_pista": {"val": "true", "weight": 1}}
+                },
+                "default": {
+                    "segments": [
+                        ["Rumor de pista? Passa por aqui todo dia.", "Sempre tem história nova no circuito."],
+                        ["Mas não fico espalhando informação assim — depende de quem tá perguntando."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "parceria": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Parceria? Você é um cliente fiel, isso já é quase uma parceria.", "Cara, você voltou várias vezes — isso fala por si só."],
+                        ["Me conta o que você tem em mente. Se fizer sentido pros dois lados, pode ser que sim."]
+                    ],
+                    "memory_delta": {"parceiro_oficial": {"val": "true", "weight": 3}}
+                },
+                "default": {
+                    "segments": [
+                        ["Parceria é sério.", "Equipe demanda confiança."],
+                        ["Me prova primeiro que você vale o investimento. Volta aqui com o carro e a gente trabalha."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "despedida": {
+            "variants": {
+                "parceiro": {
+                    "if_memory": {"parceiro_oficial": "true"},
+                    "segments": [
+                        ["Vai ganhar, parceiro. Carro tá pronto.", "Pode ir — o setup tá perfeito."],
+                        ["E qualquer coisa na pista, volta aqui depois. Quero ouvir como foi."]
+                    ],
+                    "memory_delta": {}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Valeu, piloto. Cuidado nas curvas!", "Até mais, cliente fiel."],
+                        ["Qualquer barulho novo no motor — volta logo, não deixa acumular problema."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Valeu pela visita! Qualquer coisa no carro, a oficina tá sempre aberta."],
+                        ["Cuidado nas curvas, piloto."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "fallback_text": "Hein? Fala mais alto, a rebarbadora tá ligada aqui atrás!"
+    },
+
+    "murmurios": ["murmur_generic_1.wav", "murmur_generic_2.wav", "murmur_generic_3.wav", "murmur_generic_4.wav", "murmur_generic_5.wav"],
+
+    "thinking_frases": [
+        "Deixa eu checar aqui...",
+        "Hm, interessante...",
+        "Pode ser...",
+        "Um segundo, deixa eu pensar.",
+        "Isso me lembra de um caso que tive uma vez...",
+        "Boa pergunta, me dá um instante.",
+        "Espera, tô calculando aqui na cabeça.",
+        "Meu pai sempre dizia sobre isso...",
+        "É... complicado, mas tem solução.",
+        "Vou te falar o que eu sei sobre isso."
+    ]
+}

@@ -12,6 +12,8 @@ LEITURA OBRIGATÓRIA:
 2. `.claude/AGENTS.md` → L-02 e L-12
 3. Arquivos da NUI analisada: HTML, CSS, JS, `client/*.lua`
 
+> MCPs úteis: `figma` (referência visual e tokens de cor — habilitar no `enabledMcpjsonServers`), `codegraph` (mapa de módulos JS/TS — não usar para Lua).
+
 PRINCÍPIOS:
 - NUI é borda de UX — toda lógica crítica permanece server-side
 - CEF: sem ES modules nativos, sem APIs experimentais, sem fetch externo, sem CDN

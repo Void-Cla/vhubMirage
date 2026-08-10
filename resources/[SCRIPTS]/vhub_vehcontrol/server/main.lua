@@ -63,6 +63,25 @@ end
 
 VHubVeh.resolveAccessibleVehicle = resolveAccessibleVehicle
 
+-- versao sem gate de chave/ownership: qualquer player proximo pode controlar o som.
+-- valida entidade, placa, bucket e distancia (mesmos checks fisicos), mas ignora hasAccess.
+local function resolveVehicleByProximity(src, netId, plate, maxDistance)
+  src, netId = tonumber(src), tonumber(netId)
+  if not src or not netId or netId % 1 ~= 0 or netId < 1 then return nil end
+  local normalized = normPlate(plate)
+  if normalized == '' then return nil end
+  local entity = NetworkGetEntityFromNetworkId(netId)
+  local ped = GetPlayerPed(src)
+  if not entity or entity == 0 or not DoesEntityExist(entity) or GetEntityType(entity) ~= 2
+      or not ped or ped == 0 or not DoesEntityExist(ped) then return nil end
+  if GetPlayerRoutingBucket(src) ~= GetEntityRoutingBucket(entity) then return nil end
+  if normPlate(GetVehicleNumberPlateText(entity) or '') ~= normalized then return nil end
+  if #(GetEntityCoords(ped) - GetEntityCoords(entity)) > (tonumber(maxDistance) or 15.0) then return nil end
+  return entity, normalized
+end
+
+VHubVeh.resolveVehicleByProximity = resolveVehicleByProximity
+
 local function controlRateOk(src, action)
   local now = GetGameTimer()
   local bucket = _controlAt[src] or {}

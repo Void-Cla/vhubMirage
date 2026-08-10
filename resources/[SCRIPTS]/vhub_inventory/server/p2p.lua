@@ -50,6 +50,8 @@ function M.send(src, target, slot, qty)
   local entry = Backpack.peek(src, slot)
   if not entry then return false, 'slot_vazio' end
   if qty > entry.amount then return false, 'qty_slot' end
+  local def = U.itemDef(entry.id)
+  if not def or def.negociavel == false then return false, 'bloqueado' end
 
   -- target pode receber?
   if not Backpack.canFit(target, entry.id, qty) then return false, 'cheio' end
@@ -64,7 +66,6 @@ function M.send(src, target, slot, qty)
     return false, err or 'credit'
   end
 
-  local def   = U.itemDef(entry.id)
   local label = (def and def.label) or entry.id
   TriggerClientEvent(E.NOTIFY, src,    ('Você enviou %dx %s.'):format(qty, label))
   TriggerClientEvent(E.NOTIFY, target, ('Você recebeu %dx %s.'):format(qty, label))

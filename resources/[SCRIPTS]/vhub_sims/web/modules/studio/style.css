@@ -329,3 +329,228 @@
   .mod-studio__tab-icon { width: 18px; height: 18px; }
   .mod-studio__bottombar { padding-left: 66px; }
 }
+
+
+/* ============================================================
+   STAGE — zona de órbita (arraste/scroll) atrás dos painéis
+   ============================================================ */
+
+.mod-studio__stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.mod-studio__stage.is-grabbing { cursor: grabbing; }
+
+.mod-studio__stage-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 66px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--vh-muted);
+  opacity: .5;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* painéis SEMPRE acima da zona de órbita */
+.mod-studio__topbar,
+.mod-studio__nav,
+.mod-studio__panel,
+.mod-studio__bottombar { position: relative; z-index: 1; }
+
+
+/* ============================================================
+   COMPONENTES DE EDIÇÃO — grupos, swatches, stepper, presets
+   ============================================================ */
+
+.sims-group { grid-column: 1 / -1; }
+
+.sims-group__title {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--vh-gold-soft);
+  margin: 8px 2px 5px;
+  border-bottom: 1px solid rgba(230, 200, 132, 0.12);
+  padding-bottom: 3px;
+}
+
+.sims-group__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.sims-swatches {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+  margin: 2px 0 6px;
+}
+
+.sims-swatch {
+  aspect-ratio: 1 / 1;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 90ms ease, border-color 90ms ease, box-shadow 90ms ease;
+}
+
+.sims-swatch:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, 0.35); }
+
+.sims-swatch[aria-pressed="true"] {
+  border-color: var(--vh-gold-soft);
+  box-shadow: 0 0 0 2px rgba(243, 181, 58, 0.35);
+}
+
+.sims-stepper { display: flex; flex-direction: column; gap: 4px; }
+
+.sims-stepper__label { font-size: 10px; color: var(--vh-muted); letter-spacing: .04em; }
+
+.sims-stepper__row { display: flex; align-items: center; gap: 4px; }
+
+.sims-stepper__btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid rgba(230, 200, 132, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--vh-sand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sims-stepper__btn:hover { background: rgba(243, 181, 58, 0.14); border-color: rgba(243, 181, 58, 0.38); }
+
+.sims-stepper__value {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--vh-sand);
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 7px;
+  padding: 5px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sims-presets {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.sims-preset {
+  flex: 1 1 auto;
+  min-height: 30px;
+  border: 1px solid rgba(230, 200, 132, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--vh-sand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0 10px;
+}
+
+.sims-preset:hover {
+  background: rgba(243, 181, 58, 0.14);
+  border-color: rgba(243, 181, 58, 0.38);
+  color: var(--vh-gold-soft);
+}
+
+
+/* ============================================================
+   OUTFITS — nome em cima, ações embaixo (3 botões no painel estreito)
+   ============================================================ */
+
+.mod-studio__outfit { flex-wrap: wrap; }
+
+.mod-studio__outfit-name {
+  flex: 1 1 100%;
+  color: var(--vh-sand);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-studio__outfit .sims-button { flex: 1 1 auto; }
+
+.mod-studio__outfit-input {
+  flex: 1 1 100%;
+  text-align: left;
+  color: var(--vh-sand);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+
+/* ============================================================
+   MODAL — confirmação de saída (scrim translúcido; A-09: sem backdrop-filter)
+   ============================================================ */
+
+.mod-studio__modal {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 5, 3, 0.72);
+  pointer-events: auto;
+  animation: sims-modal-in 140ms ease;
+}
+
+.mod-studio__modal[hidden] { display: none; }
+
+.mod-studio__dialog {
+  width: min(360px, 82%);
+  border: 1px solid var(--vh-line);
+  border-radius: 16px;
+  padding: 20px 20px 16px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 217, 120, 0.10), transparent 46%),
+    var(--vh-panel-strong);
+  box-shadow: var(--vh-shadow);
+  text-align: center;
+}
+
+.mod-studio__dialog h3 {
+  margin: 0 0 8px;
+  color: var(--vh-gold-soft);
+  font-size: 15px;
+  letter-spacing: .04em;
+}
+
+.mod-studio__dialog p {
+  margin: 0 0 16px;
+  color: var(--vh-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mod-studio__dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+@keyframes sims-modal-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

@@ -1407,3 +1407,39 @@ Todos os ícones são `.png` — não usar extensão diferente sem confirmar no 
 ---
 
 *Fim do prompt — implemente na ordem: fxmanifest → shared → server → client → web/runtime → web/shared → web/modules → integrações externas → DoD.*
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `registerApp` | `(appDef) → ok` | qualquer resource que registre app no catálogo |
+| 2 | `unregisterApp` | `(appId) → ok` | resource que remove seu app |
+| 3 | `openIpad` | `(src) → ok` *(server)* | vhub_ipad NUI, vhub_admin |
+| 4 | `closeIpad` | `(src) → ok` *(server)* | vhub_admin |
+| 5 | `isOpen` | `(src) → bool` *(server)* | vhub_ipad interno |
+| 6 | `useIpad` | `(src) → ok` *(server)* | vhub_inventory (item ipad) |
+| 7 | `ipadRelay` | `(src, action, data) → resp` *(server)* | broker das apps (vhub_racha, vhub_lspdtool, vhub_coinshop) |
+| 8 | `appPush` | `(src, appId, payload) → ok` *(server)* | qualquer resource que notifique o iPad |
+| 9 | `OpenIpad` | `() → ok` *(client)* | vhub_ipad NUI |
+| 10 | `CloseIpad` | `() → ok` *(client)* | vhub_ipad NUI |
+| 11 | `ipadRelay` | `(action, data) → resp` *(client)* | vhub_racha client |
+| 12 | `useIpad` | `() → ok` *(client)* | vhub_ipad NUI |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `vhub_inventory` | `hasItem` (verificar se tem iPad antes de abrir) — soft-dep |
+| `vhub_racha` | `ipadRelay` (roteamento de ações do app racha) |
+| `vhub_lspdtool` | `ipadRelay` (roteamento de ações do app LSPD) |
+| `vhub_coinshop` | `ipadRelay` (roteamento de ações do app CoinShop) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_ipad:opened` | server→client (player) | `{char_id}` |
+| `vhub_ipad:closed` | server→client (player) | `{}` |
+| `vhub_ipad:appPush` | server→client (player) | `{appId, payload}` |

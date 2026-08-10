@@ -121,3 +121,35 @@ exports.vhub_admin:log(actorSrc, 'lspd:prender', targetSrc, {
 | §3.7 | Exports gated — apenas resources TRUSTED da lista interna |
 | §4.6 | Rate de ações moderadas declarado em `CFG.limits` |
 | L-12 | Logs de auditoria em SQL atômico (`server/sql.lua`) |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `isAdmin` | `(src) → bool` | vhub_lspdtool, vhub_coinshop |
+| 2 | `listAdmins` | `() → [{src, name}]` | vhub_admin NUI |
+| 3 | `log` | `(actorSrc, action, targetSrc, payload) → ok` | vhub_lspdtool, vhub_garage, vhub_ferinha |
+| 4 | `isJailed` | `(char_id) → bool` | vhub_login, vhub_spawselector |
+| 5 | `isMuted` | `(char_id) → bool` | vhub_voicePMA |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `isAdmin`, `banPlayer`, `notify` |
+| `oxmysql` | Logs de auditoria, jail/mute persistentes |
+| `vhub_hss` | `teleport`, `revive`, `kill`, `setHealth`, `setArmour`, `fullHeal`, `giveWeapons` |
+| `vhub_inventory` | `giveItem`, `getInventory` |
+| `vhub_money` | `giveWallet`, `giveBank`, `setWallet`, `setBank`, `getBalance` |
+| `vhub_identity` | `getIdentity` |
+| `vhub_groups` | `hasPermission`, `addGroup`, `removeGroup`, `getCatalog` |
+| `vhub_garage` | `adminSpawnVehicle`, `storeVehicle`, `retrieveVehicle` |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_admin:actionLog` | server interno + webhook Discord | `{actor, action, target, payload, ts}` |
+| `vhub_admin:banned` | server→client (target) | `{motivo, expires}` |

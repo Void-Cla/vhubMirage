@@ -22,6 +22,21 @@ VHubAdmin.state = {
   jail = nil,
 }
 local S = VHubAdmin.state
+local focus_lock_running = false
+
+local function lockPanelControls()
+  if focus_lock_running then return end
+  focus_lock_running = true
+  Citizen.CreateThread(function()
+    while S.panel_open do
+      DisableAllControlActions(0)
+      DisableAllControlActions(1)
+      DisableAllControlActions(2)
+      Citizen.Wait(0)
+    end
+    focus_lock_running = false
+  end)
+end
 
 local function setAdminCapability(active)
   active = active == true
@@ -71,9 +86,11 @@ RegisterKeyMapping('admin', 'Abrir painel administrativo vHub', 'keyboard', 'F6'
 
 -- Abre a NUI somente apos receber capacidade do servidor.
 function VHubAdmin.openPanel()
-  if not S.is_admin then return end
+  if not S.is_admin or S.panel_open then return end
   S.panel_open = true
   SetNuiFocus(true, true)
+  SetNuiFocusKeepInput(false)
+  lockPanelControls()
   SendNUIMessage({
     action = UI.OPEN,
     data = {
@@ -95,6 +112,7 @@ end
 function VHubAdmin.closePanel()
   if not S.panel_open then return end
   S.panel_open = false
+  SetNuiFocusKeepInput(false)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = UI.CLOSE })
 end

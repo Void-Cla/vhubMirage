@@ -117,6 +117,33 @@ function Outfits.save(src, payload)
   return true
 end
 
+-- renomeia outfit pertencente ao personagem (idempotente para o mesmo nome)
+function Outfits.rename(src, payload)
+  if type(payload) ~= 'table' or not Core.rate(src, 'outfit_rename') then return false end
+  local session = Session.require(src, payload.session_id, 'studio')
+  local outfitId = tonumber(payload.outfit_id)
+  if not validClothesSession(src, session) or not outfitId or outfitId < 1 then return false end
+
+  local label = normalizeLabel(payload.label)
+  if not label then
+    TriggerClientEvent(E.CLI_CHECKOUT_RESULT, src, { ok = false, err = 'invalid_label' })
+    return false
+  end
+
+  local row = SQL.getOutfit(session.char_id, math.floor(outfitId))
+  if not row then
+    TriggerClientEvent(E.CLI_CHECKOUT_RESULT, src, { ok = false, err = 'storage' })
+    return false
+  end
+  if row.label ~= label and not SQL.renameOutfit(session.char_id, math.floor(outfitId), label) then
+    TriggerClientEvent(E.CLI_CHECKOUT_RESULT, src, { ok = false, err = 'storage' })
+    return false
+  end
+
+  sendList(src, session)
+  return true
+end
+
 -- remove outfit pertencente ao personagem
 function Outfits.delete(src, payload)
   if type(payload) ~= 'table' or not Core.rate(src, 'outfit_delete') then return false end
@@ -149,5 +176,6 @@ end
 
 RegisterNetEvent(E.SRV_OUTFIT_LIST, function(payload) Outfits.list(source, payload) end)
 RegisterNetEvent(E.SRV_OUTFIT_SAVE, function(payload) Outfits.save(source, payload) end)
+RegisterNetEvent(E.SRV_OUTFIT_RENAME, function(payload) Outfits.rename(source, payload) end)
 RegisterNetEvent(E.SRV_OUTFIT_DELETE, function(payload) Outfits.delete(source, payload) end)
 RegisterNetEvent(E.SRV_OUTFIT_APPLY, function(payload) Outfits.apply(source, payload) end)

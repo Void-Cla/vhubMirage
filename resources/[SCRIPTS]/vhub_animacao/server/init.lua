@@ -1,4 +1,5 @@
 -- server/init.lua — comandos de emote com validações server-side
+---@diagnostic disable: undefined-global
 
 local E       = VHubAnimacao.E
 local Catalog = VHubAnimacao.Cfg.CATALOG
@@ -78,3 +79,15 @@ RegisterCommand('cancelar', function(src)
     if not src or src == 0 then return end
     TriggerClientEvent(E.STOP_EMOTE, src)
 end, false)
+
+
+-- ============================================================
+-- SENTAR — force-stand quando HSS bloqueia (algemado, desmaiado)
+-- ============================================================
+
+-- Força o cliente a levantar quando o estado HSS impede sentar.
+-- Chamado pelo próprio HSS via export ou internamente ao detectar bloqueio.
+exports('sitForceStand', function(src)
+    if not src or src == 0 then return end
+    TriggerClientEvent(E.SIT_FORCE_STAND, src)
+end)

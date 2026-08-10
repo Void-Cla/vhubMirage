@@ -1,8 +1,8 @@
 # vhub_conce — Concessionária + Autoridade Chave/Placa/Dono
 
-**Versão:** 0.3.1 | **Owner:** vhub_conce
+**Versão:** 0.4.1 | **Owner:** vhub_conce
 
-**Responsabilidade única:** identidade do veículo. Relação CHAVE↔PLACA↔DONO, compra, test-drive, estoque, emissão/revogação de chave, cron 24h e status/IPVA. Não renderiza, não guarda físico (CORE) nem dinheiro (vhub_money).
+**Responsabilidade única:** identidade e prontuário do veículo. Relação CHAVE↔PLACA↔DONO, compra, estoque, status/IPVA, health, dano e customização. Fuel permanece no CORE; dinheiro no `vhub_money`.
 
 ---
 
@@ -12,7 +12,6 @@
 - Registra, transfere e deleta veículos persistentes
 - Emite e revoga chaves de veículo (sistema de chaves físicas)
 - Mantém prontuário físico do veículo via `VState` (fuel, engine, body, odo, customization)
-- Emite `vHub:vehicleCommitted` após cada save bem-sucedido
 - Cron diário de expiração de IPVA e chaves temporárias
 
 ---
@@ -51,6 +50,15 @@ local lista = exports.vhub_conce:listByOwner(char_id)
 -- lista por status ('parked', 'spawned', 'impound', ...)
 local lista = exports.vhub_conce:listByStatus('parked')
 ```
+
+### Auditoria veicular do custom
+
+```lua
+-- exact-gated para vhub_custom; char_id é capturado antes dos awaits
+local ok = exports.vhub_conce:appendVehicleAudit(src, actor_char_id, plate, action, payload)
+```
+
+Grava apenas `INSERT` append-only em `vhub_vehicle_log`; não altera o estado operacional.
 
 ### CRUD de veículo
 
@@ -131,18 +139,6 @@ local entry = exports.vhub_conce:stockGet('sultan')
 
 ---
 
-## Evento emitido
-
-```lua
--- emitido pelo VState após save bem-sucedido (server→server via TriggerEvent)
--- Shape: { plate=string, source=string, changed={ customization=bool, health=bool, fuel=bool } }
-AddEventHandler('vHub:vehicleCommitted', function(ev)
-  -- ev.plate, ev.source, ev.changed.fuel, etc.
-end)
-```
-
----
-
 ## Como escrever estado de veículo (§3.2 do manual)
 
 **De outros resources:** sempre via contrato do CORE:
@@ -165,3 +161,33 @@ exports.vhub:commitVehicleState('ABC1234', { fuel = 100.0 }, 'vhub_meudom:refuel
 | L-14 | Não mute internos via `getVehicle()` — use os exports de atualização |
 | §3.2 | Estado físico: leia por `getVehicleState`, escreva por `commitVehicleState` (CORE) |
 | Doutrina da Placa | Toda verdade veicular mora na placa; derivados não persistem |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `getVehicle` | `(plate) → row\|nil` | garage, custom, vehcontrol |
+| 2 | `canOperate` | `(src, plate) → bool` | garage, custom, vehcontrol, nitro |
+| 3 | `getVehicleState` | `(plate) → state\|nil` | garage, custom, vehcontrol, nitro |
+| 4 | `saveVehicleState` | `(plate, patch, source) → bool` | garage, custom, vehcontrol, nitro |
+| 5 | `updatePosition` | `(plate, position_json) → affected` | custom, garage |
+| 6 | `createVehicle` | `(row) → bool` | garage, coinshop |
+| 7 | `updateStatus` | `(plate, status) → affected` | garage |
+| 8 | `transferOwner` | `(plate, char_id) → bool` | ferinha, garage |
+| 9 | `grantKey` / `revokeKey` / `hasValidKey` | chave por placa | garage, inventory |
+| 10 | `getCatalog` / `getCatalogSnapshot` | catálogo autoritativo | custom, vehcontrol, admin |
+| 11 | `appendVehicleAudit` | `(src, actor_char_id, plate, action, payload) → bool` | custom |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `getCData`, `commitVehicleState`, `getVehicleState` |
+| `oxmysql` | Persistência direta via `exports.oxmysql` |
+| `vhub_inventory` | `giveVehicleKey`, `takeVehicleKey`, `hasVehicleKey` |
+
+## Eventos emitidos
+
+Nenhum. Consumidores leem pelos exports autoritativos.

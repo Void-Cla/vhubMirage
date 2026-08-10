@@ -69,6 +69,5 @@ files {
   'nui/js/logs.js',
   'nui/js/fleet.js',
   'nui/js/overlay.js',
-  'nui/assets/bg.png',
   'nui/assets/logo.png',
 }

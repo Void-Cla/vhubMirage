@@ -8,7 +8,7 @@ local ResolveCharacter = nil
 
 local _activity_by_src = {}
 local _activity_by_bucket = {}
-local _next_bucket = 0
+local _cursor_by_first = {}
 
 
 -- ============================================================
@@ -23,21 +23,24 @@ local function set_player_bucket(src, bucket)
     return true
 end
 
-local function allocate_bucket()
-    local first = Cfg.PED.activity_bucket_first
-    local last = Cfg.PED.activity_bucket_last
+-- Aloca um bucket livre de um intervalo, com cursor round-robin próprio por intervalo.
+local function allocate_bucket(first, last)
+    if type(first) ~= 'number' or type(last) ~= 'number' or last < first then return nil end
     local span = last - first + 1
-    if _next_bucket < first or _next_bucket > last then _next_bucket = first end
+    local cursor = _cursor_by_first[first]
+    if not cursor or cursor < first or cursor > last then cursor = first end
 
     for _ = 1, span do
-        local bucket = _next_bucket
-        _next_bucket = bucket >= last and first or bucket + 1
+        local bucket = cursor
+        cursor = bucket >= last and first or bucket + 1
         if not _activity_by_bucket[bucket] then
+            _cursor_by_first[first] = cursor
             SetRoutingBucketPopulationEnabled(bucket, false)
             SetRoutingBucketEntityLockdownMode(bucket, 'strict')
             return bucket
         end
     end
+    _cursor_by_first[first] = cursor
     return nil
 end
 
@@ -62,7 +65,7 @@ end
 function Buckets.init(cfg, resolve_character, _logger)
     Cfg = cfg
     ResolveCharacter = resolve_character
-    _next_bucket = Cfg.PED.activity_bucket_first
+    _cursor_by_first = {}
     SetRoutingBucketPopulationEnabled(Cfg.PED.entry_bucket, false)
     SetRoutingBucketEntityLockdownMode(Cfg.PED.entry_bucket, 'strict')
 end
@@ -82,13 +85,41 @@ function Buckets.begin_activity(src)
     src = tonumber(src)
     if not src or not ResolveCharacter(src) then return nil end
     if GetPlayerRoutingBucket(src) ~= Cfg.PED.world_bucket or _activity_by_src[src] then return nil end
-    local bucket = allocate_bucket()
+    local bucket = allocate_bucket(Cfg.PED.activity_bucket_first, Cfg.PED.activity_bucket_last)
     if not bucket then return nil end
     local activity = { bucket = bucket, vehicle = nil, src = src }
     _activity_by_src[src] = activity
     _activity_by_bucket[bucket] = src
     set_player_bucket(src, bucket)
     return bucket
+end
+
+-- Aloca bucket exclusivo para o estúdio de criação; parte do entry_bucket (não do mundo).
+-- Idempotente: se o src já tem bucket exclusivo, reusa (self-heal de retry/reabertura).
+function Buckets.begin_creation(src)
+    src = tonumber(src)
+    if not src or not GetPlayerName(src) then return nil end
+    local existing = _activity_by_src[src]
+    if existing and existing.bucket >= Cfg.PED.creation_bucket_first
+        and existing.bucket <= Cfg.PED.creation_bucket_last then
+        set_player_bucket(src, existing.bucket)
+        return existing.bucket
+    end
+    if existing then return nil end
+    local bucket = allocate_bucket(Cfg.PED.creation_bucket_first, Cfg.PED.creation_bucket_last)
+    if not bucket then return nil end
+    _activity_by_src[src] = { bucket = bucket, vehicle = nil, src = src }
+    _activity_by_bucket[bucket] = src
+    set_player_bucket(src, bucket)
+    return bucket
+end
+
+function Buckets.is_creation(src)
+    src = tonumber(src)
+    local activity = src and _activity_by_src[src] or nil
+    return activity ~= nil
+        and activity.bucket >= Cfg.PED.creation_bucket_first
+        and activity.bucket <= Cfg.PED.creation_bucket_last
 end
 
 -- Anexa veículo pertencente ao jogador ao bucket exclusivo atual.
@@ -122,9 +153,16 @@ function Buckets.drop(src)
     return Buckets.end_activity(src, false)
 end
 
--- Restaura todas as atividades antes de parar o resource.
+-- Fail-safe: sessão privada depende do owner HSS; restart exige reconexão.
 function Buckets.shutdown()
     local sources = {}
     for src in pairs(_activity_by_src) do sources[#sources + 1] = src end
-    for _, src in ipairs(sources) do Buckets.end_activity(src, true) end
+    for _, src in ipairs(sources) do
+        if Buckets.is_creation(src) then
+            Buckets.end_activity(src, false)
+            if GetPlayerName(src) then DropPlayer(src, 'Serviço de personagem reiniciado. Reconecte.') end
+        else
+            Buckets.end_activity(src, true)
+        end
+    end
 end

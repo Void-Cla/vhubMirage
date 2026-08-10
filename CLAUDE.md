@@ -334,6 +334,7 @@ Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem 
 | **A-08** | `SendNUIMessage` em hot path usa batching/delta sync — nunca 60fps de payload bruto |
 | **A-09** | **CEF transparente.** `html, body { background: transparent }` SEMPRE. `backdrop-filter` é PROIBIDO em HUD/overlay direto sobre o jogo — no CEF do FiveM ele só desfoca o que está dentro da página e renderiza um **bloco preto sólido** sobre o mundo GTA. Vidro nesses casos é SIMULADO com fundo translúcido em camadas (opacidade do piso ≈0.78–0.86). `backdrop-filter` só é permitido quando há uma camada de fundo OPACA (`#vhub-bg` com `bg.png`) atrás do painel. |
 | **A-10** | **Assets declarados.** Todo arquivo que a NUI carrega (`<script>`, `<link>`, imagem, fonte) DEVE constar no `files{}` do `fxmanifest.lua` — omitir = 404 no CEF = a NUI não monta. Sem CDN externo (Google Fonts, FontAwesome, cdnjs): offline falha; usar fonte do sistema/embarcada + ícone SVG/unicode. |
+| **A-11** | **CSS escopo local — sair do `:root`.** Tokens CSS (cores, espaçamento, tipografia, glass params) **não vão em `:root` global**; vivem no seletor raiz do módulo (`.mod-<nome> { --cor: …; }`). `:root` só acepta variáveis verdadeiramente globais do design system (paleta Mirage, breakpoints do runtime). Adoção **incremental** como L-19: aplica-se a **código novo** e a **CSS tocado**; não reescrever NUI existente só por isso. Cuidado especial com background: fundo translúcido (`rgba`) declarado em escopo local previne colisão com o comportamento de CEF opaco (A-09) — nunca expor fundo em `:root` sem o contexto `html/body { background: transparent }` já garantido. |
 
 ### Condições adicionais de parada obrigatória (NUI)
 
@@ -343,6 +344,7 @@ Complementam L-01..L-12; aplicam-se a NUI/runtime/cliente-JS. Não sobrescrevem 
 - Animação rodando com NUI fechada (idle > 0 em resmon)
 - `backdrop-filter` em HUD/overlay sobre o jogo, ou `html`/`body` com fundo opaco (A-09)
 - Asset carregado pela NUI ausente do `files{}` do fxmanifest, ou dependência de CDN externo (A-10)
+- Token CSS (`--cor`, `--gap`, etc.) declarado em `:root` fora da paleta global do design system (A-11)
 
 ---
 
@@ -551,9 +553,43 @@ Enquanto o CORE está sendo descongelado, escrever em `resources/[CORE]/vhub/**`
 
 Servidores MCP declarados em `.mcp.json` (raiz do repo, ao lado de `.claude/`). São ferramentas
 extras que a sessão e os agentes podem usar; ativação por servidor, sem segredo hardcoded.
+**`.mcp.json` está no `.gitignore`** — nunca commitar; tokens vão em variável de ambiente do usuário.
 
-- **`filesystem`** (ativo): leitura/escrita restrita à raiz do projeto — navegação e edição sob as mesmas regras de permissão/hook do Claude Code.
-- **`git`** (opcional): histórico, diff e blame estruturados — útil para o `vhub_guardiao_revisao` inspecionar a mudança sem custo de shell. Requer `uvx`/Python; habilitar quando disponível.
-- Regras: nenhum servidor MCP contorna os gates de `settings.json` nem escreve em `contexto.md`/CORE sem o mesmo gate. Chave/token de servidor MCP vai em `.env`/variável de ambiente, **nunca** no `.mcp.json` versionado.
+> **Declarar ≠ ativar.** `settings.json` controla quais servidores sobem no boot via
+> `enabledMcpjsonServers`. Cada servidor não listado não inicia, não consome memória e não
+> cobra cold-start de `npx`/`uvx`. Adicionar à lista reinicia o processo MCP — faça
+> intencionalmente. Servidor habilitado ocioso ainda tem custo de handshake por sessão.
 
-Para adicionar um servidor, editar `.mcp.json` e reiniciar a sessão (o Claude Code recarrega MCP no boot).
+### Servidores disponíveis
+
+| Servidor | `enabledMcpjsonServers` | Quando usar | Custo |
+|----------|------------------------|-------------|-------|
+| **`filesystem`** | ✅ ativo | Path dinâmico/parametrizado; alternativa às tools nativas quando o path não é conhecido em design-time | Baixo |
+| **`git`** | ➕ habilitar quando precisar | Blame/log/diff estruturado em subagente sem acesso a shell (`uvx` + Python obrigatório) | Baixo |
+| **`codegraph`** | ➕ habilitar em sprint NUI | Mapa de chamadas e imports JS/TS (`web/runtime/`, `web/modules/`). **Lua = nunca** | Médio |
+| **`figma`** | ➕ habilitar antes de sprint UI | Ler arquivo Figma, nós de design, tokens de cor. Token via env var `FIGMA_API_KEY` (Windows user-level) | Médio |
+
+### Quando NÃO usar MCP
+
+- **Busca em Lua**: `Grep` + `Read` — mais rápidos, zero overhead. `codegraph` não cobre Lua.
+- **Edição de arquivo conhecido**: `Edit`/`Write` nativo — não abrir MCP filesystem à toa.
+- **Git simples** (`status`, `diff`, `log`): `Bash` direto é suficiente — `git` MCP só quando subagente não tem shell.
+- **Figma fora de sprint UI**: servidor puxa `npx figma-mcp` no boot → custo fixo. Não habilitar sem uso real.
+- **Qualquer MCP** quando a tool nativa equivalente existe e o path é conhecido.
+
+### Mapa por agente
+
+| Agente | MCPs úteis |
+|--------|-----------|
+| `vhub_guardiao_revisao` | `git` (blame/diff estruturado), `filesystem` |
+| `vhub_guardiao_designer` | `figma` (tokens de cor/layout), `codegraph` (deps JS) |
+| `vhub_designer` | `figma` (referência visual), `codegraph` (mapa de módulos NUI) |
+| `vhub_guardiao_runtime` | `codegraph` (grafo de imports JS/TS) |
+| Demais guardiões | `filesystem` apenas se path dinâmico; `git` se sem shell |
+
+### Regras
+
+- Nenhum servidor MCP contorna gates de `settings.json` nem escreve em `contexto.md`/CORE sem gate.
+- Token/chave vai em variável de ambiente do usuário, **nunca** no `.mcp.json` versionado.
+- Para habilitar servidor: adicionar ao `enabledMcpjsonServers` no `settings.json` → reiniciar sessão.
+- Para remover: apagar entrada de `enabledMcpjsonServers` (ou o bloco do servidor em `.mcp.json`) → reiniciar.

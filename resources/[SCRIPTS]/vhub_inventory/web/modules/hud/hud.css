@@ -1,23 +1,34 @@
-/* modules/hud/hud.css — Player Info HUD. SEM fundo: so texto + glow (lição do racha). */
+/* modules/hud/hud.css — Player Info HUD. Vidro translúcido leve (SEM backdrop-filter, A-09). */
 
 .mod-hud {
   position: fixed;
   left: 18px;
   bottom: 16px;
-  pointer-events: none;          /* HUD nao captura mouse */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-  line-height: 1.15;
+  pointer-events: none;                 /* HUD não captura mouse */
 }
 
-.mod-hud .hud-line {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--vh-text-dim);
+.mod-hud .hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 9px;
+  background: linear-gradient(180deg, rgba(18, 15, 10, 0.5), rgba(10, 8, 5, 0.55));
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-pill);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.mod-hud .hud-ico {
+  width: 15px; height: 15px;
+  stroke: var(--vh-gold); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(243, 181, 58, 0.4));
 }
 
 .mod-hud .hud-id {
-  color: var(--vh-gold);
+  font-family: var(--vh-font-title);
+  font-size: 12px;
   font-weight: 700;
-  text-shadow: var(--vh-glow);
+  letter-spacing: 0.6px;
+  color: var(--vh-gold);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }

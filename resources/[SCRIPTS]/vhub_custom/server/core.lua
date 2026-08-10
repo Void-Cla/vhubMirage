@@ -203,6 +203,35 @@ function Core.stageCap(row, sheet)
   return cap
 end
 
+-- ADR #85 F2.5-A: juízo de compatibilidade de UMA peça. Delega ao módulo PURO VHubCustom.Compat
+-- (shared/compat.lua — testável offline em tools/test_compat.lua). `class_budget`/stageCap não
+-- bloqueiam (viram hint); o gate real é família/conflito/dependência/item/já-instalada. Usado no
+-- install/remove (oficina.lua) e no payload de auth (init.lua) — juízo ÚNICO, sem 2ª verdade.
+function Core.resolvePartStatus(part, curParts, cap, hasItem)
+  return VHubCustom.Compat.resolve(part, curParts, cap, hasItem)
+end
+
+-- monta o mapa STATUS por peça do catálogo (glue O(nº peças) sobre Core.resolvePartStatus — juízo
+-- ÚNICO). Usado no payload de auth (init.lua) e no estado fresco pós-install/remove (oficina.lua).
+-- `cap` já resolvido pelo chamador (Core.stageCap). Item consultado 1×/item (cache local). Não persiste.
+function Core.computePartsStatus(src, cap, curParts)
+  local catalog = VHubCustom.PartsCatalog
+  if not catalog or type(catalog.PARTS) ~= 'table' then return nil end
+  local itemCache = {}
+  local function hasItem(it)
+    if itemCache[it] == nil then
+      local ok, has = pcall(function() return exports.vhub_inventory:hasItem(src, it, 1) == true end)
+      itemCache[it] = ok and has == true
+    end
+    return itemCache[it]
+  end
+  local out = {}
+  for _, p in ipairs(catalog.PARTS) do
+    out[p.id] = Core.resolvePartStatus(p, curParts, cap, hasItem)
+  end
+  return out
+end
+
 -- valida zona, réplica, placa, modelo, bucket, distância, velocidade e autorização
 function Core.validateVehicle(src, domain, plate, netId, zoneId)
   local cid = Core.getCharId(src)
@@ -504,8 +533,8 @@ end
 local function operationApplied(row)
   local after = decoded(row.after_json)
   if row.action == 'nitro_kit' then
-    local ok, state = pcall(function() return exports.vhub_nitro:getNitro(row.plate) end)
-    return ok and type(state) == 'table' and state.kit == true
+    local state = VHubCustom.nitroGetInternal(row.plate)
+    return type(state) == 'table' and state.kit == true
   end
   if row.action == 'tow' then
     local ok, vehicle = pcall(function() return exports.vhub_conce:getVehicle(row.plate) end)

@@ -54,3 +54,35 @@ canInteract?, onSelect?, event?, serverEvent?, export?, command?, openMenu?, men
 
 `shared/config.lua` → `VHubTarget.cfg`: `hotkey`, `toggleHotkey`, `leftClick`, `debug`,
 `drawSprite`, `defaults` (portas de veículo built-in), `maxZones`, `rates`.
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `addBoxZone` | `(id, coords, size, opts) → ok` *(client)* | vhub_money, vhub_sims |
+| 2 | `addSphereZone` | `(id, coord, radius, opts) → ok` *(client)* | vhub_conce, vhub_ferinha |
+| 3 | `addPolyZone` | `(id, pontos, opts) → ok` *(client)* | vhub_sims |
+| 4 | `addModel` | `(model, opts) → ok` *(client)* | vhub_money (ATM), vhub_cadeira |
+| 5 | `addEntity` | `(entity, opts) → ok` *(client)* | vhub_cadeira |
+| 6 | `addGlobalPed` | `(ped_hash, opts) → ok` *(client)* | vhub_sims (NPC de loja) |
+| 7 | `removeZone` | `(id) → ok` *(client)* | vhub_money, vhub_sims, vhub_cadeira |
+| 8 | `zoneExists` | `(id) → bool` *(client)* | vhub_target interno |
+| 9 | `disableTargeting` | `(bool) → ok` *(client)* | vhub_racha (durante corrida) |
+| 10 | `setLocked` | `(bool) → ok` *(client)* | vhub_hss (ped inconsciente) |
+| 11 | `isActive` | `() → bool` *(client)* | vhub_target NUI |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId` |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_target:zoneEntered` | client local | `{zoneId, entity?}` |
+| `vhub_target:zoneLeft` | client local | `{zoneId}` |
+| `vhub_target:optionSelected` | client local | `{zoneId, option}` |

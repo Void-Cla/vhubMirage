@@ -3,10 +3,13 @@
 -- Thread QUENTE: DrawMarker + prompt [E]. Budget: 16 ms (~60 Hz) dentro de zona (L-18 renegociado:
 --   DrawMarker exige tick-a-tick; 16 ms é o mínimo visual aceitável e não estoura o frame budget
 --   do client FiveM que já executa o render loop nessa janela).
+--
+-- ADR #82 F2.2: a OFICINA migrou p/ interação de OLHO no capô (client/target_hood.lua via
+-- vhub_target). Aqui a zona 'oficina' NÃO desenha marker nem responde [E] — bennys/mec seguem
+-- pelo fluxo de proximidade (target cobre só a oficina). Skill: interacao_target_migration (#57).
 ---@diagnostic disable: undefined-global
 
 local CFG = VHubCustom.cfg
-local E   = VHubCustom.E
 
 local MARKER_COLOR = { r = 220, g = 180, b = 90, a = 100 }
 local PROMPT_KEY   = 38   -- tecla E
@@ -37,7 +40,8 @@ Citizen.CreateThread(function()
     local pPos = GetEntityCoords(PlayerPedId())
     local found = nil
     for _, z in ipairs(CFG.zones) do
-      if #(pPos - z._vec) < z.raio_check then
+      -- oficina migrou p/ vhub_target (F2.2): não entra na detecção de marker/[E]
+      if z.domain ~= 'oficina' and #(pPos - z._vec) < z.raio_check then
         found = z; break
       end
     end
@@ -82,15 +86,7 @@ Citizen.CreateThread(function()
           -- verifica se há veículo próximo para operar
           local veh = GetClosestVehicle(pPos.x, pPos.y, pPos.z, 8.0, 0, 70)
           if DoesEntityExist(veh) and veh ~= 0 then
-            VHubCustom.activeZone   = z
-            VHubCustom.activeVeh    = veh
-            VHubCustom.activeVehNet = NetworkGetNetworkIdFromEntity(veh)
-            VHubCustom.activePlate  = GetVehicleNumberPlateText(veh):upper():match('^%s*(.-)%s*$')
-
-            if z.domain == 'bennys'  then VHubCustom.openBennys()
-            elseif z.domain == 'mec' then VHubCustom.openMec()
-            elseif z.domain == 'oficina' then VHubCustom.openOficina()
-            end
+            VHubCustom.requestService(z, veh)
           else
             BeginTextCommandDisplayHelp('STRING')
             AddTextComponentSubstringPlayerName('Aproxime um veículo para usar este serviço.')

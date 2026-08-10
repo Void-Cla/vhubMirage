@@ -93,11 +93,20 @@ local function audit(char_id, reason, before, after)
     })
 end
 
+-- Telemetria permanente e esparsa: somente falhas de CAS/commit.
+local function audit_conflict(stage, meta)
+    meta = type(meta) == 'table' and meta or {}
+    meta.stage = stage
+    pcall(function() exports.vhub:log('warn', 'hss', 'commitCustomization diag', meta) end)
+end
+
 local function operation_replay(row, char_id, src)
     if not row then return nil end
     if tonumber(row.char_id) ~= char_id or tonumber(row.digest_ok) ~= 1 then
         return { ok = false, err = 'conflict' }
     end
+    -- pending = tentativa anterior incompleta; INSERT IGNORE + UPDATE fazem o retry corretamente
+    if row.state == 'pending' then return nil end
     if row.state ~= 'committed' then return { ok = false, err = 'conflict' } end
     local customization = decode_table(row.after_customization)
     if not customization then return { ok = false, err = 'storage' } end
@@ -224,16 +233,35 @@ local function commit_customization(src, patch, expected_revision, operation_id)
     local replay = operation_replay(existing, char_id, src)
     if replay then return replay end
 
-    local snapshot = State.customization_snapshot(char_id)
-    if not snapshot or snapshot.revision ~= expected_revision then
-        return { ok = false, err = 'conflict' }
-    end
-    local ped = GetPlayerPed(src)
-    if not ped or ped == 0 or not DoesEntityExist(ped) then return { ok = false, err = 'native' } end
+    -- O flush de fundo do estado (autosave/auto-heal) compartilha o flag entry.in_flight com a CAS
+    -- de aparência. Durante o await do SQL acima, um flush pode marcar in_flight e fazer a reserva
+    -- abaixo falhar com 'conflict' espúrio. Serializa: aguarda janela limpa e RESERVA na mesma
+    -- continuação síncrona (sem yield entre await_customization_idle e prepare_customization).
+    local prepared, prepare_error, after
+    for attempt = 1, 4 do
+        State.await_customization_idle(char_id)
 
-    local after = VHubHSS.Appearance.merge(snapshot.customization, clean)
-    local prepared, prepare_error = State.prepare_customization(char_id, after, expected_revision)
-    if not prepared then return { ok = false, err = prepare_error or 'conflict' } end
+        local snapshot = State.customization_snapshot(char_id)
+        if not snapshot or snapshot.revision ~= expected_revision then
+            audit_conflict('revision_mismatch', { expected = expected_revision,
+                in_memory = snapshot and snapshot.revision or nil, attempt = attempt })
+            return { ok = false, err = 'conflict' }
+        end
+        local ped = GetPlayerPed(src)
+        if not ped or ped == 0 or not DoesEntityExist(ped) then return { ok = false, err = 'native' } end
+
+        after = VHubHSS.Appearance.merge(snapshot.customization, clean)
+        prepared, prepare_error = State.prepare_customization(char_id, after, expected_revision)
+        if prepared then break end
+        if prepare_error ~= 'busy' then
+            audit_conflict('prepare_failed', { err = prepare_error, attempt = attempt })
+            return { ok = false, err = prepare_error or 'conflict' }
+        end
+    end
+    if not prepared then
+        audit_conflict('prepare_busy_exhausted', { expected = expected_revision })
+        return { ok = false, err = 'busy' }
+    end
     local rollback_token = 'rb:' .. operation_id
     local commit_ok, row = await_sql(function(cb)
         SQL.commit_customization(prepared, operation_id, payload_json, rollback_token, cb)
@@ -243,6 +271,8 @@ local function commit_customization(src, patch, expected_revision, operation_id)
         return { ok = false, err = 'storage' }
     end
     if type(row) ~= 'table' then
+        audit_conflict('commit_no_row', { after_revision = prepared.after_revision,
+            before_revision = prepared.before_revision })
         State.abort_customization(prepared)
         return { ok = false, err = 'conflict' }
     end
@@ -251,6 +281,12 @@ local function commit_customization(src, patch, expected_revision, operation_id)
         or row.state ~= 'committed'
         or tonumber(row.after_revision) ~= prepared.after_revision
         or tonumber(row.stored_revision) ~= prepared.after_revision then
+        audit_conflict('commit_row_mismatch', {
+            digest_ok = tonumber(row.digest_ok), row_char = tonumber(row.char_id),
+            row_state = row.state, row_after = tonumber(row.after_revision),
+            stored_revision = tonumber(row.stored_revision),
+            expected_after = prepared.after_revision,
+        })
         State.abort_customization(prepared)
         return { ok = false, err = 'conflict' }
     end

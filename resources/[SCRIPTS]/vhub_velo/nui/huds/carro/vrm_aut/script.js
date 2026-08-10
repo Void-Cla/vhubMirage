@@ -1,6 +1,12 @@
 /* Adapter HUD — vrm_aut: usa o engine compartilhado VeloCore e
    aplica personalizações por mostrador. Mantém o painel /velo
-   (galeria) e persiste via NUI callbacks padronizados. */
+   (galeria) e persiste via NUI callbacks padronizados.
+
+   ⚠️ LEGADO (pré-VeloDials). gerarTicks()/desenharTicksCircular() abaixo DUPLICAM
+   VeloDials.buildTicks() (nui/velo-dials.js). Este HUD é a via ANTIGA (SVG inline + painel
+   de config próprio). Migração para VeloDials.build(spec) + galeria /velo única = Fase 3 do
+   plano de padronização (ver .claude/contexto.md #velo-dials). NÃO estender este arquivo:
+   HUDs novos nascem via spec.js + VeloDials (ver huds/carro/vrm_classic). */
 
 const painel = document.getElementById('velo-config');
 const inpRpm = document.getElementById('input-rpm');

@@ -49,3 +49,39 @@ exports.vhub_voicePMA:getVoiceState()
 
 Os quatro projetos usados somente para análise foram arquivados em
 `metas/vhub_voicePMA_referencias/`. Nenhum código legado entra no runtime.
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `setRadioChannel` | `(src, channel) → ok` *(server)* | vhub_voicePMA interno |
+| 2 | `leaveRadio` | `(src) → ok` *(server)* | vhub_voicePMA interno |
+| 3 | `setCallChannel` | `(src, callId) → ok` *(server)* | vhub_voicePMA (ligações) |
+| 4 | `leaveCall` | `(src) → ok` *(server)* | vhub_voicePMA interno |
+| 5 | `getVoiceState` | `(src) → {channel, inCall, …}` *(server)* | vhub_wow (ducking) |
+| 6 | `getRadioMembers` | `(channel) → lista` *(server)* | vhub_admin |
+| 7 | `setRadioChannel` | `(channel) → ok` *(client)* | vhub_voicePMA NUI |
+| 8 | `leaveRadio` | `() → ok` *(client)* | vhub_voicePMA NUI |
+| 9 | `setRadioVolume` | `(vol) → ok` *(client)* | vhub_voicePMA NUI |
+| 10 | `setCallVolume` | `(vol) → ok` *(client)* | vhub_voicePMA NUI |
+| 11 | `getVoiceState` | `() → state` *(client)* | vhub_wow (ducking client) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `vhub_inventory` | `hasItem` (item `radio` para frequências normais) |
+| `vhub_groups` | `hasPermissionByChar` (freq 900-999 = policia.radio) |
+| `vhub_hss` | `isConscious`, `isHandcuffed` (bloqueio fisiológico) |
+| `vhub_wow` | ducking de áudio (voicePMA notifica atividade de voz) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_voicePMA:channelJoined` | server→client (player) | `{channel}` |
+| `vhub_voicePMA:channelLeft` | server→client (player) | `{}` |
+| `vhub_voicePMA:voiceActivity` | server→vhub_wow | `{src, active}` |

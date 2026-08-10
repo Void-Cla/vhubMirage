@@ -66,10 +66,13 @@ end
 
 local function sum(a) local s = 0; for _, ax in ipairs(TR.AXES) do s = s + (a[ax] or 0) end; return s end
 
+-- chave de budget do chassi (ADR #82): canônico `class_budget`, alias legado `tier_base` (shim R15)
+local function budgetKey(p1) return p1 and (p1.class_budget or p1.tier_base) or nil end
+
 -- carros REAIS do catálogo que têm bloco p1 (engine habilitado)
 local P1_CARS = {}
 for key, entry in pairs(CATALOG) do
-  if type(entry) == "table" and type(entry.p1) == "table" and entry.p1.tier_base then
+  if type(entry) == "table" and type(entry.p1) == "table" and budgetKey(entry.p1) then
     P1_CARS[key] = entry.p1
   end
 end
@@ -91,9 +94,9 @@ local COMBOS = {
 local n_cars = 0
 for key, base in pairs(P1_CARS) do
   n_cars = n_cars + 1
-  eq(TR.budgetOf(base, nil, nil), TR.BUDGET[base.tier_base], "budgetOf stock " .. key)
+  eq(TR.budgetOf(base, nil, nil), TR.BUDGET[budgetKey(base)], "budgetOf stock " .. key)
   if type(base.base_alloc) == "table" then
-    eq(sum(base.base_alloc), TR.BUDGET[base.tier_base], "base_alloc sum == BUDGET[tier] " .. key)
+    eq(sum(base.base_alloc), TR.BUDGET[budgetKey(base)], "base_alloc sum == BUDGET[tier] " .. key)
   end
 end
 ok(n_cars > 0, "catálogo tem ao menos 1 carro com p1 (encontrei " .. n_cars .. ")")
@@ -197,7 +200,7 @@ do
   local base = P1_CARS.f8t or select(2, next(P1_CARS))
   local sheet = TR.buildSheet(base, { [11] = 2 }, true, nil)
   ok(type(sheet) == "table", "buildSheet retorna tabela")
-  for _, k in ipairs({ "tier","tier_base","tier_max","score","budget","used","alloc","affinity","ranges","free" }) do
+  for _, k in ipairs({ "tier","class_budget","tier_base","tier_max","score","budget","used","alloc","affinity","ranges","free" }) do
     ok(sheet[k] ~= nil, "buildSheet tem chave " .. k)
   end
   eq(sheet.used, sheet.budget, "buildSheet default used==budget")

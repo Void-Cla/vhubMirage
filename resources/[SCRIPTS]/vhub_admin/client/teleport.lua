@@ -105,6 +105,14 @@ RegisterCommand('tpgo', function()
   if S.is_admin then TriggerServerEvent(E.ACT_TPGO) end
 end, false)
 
+RegisterCommand('tpway', function()
+  if S.is_admin then TriggerServerEvent(E.ACT_TPGO) end
+end, false)
+
+RegisterCommand('tppgo', function()
+  if S.is_admin then TriggerServerEvent(E.ACT_TPGO) end
+end, false)
+
 RegisterCommand('tpcds', function(_, args)
   if not S.is_admin then return end
   local raw = table.concat(args, ' '):gsub(',', ' ')

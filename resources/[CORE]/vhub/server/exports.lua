@@ -343,3 +343,17 @@ vHub.Kernel:export("registerVehicleDespawn", function(plate)
   vHub.Vehicle:onDespawned(plate)
   return true
 end)
+
+-- Solta o cache VRAM de uma placa DELETADA — contraparte de lifecycle do register (ADR #82).
+-- Gate por IDENTIDADE (só o dono da identidade da placa = vhub_conce), não trust genérico:
+-- desregistrar placa alheia é vetor de sabotagem cruzada (quebra fuel-commit de outro veículo).
+-- Não materializa (register) — no-op se a placa não está em VRAM, evitando re-ancorar a placa
+-- condenada numa corrida com o próprio DELETE. skipSave=true: a row vai sumir, não persistir.
+vHub.Kernel:export("unregisterVehicle", function(plate)
+  if GetInvokingResource() ~= "vhub_conce" then return false end
+  vHub.assertThread()
+  if type(plate) ~= "string" then return false end
+  vHub.Vehicle:unregister(plate, true)   -- normaliza a placa internamente; no-op se ausente
+  vHub.audit("vhub_conce", "unregisterVehicle", plate, "delete", nil, nil)
+  return true
+end)

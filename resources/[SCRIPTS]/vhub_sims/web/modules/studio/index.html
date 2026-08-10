@@ -1,6 +1,13 @@
 <section class="mod-studio" aria-label="Estúdio de aparência">
 
   <!-- ======================================================
+       STAGE — zona central: captura de órbita (arraste/scroll)
+       ====================================================== -->
+  <div class="mod-studio__stage" data-orbit-zone aria-hidden="true">
+    <span class="mod-studio__stage-hint">Arraste para girar · scroll para aproximar</span>
+  </div>
+
+  <!-- ======================================================
        TOP BAR — marca + modo + status + sair
        ====================================================== -->
   <header class="mod-studio__topbar">
@@ -53,5 +60,24 @@
       <button class="sims-rot-btn" data-action="rotate-right" aria-label="Girar à direita">↷</button>
     </div>
   </footer>
+
+  <!-- ======================================================
+       MODAL — confirmação de saída com alterações não salvas
+       ====================================================== -->
+  <div class="mod-studio__modal" data-studio-modal hidden>
+    <div class="mod-studio__dialog" role="dialog" aria-modal="true"
+      aria-labelledby="sims-modal-title" aria-describedby="sims-modal-text">
+      <h3 id="sims-modal-title">Alterações não salvas</h3>
+      <p id="sims-modal-text">Você fez alterações que ainda não foram salvas. O que deseja fazer?</p>
+      <div class="mod-studio__dialog-actions">
+        <button class="sims-button sims-button--primary sims-button--sm"
+          data-action="exit-save">Salvar</button>
+        <button class="sims-button sims-button--ghost-danger sims-button--sm"
+          data-action="exit-discard">Sair sem salvar</button>
+        <button class="sims-button sims-button--sm"
+          data-action="exit-stay">Continuar editando</button>
+      </div>
+    </div>
+  </div>
 
 </section>

@@ -1,108 +1,26 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet" href="style.css">
-    <style>
-        /* Ajustes para o iframe */
-        body { background: transparent !important; }
-        .velocimetro-container { position: absolute; bottom: 20px; right: 20px; }
-
-        /* personalização do jogador (host/velo-core setam --velo-bg / --velo-accent).
-           Fundo CDN CENTRALIZADO ENTRE os círculos: marca d'água na junção RPM↔VELOCÍMETRO
-           (midpoint dos centros no shell 430×239). Acima da face SVG, abaixo dos ponteiros. */
-        #velo-custom-bg {
-            position: absolute; left: 232px; top: 130px;
-            width: 112px; height: 112px;
-            transform: translate(-50%, -50%);
-            background-image: var(--velo-bg, none);
-            background-size: contain; background-position: center; background-repeat: no-repeat;
-            pointer-events: none; z-index: 2; opacity: 0.55;
-        }
-        .speedometerShell { position: relative; z-index: 1; }
-        .needle { filter: drop-shadow(0 0 5px var(--velo-accent, transparent)); }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRM Clássico | vHub Velo</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- HUD-padrão (needles). velo-core liga body.velo-active e preenche os IDs padrão.
-         Fundo/cor vêm das CSS vars --velo-bg/--velo-accent (galeria /velo) — sem veloOnConfig próprio. -->
-    <main id="velocimetro" class="velocimetro-container">
-        <div class="speedometerShell">
-            <img src="dashboard_fivem.svg" class="velo-bg" alt="velocimetro">
-
-            <!-- marca d'água do jogador entre os círculos (acima da face SVG, abaixo dos ponteiros) -->
-            <div id="velo-custom-bg"></div>
-
-            <!-- ponteiros (velo-core rotaciona pelos IDs padrão) -->
-            <div class="needle speed-needle" id="speed-needle" aria-hidden="true"></div>
-            <div class="needle rpm-needle"   id="rpm-needle"   aria-hidden="true"></div>
-            <div class="needle fuel-needle"  id="fuel-needle"  aria-hidden="true"></div>
-
-            <div class="speedometerOverlay">
-                <!-- pod motor + nitro (canto sup. esquerdo; velo-core preenche pelos IDs padrão) -->
-                <div class="nitroCol" aria-label="Saúde do motor e nitro">
-                    <span class="podLbl">MOTOR</span>
-                    <div id="engine-health-dot" data-health="ok"></div>
-                    <span class="podLbl">NITRO</span>
-                    <!-- horseshoe 240°: r=35 → comprimento do arco ≈ 146.6 (dashoffset animado pelo velo-core) -->
-                    <svg class="nitroArc" viewBox="0 0 80 68" width="46" height="39" aria-hidden="true">
-                        <path d="M 9.7,57.5 A 35,35 0 1 1 70.3,57.5"
-                              fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="8" stroke-linecap="round"/>
-                        <path id="nitro-arc-fill"
-                              d="M 9.7,57.5 A 35,35 0 1 1 70.3,57.5"
-                              fill="none" stroke="#00b4ff" stroke-width="8" stroke-linecap="round"
-                              stroke-dasharray="146.6 73.3" stroke-dashoffset="146.6"/>
-                    </svg>
-                    <span id="nitro-value" class="nitroVal">0%</span>
-                </div>
-
-                <!-- marcha -->
-                <div class="gearReadout" aria-label="Marcha atual"><strong id="vehicle-gear">N</strong></div>
-
-                <!-- velocidade (3 dígitos: prefixo apagado + valor) -->
-                <div class="speedReadout">
-                    <h1 class="velo"><span class="defaultVelo" id="vehicle-speed-prefix">00</span><span id="vehicle-speed">0</span></h1>
-                </div>
-
-                <!-- odômetro: 6 colunas roláveis (velo-core anima via [data-odo-digit] .odoColumn) -->
-                <div class="odoReadout" id="odo-readout" aria-label="Quilômetros rodados">
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                    <div class="odoDigit" data-odo-digit><div class="odoColumn"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span></div></div>
-                </div>
-
-                <!-- status: velo-core seta data-status=on/off (seta, trava, cinto) -->
-                <div class="statusCluster" id="status-cluster" aria-label="Indicadores do veículo">
-                    <div class="statusIcon turn-left" id="status-turn-left" data-status="off" aria-label="Seta esquerda">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-7 6 7 6"/><path d="M19 6l-7 6 7 6" opacity="0.55"/></svg>
-                    </div>
-                    <div class="statusIcon lock" id="status-lock" data-status="off" aria-label="Trava do veículo">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" class="lock-shackle"/><circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none"/></svg>
-                    </div>
-                    <div class="statusIcon seatbelt" id="status-seatbelt" data-status="off" aria-label="Cinto de segurança">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><path d="M6 3l12 14"/><circle cx="12" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>
-                    </div>
-                    <div class="statusIcon turn-right" id="status-turn-right" data-status="off" aria-label="Seta direita">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l7 6-7 6"/><path d="M5 6l7 6-7 6" opacity="0.55"/></svg>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- engine universal: telemetria, gauges, odômetro RAF, visibilidade (body.velo-active), personalização -->
-    <script src="/nui/velo-core.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            VeloCore.init({
-                speedPoints: [[0, -135], [400, 135]],
-                rpmPoints:   [[0, -135], [10, 60]],
-                fuelPoints:  [[0, -120], [50, -25], [100, 70]],
-            });
-        });
-    </script>
+<!-- ============================================================
+     HUD DE LINHA DE PRODUÇÃO — zero markup à mão.
+     A face inteira (dials, ticks, números, redzone, ponteiros, slots CDN, leituras) é
+     montada por VeloDials.build(veloSpec) a partir do spec.js. Para criar um HUD novo:
+       1. copie esta pasta  2. edite spec.js (os números)  3. tempere o style.css (tokens --vf-*).
+     ============================================================ -->
+<script src="/nui/velo-core.js"></script>
+<script src="/nui/velo-dials.js"></script>
+<script src="spec.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var gauges = VeloDials.build(window.veloSpec);   // desenha a face + deriva as curvas do spec
+    VeloCore.init(gauges);                            // liga a telemetria com as MESMAS curvas
+});
+</script>
 </body>
 </html>

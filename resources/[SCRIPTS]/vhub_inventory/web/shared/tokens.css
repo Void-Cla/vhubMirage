@@ -1,27 +1,72 @@
-/* shared/tokens.css — identidade vHub (Liquid Glass + Areia + Dourado). */
+/* shared/tokens.css — design system vHub Mirage (Liquid Glass + Areia + Dourado).
+   Só tokens VERDADEIRAMENTE globais vivem no :root (paleta Mirage, raios, easing,
+   sombras, tipografia). Tokens de layout específicos de um módulo moram no seletor
+   raiz do próprio módulo (.mod-<nome> { --... }) — regra A-11. */
 
 :root {
-  --vh-gold:      #f8c869;
-  --vh-gold-neon: rgb(248, 200, 105);
-  --vh-sand:      #e8d2a0;
 
-  --vh-glass:     rgba(20, 18, 14, 0.72);
-  --vh-glass-2:   rgba(28, 25, 19, 0.84);
-  --vh-border:    rgba(248, 200, 105, 0.22);
-  --vh-border-2:  rgba(248, 200, 105, 0.40);
+  /* ---- paleta hero: areia dourada (canônica Mirage, alinhada aos demais recursos) ---- */
+  --vh-gold:       #f3b53a;
+  --vh-gold-soft:  #ffd573;
+  --vh-gold-deep:  #d8a24e;
+  --vh-sand:       #d9c19a;
+  --vh-sand-dim:   #a89572;
 
-  --vh-text:      #f3ead6;
-  --vh-text-dim:  #b9ad93;
-  --vh-danger:    #e06a5a;
-  --vh-ok:        #8fe08c;
+  /* ---- vidro fosco (SIMULADO em camadas — nunca backdrop-filter sobre o jogo, A-09) ---- */
+  --vh-glass:      rgba(20, 17, 12, 0.72);
+  --vh-glass-2:    rgba(27, 23, 16, 0.86);
+  --vh-glass-3:    rgba(15, 13, 9, 0.92);
+  --vh-scrim:      rgba(6, 5, 3, 0.58);
 
-  --vh-radius:    12px;
-  --vh-radius-sm: 8px;
-  --vh-shadow:    0 10px 34px rgba(0, 0, 0, 0.45);
-  --vh-glow:      0 0 10px rgba(248, 200, 105, 0.35);
+  /* brilho superior do vidro (camada de luz que dá volume ao painel) */
+  --vh-sheen:      linear-gradient(180deg, rgba(243, 181, 58,0.06), rgba(243, 181, 58,0) 42%);
 
-  --vh-font-title: 'Barlow Condensed', 'Segoe UI Condensed', 'Segoe UI', system-ui, sans-serif;
-  --vh-font-body:  'Inter', 'Segoe UI', system-ui, sans-serif;
+  /* ---- bordas ---- */
+  --vh-border:     rgba(243, 181, 58, 0.16);
+  --vh-border-2:   rgba(243, 181, 58, 0.34);
+  --vh-hair:       rgba(255, 255, 255, 0.05);
 
-  --vh-pending:   rgba(248, 200, 105, 0.18);
+  /* ---- texto ---- */
+  --vh-text:       #f3ead6;
+  --vh-text-dim:   #b9ad93;
+  --vh-text-mut:   rgba(185, 173, 147, 0.45);
+
+  /* ---- estados ---- */
+  --vh-danger:     #e0785a;
+  --vh-ok:         #8fe08c;
+
+  /* ---- legalidade (acento discreto por item — não "saco de skittles") ---- */
+  --vh-leg-comum:  #d9c19a;
+  --vh-leg-legal:  #7fce8a;
+  --vh-leg-ilegal: #e0785a;
+
+  /* ---- raios ---- */
+  --vh-r-xl:       20px;
+  --vh-r-lg:       14px;
+  --vh-r-md:       11px;
+  --vh-r-sm:       8px;
+  --vh-r-pill:     999px;
+  --vh-radius:     var(--vh-r-md);     /* compat com CSS legado */
+  --vh-radius-sm:  var(--vh-r-sm);
+
+  /* ---- sombras + brilho ---- */
+  --vh-shadow:     0 24px 70px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  --vh-shadow-sm:  0 8px 26px rgba(0, 0, 0, 0.48);
+  --vh-glow:       0 0 12px rgba(243, 181, 58, 0.38);
+  --vh-glow-soft:  0 0 22px rgba(243, 181, 58, 0.16);
+
+  /* ---- movimento (suave, GPU-friendly) ---- */
+  --vh-ease:       cubic-bezier(0.22, 1, 0.36, 1);   /* saída macia */
+  --vh-ease-soft:  cubic-bezier(0.4, 0, 0.2, 1);
+  --vh-fast:       130ms;
+  --vh-med:        200ms;
+  --vh-slow:       320ms;
+
+  /* ---- tipografia (stack de sistema; sem CDN de fonte — A-10) ---- */
+  --vh-font-title: 'Barlow Condensed', 'Bahnschrift', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
+  --vh-font-body:  'Segoe UI', 'Inter', system-ui, sans-serif;
+  --vh-font:       var(--vh-font-body);
+
+  /* ---- pending (slot aguardando ACK do servidor) ---- */
+  --vh-pending:    rgba(243, 181, 58, 0.16);
 }

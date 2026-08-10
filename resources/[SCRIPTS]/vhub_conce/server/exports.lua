@@ -6,6 +6,7 @@
 
 local SQL  = VHubConce.SQL
 local Core = VHubConce.Core
+local U    = VHubConce.U
 
 local TRUSTED = {
   ['vhub']            = true,
@@ -16,8 +17,7 @@ local TRUSTED = {
   ['vhub_vehcontrol'] = true,   -- telemetria física + engine de skill → saveVehicleState (telemetry/handling)
   ['vhub_legacyfuel'] = true,   -- migração única ADR #61
   ['vhub_testrunner'] = true,   -- testes server-side (somente ambiente de teste)
-  ['vhub_custom']     = true,   -- oficina (bennys/mec/oficina) → saveVehicleState (cosmetic/tune/repair)
-  ['vhub_nitro']      = true,   -- nitro → saveVehicleState (customization.nitro, source='nitro')
+  ['vhub_custom']     = true,   -- oficina + nitro (absorveu vhub_nitro ADR #81) → saveVehicleState
   ['vhub_vrcs']       = true,   -- Race Cinema: getVehicleState (read-only) p/ preservar aparência no replay
 }
 local CATALOG_SNAPSHOT_TRUSTED = { ['vhub_coinshop'] = true, ['vhub_admin'] = true }
@@ -37,6 +37,21 @@ end
 exports('canOperate', function(src, plate)
   if not _invoker_allowed() then return false end
   return Core:canOperate(src, plate)
+end)
+
+-- auditoria append-only; src=0 é reservado à reconciliação offline do caller exato.
+exports('appendVehicleAudit', function(src, actor_char_id, plate, action, payload)
+  if GetInvokingResource() ~= 'vhub_custom' then return false end
+  src, actor_char_id = tonumber(src), tonumber(actor_char_id)
+  local p = U.normalizePlate(plate)
+  if not src or src < 0 or not actor_char_id or actor_char_id <= 0
+      or actor_char_id % 1 ~= 0 or not p or type(action) ~= 'string' or #action > 64
+      or not action:match('^custom%.[a-z_]+$') or type(payload) ~= 'table' then return false end
+  local online_actor = src > 0 and Core:getCharId(src) or nil
+  if online_actor and tonumber(online_actor) ~= actor_char_id then return false end
+  local encoded = U.jenc(payload)
+  if type(encoded) ~= 'string' or #encoded > 8192 then return false end
+  return SQL:log(p, action, actor_char_id, encoded) == true
 end)
 
 -- é o dono real da placa?

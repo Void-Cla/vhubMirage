@@ -93,3 +93,25 @@ O bloqueio é automático: o servidor consulta `exports.vhub_hss:getAnimBlocks(s
 | L-09 | Catálogo centralizado — sem duplicatas de dict/anim |
 | §2.5 | Soft-dep HSS via `pcall` — sem o HSS, emote funciona sem bloqueio |
 | §3.9 | Props limpos em `cancelEmote` (DeleteObject client-side) |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| — | *sem exports públicos* | `vhub_animacao` é feature independente (UX client) | — |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId` |
+| `vhub_hss` | `getAnimBlocks`, `isHandcuffed`, `isConscious`, `getState` (gates de emote) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_animacao:emotePlaying` | client local | `{emote, prop}` |
+| `vhub_animacao:emoteStopped` | client local | `{}` |

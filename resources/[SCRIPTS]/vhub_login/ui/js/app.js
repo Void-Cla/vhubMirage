@@ -26,13 +26,20 @@ window.onerror = function (msg, src, line, col) {
     msg2: document.getElementById('msg2'),
     charList: document.getElementById('char-list'),
     modal: document.getElementById('terms-modal'),
-    btnCreateWrap: document.getElementById('btn-create-wrap')
+    btnCreateWrap: document.getElementById('btn-create-wrap'),
+    btnCreate: document.getElementById('btn-create'),
+    btnConfirm: document.getElementById('btn-confirm'),
+    selectedIndex: document.getElementById('cs-selected-index'),
+    selectedName: document.getElementById('cs-selected-name'),
+    selectedMeta: document.getElementById('cs-selected-meta')
   };
 
   var busy = false;
   var termsVersion = '';
   var listeners = [];
   var characterListeners = [];
+  var selectedCharacter = null;
+  var selectedSlot = 0;
 
   var ERR = {
     credencial_invalida: 'Usuário ou senha incorretos.',
@@ -120,9 +127,20 @@ window.onerror = function (msg, src, line, col) {
 
   function setBusy(next) {
     busy = next;
-    document.querySelectorAll('button[type="submit"]').forEach(function (button) {
+    document.querySelectorAll('button[type="submit"], #view-charselect button').forEach(function (button) {
       button.disabled = next;
     });
+    if (!next) {
+      refs.btnConfirm.disabled = !selectedCharacter;
+      refs.btnCreate.disabled = false;
+    }
+  }
+
+  function setGateView(view) {
+    var selecting = view === 'charselect';
+    show(refs.loginView, !selecting);
+    show(refs.charView, selecting);
+    refs.app.classList.toggle('is-charselect', selecting);
   }
 
   function clearSensitive() {
@@ -259,6 +277,28 @@ window.onerror = function (msg, src, line, col) {
     if (event.key === 'Escape' && !refs.modal.classList.contains('hidden')) closeTerms();
   });
 
+  on(document, 'keydown', function (event) {
+    if (busy || refs.charView.classList.contains('hidden') || !refs.modal.classList.contains('hidden')) return;
+    var cards = Array.prototype.slice.call(refs.charList.querySelectorAll('.char-card'));
+    if (!cards.length) return;
+
+    var target = -1;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') target = selectedSlot % cards.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') target = (selectedSlot - 2 + cards.length) % cards.length;
+    if (/^[1-3]$/.test(event.key)) target = Number(event.key) - 1;
+    if (event.key === 'Enter' && event.target.classList
+      && event.target.classList.contains('char-card')) return;
+    if (event.key === 'Enter' && selectedCharacter) {
+      event.preventDefault();
+      refs.btnConfirm.click();
+      return;
+    }
+    if (target < 0 || target >= cards.length) return;
+    event.preventDefault();
+    cards[target].click();
+    cards[target].focus();
+  });
+
 
   // ============================================================
   // PERSONAGENS
@@ -267,6 +307,12 @@ window.onerror = function (msg, src, line, col) {
   function renderCharacters(characters) {
     clearCharacterListeners();
     refs.charList.textContent = '';
+    selectedCharacter = null;
+    selectedSlot = 0;
+    refs.btnConfirm.disabled = true;
+    refs.selectedIndex.textContent = '--';
+    refs.selectedName.textContent = 'Selecione um personagem';
+    refs.selectedMeta.textContent = 'A aparência carregada é a última salva.';
 
     var slotInfo = document.getElementById('cs-slot-info');
     if (slotInfo) {
@@ -281,7 +327,7 @@ window.onerror = function (msg, src, line, col) {
 
       var icon = document.createElement('span');
       icon.className = 'char-empty-icon';
-      icon.textContent = '🏎';
+      icon.textContent = '+';
       empty.appendChild(icon);
 
       var txt = document.createElement('span');
@@ -295,30 +341,18 @@ window.onerror = function (msg, src, line, col) {
     characters.forEach(function (character, index) {
       var cid = character.id != null ? character.id : character.char_id;
       var label = character.name || ('Piloto ' + (index + 1));
-      var initial = label.charAt(0).toUpperCase();
-
       var card = document.createElement('button');
       card.type = 'button';
       card.className = 'char-card';
       card.style.animationDelay = (index * 40) + 'ms';
-
-      /* topo com avatar */
-      var top = document.createElement('div');
-      top.className = 'char-card-top';
-
-      var avatar = document.createElement('div');
-      avatar.className = 'char-avatar';
-      avatar.textContent = initial;
-      top.appendChild(avatar);
+      card.setAttribute('role', 'option');
+      card.setAttribute('aria-selected', 'false');
 
       var badge = document.createElement('span');
       badge.className = 'char-index-badge';
-      badge.textContent = '#' + (index + 1);
-      top.appendChild(badge);
+      badge.textContent = String(index + 1).padStart(2, '0');
+      card.appendChild(badge);
 
-      card.appendChild(top);
-
-      /* corpo */
       var body = document.createElement('div');
       body.className = 'char-card-body';
 
@@ -337,29 +371,47 @@ window.onerror = function (msg, src, line, col) {
       var profile = character.model === 'mp_f_freemode_01'
         ? 'Feminino'
         : character.model === 'mp_m_freemode_01' ? 'Masculino' : 'Perfil pendente';
-      details.textContent = (character.age ? character.age + ' anos · ' : '') + profile;
+      details.textContent = (character.age ? character.age + ' anos · ' : '') + profile + ' · ID ' + cid;
       body.appendChild(details);
-
-      /* botão decorativo "Entrar" */
-      var enterBtn = document.createElement('div');
-      enterBtn.className = 'char-enter-btn';
-      enterBtn.innerHTML = 'Entrar <span class="char-enter-arrow">→</span>';
-      body.appendChild(enterBtn);
-
       card.appendChild(body);
+
+      var arrow = document.createElement('span');
+      arrow.className = 'char-enter-arrow';
+      arrow.textContent = '›';
+      card.appendChild(arrow);
 
       onCharacter(card, 'click', function () {
         if (busy) return;
-        setBusy(true);
+        document.querySelectorAll('.char-card').forEach(function (item) {
+          item.classList.remove('selected');
+          item.setAttribute('aria-selected', 'false');
+        });
+        selectedCharacter = character;
+        selectedSlot = index + 1;
+        card.classList.add('selected');
+        card.setAttribute('aria-selected', 'true');
+        refs.selectedIndex.textContent = String(selectedSlot).padStart(2, '0');
+        refs.selectedName.textContent = label;
+        refs.selectedMeta.textContent = profile + ' · ID ' + cid;
+        refs.btnConfirm.disabled = false;
         setMessage(refs.msg2, '');
-        nui('pickChar', { cid: cid });
+        nui('focusChar', { slot: selectedSlot });
       });
 
       refs.charList.appendChild(card);
+      if (index === 0) card.click();
     });
   }
 
-  on(document.getElementById('btn-create'), 'click', function () {
+  on(refs.btnConfirm, 'click', function () {
+    if (busy || !selectedCharacter) return;
+    var cid = selectedCharacter.id != null ? selectedCharacter.id : selectedCharacter.char_id;
+    setBusy(true);
+    setMessage(refs.msg2, 'Validando personagem…');
+    nui('pickChar', { cid: cid });
+  });
+
+  on(refs.btnCreate, 'click', function () {
     if (busy) return;
     setBusy(true);
     setMessage(refs.msg2, '');
@@ -378,8 +430,7 @@ window.onerror = function (msg, src, line, col) {
       case 'login:open':
         termsVersion = typeof data.termsVersion === 'string' ? data.termsVersion : '';
         show(refs.app, true);
-        show(refs.loginView, true);
-        show(refs.charView, false);
+        setGateView('login');
         closeTerms();
         clearSensitive();
         setMode('login');
@@ -387,8 +438,7 @@ window.onerror = function (msg, src, line, col) {
         document.getElementById('login-user').focus();
         break;
       case 'login:view':
-        show(refs.loginView, data.view === 'login');
-        show(refs.charView, data.view === 'charselect');
+        setGateView(data.view);
         setBusy(false);
         setMessage(refs.msg, '');
         setMessage(refs.msg2, '');
@@ -407,8 +457,7 @@ window.onerror = function (msg, src, line, col) {
         break;
       case 'login:creationReturn':
         show(refs.app, true);
-        show(refs.loginView, false);
-        show(refs.charView, true);
+        setGateView('charselect');
         renderCharacters(data.chars || []);
         setBusy(false);
         setMessage(refs.msg2, data.err ? (ERR[data.err] || ERR.erro) : '');
@@ -418,6 +467,9 @@ window.onerror = function (msg, src, line, col) {
         clearCharacterListeners();
         closeTerms();
         show(refs.app, false);
+        refs.app.classList.remove('is-charselect');
+        selectedCharacter = null;
+        selectedSlot = 0;
         setBusy(false);
         break;
     }

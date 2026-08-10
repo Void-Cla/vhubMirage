@@ -193,8 +193,12 @@ function M:updateRental(plate, rentedUntil)
     { rentedUntil, os.time(), plate })
 end
 
--- remove prontuário + espelho CORE (FK CASCADE limpa vh_vehicle_data), depois o negócio
+-- remove prontuário + espelho CORE (FK CASCADE limpa vh_vehicle_data), depois o negócio.
+-- ADR #82 (fix FK stale-anchor): solta o cache VRAM do CORE ANTES de apagar a row-pai —
+-- senão o `anchored=true` congelado no register faz o fuel-commit por tick reescrever
+-- vh_vehicle_data cuja FK (vh_vehicles) já sumiu → op envenenada no batch. Soft-dep (pcall).
 function M:deleteVehicle(plate)
+  pcall(function() exports.vhub:unregisterVehicle(plate) end)
   VHubConce.VState:delete(plate)
   pexec('DELETE FROM vh_vehicles WHERE plate = ?', { plate })
   return pexec('DELETE FROM vhub_vehicles WHERE plate = ?', { plate })
@@ -292,10 +296,12 @@ end
 
 -- registra ação no log de auditoria (append-only; payload já em JSON)
 function M:log(plate, action, actor_id, payloadJson)
-  pexec([[
+  local affected = pexec([[
     INSERT INTO vhub_vehicle_log (plate, action, actor_id, payload, created_at)
     VALUES (?, ?, ?, ?, ?)
   ]], { plate, action, actor_id, payloadJson, os.time() })
+  local count = type(affected) == 'table' and affected.affectedRows or affected
+  return (tonumber(count) or 0) > 0
 end
 
 

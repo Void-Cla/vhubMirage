@@ -16,14 +16,14 @@ local function setGateEnvironment(on)
   if on then
     SetEveryoneIgnorePlayer(PlayerId(), true)
     SetPoliceIgnorePlayer(PlayerId(), true)
-    DisplayRadar(false)
-    DisplayHud(false)
   else
     SetEveryoneIgnorePlayer(PlayerId(), false)
     SetPoliceIgnorePlayer(PlayerId(), false)
-    DisplayRadar(true)
-    DisplayHud(true)
   end
+  local ok, applied = pcall(function()
+    return exports.vhub_hss:setNativeHudSuppressed('hud', on)
+  end)
+  return ok and applied == true
 end
 
 local _awaitSel = false
@@ -34,7 +34,6 @@ local _awaitSel = false
 -- evita o player preso no mundo congelado sem NUI. (5s de throttle já passou.)
 local function handoffSelector()
   setFocus(false)
-  setGateEnvironment(false)
   ClearTimecycleModifier()
   DoScreenFadeIn(0)
   _awaitSel = true
@@ -44,98 +43,244 @@ local function handoffSelector()
   end)
 end
 
+local function handoffPreparedSelector(payload)
+  if type(payload) ~= "table" or type(payload.data) ~= "table" then
+    handoffSelector()
+    return
+  end
+  _awaitSel = false
+  SendNUIMessage({ type = "login:close", data = {} })
+  _focus = false
+  ClearTimecycleModifier()
+  TriggerEvent(E.SELECTOR_OPEN, payload)
+end
+
 -- o selector abriu de fato → cancela o watchdog (observação read-only do evento dele)
 RegisterNetEvent(E.SELECTOR_OPEN, function() _awaitSel = false end)
 
 
 -- ============================================================
--- PED DE PREVIEW (char select — bucket 999, somente visual)
+-- PALCO DE SELECAO (3 peds locais; estado persistido continua no HSS)
 -- ============================================================
 
-local _previewPed = 0
-local PREVIEW_MODEL     = GetHashKey("mp_m_freemode_01")
-local PREVIEW_ANIM_DICT = "amb@world_human_stand_impatient@male@base"
-local PREVIEW_ANIM_NAME = "base"
+local _previewPeds = {}
+local _previewCharacters = {}
+local _selectionCam = 0
+local _selectionCams = {}
+local _selectionSlot = 1
+local _focusedSlot = 0
+local _previewGeneration = 0
+local SELECTION = CFG.selection or {}
+local PREVIEW_SCENARIOS = {
+  "WORLD_HUMAN_STAND_IMPATIENT",
+  "WORLD_HUMAN_GUARD_STAND",
+  "WORLD_HUMAN_STAND_MOBILE",
+}
 
--- destrói o ped de preview se existir
-local function destroyPreviewPed()
-  if _previewPed ~= 0 and DoesEntityExist(_previewPed) then
-    StopEntityAnim(_previewPed, PREVIEW_ANIM_NAME, PREVIEW_ANIM_DICT)
-    DeleteEntity(_previewPed)
+local function destroyPreviewPeds(preserveExternalScene)
+  _previewGeneration = _previewGeneration + 1
+  local hadScene = next(_selectionCams) ~= nil or next(_previewPeds) ~= nil
+  for _, ped in pairs(_previewPeds) do
+    if DoesEntityExist(ped) then
+      ClearPedTasksImmediately(ped)
+      DeleteEntity(ped)
+    end
   end
-  _previewPed = 0
+  _previewPeds = {}
+  _focusedSlot = 0
+  if next(_selectionCams) ~= nil then
+    if not preserveExternalScene then RenderScriptCams(false, true, 350, true, true) end
+    for cam in pairs(_selectionCams) do
+      if DoesCamExist(cam) then DestroyCam(cam, false) end
+    end
+  end
+  _selectionCams = {}
+  _selectionCam = 0
+  if hadScene and not preserveExternalScene then
+    ClearFocus()
+    NewLoadSceneStop()
+  end
 end
 
--- cria ped de preview à frente do player local (bucket 999 — sem rede)
-local function spawnPreviewPed(charIndex)
-  destroyPreviewPed()
+local function modelHash(name)
+  if name ~= "mp_m_freemode_01" and name ~= "mp_f_freemode_01" then
+    name = "mp_m_freemode_01"
+  end
+  local model = GetHashKey(name)
+  if not IsModelInCdimage(model) or not IsModelValid(model) then return nil end
+  return model
+end
 
+local function requestPreviewModels(characters, generation)
+  local models, requested = {}, {}
+  for index = 1, math.min(#characters, 3) do
+    local character = type(characters[index]) == "table" and characters[index] or {}
+    local customization = type(character.customization) == "table" and character.customization or {}
+    local model = modelHash(customization.model or character.model)
+    models[index] = model
+    if model and not requested[model] then
+      requested[model] = true
+      RequestModel(model)
+    end
+  end
+
+  local deadline = GetGameTimer() + 5000
+  while generation == _previewGeneration and GetGameTimer() < deadline do
+    local ready = true
+    for model in pairs(requested) do
+      if not HasModelLoaded(model) then ready = false break end
+    end
+    if ready then break end
+    Citizen.Wait(25)
+  end
+  for index, model in pairs(models) do
+    if not HasModelLoaded(model) then models[index] = nil end
+  end
+  return models, requested
+end
+
+local function startSelectionCamera()
+  local camera = SELECTION.camera
+  local positions = SELECTION.positions
+  if type(SELECTION.map_resource) ~= "string"
+    or GetResourceState(SELECTION.map_resource) ~= "started"
+    or type(camera) ~= "table" or type(positions) ~= "table" or type(positions[2]) ~= "table" then
+    return false
+  end
+  local center = positions[2]
+  RequestCollisionAtCoord(center.x, center.y, center.z)
+  SetFocusPosAndVel(center.x, center.y, center.z, 0.0, 0.0, 0.0)
+  NewLoadSceneStartSphere(center.x, center.y, center.z, 35.0, 0)
+  _selectionCam = CreateCamWithParams(
+    "DEFAULT_SCRIPTED_CAMERA",
+    camera.x, camera.y, camera.z,
+    0.0, 0.0, 0.0,
+    camera.fov or 52.0,
+    true, 2
+  )
+  if not _selectionCam or _selectionCam == 0 then
+    ClearFocus()
+    NewLoadSceneStop()
+    return false
+  end
+  _selectionCams[_selectionCam] = _previewGeneration
+  PointCamAtCoord(_selectionCam, camera.target_x, camera.target_y, camera.target_z)
+  SetCamActive(_selectionCam, true)
+  RenderScriptCams(true, true, 500, true, true)
+  return true
+end
+
+local function focusSelectionCamera(slot)
+  slot = math.floor(tonumber(slot) or 0)
+  local camera = SELECTION.camera
+  local position = type(SELECTION.positions) == "table" and SELECTION.positions[slot] or nil
+  if slot < 1 or slot > #_previewCharacters or _selectionCam == 0
+    or type(camera) ~= "table" or type(position) ~= "table" then return false end
+  if slot == _focusedSlot then return true end
+
+  local heading = math.rad(tonumber(position.heading) or 180.0)
+  local distance = tonumber(camera.focus_distance) or 2.95
+  local nextCam = CreateCamWithParams(
+    "DEFAULT_SCRIPTED_CAMERA",
+    position.x - math.sin(heading) * distance,
+    position.y + math.cos(heading) * distance,
+    position.z + (tonumber(camera.focus_height) or 1.02),
+    0.0, 0.0, 0.0,
+    tonumber(camera.focus_fov) or 44.0,
+    false, 2
+  )
+  if not nextCam or nextCam == 0 then return false end
+
+  PointCamAtCoord(nextCam, position.x, position.y,
+    position.z + (tonumber(camera.focus_target_height) or 0.68))
+  RequestCollisionAtCoord(position.x, position.y, position.z)
+
+  local previousCam = _selectionCam
+  local transition = math.max(150, math.min(1500, math.floor(tonumber(camera.transition_ms) or 850)))
+  _selectionCam = nextCam
+  local generation = _previewGeneration
+  _selectionCams[nextCam] = generation
+  _selectionSlot = slot
+  _focusedSlot = slot
+  SetCamActiveWithInterp(nextCam, previousCam, transition, 1, 1)
+  RenderScriptCams(true, false, 0, true, true)
+
+  Citizen.SetTimeout(transition + 50, function()
+    if previousCam ~= 0 and previousCam ~= _selectionCam
+      and _selectionCams[previousCam] == generation then
+      if DoesCamExist(previousCam) then DestroyCam(previousCam, false) end
+      _selectionCams[previousCam] = nil
+    end
+  end)
+  return true
+end
+
+local function spawnPreviewPeds(characters)
+  destroyPreviewPeds()
+  characters = type(characters) == "table" and characters or {}
+  _previewCharacters = characters
+  if not startSelectionCamera() or #characters == 0 then return end
+
+  local generation = _previewGeneration
+  _selectionSlot = 1
+  focusSelectionCamera(_selectionSlot)
   Citizen.CreateThread(function()
-    local model = PREVIEW_MODEL
-    if not IsModelInCdimage(model) or not IsModelValid(model) then return end
-
-    RequestModel(model)
-    local waited = 0
-    while not HasModelLoaded(model) and waited < 5000 do
-      Citizen.Wait(100)
-      waited = waited + 100
-    end
-    if not HasModelLoaded(model) then return end
-
-    local player = PlayerPedId()
-    -- GetEntityCoords retorna nil/0,0,0 quando o ped ainda não existe (bucket 999).
-    -- Aguarda até o ped estar fisicamente presente no mundo antes de posicionar.
-    waited = 0
-    while not DoesEntityExist(player) and waited < 5000 do
-      Citizen.Wait(100)
-      waited = waited + 100
-      player = PlayerPedId()
-    end
-    if not DoesEntityExist(player) then
-      SetModelAsNoLongerNeeded(model)
+    local sceneDeadline = GetGameTimer() + 4000
+    while generation == _previewGeneration and not IsNewLoadSceneLoaded()
+      and GetGameTimer() < sceneDeadline do Citizen.Wait(50) end
+    if generation ~= _previewGeneration then return end
+    local models, requested = requestPreviewModels(characters, generation)
+    if generation ~= _previewGeneration then
+      for model in pairs(requested) do SetModelAsNoLongerNeeded(model) end
       return
     end
 
-    local coords = GetEntityCoords(player)
-    local px, py, pz = coords.x, coords.y, coords.z
-    local heading = GetEntityHeading(player)
-
-    -- posiciona 2m à frente e ligeiramente à direita (decorativo, sem colisão crítica)
-    local rad = math.rad(heading)
-    local ox = math.sin(-rad) * 2.2
-    local oy = math.cos(-rad) * 2.2
-
-    local ped = CreatePed(4, model, px + ox, py + oy, pz, heading + 180.0, false, false)
-
-    if not DoesEntityExist(ped) then
-      SetModelAsNoLongerNeeded(model)
-      return
+    for index = 1, math.min(#characters, 3) do
+      if generation ~= _previewGeneration then
+        for model in pairs(requested) do SetModelAsNoLongerNeeded(model) end
+        return
+      end
+      local position = SELECTION.positions[index]
+      local character = type(characters[index]) == "table" and characters[index] or {}
+      local customization = type(character.customization) == "table" and character.customization or {}
+      local model = models[index]
+      if model then
+        if generation ~= _previewGeneration then
+          for requestedModel in pairs(requested) do SetModelAsNoLongerNeeded(requestedModel) end
+          return
+        end
+        local ped = CreatePed(4, model, position.x, position.y, position.z,
+          position.heading, false, false)
+        if DoesEntityExist(ped) then
+          SetEntityAsMissionEntity(ped, true, true)
+          SetEntityInvincible(ped, true)
+          SetBlockingOfNonTemporaryEvents(ped, true)
+          SetPedCanRagdoll(ped, false)
+          SetEntityVisible(ped, true, false)
+          local applied, result = pcall(function()
+            return exports.vhub_hss:applyPreviewCustomization(ped, customization)
+          end)
+          if not applied or result ~= true then SetPedDefaultComponentVariation(ped) end
+          SetEntityCoordsNoOffset(ped, position.x, position.y, position.z, false, false, false)
+          SetEntityHeading(ped, position.heading)
+          TaskStartScenarioInPlace(ped, PREVIEW_SCENARIOS[index], -1, true)
+          FreezeEntityPosition(ped, true)
+          _previewPeds[index] = ped
+        end
+      end
     end
+    for model in pairs(requested) do SetModelAsNoLongerNeeded(model) end
 
-    SetEntityInvincible(ped, true)
-    SetBlockingOfNonTemporaryEvents(ped, true)
-    SetPedCanRagdoll(ped, false)
-    FreezeEntityPosition(ped, true)
-    SetEntityVisible(ped, true, false)
-
-    -- variação de componentes por índice (distingue os pilotos visualmente)
-    local torso = (charIndex % 3) + 1
-    SetPedComponentVariation(ped, 3, torso, 0, 0)  -- torso
-    SetPedComponentVariation(ped, 11, 15, 0, 0)    -- acessório (capacete off)
-
-    -- animação idle
-    RequestAnimDict(PREVIEW_ANIM_DICT)
-    waited = 0
-    while not HasAnimDictLoaded(PREVIEW_ANIM_DICT) and waited < 3000 do
-      Citizen.Wait(100)
-      waited = waited + 100
+    while generation == _previewGeneration and _selectionCam ~= 0 do
+      local position = SELECTION.positions[_selectionSlot]
+      if position and _previewPeds[_selectionSlot] then
+        DrawMarker(1, position.x, position.y, position.z - 0.96,
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          1.15, 1.15, 0.08, 232, 177, 73, 125,
+          false, false, 2, false, nil, nil, false)
+      end
+      Citizen.Wait(0)
     end
-    if HasAnimDictLoaded(PREVIEW_ANIM_DICT) then
-      TaskPlayAnim(ped, PREVIEW_ANIM_DICT, PREVIEW_ANIM_NAME, 8.0, -8.0, -1, 1, 0, false, false, false)
-    end
-
-    SetModelAsNoLongerNeeded(model)
-    _previewPed = ped
   end)
 end
 
@@ -146,6 +291,8 @@ end
 
 -- abre a NUI de login (não autenticado); congela ped para silenciar o mundo
 RegisterNetEvent(E.OPEN, function()
+  destroyPreviewPeds()
+  _previewCharacters = {}
   setGateEnvironment(true)
   setFocus(true)
   SendNUIMessage({
@@ -158,7 +305,7 @@ end)
 RegisterNetEvent(E.AUTH_OK, function(chars)
   SendNUIMessage({ type = "login:chars", data = { chars = chars or {} } })
   SendNUIMessage({ type = "login:view", data = { view = "charselect" } })
-  spawnPreviewPed(0)
+  spawnPreviewPeds(chars)
 end)
 
 RegisterNetEvent(E.AUTH_FAIL, function(err)
@@ -172,10 +319,8 @@ RegisterNetEvent(E.RECOVERY_DONE, function()
   SendNUIMessage({ type = "login:recoveryDone", data = {} })
 end)
 
-RegisterNetEvent(E.CHAR_OK, function()
-  destroyPreviewPed()
-  SendNUIMessage({ type = "login:close", data = {} })
-  handoffSelector()
+RegisterNetEvent(E.CHAR_OK, function(selector)
+  handoffPreparedSelector(selector)
 end)
 
 RegisterNetEvent(E.CHAR_FAIL, function(err)
@@ -183,13 +328,34 @@ RegisterNetEvent(E.CHAR_FAIL, function(err)
 end)
 
 -- já autenticado nesta sessão (reentrada) → pula login, vai direto ao selector
-RegisterNetEvent(E.PROCEED_SPAWN, function()
-  handoffSelector()
+RegisterNetEvent(E.PROCEED_SPAWN, function(selector)
+  setGateEnvironment(true)
+  handoffPreparedSelector(selector)
+end)
+
+AddEventHandler(VHubSpawnSelector.E.COMPLETE, function()
+  destroyPreviewPeds()
+  _previewCharacters = {}
+  setGateEnvironment(false)
+  setFocus(false)
+  if SetNuiFocusKeepInput then SetNuiFocusKeepInput(false) end
+end)
+
+RegisterNetEvent(VHubSpawnSelector.E.BACK, function(characters)
+  characters = type(characters) == "table" and characters or {}
+  _previewCharacters = characters
+  setGateEnvironment(true)
+  setFocus(true)
+  SendNUIMessage({
+    type = "login:creationReturn",
+    data = { chars = characters },
+  })
+  if _selectionCam == 0 then spawnPreviewPeds(characters) end
 end)
 
 -- entrega foco ao SIMS sem abrir o selector nem consumir o pending do HSS
 RegisterNetEvent(E.CREATION_HANDOFF, function()
-  destroyPreviewPed()
+  destroyPreviewPeds(true)
   setGateEnvironment(false)
   SendNUIMessage({ type = "login:close", data = {} })
   -- NÃO chamar SetNuiFocus(false) aqui: o SIMS assume o foco no CLI_STUDIO_OPEN e a ordem
@@ -206,7 +372,7 @@ RegisterNetEvent(E.CREATION_RETURN, function(chars, err)
     type = "login:creationReturn",
     data = { chars = chars or {}, err = err },
   })
-  spawnPreviewPed(0)
+  spawnPreviewPeds(chars)
 end)
 
 
@@ -251,6 +417,16 @@ RegisterNUICallback("pickChar", function(d, cb)
   cb({ ok = true })
 end)
 
+RegisterNUICallback("focusChar", function(d, cb)
+  d = type(d) == "table" and d or {}
+  local slot = tonumber(d.slot)
+  if not slot or slot % 1 ~= 0 or not focusSelectionCamera(slot) then
+    cb({ ok = false })
+    return
+  end
+  cb({ ok = true })
+end)
+
 RegisterNUICallback("createChar", function(_, cb)
   TriggerServerEvent(E.REQUEST_CREATE)
   cb({ ok = true })
@@ -263,7 +439,7 @@ end)
 
 AddEventHandler("onResourceStop", function(res)
   if res ~= GetCurrentResourceName() then return end
+  destroyPreviewPeds()
   if _focus then setFocus(false) end
   setGateEnvironment(false)
-  destroyPreviewPed()
 end)

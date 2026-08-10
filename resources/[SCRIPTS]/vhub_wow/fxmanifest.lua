@@ -5,8 +5,8 @@ lua54      'yes'
 
 name        'vhub_wow'
 author      'vHub Mirage'
-version     '2.0.0'
-description 'Motor de audio/video (player YouTube nocookie + busca InnerTube/APIv3 + surface DVD no carro).'
+version     '2.1.0'
+description 'Motor de audio/video (player YouTube + busca InnerTube/APIv3 + surface DVD no carro).'
 
 dependencies {
   'vhub',

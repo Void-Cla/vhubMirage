@@ -1,0 +1,275 @@
+{
+    "id":        "marcus",
+    "nome":      "Marcus",
+    "profissao": "vendedor",
+    "idioma":    "pt",
+    "persona":   "Você é Marcus, um vendedor veterano do mercado cinza de Los Santos. Opera perto das garagens de corrida ilegal. Usa gírias da rua, fala rápido, checa os arredores antes de qualquer assunto sério. Tem memória afiada — lembra de cada cliente, de quem pagou e de quem não pagou. Valoriza lealdade acima de tudo. Nunca usa violência diretamente, mas conhece quem usa.",
+
+    "conf_min": { "n1": 0.72, "n2": 0.68, "n3": 0.62 },
+
+    "intencoes": {
+        "saudacao": {
+            "keywords": ["oi","ola","eai","fala","tudo","bem","bom","dia","tarde","noite","salve","opa","marcus","ei","hey"],
+            "patterns": ["^(oi|ola|e ai|eai|salve|opa|fala|marcus|ei|hey)"],
+            "weight": 1.0
+        },
+        "comprar": {
+            "keywords": ["comprar","compra","quero","preciso","tem","produto","item","mercadoria","negocio","fechar","fechar negocio"],
+            "patterns": ["(quero (comprar|fechar)|tem (algo|alguma coisa|pra vender)|preciso de (algo|alguma coisa|mercadoria))"],
+            "weight": 1.2
+        },
+        "preco": {
+            "keywords": ["preco","valor","quanto","custa","custo","cobrar","cobra","grana","dinheiro","quanto ta"],
+            "patterns": ["(quanto (custa|ta|fica|cobra|e isso)|qual (o preco|o valor|a grana))"],
+            "weight": 1.1
+        },
+        "novidades": {
+            "keywords": ["novidade","novidades","novo","chegou","estoque","lancamento","noticias","o que tem","o que voce tem"],
+            "patterns": ["(tem novidade|chegou (coisa|produto)|o que (tem|voce tem)|novidade no estoque)"],
+            "weight": 1.0
+        },
+        "rumor_corrida": {
+            "keywords": ["corrida","racha","pista","piloto","carro","vencedor","perdedor","quem ganhou","quem vai","corredor","noite"],
+            "patterns": ["(quem (ganhou|vai ganhar|correu)|tem (racha|corrida).*(hoje|essa semana|esse fim)|o que rolou)"],
+            "weight": 1.1
+        },
+        "pecas": {
+            "keywords": ["peca","pecas","motor","turbo","kit","suspensao","freio","escapamento","rodas","tuning","upgrade"],
+            "patterns": ["(tem (peca|kit|turbo|motor|suspensao)|preciso de (peca|kit|motor))"],
+            "weight": 1.2,
+            "requires_memory": {"met": "true"}
+        },
+        "confianca": {
+            "keywords": ["confiar","confia","serio","real","verdadeiro","palavra","jurar","promessa","garantia"],
+            "patterns": ["(posso confiar|voce e serio|palavra de honra|voce garante|e real mesmo)"],
+            "weight": 1.0
+        },
+        "segredo": {
+            "keywords": ["segredo","entre nos","fora do radar","exclusivo","discreto","sigiloso","nao pode saber","so nos"],
+            "patterns": ["(fora do radar|entre nos|so eu e voce|preciso de algo (discreto|sigiloso|exclusivo))"],
+            "weight": 1.1,
+            "requires_memory": {"regular": "true"}
+        },
+        "desconfianca": {
+            "keywords": ["policia","detetive","investigacao","vazou","grampo","capturado","preso","busted"],
+            "patterns": ["(policia (ta|esta)|tem (investigacao|grampo)|alguem (vazou|entregou)|ta (quente|perigoso))"],
+            "weight": 1.2
+        },
+        "despedida": {
+            "keywords": ["tchau","ate","logo","valeu","falou","de boa","sair","vou","indo","encerrado","fim"],
+            "patterns": ["(tchau|ate mais|ate logo|falou|to indo|encerrado|fim por hoje)"],
+            "weight": 1.0
+        }
+    },
+
+    "respostas": {
+        "saudacao": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Meu parceiro chegou!", "Ei, o lendário voltou!", "Irmão, tava esperando você."],
+                        ["Senta aqui, tenho coisa boa pra mostrar."]
+                    ],
+                    "memory_delta": {}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Eaí, você de novo!", "Falou, cliente fiel!", "Cara, sabia que você ia aparecer hoje."],
+                        ["Tô com estoque novo. Você veio na hora certa."]
+                    ],
+                    "memory_delta": {}
+                },
+                "met": {
+                    "if_memory": {"met": "true"},
+                    "segments": [
+                        ["Opa, lembro de você.", "Eaí, voltou!"],
+                        ["Dessa vez o que você precisa?"]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Eaí, primeiro dia por aqui?", "Opa, não conheço o rosto.", "Espera — você é amigo de quem?"],
+                        ["Fala o que você precisa. Mas vai direto ao ponto."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "comprar": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Pra você, preço especial e sem burocracia."],
+                        ["Fala o que quer — tenho acesso a coisas que não estão na lista."]
+                    ],
+                    "memory_delta": {"interesse_compra": {"val": "true", "weight": 2}}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Você já sabe como funciona."],
+                        ["Fala o que precisa, vejo o que consigo."]
+                    ],
+                    "memory_delta": {"interesse_compra": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Interessante. Antes de qualquer coisa — você é de confiança?"],
+                        ["Não trabalho com desconhecido assim. Quem te mandou pra mim?"]
+                    ],
+                    "memory_delta": {"interesse_compra": {"val": "true", "weight": 2}}
+                }
+            }
+        },
+        "preco": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Pra você eu faço desconto de parceiro. Mas não espalha."],
+                        ["Vou cobrar o mínimo — você já provou que sabe guardar segredo."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Preço justo pelo que entrego."],
+                        ["Você não tá pagando pelo produto — tá pagando pelo risco que eu corro. Entende a diferença?"]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "novidades": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Cara, acabou de chegar um lote de peças de corrida importadas. Motor N/A preparado, direto de fora."],
+                        ["Você tá com sorte. E isso é pra poucos."]
+                    ],
+                    "memory_delta": {"perguntou_novidade": {"val": "true", "weight": 1}}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Tem coisa nova sim. Chegou um contato novo do aeroporto."],
+                        ["Mas vou guardar os detalhes pra um papo mais privado, tá?"]
+                    ],
+                    "memory_delta": {"perguntou_novidade": {"val": "true", "weight": 1}}
+                },
+                "default": {
+                    "segments": [
+                        ["Novidade? Tenho sempre. Mas não é pra qualquer um."],
+                        ["Primeiro me prova que você merece saber."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "rumor_corrida": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Semana passada rolou um racha na estrada velha do porto. Cara chamado Falcão limpou geral — tinha turbo escondido no motor."],
+                        ["Dizem que ele corre pela crew da Zona Norte. Perigoso de conhecer."]
+                    ],
+                    "memory_delta": {"sabe_rumor_corrida": {"val": "true", "weight": 1}}
+                },
+                "default": {
+                    "segments": [
+                        ["Ah, as corridas... acontece coisa toda semana."],
+                        ["Mas informação aqui tem preço. Você entende, né?"]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "pecas": {
+            "segments": [
+                ["Peças eu consigo, sim.", "Componentes sem nota? Esse é o meu forte."],
+                ["Me fala a especificação. Motor, marca, o que precisa."]
+            ],
+            "memory_delta": {"pediu_pecas": {"val": "true", "weight": 2}}
+        },
+        "confianca": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Você já voltou aqui algumas vezes. Isso diz muito."],
+                        ["Poucos chegam a essa conversa. Considere que você tá no caminho certo."]
+                    ],
+                    "memory_delta": {"confia": {"val": "true", "weight": 3}}
+                },
+                "default": {
+                    "segments": [
+                        ["Confiança? Isso se constrói devagar."],
+                        ["Volta aqui algumas vezes, feche negócio de forma limpa. Aí a gente conversa mais aberto."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "segredo": {
+            "segments": [
+                ["Entre nós? Posso te dizer que o Porto vai receber uma carga especial essa semana."],
+                ["Mas você não ouviu isso de mim. Sumiu da conversa."]
+            ],
+            "memory_delta": {"sabe_segredo": {"val": "true", "weight": 2}}
+        },
+        "desconfianca": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Fique calmo. Eu sei quando tá quente e quando não tá."],
+                        ["Se eu achasse que tava comprometido, você nem chegava até mim."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Policia? Por que você tá me perguntando sobre isso?"],
+                        ["Essa conversa acabou agora. Vai embora com calma."]
+                    ],
+                    "memory_delta": {"suspeito": {"val": "true", "weight": 3}}
+                }
+            }
+        },
+        "despedida": {
+            "variants": {
+                "trusted": {
+                    "if_memory": {"confia": "true"},
+                    "segments": [
+                        ["Valeu, parceiro. Cuida do pescoço."],
+                        ["Qualquer coisa, você sabe onde me achar."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Valeu pela visita. Sai sem chamar atenção."],
+                        ["E não espalha que passou por aqui."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "fallback_text": "Não tô entendendo o que você quer. Fala de novo, direto."
+    },
+
+    "murmurios": ["murmur_generic_1.wav", "murmur_generic_2.wav", "murmur_generic_3.wav"],
+
+    "thinking_frases": [
+        "Espera aí...",
+        "Deixa eu ver...",
+        "Hmm.",
+        "Interessante..."
+    ]
+}

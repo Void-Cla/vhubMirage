@@ -45,6 +45,7 @@ client_scripts {
   'client/init.lua',
   'client/vehicles.lua',
   'client/zones.lua',
+  'client/peds.lua',
 }
 
 ui_page 'nui/index.html'

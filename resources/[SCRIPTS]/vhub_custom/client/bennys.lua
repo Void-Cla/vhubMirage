@@ -15,7 +15,21 @@ local E   = VHubCustom.E
 local Cam = VHubCustom.Cam
 
 -- snapshot do estado cosmético antes do preview (para rollback)
-local _snapshot = nil
+local _snapshot    = nil
+-- stance persistido no momento da abertura — rollback do preview volta ao SALVO, não ao stock
+local _savedStance = nil
+
+-- coerção INT: natives de índice (tint/placa/livery/xenon) são int; float do
+-- msgpack/JSON (ex.: 3.0) pode ser bit-reinterpretado pelo native → valor errado.
+-- math.floor força o subtipo integer (espelha o '+0.0' usado p/ floats no garage).
+local function toint(v, d)
+  local n = tonumber(v)
+  return n and math.floor(n) or (d or 0)
+end
+
+-- NB: stance e fogo de escapamento saíram DESTE arquivo. Stance agora é per-entidade em
+-- client/stance.lua (VHubCustom.Stance) e o fogo é backfire não-ignitável em client/exhaust.lua
+-- (VHubCustom.Exhaust). Aqui só disparamos PREVIEW via esses módulos.
 
 
 -- ============================================================
@@ -35,15 +49,33 @@ local KIT_TYPES = {
   { idx = 8,  name = 'Paralama esquerdo',  part = 'lateral'  },
   { idx = 9,  name = 'Paralama direito',   part = 'lateral'  },
   { idx = 10, name = 'Teto',               part = 'teto'     },
+  { idx = 14, name = 'Buzina',              part = 'frente'   },
   { idx = 23, name = 'Rodas',              part = 'roda'     },
+  { idx = 25, name = 'Suporte de placa',    part = 'frente'   },
+  { idx = 26, name = 'Placa de vaidade',    part = 'frente'   },
   { idx = 27, name = 'Acabamento',         part = 'lateral'  },
   { idx = 28, name = 'Ornamentos',         part = 'frente'   },
-  { idx = 30, name = 'Painel',             part = 'lateral'  },
+  { idx = 29, name = 'Painel',              part = 'lateral'  },
+  { idx = 30, name = 'Mostradores',         part = 'lateral'  },
+  { idx = 31, name = 'Alto-falantes das portas', part = 'lateral' },
+  { idx = 32, name = 'Bancos',              part = 'lateral'  },
   { idx = 33, name = 'Volante',            part = 'lateral'  },
   { idx = 34, name = 'Câmbio',             part = 'lateral'  },
   { idx = 35, name = 'Placa decorativa',   part = 'traseira' },
-  -- livery NÃO entra aqui: usa o sistema SetVehicleLivery na aba "Detalhes"
-  -- (mod 48 é um 2º sistema de adesivo que duplicaria a UI)
+  { idx = 36, name = 'Alto-falantes',       part = 'traseira' },
+  { idx = 37, name = 'Porta-malas',         part = 'traseira' },
+  { idx = 38, name = 'Conjunto hidráulico', part = 'traseira' },
+  { idx = 39, name = 'Bloco do motor',      part = 'frente'   },
+  { idx = 40, name = 'Filtro de ar',        part = 'frente'   },
+  { idx = 41, name = 'Barras estruturais',  part = 'frente'   },
+  { idx = 42, name = 'Cobertura dos arcos', part = 'lateral'  },
+  { idx = 43, name = 'Antenas',             part = 'teto'     },
+  { idx = 44, name = 'Acabamento interno',  part = 'lateral'  },
+  { idx = 45, name = 'Tanque',              part = 'traseira' },
+  { idx = 46, name = 'Janelas',             part = 'lateral'  },
+  { idx = 47, name = 'Detalhe adicional',   part = 'geral'    },
+  { idx = 48, name = 'Adesivagem',          part = 'lateral'  },
+  { idx = 49, name = 'Barra de luz',        part = 'teto'     },
 }
 
 
@@ -51,15 +83,18 @@ local KIT_TYPES = {
 -- ENUMERAÇÃO ANTI-FANTASMA (GetNumVehicleMods)
 -- ============================================================
 
--- retorna { kits={[idx]=count}, liveryCount=n, wheelMods=n } só com o que existe
+-- retorna { kits={[idx]=count}, liveryCount=n, wheelMods=n, extras={[idx]=true} } só com o que existe
 local function enumerateAvailable(veh)
-  local avail = { kits = {}, liveryCount = -1, wheelMods = 0 }
+  local avail = { kits = {}, liveryCount = -1, wheelMods = 0, extras = {} }
   for _, k in ipairs(KIT_TYPES) do
     local n = GetNumVehicleMods(veh, k.idx)
     if n and n > 0 then avail.kits[tostring(k.idx)] = n end
   end
-  avail.wheelMods  = GetNumVehicleMods(veh, 23) or 0
+  avail.wheelMods   = GetNumVehicleMods(veh, 23) or 0
   avail.liveryCount = GetVehicleLiveryCount(veh) or -1
+  for i = 0, (CFG.extras_max or 14) - 1 do
+    if DoesExtraExist(veh, i) then avail.extras[tostring(i)] = true end
+  end
   return avail
 end
 
@@ -98,6 +133,20 @@ local function snapshotVeh(veh)
   local xenonIdx = 0
   pcall(function() xenonIdx = GetVehicleXenonLightsColor(veh) or 0 end)
 
+  -- cores de interior/painel (índice GTA) — lidas defensivamente
+  local interiorCol, dashboardCol = 0, 0
+  pcall(function() interiorCol = GetVehicleInteriorColour(veh) or 0 end)
+  pcall(function() dashboardCol = GetVehicleDashboardColour(veh) or 0 end)
+
+  -- extras do modelo (acessórios — toggle por idx)
+  local extras = {}
+  for i = 0, (CFG.extras_max or 14) - 1 do
+    if DoesExtraExist(veh, i) then
+      extras[tostring(i)] = IsVehicleExtraTurnedOn(veh, i)
+    end
+  end
+
+  -- turbo (18) NÃO é coletado: chave EXCLUSIVA da oficina (performance)
   return {
     mods          = mods,
     colours       = { p, s },
@@ -114,7 +163,9 @@ local function snapshotVeh(veh)
     smoke         = IsToggleModOn(veh, 20),
     xenon         = IsToggleModOn(veh, 22),
     xenon_color   = xenonIdx,
-    -- turbo (18) NÃO é coletado: chave EXCLUSIVA da oficina (performance)
+    interior_color  = interiorCol,
+    dashboard_color = dashboardCol,
+    extras = extras,
   }
 end
 
@@ -183,12 +234,15 @@ function VHubCustom.applyCosmetic(veh, c)
   -- xenon: toggle + cor por índice (0..12)
   if c.xenon ~= nil then ToggleVehicleMod(veh, 22, c.xenon == true) end
   if c.xenon_color ~= nil then
-    pcall(SetVehicleXenonLightsColor, veh, tonumber(c.xenon_color) or 0)
+    pcall(SetVehicleXenonLightsColor, veh, toint(c.xenon_color, 0))
   end
 
-  if c.window_tint ~= nil then SetVehicleWindowTint(veh, tonumber(c.window_tint) or 0) end
-  if c.wheel_type  ~= nil then SetVehicleWheelType(veh, tonumber(c.wheel_type) or 0) end
-  if c.livery      ~= nil then SetVehicleLivery(veh, tonumber(c.livery) or -1) end
+  if c.window_tint ~= nil then SetVehicleWindowTint(veh, toint(c.window_tint, 0)) end
+  if c.wheel_type  ~= nil then SetVehicleWheelType(veh, toint(c.wheel_type, 0)) end
+  if c.livery      ~= nil then SetVehicleLivery(veh, toint(c.livery, -1)) end
+  if c.plate_index ~= nil then SetVehicleNumberPlateTextIndex(veh, toint(c.plate_index, 0)) end
+  if c.interior_color  ~= nil then pcall(SetVehicleInteriorColour, veh, toint(c.interior_color, 0)) end
+  if c.dashboard_color ~= nil then pcall(SetVehicleDashboardColour, veh, toint(c.dashboard_color, 0)) end
 
   -- kits cosméticos (nunca performance — defesa em profundidade)
   if type(c.mods) == 'table' then
@@ -198,6 +252,30 @@ function VHubCustom.applyCosmetic(veh, c)
         SetVehicleMod(veh, idx, tonumber(lvl) or -1, false)
       end
     end
+  end
+
+  -- acessórios extras do modelo (SetVehicleExtra: 3º param = "disable", não "enable")
+  if type(c.extras) == 'table' then
+    for k, enabled in pairs(c.extras) do
+      local idx = tonumber(k)
+      if idx and DoesExtraExist(veh, idx) then
+        SetVehicleExtra(veh, idx, not enabled)
+      end
+    end
+  end
+
+  -- stance (rebaixamento visual REAL, per-entidade) — delega ao módulo client/stance.lua, que
+  -- aplica altura/bitola/roda via natives per-entidade (sem vazar model-wide como o antigo).
+  if c.stance ~= nil and VHubCustom.Stance then
+    VHubCustom.Stance.apply(veh, c.stance)
+  end
+
+  -- glass_armor é puramente RP; sem efeito visual client-side (não interfere com window_tint)
+
+  -- fogo no escapamento (PREVIEW): uma leva colorida p/ o jogador ver a cor escolhida. O efeito
+  -- contínuo ao dirigir é do módulo client/exhaust.lua (backfire NÃO-ignitável, via State Bag).
+  if type(c.exhaust_fx) == 'table' and c.exhaust_fx.enabled and VHubCustom.Exhaust then
+    VHubCustom.Exhaust.preview(veh, c.exhaust_fx)
   end
 end
 
@@ -223,11 +301,17 @@ local function snapshotToCurrent(snap)
     tyre_smoke_color = snap.tyre_smoke_color,
     xenon            = snap.xenon == true,
     xenon_color      = snap.xenon_color,
+    interior_color   = snap.interior_color,
+    dashboard_color  = snap.dashboard_color,
     window_tint      = snap.window_tint,
     wheel_type       = snap.wheel_type,
     livery           = snap.livery,
     plate_index      = snap.plate_index,
     mods             = mods,
+    extras           = snap.extras or {},
+    stance           = {},   -- stance vive na PLACA (não na entidade) → vem de auth.saved.stance
+    glass_armor      = snap.glass_armor or 0,
+    exhaust_fx       = snap.exhaust_fx or { enabled = false },
   }
 end
 
@@ -235,11 +319,6 @@ end
 -- ============================================================
 -- HELPERS
 -- ============================================================
-
--- normalização compatível com conce (mesma chave de placa)
-local function plateOf(veh)
-  return (GetVehicleNumberPlateText(veh) or ''):upper():gsub('%s+', ' '):match('^%s*(.-)%s*$')
-end
 
 -- converte tabela indexada por número em dict string-keyed (msgpack/JSON-safe p/ NUI)
 local function priceDict(tbl)
@@ -256,45 +335,69 @@ end
 -- ============================================================
 
 -- abre o menu bennys para o veículo ativo na zona
-function VHubCustom.openBennys()
+function VHubCustom.openBennys(auth)
   local veh = VHubCustom.activeVeh
   if not DoesEntityExist(veh) or veh == 0 then return end
   if VHubCustom.inMenu then return end
+  if type(auth) ~= 'table' or not VHubCustom.service or VHubCustom.service.domain ~= 'bennys' then return end
 
   -- snapshot ANTES de qualquer preview (rollback + estado inicial real)
   _snapshot = snapshotVeh(veh)
   Cam.start(veh)
   VHubCustom.inMenu = true
 
-  local plate = plateOf(veh)
+  local plate = auth.plate
   local model = GetEntityModel(veh)
-  local dispName = string.lower(GetDisplayNameFromVehicleModel(model) or '')
-  local catEntry = (VHubCustom.catalog or {})[dispName] or {}
+
+  -- estado inicial = snapshot da entidade + campos virtuais persistidos (PTFX/RP/índice),
+  -- que não vivem na entidade viva. Sem isso a UI mostraria default no reabrir.
+  local current = snapshotToCurrent(_snapshot)
+  _savedStance = nil
+  if type(auth.saved) == 'table' then
+    if type(auth.saved.exhaust_fx) == 'table' then current.exhaust_fx = auth.saved.exhaust_fx end
+    if type(auth.saved.stance) == 'table' then
+      current.stance = auth.saved.stance
+      _savedStance   = auth.saved.stance   -- referência p/ rollback do preview de stance
+    end
+    if auth.saved.glass_armor ~= nil then current.glass_armor = auth.saved.glass_armor end
+  end
 
   SendNUIMessage({
     action = 'openBennys',
     data   = {
-      plate     = plate,
-      nome      = catEntry.nome or GetDisplayNameFromVehicleModel(model) or plate,
-      categoria = catEntry.categoria or '—',
-      prices    = priceDict(CFG.prices),
-      avail     = enumerateAvailable(veh),   -- ANTI-FANTASMA
-      kit_types = KIT_TYPES,                  -- nomes PT-BR dos kits disponíveis
-      current   = snapshotToCurrent(_snapshot),
+      plate              = plate,
+      nome               = auth.name or GetDisplayNameFromVehicleModel(model) or plate,
+      categoria          = auth.category or '—',
+      prices             = priceDict(CFG.prices),
+      avail              = enumerateAvailable(veh),
+      kit_types          = KIT_TYPES,
+      current            = current,
+      stance             = CFG.stance,
+      glass_armor_tiers  = CFG.glass_armor_tiers,
+      paint_palettes     = CFG.paint_palettes,
     },
   })
 
   SetNuiFocus(true, true)
 end
 
--- fecha o menu (rollback visual se não confirmado)
+-- fecha o menu. No CANCELAR: rollback — reaplica o snapshot cosmético e volta o stance ao estado
+-- SALVO (não ao stock; o carro já vinha com o stance persistido). O escapamento de preview é
+-- backfire não-loopado (auto-extingue) → nada a parar. No CONFIRMAR: mantém o preview (o servidor
+-- persiste e o State Bag reafirma stance/escapamento p/ TODOS os clientes).
 function VHubCustom.closeBennys(confirmed)
-  if not confirmed and VHubCustom.activeVeh and _snapshot then
-    VHubCustom.applyCosmetic(VHubCustom.activeVeh, _snapshot)
+  local veh = VHubCustom.activeVeh
+  if not confirmed then
+    if veh and _snapshot then VHubCustom.applyCosmetic(veh, _snapshot) end
+    if veh and veh ~= 0 and DoesEntityExist(veh) and VHubCustom.Stance then
+      VHubCustom.Stance.apply(veh, _savedStance)   -- rollback do stance → estado salvo
+    end
   end
   Cam.stop()
   _snapshot = nil
+  _savedStance = nil
   VHubCustom.inMenu = false
+  VHubCustom.endService('bennys')
   SetNuiFocus(false, false)
 end
 
@@ -304,9 +407,9 @@ end
 -- ============================================================
 
 RegisterNetEvent(E.BENNYS_CONFIRM)
-AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch)
+AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch, netId)
   local veh = VHubCustom.activeVeh
-  if not veh or not DoesEntityExist(veh) then
+  if not veh or not DoesEntityExist(veh) or NetworkGetNetworkIdFromEntity(veh) ~= tonumber(netId) then
     VHubCustom.closeBennys(false)
     SendNUIMessage({ action = 'fecharBennys' })
     return
@@ -387,6 +490,21 @@ RegisterNUICallback('bennys:aplicar', function(data, cb)
     return
   end
 
-  TriggerServerEvent(E.BENNYS_APPLY, plate, payload)
+  local service = VHubCustom.service
+  if not service or service.domain ~= 'bennys' then cb({ ok = false }); return end
+  TriggerServerEvent(E.BENNYS_APPLY, service.lease_id, VHubCustom.nextRequestId(), payload)
   cb({ ok = true })
+end)
+
+
+-- ============================================================
+-- CLEANUP — desfaz o preview de stance se parar com o menu aberto
+-- ============================================================
+
+AddEventHandler('onResourceStop', function(res)
+  if res ~= GetCurrentResourceName() then return end
+  local veh = VHubCustom.activeVeh
+  if VHubCustom.inMenu and veh and veh ~= 0 and DoesEntityExist(veh) and VHubCustom.Stance then
+    VHubCustom.Stance.apply(veh, _savedStance)   -- volta ao stance salvo (não deixa preview vazar)
+  end
 end)

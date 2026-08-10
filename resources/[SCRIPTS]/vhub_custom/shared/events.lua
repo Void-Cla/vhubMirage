@@ -32,10 +32,26 @@ VHubCustom.E = {
   OFICINA_NITRO_KIT    = 'vhub_custom:server:oficinaNitroKit',   -- cliente → servidor: instalar kit nitro
   OFICINA_NITRO_KIT_OK = 'vhub_custom:client:oficinaNitroKitOk', -- servidor → cliente: resultado (ok, msg)
 
-  -- knobs de handling livre (freio de mão, trava de direção, largada, rigidez) — normalizado 0..1
-  -- persiste customization.handling_ext; motor (vhub_vehcontrol) mapeia p/ banda e aplica
-  OFICINA_HANDLING    = 'vhub_custom:server:oficinaHandling',   -- cliente → servidor: { key=0..1 }
-  OFICINA_HANDLING_OK = 'vhub_custom:client:oficinaHandlingOk', -- servidor → cliente: (ok, msg, knobs)
+  -- peça de inventário → desempenho (FASE 3 ADR #81 → ADR #82 F2.1: por part_id do catálogo)
+  -- cliente envia (leaseId, requestId, partId); servidor valida no catálogo, cobra, toma item (se
+  -- houver) e grava customization.parts (fonte única) + projeção mods/turbo/drift_capable ('tune')
+  OFICINA_INSTALL_PART    = 'vhub_custom:server:oficinaInstallPart',   -- cliente → servidor: instalar peça
+  OFICINA_INSTALL_PART_OK = 'vhub_custom:client:oficinaInstallPartOk', -- servidor → cliente: (ok, msg)
+
+  -- remover PEÇA de engenharia (ADR #85 F2.5-A — remoção como primeira classe). cliente envia
+  -- (leaseId, requestId, partId); servidor reverte customization.parts[id]=false + projeção
+  -- mods/turbo/drift_capable NA MESMA transação (L-13). Custo 0; sem devolução de item na F2.5-A.
+  OFICINA_REMOVE_PART    = 'vhub_custom:server:oficinaRemovePart',   -- cliente → servidor: remover peça
+  OFICINA_REMOVE_PART_OK = 'vhub_custom:client:oficinaRemovePartOk', -- servidor → cliente: (ok, msg, fresh)
+
+  -- engine bay (ADR #82 F2.2) — LEITURA contextual do compartimento do motor (imersão capô).
+  -- cliente envia (zoneId, plate, netId); servidor GATEIA por Core.validateVehicle (mesmo gate
+  -- físico do serviço) e devolve resumo READ-ONLY da engenharia (eng/parts). Não confia no cliente.
+  ENGINE_BAY_INSPECT    = 'vhub_custom:server:engineBayInspect',   -- cliente → servidor: inspecionar motor
+  ENGINE_BAY_INSPECT_OK = 'vhub_custom:client:engineBayInspectOk', -- servidor → cliente: (ok, resumo)
+
+  -- (OFICINA_HANDLING/OFICINA_HANDLING_OK REMOVIDOS — ADR #82: gravavam handling_ext, campo zumbi
+  --  fora de CUST_KEYS que nunca persistiu. Handling físico migra p/ peças na Camada B, ADR #83.)
 
     -- drift (Freio de Mão Hidráulico — peça instalável, efêmera em runtime; persiste só drift_capable)
   DRIFT_INSTALL   = 'vhub_custom:server:driftInstall',    -- cliente → servidor: instalar peça

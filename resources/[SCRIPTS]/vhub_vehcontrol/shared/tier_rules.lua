@@ -25,6 +25,10 @@ TR.AXES = { 'potencia', 'grip', 'frenagem', 'aero', 'suspensao' }
 -- budget de pontos por tier (teto base; peças somam por cima)
 TR.BUDGET = { D=500, C=600, B=700, A=800, S=900, ['S+']=1000 }
 
+-- massa de referência (kg) por tier — espelho do tiers.json do handling-balancer (baliza NATIVA).
+-- usada SÓ no baseline DEFAULT (carro sem p1); carro com p1 usa a massa real do .meta. ADR #85 F2.5-C.
+TR.TIER_MASS = { D=1100, C=1400, B=1500, A=1400, S=1500, ['S+']=1500 }
+
 -- ordem determinística de tiers (não depender de pairs)
 TR.TIER_ORDER = { 'D', 'C', 'B', 'A', 'S', 'S+' }
 
@@ -115,10 +119,18 @@ function TR.partsBonus(mods, turbo)
   return { total = total, fixed = fixed, free = free }
 end
 
+-- chave de budget do chassi (ADR #82): `class_budget` é o nome canônico (teto INTERNO anti-P2W);
+-- `tier_base` é aceito como alias por 1 versão (shim R15) — catálogos antigos continuam válidos.
+local function budgetKey(base)
+  return (type(base) == 'table') and (base.class_budget or base.tier_base) or nil
+end
+VHubVeh.budgetKey = budgetKey
+
 -- teto total de pontos do veículo: base do tier + total das peças
 function TR.budgetOf(base, mods, turbo)
-  if type(base) ~= 'table' or not base.tier_base then return nil end
-  local tierBudget = TR.BUDGET[base.tier_base]
+  local key = budgetKey(base)
+  if not key then return nil end
+  local tierBudget = TR.BUDGET[key]
   if not tierBudget then return nil end
   return tierBudget + TR.partsBonus(mods, turbo).total
 end
@@ -190,6 +202,53 @@ function TR.clampTier(tier, tierMax)
   if not tierMax then return tier end
   if tierIndex(tier) > tierIndex(tierMax) then return tierMax end
   return tier
+end
+
+-- próximo tier acima (headroom de build; teto em S+)
+function TR.nextTier(tier)
+  return TR.TIER_ORDER[math.min(tierIndex(tier) + 1, #TR.TIER_ORDER)]
+end
+
+
+-- ============================================================
+-- BASELINE DEFAULT (ADR #85 F2.5-C — p1 JUSTO p/ carro sem p1 explícito)
+-- ============================================================
+
+-- classifica um carro em tier (D..S+) pelo DESEMPENHO autorado no catálogo (stats 0..100).
+-- peso: velocidade+aceleração dominam (reta/arrancada); freio+direção complementam. Faixas
+-- calibradas na distribuição real do catálogo (kuruma≈C, zentorno≈S, t20≈S+). Sem stats → C (neutro).
+function TR.classifyStats(stats)
+  if type(stats) ~= 'table' then return 'C' end
+  local perf = (tonumber(stats.vel)   or 60) * 0.35
+             + (tonumber(stats.acel)  or 60) * 0.35
+             + (tonumber(stats.freio) or 60) * 0.15
+             + (tonumber(stats.dir)   or 60) * 0.15
+  if perf >= 93 then return 'S+' end
+  if perf >= 86 then return 'S'  end
+  if perf >= 78 then return 'A'  end
+  if perf >= 70 then return 'B'  end
+  if perf >= 62 then return 'C'  end
+  return 'D'
+end
+
+-- p1 DEFAULT derivado do catálogo (carro SEM p1 explícito). base_alloc BALANCEADO (soma == budget,
+-- dentro da faixa anti-P2W); mass = massBase do tier (baliza nativa); tier_max = 1 acima (headroom
+-- de build, igual aos mods). PURO — nunca persiste. `_default=true` sinaliza origem computada.
+function TR.defaultP1(entry)
+  if type(entry) ~= 'table' or type(entry.stats) ~= 'table' then return nil end
+  local tier = TR.classifyStats(entry.stats)
+  local budget = TR.BUDGET[tier]
+  if not budget then return nil end
+  local each, alloc, used = math.floor(budget / #TR.AXES), {}, 0
+  for _, ax in ipairs(TR.AXES) do alloc[ax] = each; used = used + each end
+  alloc[TR.AXES[1]] = alloc[TR.AXES[1]] + (budget - used)   -- resto → 1º eixo (soma exata == budget)
+  return {
+    class_budget = tier,
+    tier_max     = TR.nextTier(tier),
+    base_alloc   = alloc,
+    mass         = TR.TIER_MASS[tier],
+    _default     = true,
+  }
 end
 
 
@@ -383,7 +442,8 @@ end
 -- exposta read-only pra UI desenhar sliders sem recalcular nada por conta própria (L-04).
 -- retorna tabela FLAT de primitivos (pronta p/ cruzar fronteira L-19), ou nil se sem p1.
 function TR.buildSheet(base, mods, turbo, savedAlloc)
-  if type(base) ~= 'table' or not base.tier_base then return nil end
+  local classBudget = budgetKey(base)   -- ADR #82: aceita class_budget|tier_base (shim R15)
+  if not classBudget then return nil end
   local budget = TR.budgetOf(base, mods, turbo)
   if not budget then return nil end
 
@@ -402,7 +462,10 @@ function TR.buildSheet(base, mods, turbo, savedAlloc)
 
   return {
     tier        = tier,
-    tier_base   = base.tier_base,
+    -- ADR #82 shim R15: `class_budget` é o nome canônico; `tier_base` mantido por 1 versão
+    -- p/ não quebrar consumidores legados (ficha.js, testrunner). Remoção do alias na FASE 3.
+    class_budget = classBudget,
+    tier_base   = classBudget,
     tier_max    = base.tier_max,
     archetype   = base.archetype,
     score       = score,

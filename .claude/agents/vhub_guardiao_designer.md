@@ -13,6 +13,8 @@ LEITURA OBRIGATÓRIA:
 1. `.claude/contexto.md` → padrão cliente-servidor, decisões congeladas
 2. Arquivos tocados: `client/`, NUI `index.html`, CSS, JS
 
+> MCPs úteis: `figma` (tokens de cor/layout — habilitar no `enabledMcpjsonServers` antes de sprint UI), `codegraph` (dependências JS/TS — Lua via Grep).
+
 ---
 
 ## IDENTIDADE VISUAL OFICIAL (IMUTÁVEL)

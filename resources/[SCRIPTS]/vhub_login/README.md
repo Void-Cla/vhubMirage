@@ -1,8 +1,8 @@
 # vhub_login — Gate de Entrada (Login + Seleção de Personagem)
 
-**Versão:** 0.3.0 | **Owner:** vhub_login
+**Versão:** 0.6.1 | **Owner:** vhub_login
 
-Gate de entrada do servidor: login, seleção, criação autoritativa no CORE e handoff ao `vhub_sims`. Intercepta o `chooseSpawn` e só abre o selector no estado `spawning`. Não faz loading screen nem toca ped/bucket/coordenada.
+Gate de entrada do servidor: login, seleção, criação autoritativa no CORE e handoff ao `vhub_sims`. O HSS mantém o bucket-base 999 e aloca uma subinstância privada após autenticação; previews locais usam o mapa `depzitamadasptlnd`.
 
 ---
 
@@ -27,7 +27,7 @@ responder `cadastro_atualizacao_necessaria`. Novos clientes usam `vhub_login:try
 ## Dependências
 
 ```
-vhub, vhub_hss, vhub_identity, vhub_sims, vhub_spawselector
+vhub, vhub_hss, vhub_identity, vhub_sims, vhub_spawselector, depzitamadasptlnd
 ```
 
 ---
@@ -44,7 +44,7 @@ local ok = exports.vhub_login:isAuthenticated(src)
 -- { account_id, username, user_id } ou nil
 local conta = exports.vhub_login:getAccount(src)
 
--- etapa atual: 'login' | 'charselect' | 'creating' | 'spawning' | nil
+-- etapa atual: 'login' | 'charselect' | 'creating' | 'spawning' | 'ready' | nil
 local step = exports.vhub_login:getSessionStep(src)
 ```
 
@@ -70,7 +70,8 @@ Sem entrada na lista, o export retorna o valor de negação (`false`/`nil`) — 
 2. vhub_login intercepta chooseSpawn → segura o player na tela de login
 3. Login ok → agrega resumos HSS/Identity → player escolhe ou cria
 4. Com criação: SIMS assume o estágio e devolve ao charselect ao concluir ou cancelar
-5. Personagem concluído → step='spawning' → abre o selector
+5. Personagem concluído → step='spawning' → abre o selector sobre o mesmo palco
+6. O jogador pode voltar ao `charselect`; somente a confirmação final encerra o bucket privado
 ```
 
 Runbook pré-enable: validar o fail-open do selector antes de ligar `enabled=true` (passo do dono, pós runtime-validate).
@@ -94,3 +95,34 @@ Runbook pré-enable: validar o fail-open do selector antes de ligar `enabled=tru
 | §3.7 | Export-first com `invokerOK` default-deny (trust vazio = só interno) |
 | L-16 | Não toca o ped — segura o fluxo e devolve ao owner do spawn |
 | L-17 | Replay-safe: re-disparo do fluxo não duplica sessão nem prende o player |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `isAuthenticated` | `(src) → bool` | vhub_spawselector |
+| 2 | `getAccount` | `(src) → {user_id, chars_count, …}` | vhub_spawselector |
+| 3 | `getSessionStep` | `(src) → 'auth'\|'char'\|'spawn'\|'ready'` | vhub_spawselector |
+| 4 | `runPersistenceTest` | `() → ok` | vhub_testrunner |
+| 5 | `getPersistenceTest` | `() → resultado` | vhub_testrunner |
+| 6 | `isGateActive` | `() → bool` | vhub_spawselector (feature flag) |
+| 7 | `completeEntry` | `(src) → bool` | vhub_spawselector (ACK final) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getUID`, `notify` |
+| `vhub_hss` | `isPendingSpawn`, `getCharacterSummaries`, `isolateEntrySession`, `releaseEntrySession` |
+| `vhub_identity` | `getCharacterSummaries` (lista de chars para seleção) |
+| `vhub_sims` | `needsCreation`, `beginCreation` (personagem novo) |
+| `vhub_spawselector` | intercepta fluxo `chooseSpawn` (provider) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_login:authenticated` | server→client (player) | `{user_id}` |
+| `vhub_login:charSelected` | server→client (player) | `{char_id}` |

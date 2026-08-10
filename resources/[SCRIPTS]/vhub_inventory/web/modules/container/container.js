@@ -1,5 +1,5 @@
 // modules/container/container.js — baú dual-pane (mochila | baú) com transfer autoritativa.
-// A UI só solicita; origem e destino mudam por delta do servidor.
+// A UI só solicita; origem e destino mudam por delta do servidor. Verdade = servidor.
 
 (function () {
 
@@ -9,7 +9,7 @@
 
   const inv  = vhub.store('inventory');
   const cont = vhub.store('container');
-  let root = null, bpGrid = null, cnGrid = null, toastEl = null, toastT = 0;
+  let root = null, bpGrid = null, cnGrid = null, toastEl = null, sandEl = null, toastT = 0;
   const offs      = [];
   const pendingBp = new Map();   // slot → timeoutId (mochila)
   const pendingCn = new Map();   // slot → timeoutId (baú)
@@ -161,7 +161,7 @@
         const data = d.data || {}, bp = data.backpack || {}, cn = data.container || {};
         setItems(inv, bp.items);  inv.set('max', bp.max || 0);     inv.set('size', bp.size || 30);
         setItems(cont, cn.items); cont.set('capacity', cn.capacity || 0); cont.set('size', cn.size || 50);
-        cont.set('label', cn.label || 'Baú');
+        cont.set('label', cn.label || 'Baú'); cont.set('kind', cn.kind || 'static');
         vhub.mount('container');
         renderAll();
       }));
@@ -184,24 +184,36 @@
         toast(LANG[data.reason] || 'Operação negada', true);
       }));
 
-      // notify e informativo (false = nao e erro)
       offs.push(vhub.listen('nui:notify', (d) => toast(d.msg || '', false)));
     },
 
     onMount() {
       root = document.getElementById('container-root');
       root.className = 'mod-container';
+
+      const kind  = cont.get('kind') || 'static';
+      const cnIco = kind === 'trunk'
+        ? '<path d="M3 13l2-6a2 2 0 0 1 2-1.4h10A2 2 0 0 1 21 7l2 6M5 13h14v4a1 1 0 0 1-1 1h-1a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H5a1 1 0 0 1-1-1z"/>'
+        : '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M4 12h16M9 8V6a3 3 0 0 1 6 0v2"/>';
+
       root.innerHTML =
+        '<canvas class="vh-sand" aria-hidden="true"></canvas>' +
         '<div class="ct-shell">' +
           '<section class="ct-panel">' +
-            '<div class="ct-head"><div class="ct-title">MOCHILA</div></div>' +
+            '<div class="ct-head">' +
+              '<svg class="ct-ico" viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="12" rx="2"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/></svg>' +
+              '<div class="ct-title">MOCHILA</div>' +
+            '</div>' +
             '<div class="ct-grid" id="ct-bp" role="grid" aria-label="Grade de itens da mochila"></div>' +
             '<div class="ct-foot"><div class="ct-wlabel"><span>Peso</span><span id="ct-bp-val"></span></div>' +
               '<div class="ct-track"><div class="ct-bar" id="ct-bp-bar"></div></div></div>' +
           '</section>' +
-          '<section class="ct-panel">' +
-            '<div class="ct-head"><div class="ct-title ct-cn-title">BAÚ</div>' +
-              '<div class="ct-close" tabindex="0" role="button" aria-label="Fechar baú">&times;</div></div>' +
+          '<section class="ct-panel ct-panel--dst">' +
+            '<div class="ct-head">' +
+              '<svg class="ct-ico" viewBox="0 0 24 24">' + cnIco + '</svg>' +
+              '<div class="ct-title ct-cn-title">BAÚ</div>' +
+              '<div class="ct-close" tabindex="0" role="button" aria-label="Fechar baú">&#x2715;</div>' +
+            '</div>' +
             '<div class="ct-grid" id="ct-cn" role="grid" aria-label="Grade de itens do baú"></div>' +
             '<div class="ct-foot"><div class="ct-wlabel"><span>Capacidade</span><span id="ct-cn-val"></span></div>' +
               '<div class="ct-track"><div class="ct-bar" id="ct-cn-bar"></div></div></div>' +
@@ -211,12 +223,13 @@
         '<div class="ct-toast" role="status" aria-live="polite"></div>';
       root.classList.remove('hidden');
 
+      sandEl  = root.querySelector('.vh-sand');
       bpGrid  = root.querySelector('#ct-bp');
       cnGrid  = root.querySelector('#ct-cn');
       toastEl = root.querySelector('.ct-toast');
       root.querySelector('.ct-cn-title').textContent = (cont.get('label') || 'Baú').toUpperCase();
 
-      // inspector compartilhado entre os dois grids
+      if (vhub.sand && sandEl) vhub.sand.start(sandEl);
       this._inspectOff = vhub.inspect.init(root.querySelector('.ct-insp'));
 
       this._onBpClick = (e) => {
@@ -250,6 +263,7 @@
     onHide() { if (vhub.inspect) vhub.inspect.hide(); },
 
     onDestroy() {
+      if (vhub.sand) vhub.sand.stop();
       if (this._cleanupDrag) this._cleanupDrag();
       if (bpGrid) bpGrid.removeEventListener('click', this._onBpClick);
       if (cnGrid) cnGrid.removeEventListener('click', this._onCnClick);
@@ -260,8 +274,7 @@
       if (this._inspectOff) { this._inspectOff(); this._inspectOff = null; }
       if (root) { root.innerHTML = ''; root.classList.add('hidden'); }
       // offs NAO sao drenados: governam o ciclo mount/unmount deste modulo lazy.
-      // Sao liberados apenas se o runtime descartar o modulo por completo.
-      root = null; bpGrid = null; cnGrid = null; toastEl = null;
+      root = null; bpGrid = null; cnGrid = null; toastEl = null; sandEl = null;
     },
   });
 })();

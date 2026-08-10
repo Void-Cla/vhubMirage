@@ -442,7 +442,7 @@ local function clean_reason(value)
 end
 
 -- Debita saldo com idempotência durável e split exato carteira/banco.
-function Core.commit_payment(src, amount, operation_id, reason)
+function Core.commit_payment(src, amount, operation_id, reason, request_conflict_key)
   local entry = Core._by_src[tonumber(src) or 0]
   if not entry then return { ok = false, err = 'offline' } end
 
@@ -460,7 +460,7 @@ function Core.commit_payment(src, amount, operation_id, reason)
     end
     entry.dirty = false
 
-    local outcome = SQL.commit_payment(char_id, n, op, clean_reason(reason))
+    local outcome = SQL.commit_payment(char_id, n, op, clean_reason(reason), request_conflict_key)
     if outcome.ok and Core._by_char[char_id] == entry then
       if outcome.wallet == nil or outcome.bank == nil then
         local current = SQL.load_account(char_id, 0, 0)
@@ -487,13 +487,19 @@ function Core.commit_payment(src, amount, operation_id, reason)
 end
 
 -- Estorna offline exatamente a operação original, sem aceitar valor do caller.
-function Core.refund_payment(operation_id)
+function Core.refund_payment(operation_id, expected_reason_prefix)
   local op = clean_operation_id(operation_id)
   if not op then return { ok = false, err = 'not_found' } end
 
   local found_ok, found = pcall(SQL.find_payment_operation, op)
   if not found_ok then return { ok = false, err = 'storage' } end
   if not found then return { ok = false, err = 'not_found' } end
+  if expected_reason_prefix ~= nil then
+    if type(expected_reason_prefix) ~= 'string' or #expected_reason_prefix < 3
+        or tostring(found.reason or ''):sub(1, #expected_reason_prefix) ~= expected_reason_prefix then
+      return { ok = false, err = 'forbidden' }
+    end
+  end
   local char_id = tonumber(found.char_id) or 0
   if char_id <= 0 then return { ok = false, err = 'storage' } end
   if Core.is_operation_locked(char_id) then return { ok = false, err = 'conflict' } end

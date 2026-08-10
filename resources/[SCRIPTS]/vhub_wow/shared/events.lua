@@ -13,4 +13,6 @@ VHubWOW.E = {
   SET_DISTANCE = 'vhub_wow:setDistance',
   SEARCH_RESULTS = 'vhub_wow:searchResults',
   AUDIO_LIFECYCLE_LOCAL = 'vhub_wow:audioLifecycle',
+  AUDIO_LIFECYCLE_REPORT = 'vhub_wow:server:audioLifecycleReport',
+  AUDIO_LIFECYCLE_SERVER = 'vhub_wow:server:audioLifecycle',
 }

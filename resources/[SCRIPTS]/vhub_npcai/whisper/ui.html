@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>vhub NPC AI — Teste de Voz</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #94a3b8;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .card {
+    background: #1e2230;
+    border: 1px solid #2d3348;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card-title {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: #64748b;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    background: #0f1117;
+    border: 1px solid #2d3348;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: .95rem;
+    padding: 10px 12px;
+    resize: vertical;
+    outline: none;
+    transition: border-color .15s;
+  }
+  textarea:focus { border-color: #4f6ef7; }
+
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  select {
+    background: #0f1117;
+    border: 1px solid #2d3348;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: .9rem;
+    padding: 8px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  button {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: none;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary  { background: #4f6ef7; color: #fff; }
+  .btn-danger   { background: #ef4444; color: #fff; }
+  .btn-success  { background: #22c55e; color: #fff; }
+  .btn-ghost    { background: #2d3348; color: #cbd5e1; }
+
+  .status {
+    font-size: .85rem;
+    color: #64748b;
+    min-height: 1.2em;
+  }
+  .status.ok  { color: #22c55e; }
+  .status.err { color: #f87171; }
+
+  audio {
+    width: 100%;
+    border-radius: 8px;
+    accent-color: #4f6ef7;
+  }
+
+  .result-box {
+    background: #0f1117;
+    border: 1px solid #2d3348;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: .95rem;
+    color: #cbd5e1;
+    min-height: 2.5em;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .badge {
+    display: inline-block;
+    background: #2d3348;
+    color: #94a3b8;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+  }
+
+  .mic-ring {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #64748b;
+    margin-right: 6px;
+    vertical-align: middle;
+    transition: background .2s;
+  }
+  .mic-ring.active { background: #ef4444; box-shadow: 0 0 0 3px #ef444430; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>vhub NPC AI — Teste de Voz</h1>
+
+  <!-- ── TTS: texto → audio ── -->
+  <div class="card">
+    <div class="card-title">Texto → Fala (TTS)</div>
+
+    <textarea id="tts-text" placeholder="Digite aqui a frase que o NPC vai falar..."></textarea>
+
+    <div class="row">
+      <select id="tts-lang">
+        <option value="pt">PT-BR</option>
+        <option value="en">EN</option>
+      </select>
+      <button class="btn-primary" id="tts-btn" onclick="falar()">🔊 Ouvir</button>
+      <span class="status" id="tts-status"></span>
+    </div>
+
+    <audio id="tts-audio" controls style="display:none"></audio>
+  </div>
+
+  <!-- ── STT: microfone → texto ── -->
+  <div class="card">
+    <div class="card-title">Microfone → Texto (STT)</div>
+
+    <div class="row">
+      <select id="stt-lang">
+        <option value="auto">Detectar idioma</option>
+        <option value="pt">PT-BR</option>
+        <option value="en">EN</option>
+      </select>
+      <button class="btn-success" id="rec-btn" onclick="toggleRec()">
+        <span class="mic-ring" id="mic-ring"></span>Gravar
+      </button>
+      <span class="status" id="stt-status"></span>
+    </div>
+
+    <div class="result-box" id="stt-result">—</div>
+
+    <div class="row" style="gap:8px">
+      <span class="badge" id="stt-lang-badge"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SERVER = window.location.origin;
+
+// ============================================================
+// TTS — texto para audio
+// ============================================================
+
+async function falar() {
+  const text = document.getElementById('tts-text').value.trim();
+  const lang = document.getElementById('tts-lang').value;
+  const btn  = document.getElementById('tts-btn');
+  const st   = document.getElementById('tts-status');
+  const aud  = document.getElementById('tts-audio');
+
+  if (!text) { setStatus(st, 'Digite algo primeiro.', 'err'); return; }
+
+  btn.disabled = true;
+  setStatus(st, 'Sintetizando...', '');
+
+  try {
+    const res = await fetch(`${SERVER}/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang }),
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || `HTTP ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    aud.src = URL.createObjectURL(blob);
+    aud.style.display = 'block';
+    aud.play();
+    setStatus(st, 'Pronto.', 'ok');
+
+  } catch (e) {
+    setStatus(st, `Erro: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+// STT — microfone para texto
+// ============================================================
+
+let mediaRec  = null;
+let chunks    = [];
+let recording = false;
+
+async function toggleRec() {
+  if (recording) stopRec(); else await startRec();
+}
+
+async function startRec() {
+  const st = document.getElementById('stt-status');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks   = [];
+    mediaRec = new MediaRecorder(stream, { mimeType: bestMime() });
+
+    mediaRec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); enviarAudio(); };
+    mediaRec.start();
+
+    recording = true;
+    document.getElementById('rec-btn').innerHTML  = '<span class="mic-ring active" id="mic-ring"></span>Parar';
+    document.getElementById('rec-btn').className  = 'btn-danger';
+    setStatus(st, 'Gravando...', '');
+
+  } catch (e) {
+    setStatus(st, `Mic negado: ${e.message}`, 'err');
+  }
+}
+
+function stopRec() {
+  if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
+  recording = false;
+  document.getElementById('rec-btn').innerHTML = '<span class="mic-ring" id="mic-ring"></span>Gravar';
+  document.getElementById('rec-btn').className = 'btn-success';
+  setStatus(document.getElementById('stt-status'), 'Transcrevendo...', '');
+}
+
+async function enviarAudio() {
+  const st   = document.getElementById('stt-status');
+  const lang = document.getElementById('stt-lang').value;
+
+  const mime = bestMime();
+  const ext  = mime.includes('ogg') ? '.ogg' : mime.includes('mp4') ? '.mp4' : '.webm';
+  const blob = new Blob(chunks, { type: mime });
+
+  const fd = new FormData();
+  fd.append('file', blob, `audio${ext}`);
+  if (lang !== 'auto') fd.append('language', lang);
+
+  try {
+    const res = await fetch(`${SERVER}/transcribe`, { method: 'POST', body: fd });
+    const j   = await res.json();
+
+    if (j.ok) {
+      document.getElementById('stt-result').textContent   = j.text || '(vazio)';
+      document.getElementById('stt-lang-badge').textContent = j.language ? `idioma: ${j.language}` : '';
+      setStatus(st, 'Pronto.', 'ok');
+    } else {
+      setStatus(st, `Erro: ${j.error}`, 'err');
+    }
+  } catch (e) {
+    setStatus(st, `Erro: ${e.message}`, 'err');
+  }
+}
+
+function bestMime() {
+  const pref = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  return pref.find(m => MediaRecorder.isTypeSupported(m)) || 'audio/webm';
+}
+
+// ============================================================
+// UTIL
+// ============================================================
+
+function setStatus(el, msg, cls) {
+  el.textContent = msg;
+  el.className   = 'status ' + cls;
+}
+
+// Enter no textarea dispara TTS
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('tts-text').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) falar();
+  });
+});
+</script>
+</body>
+</html>

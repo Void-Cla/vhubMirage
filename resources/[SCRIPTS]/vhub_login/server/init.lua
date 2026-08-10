@@ -125,9 +125,23 @@ AddEventHandler(VHubHSS.E.SPAWN_CHOOSE, function(src)
 
     local session = F.get(src)
     if session and session.step ~= "login" then
-      if session.step == "spawning" then
-        TriggerClientEvent(E.PROCEED_SPAWN, src)
+      if session.step == "ready" then
+        local released, spawned = pcall(function() return exports.vhub_hss:spawnAt(src, nil) end)
+        if not released or spawned ~= true then
+          DropPlayer(tostring(src), "Falha ao restaurar o personagem.")
+        end
+      elseif session.step == "spawning" then
+        local selector = F.prepararSeletor(src)
+        if not selector then
+          DropPlayer(tostring(src), "Falha ao preparar a selecao de destino.")
+          return
+        end
+        TriggerClientEvent(E.PROCEED_SPAWN, src, selector)
       elseif session.step == "charselect" then
+        if not F.isolarEntrada(src) then
+          DropPlayer(tostring(src), "Falha ao isolar a sessão de personagens.")
+          return
+        end
         TriggerClientEvent(E.CREATION_RETURN, src, F.personagens(src) or {})
       end
       return -- creating mantém SIMS + hold; somente spawning abre o selector
@@ -200,14 +214,14 @@ local function runRequest(src, action, limit, work, done)
   local token = { action = action, session = F.get(src) }
   _inflight[src] = token
   Citizen.CreateThread(function()
-    local ran, ok, err, detail = pcall(work)
+    local ran, ok, err, detail, extra = pcall(work)
     if _inflight[src] ~= token or F.get(src) ~= token.session then return end
     _inflight[src] = nil
     if not ran then
       log("error", "Operação de autenticação falhou.", { action = action, src = src })
       return done(false, "erro")
     end
-    done(ok, err, detail)
+    done(ok, err, detail, extra)
   end)
 end
 
@@ -303,14 +317,18 @@ AddEventHandler(E.PICK_CHAR, function(cid)
   runRequest(src, "pick", CFG.rate.pick, function()
     if not cid or cid < 1 or cid ~= math.floor(cid) then return false, "char_invalido" end
     return F.selecionar(src, cid)
-  end, function(ok, err, transition)
+  end, function(ok, err, transition, selector)
     if ok then
       if transition == "creating" then
         TriggerClientEvent(E.CREATION_HANDOFF, src)
       else
-        TriggerClientEvent(E.CHAR_OK, src)
+        TriggerClientEvent(E.CHAR_OK, src, selector)
       end
     else
+      if not F.isolarEntrada(src) then
+        DropPlayer(tostring(src), "Falha ao isolar a sessão de personagens.")
+        return
+      end
       TriggerClientEvent(E.CHAR_FAIL, src, err)
     end
   end)
@@ -327,14 +345,22 @@ AddEventHandler(E.REQUEST_CREATE, function()
       TriggerClientEvent(E.CREATION_HANDOFF, src)
       return
     end
+    if not F.isolarEntrada(src) then
+      DropPlayer(tostring(src), "Falha ao isolar a sessão de personagens.")
+      return
+    end
     TriggerClientEvent(E.CREATION_RETURN, src, F.personagens(src) or {}, err or "erro")
   end)
 end)
 
 local function returnFromCreation(char_id)
   Citizen.CreateThread(function()
-    local src = F.concluirCriacao(char_id)
+    local src, isolated = F.concluirCriacao(char_id)
     if not src or GetPlayerName(src) == nil then return end
+    if not isolated then
+      DropPlayer(tostring(src), "Falha ao isolar a sessão de personagens.")
+      return
+    end
     TriggerClientEvent(E.CREATION_RETURN, src, F.personagens(src) or {})
   end)
 end
@@ -361,4 +387,13 @@ AddEventHandler("playerDropped", function()
   F.limpar(src)
   _inflight[src] = nil
   _grace[src] = nil
+end)
+
+AddEventHandler("onResourceStop", function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+  for src in pairs(F.sessions) do
+    if GetPlayerName(src) then
+      DropPlayer(tostring(src), "Gate de autenticação reiniciado. Reconecte.")
+    end
+  end
 end)

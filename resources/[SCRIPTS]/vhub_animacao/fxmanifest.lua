@@ -2,11 +2,12 @@ fx_version 'cerulean'
 game 'gta5'
 
 name        'vhub_animacao'
-description 'Motor de emotes/animações — integrado com vhub_hss'
-version     '1.0.0'
+description 'Motor de emotes/animações + sentar em props — integrado com vhub_hss'
+version     '1.1.0'
 author      'vHub Mirage'
 
 dependency 'vhub_hss'
+dependency 'vhub_target'
 
 -- ============================================================
 -- SHARED
@@ -15,6 +16,8 @@ dependency 'vhub_hss'
 shared_scripts {
     'shared/events.lua',
     'shared/config.lua',
+    'shared/props.lua',
+    'shared/sit_config.lua',
 }
 
 -- ============================================================
@@ -31,4 +34,5 @@ server_scripts {
 
 client_scripts {
     'client/init.lua',
+    'client/sit.lua',
 }

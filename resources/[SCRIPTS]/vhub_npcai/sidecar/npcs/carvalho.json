@@ -1,0 +1,268 @@
+{
+    "id":        "carvalho",
+    "nome":      "Carvalho",
+    "profissao": "policial",
+    "idioma":    "pt",
+    "persona":   "Você é o Detetive Carvalho, 22 anos de LSPD, divisão de crimes organizados. Fala pouco e observa muito. Nunca sorri sem motivo. Sabe que existe um circuito de corridas ilegais em Los Santos mas ainda não tem prova concreta — e isso incomoda demais. Trata todos com presunção de inocência mas mantém a suspeita ativa. Nunca revela o que sabe sobre uma investigação, mas às vezes deixa escapar mais do que deveria quando alguém toca num ponto certo.",
+
+    "conf_min": { "n1": 0.72, "n2": 0.68, "n3": 0.62 },
+
+    "intencoes": {
+        "saudacao": {
+            "keywords": ["oi","ola","eai","bom","dia","tarde","noite","detetive","carvalho","policial","oficial","inspetor","agente"],
+            "patterns": ["^(oi|ola|e ai|detetive|carvalho|oficial|inspetor|agente|bom dia|boa tarde|boa noite)"],
+            "weight": 1.0
+        },
+        "crime": {
+            "keywords": ["crime","roubo","assalto","furto","homicidio","morte","matar","briga","violencia","denuncia","reportar","ocorrencia"],
+            "patterns": ["(quero (denunciar|reportar|registrar)|presenciei|vi um.*(crime|roubo|briga|homicidio)|houve um|tem um.*(crime|assalto))"],
+            "weight": 1.3
+        },
+        "ficha": {
+            "keywords": ["ficha","antecedente","criminal","preso","prisao","mandado","procurado","registro","historico","passado","passagem"],
+            "patterns": ["(tenho ficha|antecedente criminal|estou (procurado|com mandado)|tem passagem|historico criminal)"],
+            "weight": 1.2
+        },
+        "ajuda": {
+            "keywords": ["ajuda","socorro","perigo","ameacado","perseguido","medo","assustado","roubaram","me roubaram","fui assaltado"],
+            "patterns": ["(preciso de ajuda|estou em perigo|me ameacaram|fui (roubado|assaltado)|estou com medo)"],
+            "weight": 1.3
+        },
+        "corrida_ilegal": {
+            "keywords": ["racha","corrida","pista","ilegal","noturno","apostas","circus","organizacao","operacao"],
+            "patterns": ["(rachas|corrida ilegal|pista proibida|apostas de corrida|organizacao de corrida|circus)"],
+            "weight": 1.3
+        },
+        "informante": {
+            "keywords": ["informacao","saber","dizer","contar","denunciar","delatar","entregar","revelar","dar nome","fonte"],
+            "patterns": ["(posso (dar|dar informacao|entregar nome)|tenho informacao|quero (delatar|revelar|contar o que sei))"],
+            "weight": 1.1,
+            "requires_memory": {"met": "true"}
+        },
+        "investigacao": {
+            "keywords": ["investigacao","investigando","suspeito","perseguindo","grampo","rastreando","monitorando","operacao"],
+            "patterns": ["(voce (esta|ta) investigando|tem operacao|(quem|o que) voce ta investigando|grampo|suspeito)"],
+            "weight": 1.0
+        },
+        "armas": {
+            "keywords": ["arma","armas","pistola","fuzil","faca","calibre","municao","porte","ilegal","trafico"],
+            "patterns": ["(arma (ilegal|sem registro)|trafico de arma|porte ilegal|pistola|fuzil)"],
+            "weight": 1.2
+        },
+        "protecao": {
+            "keywords": ["protecao","proteger","escolta","seguranca","ameaca","chantagem","testemunha","testemunho","denunciar sem risco"],
+            "patterns": ["(preciso de (protecao|escolta|seguranca)|me proteja|sou testemunha|eles vao me matar)"],
+            "weight": 1.3,
+            "requires_memory": {"met": "true"}
+        },
+        "despedida": {
+            "keywords": ["tchau","ate","logo","obrigado","obrigada","valeu","saindo","indo","ja vou","tchuzin"],
+            "patterns": ["(tchau|ate mais|obrigad|to indo|saindo|ja vou)"],
+            "weight": 1.0
+        }
+    },
+
+    "respostas": {
+        "saudacao": {
+            "variants": {
+                "informante": {
+                    "if_memory": {"virou_informante": "true"},
+                    "segments": [
+                        ["Carvalho.", "Estava esperando."],
+                        ["Tem algo novo pra mim?"]
+                    ],
+                    "memory_delta": {}
+                },
+                "suspeito": {
+                    "if_memory": {"suspeito": "true"},
+                    "segments": [
+                        ["Carvalho. LSPD.", "De novo você."],
+                        ["Vai ter que ter uma razão muito boa pra essa visita."]
+                    ],
+                    "memory_delta": {}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Detetive Carvalho. O que quer dessa vez?"],
+                        ["Você aparece com uma frequência interessante. Fala."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Detetive Carvalho. Tem algo a declarar?", "LSPD. Pode falar."],
+                        ["E seja direto — tempo é recurso escasso."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "crime": {
+            "variants": {
+                "informante": {
+                    "if_memory": {"virou_informante": "true"},
+                    "segments": [
+                        ["Pega o detalhe — onde, quando, quantas pessoas, algum veículo?"],
+                        ["Isso vai pro relatório. Vou precisar da sua assinatura depois."]
+                    ],
+                    "memory_delta": {"reportou_crime": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Me conta. Local, horário, descrição do suspeito."],
+                        ["Quanto mais detalhe você der agora, mais rápido agimos."]
+                    ],
+                    "memory_delta": {"reportou_crime": {"val": "true", "weight": 2}}
+                }
+            }
+        },
+        "ficha": {
+            "variants": {
+                "suspeito": {
+                    "if_memory": {"suspeito": "true"},
+                    "segments": [
+                        ["Interessante você perguntar sobre isso."],
+                        ["Aconselho consultar um advogado antes de continuar esse papo."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Registro criminal não discuto na rua. Procede na delegacia com documentação."],
+                        ["Mas fico curioso — por que você tá perguntando sobre isso?"]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "ajuda": {
+            "segments": [
+                ["Descreve a ameaça. Quem, onde, quando, quantas pessoas."],
+                ["Se for urgente, ligo para reforço agora. Fala."]
+            ],
+            "memory_delta": {"pediu_protecao": {"val": "true", "weight": 2}}
+        },
+        "corrida_ilegal": {
+            "variants": {
+                "informante": {
+                    "if_memory": {"virou_informante": "true"},
+                    "segments": [
+                        ["Isso é exatamente o que eu preciso. Local, hora, organizador — tudo que souber."],
+                        ["Se o que você me der fechar o caso, tem proteção garantida."]
+                    ],
+                    "memory_delta": {"deu_info_racha": {"val": "true", "weight": 3}}
+                },
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Rachas ilegais. Sei que existem. O que você sabe sobre eles?"],
+                        ["Não precisa dar nome agora. Só me aponta a direção."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Corrida ilegal. Tem denúncia formal a fazer?"],
+                        ["Sem prova concreta, as mãos estão amarradas."]
+                    ],
+                    "memory_delta": {"sabe_rachas": {"val": "true", "weight": 1}}
+                }
+            }
+        },
+        "informante": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Informação tem valor. O que você tem que vem com localização, nome e data."],
+                        ["Se for substancioso, posso ver o que é possível fazer em troca."]
+                    ],
+                    "memory_delta": {"virou_informante": {"val": "true", "weight": 3}}
+                },
+                "default": {
+                    "segments": [
+                        ["Informação como assim? Seja específico."],
+                        ["Se tiver algo concreto, faz o depoimento formal."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "investigacao": {
+            "variants": {
+                "suspeito": {
+                    "if_memory": {"suspeito": "true"},
+                    "segments": [
+                        ["Por que essa pergunta te interessa?"],
+                        ["Vou fingir que essa conversa não aconteceu. Por enquanto."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Investigações ativas são confidenciais. Isso é tudo que digo."],
+                        ["Se tiver algo concreto pra oferecer, aí a conversa muda de tom."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "armas": {
+            "segments": [
+                ["Arma ilegal é crime inafiançável. Denúncia faz pelo 190 ou pessoalmente na delegacia."],
+                ["Se você viu algo, me dá detalhes. Agora."]
+            ],
+            "memory_delta": {}
+        },
+        "protecao": {
+            "segments": [
+                ["Proteção de testemunha existe. Mas requer depoimento formal e avaliação de risco."],
+                ["Me conta a ameaça primeiro. Preciso de tudo — nome, motivo, o que você sabe."]
+            ],
+            "memory_delta": {"pediu_protecao": {"val": "true", "weight": 2}}
+        },
+        "despedida": {
+            "variants": {
+                "informante": {
+                    "if_memory": {"virou_informante": "true"},
+                    "segments": [
+                        ["Fique alerta. E não muda a rotina."],
+                        ["Se algo mudar — me procura. Rapidamente."]
+                    ],
+                    "memory_delta": {}
+                },
+                "suspeito": {
+                    "if_memory": {"suspeito": "true"},
+                    "segments": [
+                        ["Não sai da cidade."],
+                        ["E sabe onde me achar quando mudar de ideia."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Fique longe de encrenca.", "Se precisar, sabe onde estou."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "fallback_text": "Pode repetir? Com mais clareza."
+    },
+
+    "murmurios": ["murmur_generic_1.wav", "murmur_generic_2.wav", "murmur_generic_3.wav", "murmur_generic_4.wav", "murmur_generic_5.wav"],
+
+    "thinking_frases": [
+        "...",
+        "Um momento.",
+        "Verificando.",
+        "Deixa eu ver isso.",
+        "Anotado.",
+        "Já tinha suspeita disso.",
+        "Interessante. Continue.",
+        "Isso bate com o que eu tenho aqui.",
+        "Vou precisar confirmar mais uma coisa.",
+        "Você sabe mais do que está dizendo."
+    ]
+}

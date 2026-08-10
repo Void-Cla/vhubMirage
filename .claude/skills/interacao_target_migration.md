@@ -97,3 +97,25 @@ de abertura por proximidade, e **as chaves de config órfãs** que só serviam a
 - `canInteract` recusa de dentro do veículo.
 - Blips (se houver) intactos.
 - Fora do raio server → server recusa mesmo com o olho tendo aberto.
+
+---
+
+## Extensão: alvo em VEÍCULO reusando o gate físico do serviço (ADR #82 F2.2, 2026-08-09)
+
+Quando o alvo é o **próprio veículo** (ex.: mirar o capô p/ abrir a oficina), o padrão é o mesmo — o `onSelect`
+só dispara o `TriggerServerEvent` do gate **já existente** (`SERVICE_AUTH` → `Core.validateVehicle`, que
+recomputa distância/bucket/velocidade/placa/dono server-side). **Não se cria 2º gate.** Validado em
+`vhub_custom/client/target_hood.lua` (gate segurança: APROVAR).
+
+- **`canInteract(entity, dist, coords, name, bone)`** recebe o **handle da entidade** como 1º arg (não um data
+  object). Use-o para conveniência client (a pé, carro parado, perto de uma zona do domínio) — **nunca** como
+  verdade. `onSelect(response)` recebe `response.entity` = handle local.
+- **Affordance efêmera sem dono:** abrir o capô (`SetVehicleDoorOpen(veh, 4, …)`) é cosmético/revertível e
+  **não exige ownership** — a AÇÃO real (instalar peça) é que é gated. Fechar no fim (`SetVehicleDoorShut`) no
+  `closeOficina`/`onResourceStop` (cleanup).
+- **Ação de LEITURA contextual também é gated:** um "inspecionar motor" que devolve resumo read-only passa pelo
+  MESMO `Core.validateVehicle` + **rate-limit ANTES do gate** (senão o OK/erro vira oráculo de presença
+  veicular — enumeração barata). Resposta **unicast** ao `src`, nunca `-1` (R5).
+- **Migração parcial por domínio:** se só um domínio migra p/ o target (oficina) e outros seguem por
+  proximidade+[E] (bennys/mec), filtrar na thread de zona (`if z.domain ~= 'oficina'`), manter blips, e só
+  então a limpeza de órfãos é segura. Soft-dep `vhub_target` via `pcall` — sem ele, o fluxo antigo segue.

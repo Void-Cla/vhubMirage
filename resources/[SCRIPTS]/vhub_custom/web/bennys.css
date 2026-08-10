@@ -13,11 +13,10 @@
   z-index: 9990;
   background: transparent;
   opacity: 1;
-  transition: opacity 220ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
   font-family: var(--font-sans);
   color: var(--text-1);
 }
-.mod-bennys.bennys-overlay.hidden { opacity: 0; pointer-events: none; }
+.mod-bennys.bennys-overlay.hidden { display: none; }
 
 
 /* ============================================================
@@ -48,11 +47,6 @@
     inset 0 1px 0 rgba(255,213,115,0.10);
   pointer-events: none;
   opacity: 0.90;
-  animation: bn-hint-in 320ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
-}
-@keyframes bn-hint-in {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to   { opacity: .90; transform: translateX(-50%); }
 }
 .mod-bennys .boh-ico { color: var(--vh-gold); font-weight: 700; }
 
@@ -73,11 +67,6 @@
     linear-gradient(180deg, rgba(37,30,20,0.90), rgba(12,10,6,0.85));
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  animation: bn-top-in 320ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
-}
-@keyframes bn-top-in {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to   { opacity: 1; transform: translateX(-50%); }
 }
 .mod-bennys .bn-top::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
@@ -134,10 +123,8 @@
   background: linear-gradient(90deg, transparent, rgba(255,213,115,0.65), transparent);
   pointer-events: none;
 }
-.mod-bennys .bn-aside-left  { left: 26px;  animation: bnSlideL 320ms var(--ease-out, cubic-bezier(.22,.61,.36,1)); }
-.mod-bennys .bn-aside-right { right: 26px; animation: bnSlideR 320ms var(--ease-out, cubic-bezier(.22,.61,.36,1)); }
-@keyframes bnSlideL { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
-@keyframes bnSlideR { from { opacity: 0; transform: translateX( 32px); } to { opacity: 1; transform: none; } }
+.mod-bennys .bn-aside-left  { left: 26px; }
+.mod-bennys .bn-aside-right { right: 26px; }
 
 /* corner brackets industriais */
 .mod-bennys .corner { position: absolute; width: 16px; height: 16px; pointer-events: none; border: 1px solid var(--vh-gold); opacity: 0.55; }
@@ -174,12 +161,13 @@
   display: flex; align-items: center; gap: 12px;
   padding: 13px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
+  border: 1px solid rgba(243,181,58,0.08);
+  background-color: rgba(12,10,6,0.38);
   cursor: pointer;
-  transition: background 160ms, border-color 160ms, transform 140ms, box-shadow 160ms;
+  transition: background-color 160ms, border-color 160ms, box-shadow 160ms;
 }
 .mod-bennys .bn-cat::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 2px; background: transparent; transition: background 160ms, box-shadow 160ms; }
-.mod-bennys .bn-cat:hover { background: rgba(243,181,58,0.08); border-color: rgba(243,181,58,0.18); }
+.mod-bennys .bn-cat:hover { background-color: rgba(243,181,58,0.10); border-color: rgba(243,181,58,0.18); }
 .mod-bennys .bn-cat.active {
   background: linear-gradient(90deg, rgba(243,181,58,0.18), rgba(243,181,58,0.04));
   border-color: rgba(243,181,58,0.32);
@@ -252,9 +240,9 @@
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
   color: var(--vh-sand-dim);
   background: rgba(0,0,0,0.30); border: 1px solid rgba(217,193,154,0.16);
-  transition: all 160ms;
+  transition: border-color 160ms, color 160ms, background-color 160ms, box-shadow 160ms;
 }
-.mod-bennys .bn-chip:hover { border-color: rgba(243,181,58,0.36); color: var(--vh-sand); transform: translateY(-1px); }
+.mod-bennys .bn-chip:hover { border-color: rgba(243,181,58,0.36); color: var(--vh-sand); }
 .mod-bennys .bn-chip.selected {
   color: var(--vh-black); background: linear-gradient(180deg, var(--vh-gold-soft), var(--vh-gold));
   border-color: var(--vh-gold); font-weight: 700;
@@ -277,6 +265,30 @@
   flex: 1; text-align: center;
   font-family: var(--font-mono); font-size: 12px; color: var(--vh-sand);
   font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+}
+
+
+/* ============================================================
+   SWATCHES DE TINTA — grade de cores por índice GTA (paleta)
+   swatch é indicativo; a cor real aparece no veículo 3D
+   ============================================================ */
+.mod-bennys .bn-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 6px;
+}
+.mod-bennys .bn-swatch {
+  aspect-ratio: 1 / 1;
+  border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.45);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.10), inset 0 -2px 4px rgba(0,0,0,0.35);
+  transition: transform 130ms, box-shadow 130ms, outline-color 130ms;
+  outline: 2px solid transparent; outline-offset: 1px;
+}
+.mod-bennys .bn-swatch:hover { transform: scale(1.10); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+.mod-bennys .bn-swatch.selected {
+  outline-color: var(--vh-gold);
+  box-shadow: 0 0 12px rgba(243,181,58,0.55), inset 0 0 0 1px rgba(255,213,115,0.35);
 }
 
 
@@ -347,11 +359,6 @@
     linear-gradient(180deg, rgba(12,10,6,0.85), rgba(37,30,20,0.90));
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  animation: bn-bottom-in 320ms var(--ease-out, cubic-bezier(.22,.61,.36,1));
-}
-@keyframes bn-bottom-in {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to   { opacity: 1; transform: translateX(-50%); }
 }
 .mod-bennys .bn-bottom::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;

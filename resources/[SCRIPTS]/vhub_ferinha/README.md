@@ -110,3 +110,34 @@ VHubFerinha.cfg.leilao_local = {
 | L-13 | Nunca escreve estado físico do veículo diretamente |
 | L-19 | Zona exportada como coord achatada `{x,y,z}` (não `vec3`) |
 | §3.7 | Todos os exports são TRUSTED — nenhum player acessa diretamente |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `listActiveAuctions` | `() → lista de leilões ativos` | vhub_garage (NUI de leilão) |
+| 2 | `getAuctionByPlate` | `(plate) → auction\|nil` | vhub_garage |
+| 3 | `getZones` | `() → {id, label, x, y, z, raio, blip}` | vhub_garage (boot) |
+| 4 | `newAuction` | `(src, plate, min_bid, buyout, dur_min) → {ok, msg}` | vhub_garage (ação admin) |
+| 5 | `bid` | `(src, auction_id, valor) → {ok, msg}` | vhub_garage (lance) |
+| 6 | `cancelAuction` | `(auction_id, actor_cid) → ok` | vhub_admin |
+| 7 | `finalizeExpired` | `() → count` | vhub_garage (cron) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `oxmysql` | Persistência de leilões (`vhub_ferinha_auctions`) |
+| `vhub_conce` | `transferOwner` (transferência após leilão ganho) |
+| `vhub_inventory` | `giveVehicleKey` (chave ao vencedor) |
+| `vhub_money` | `tryPayment` (escrow de lance), `giveBankChar` (refund de lance anterior) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_ferinha:auctionEnded` | server→participantes | `{auction_id, winner_cid, plate, valor}` |
+| `vhub_ferinha:newBid` | server→participantes | `{auction_id, valor, bidder_cid}` |

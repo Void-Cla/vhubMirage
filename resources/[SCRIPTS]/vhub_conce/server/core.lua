@@ -73,7 +73,7 @@ end
 
 -- registra ação no log de auditoria (encode JSON do payload)
 function M:log(plate, action, actor_id, payload)
-  SQL:log(plate, action, actor_id, U.jenc(payload))
+  return SQL:log(plate, action, actor_id, U.jenc(payload))
 end
 
 

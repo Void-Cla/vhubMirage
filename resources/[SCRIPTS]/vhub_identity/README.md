@@ -77,3 +77,30 @@ O `vhub_identity` usa `exports.oxmysql` diretamente em vez do `vhub.State` porqu
 | L-04 | Identidade civil = dado do vhub_identity (escritor único da vh_identity) |
 | L-17 | `characterLoad` com replay-guard: identidade já existente não é regenerada |
 | L-12 | INSERT de identidade nova é atômico (registro/telefone únicos) |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `getIdentity` | `(src) → {char_id, firstname, lastname, age, registration, phone}` | vhub_money, vhub_admin, vhub_lspdtool |
+| 2 | `getFullName` | `(src) → string` | vhub_admin, vhub_racha |
+| 3 | `getCharByRegistration` | `(registration) → char\|nil` | vhub_lspdtool (MDT) |
+| 4 | `getCharByPhone` | `(phone) → char\|nil` | vhub_voicePMA (ligações) |
+| 5 | `setIdentity` | `(src, data, op_id) → ok` | vhub_sims (criação de personagem) |
+| 6 | `getCharacterSummaries` | `(src) → lista` | vhub_login (seleção de char) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `oxmysql` | Persistência direta (`vh_identity`) |
+| `vhub_money` | `giveBank` (dinheiro inicial na criação) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_identity:created` | server interno | `{char_id, firstname, lastname}` |

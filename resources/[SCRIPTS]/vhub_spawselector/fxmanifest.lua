@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_spawselector'
 author      'vHub Mirage'
-version     '2.1.2'
+version     '2.3.1'
 description 'Provedor de coordenada de spawn do vhub_hss (UI pura — nunca toca o ped)'
 
 dependencies {

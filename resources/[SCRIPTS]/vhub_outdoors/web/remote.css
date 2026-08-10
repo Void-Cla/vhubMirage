@@ -1,0 +1,119 @@
+.remote-shell {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  place-items: center;
+  color: var(--paper);
+  background:
+    radial-gradient(circle at 48% 44%, rgba(214, 173, 96, 0.14), transparent 32%),
+    rgba(7, 9, 7, 0.62);
+}
+
+.remote-shell[hidden] {
+  display: none;
+}
+
+.remote-panel {
+  width: min(480px, 100%);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  background: var(--ink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  animation: panel-in 180ms ease-out both;
+}
+
+.remote-heading {
+  position: relative;
+  margin-bottom: 22px;
+}
+
+.remote-heading h1 {
+  padding-right: 36px;
+}
+
+.remote-meta {
+  margin: 8px 0 0;
+  color: var(--gold);
+  font: 700 12px/1 "Trebuchet MS", sans-serif;
+}
+
+.remote-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  font: 700 12px/1 "Trebuchet MS", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.remote-field input[type="url"] {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid var(--line);
+  outline: 0;
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.remote-field input[type="url"]:focus {
+  border-color: var(--gold);
+}
+
+.remote-volume-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remote-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.remote-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.remote-actions button {
+  padding: 13px;
+  border: 1px solid var(--gold);
+  color: var(--paper);
+  background: transparent;
+  font: 800 12px/1 "Trebuchet MS", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.remote-actions button:first-child {
+  color: var(--ink);
+  background: var(--gold);
+}
+
+.remote-actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.remote-status {
+  min-height: 17px;
+  margin: 12px 0 0;
+  color: var(--paper-soft);
+  font: 12px/1.4 "Trebuchet MS", sans-serif;
+}
+
+@media (max-width: 520px) {
+  .remote-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-panel {
+    animation: none;
+  }
+}

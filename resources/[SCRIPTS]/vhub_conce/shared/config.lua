@@ -37,7 +37,7 @@ VHubConce.cfg = {
     {
       id    = 'pdm',
       label = 'Premium Deluxe Motorsport',
-      coord = vec3(-56.84, -1097.41, 26.42), raio = 10.0,
+      coord = vec3(-56.5367, -1098.6465, 26.4223), raio = 10.0,
       tipos = { 'car', 'bike' },
       blip  = { sprite = 326, color = 3, scale = 0.85 },
       test_spawn = vec4(-23.0, -1100.0, 26.42, 70.0),

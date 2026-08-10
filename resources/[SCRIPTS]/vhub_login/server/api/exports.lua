@@ -44,6 +44,16 @@ exports("getSessionStep", function(src)
   return s and s.step or nil
 end)
 
+exports("completeEntry", function(src)
+  if GetInvokingResource() ~= "vhub_spawselector" or not invokerOK() then return false end
+  return F.concluirEntrada(tonumber(src) or -1)
+end)
+
+exports("returnToCharacters", function(src)
+  if GetInvokingResource() ~= "vhub_spawselector" or not invokerOK() then return nil end
+  return F.voltarPersonagens(tonumber(src) or -1)
+end)
+
 -- Inicia round-trip de persistência apenas para o testrunner em modo de teste.
 exports("runPersistenceTest", function()
   if GetConvar("vhub_test_mode", "0") ~= "1"

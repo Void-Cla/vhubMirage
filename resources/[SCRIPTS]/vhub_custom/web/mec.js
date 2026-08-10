@@ -4,6 +4,8 @@
 // compartilhado com oficina.js/bennys.js no mesmo documento (1 ui_page por resource).
 (function () {
 
+let _module = null;
+
 // ============================================================
 // CONFIG DE OPÇÕES DE REPARO (type → ícone/label/desc fixos)
 // ============================================================
@@ -21,6 +23,7 @@ const REPAIR_OPTIONS = [
 
 let _data = null;   // payload recebido de openMec (plate, nome, prices, engine_health, body_health)
 let _busy = false;  // trava UI durante round-trip (evita duplo clique)
+let _busyTimer = null;
 
 
 // ============================================================
@@ -35,6 +38,14 @@ function setBusy(v) {
 
 function fmtMoney(v) {
   return 'R$ ' + Number(v || 0).toLocaleString('pt-BR');
+}
+
+function armBusyTimeout() {
+  if (_busyTimer) clearTimeout(_busyTimer);
+  _busyTimer = setTimeout(() => {
+    _busyTimer = null;
+    if (_data) setBusy(false);
+  }, 6000);
 }
 
 // retorna percentual de saúde (0..100) dado valor 0..1000
@@ -131,24 +142,21 @@ function renderOptions() {
 function requestRepair(repairType) {
   if (!_data || _busy) return;
   setBusy(true);
-  fetch('https://vhub_custom/mec:repair', {
-    method: 'POST',
-    body:   JSON.stringify({ plate: _data.plate, repair_type: repairType }),
-  });
-  // libera UI quando mecConfirm chegar (ou após timeout de segurança)
-  setTimeout(() => { if (_data) setBusy(false); }, 6000);
+  window.vhub.request('mec:repair', { plate: _data.plate, repair_type: repairType })
+    .catch(() => { if (_data) setBusy(false); });
+  armBusyTimeout();
 }
 
 function requestTow() {
   if (!_data || _busy) return;
   setBusy(true);
-  fetch('https://vhub_custom/mec:tow', { method: 'POST', body: '{}' });
-  setTimeout(() => { if (_data) setBusy(false); }, 6000);
+  window.vhub.request('mec:tow', {}).catch(() => { if (_data) setBusy(false); });
+  armBusyTimeout();
 }
 
 function fecharMec() {
-  closeNUI();
-  fetch('https://vhub_custom/mec:fechar', { method: 'POST', body: '{}' });
+  _module.hide();
+  window.vhub.request('mec:fechar', {}).catch(() => {});
 }
 
 
@@ -169,6 +177,7 @@ function openMec(data) {
 }
 
 function closeNUI() {
+  if (_busyTimer) { clearTimeout(_busyTimer); _busyTimer = null; }
   document.getElementById('mec-overlay').classList.add('hidden');
   _data = null;
   _busy = false;
@@ -179,13 +188,29 @@ function closeNUI() {
 // LUA MESSAGE BUS
 // ============================================================
 
-window.addEventListener('message', function (ev) {
-  const msg = ev.data || {};
-  if (msg.action === 'openMec')   openMec(msg.data);
-  if (msg.action === 'fecharMec') closeNUI();
-});
+function onKeydown(event) {
+  if (event.key === 'Escape' && _data) fecharMec();
+}
 
-document.getElementById('mc-btn-close').addEventListener('click', fecharMec);
-document.getElementById('mc-btn-tow').addEventListener('click',   requestTow);
+_module = window.vhub.createModule('mec', {
+  actions: {
+    openMec: (message, api) => api.show(message.data),
+    fecharMec: (_message, api) => api.hide(),
+  },
+  onInit() {
+    document.getElementById('mc-btn-close').addEventListener('click', fecharMec);
+    document.getElementById('mc-btn-tow').addEventListener('click', requestTow);
+    window.addEventListener('keydown', onKeydown);
+  },
+  onMount() {},
+  onShow(data) { openMec(data); },
+  onHide() { closeNUI(); },
+  onDestroy() {
+    document.getElementById('mc-btn-close').removeEventListener('click', fecharMec);
+    document.getElementById('mc-btn-tow').removeEventListener('click', requestTow);
+    window.removeEventListener('keydown', onKeydown);
+    closeNUI();
+  },
+});
 
 })();

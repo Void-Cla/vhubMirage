@@ -1,75 +1,97 @@
-/* shared/inspect.css — painel de inspecao de item. Escopo .vh-inspector. */
+/* shared/inspect.css — painel de detalhe do item. Escopo .vh-inspector. */
 
 .vh-inspector {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 12px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  background: var(--vh-glass-2);
+  padding: 14px;
+  background:
+    var(--vh-sheen),
+    linear-gradient(180deg, rgba(28, 24, 17, 0.7), rgba(16, 13, 9, 0.7));
   border: 1px solid var(--vh-border);
-  border-radius: var(--vh-radius-sm);
+  border-radius: var(--vh-r-md);
 }
 
 /* oculta sem animar (insp-empty aplicado pelo helper) */
 .vh-inspector.insp-empty { display: none; }
 
-.insp-ic {
+
+/* ---- cabeçalho ---- */
+
+.vh-inspector .insp-head { display: flex; gap: 12px; align-items: center; }
+
+.vh-inspector .insp-ic {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
-  background-size: contain;
+  width: 56px;
+  height: 56px;
+  background-size: 62%;
   background-repeat: no-repeat;
   background-position: center;
-  background-color: rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-sm);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
-.insp-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
+.vh-inspector .insp-htext { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 
-.insp-name {
-  font-size: 13px;
+.vh-inspector .insp-name {
+  font-family: var(--vh-font-title);
+  font-size: 15px;
   font-weight: 700;
   color: var(--vh-sand);
+  letter-spacing: 0.3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.insp-desc {
-  font-size: 11px;
-  color: var(--vh-text-dim);
-  line-height: 1.4;
-}
+.vh-inspector .insp-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 
-.insp-qty {
-  font-size: 11px;
-  color: var(--vh-gold);
+.vh-inspector .insp-pill {
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: var(--vh-r-pill);
+  border: 1px solid currentColor;
+  color: var(--vh-sand-dim);
 }
+.vh-inspector .insp-pill--comum  { color: var(--vh-leg-comum); }
+.vh-inspector .insp-pill--legal  { color: var(--vh-leg-legal); }
+.vh-inspector .insp-pill--ilegal { color: var(--vh-leg-ilegal); }
+.vh-inspector .insp-pill--cat    { color: var(--vh-text-dim); border-color: var(--vh-hair); }
+.vh-inspector .insp-pill--qty    { color: var(--vh-gold); }
 
-.insp-meta {
+
+/* ---- grade de propriedades ---- */
+
+.vh-inspector .insp-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border-top: 1px solid var(--vh-border);
-  padding-top: 6px;
-  margin-top: 2px;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vh-hair);
 }
 
-.insp-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
+.vh-inspector .insp-row { display: flex; justify-content: space-between; font-size: 11px; }
+.vh-inspector .insp-lbl { color: var(--vh-text-dim); }
+.vh-inspector .insp-val { color: var(--vh-gold); font-weight: 600; }
+
+
+/* ---- selos de restrição ---- */
+
+.vh-inspector .insp-flags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.vh-inspector .insp-flag {
+  padding: 2px 7px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--vh-text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-sm);
 }
-
-.insp-lbl { color: var(--vh-text-dim); }
-.insp-val { color: var(--vh-gold); font-weight: 600; }
-
-/* foco acessivel no elemento pai do inspector */
-.vh-inspector:focus-within { outline: none; }
+.vh-inspector .insp-flag--gold { color: var(--vh-gold); border-color: var(--vh-border-2); }

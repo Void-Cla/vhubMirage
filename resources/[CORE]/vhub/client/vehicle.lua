@@ -63,6 +63,18 @@ end
 -- HANDLERS (servidor → cliente)
 -- ============================================================
 
+-- número finito clampado como FLOAT, ou nil (rejeita não-número/NaN/±inf ANTES do clamp).
+-- CRÍTICO: o `+ 0.0` força o subtipo FLOAT (Lua 5.4). Inteiros vindos do msgpack (100, 1000
+-- cruzam a rede/eventos como int) passados a native de param float são BIT-REINTERPRETADOS
+-- (1000 → ~1.4e-42) — fuel/motor viravam ~0 logo após aplicar e o snapshot persistia o lixo.
+-- Espelha finiteNum de vhub_conce/server/vstate.lua e a coerção do vhub_vehcontrol (mesmo idiom).
+local function finiteFloat(v, lo, hi)
+  if type(v) ~= "number" or v ~= v or math.abs(v) == math.huge then return nil end
+  if lo and v < lo then v = lo end
+  if hi and v > hi then v = hi end
+  return v + 0.0
+end
+
 RegisterNetEvent("vHub:vehicleStateLoad")
 AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
   -- Aplica estado recebido do servidor ao veículo local se o jogador estiver no mesmo veículo
@@ -73,9 +85,17 @@ AddEventHandler("vHub:vehicleStateLoad", function(plate, state)
   if veh and veh ~= 0 and DoesEntityExist(veh) and type(state) == "table" then
     local myplate = GetVehicleNumberPlateText(veh) or ""
     if plateKey(myplate) == plateKey(plate) then
-      if state.fuel and SetVehicleFuelLevel then pcall(SetVehicleFuelLevel, veh, state.fuel) end
-      if state.engine_health then pcall(SetVehicleEngineHealth, veh, state.engine_health) end
-      if state.body_health and SetVehicleBodyHealth then pcall(SetVehicleBodyHealth, veh, state.body_health) end
+      -- ADR #80: coerção FLOAT + clamp defensivo antes de cada native (footgun msgpack).
+      -- engine_health <= 0 = motor irrecuperável sem mecânico; piso 100 (mínimo drivable),
+      -- espelha o floor de vhub_vehcontrol/client/main.lua (não ressuscita lixo persistido).
+      local fuel = finiteFloat(state.fuel, 0.0, 100.0)
+      if fuel and SetVehicleFuelLevel then pcall(SetVehicleFuelLevel, veh, fuel) end
+
+      local eng = finiteFloat(state.engine_health, -4000.0, 1000.0)
+      if eng then pcall(SetVehicleEngineHealth, veh, eng > 0.0 and eng or 100.0) end
+
+      local body = finiteFloat(state.body_health, 0.0, 1000.0)
+      if body and SetVehicleBodyHealth then pcall(SetVehicleBodyHealth, veh, body) end
     end
   end
 end)

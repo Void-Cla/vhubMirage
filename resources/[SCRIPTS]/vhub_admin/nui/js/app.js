@@ -234,9 +234,12 @@
     return 'view-' + sec;
   };
 
+  const $bg      = document.getElementById('vhub-bg');
+  const $shell   = document.getElementById('admin-shell');
   const $aside   = document.getElementById('aside');
   const $anav    = document.getElementById('aside-nav');
   const $popover = document.getElementById('popover');
+  const $rail    = document.getElementById('utility-rail');
   const $title   = document.getElementById('pop-title');
   const $subtabs = document.getElementById('subtabs');
   const $search  = document.getElementById('tb-search');
@@ -254,7 +257,10 @@
       const b = App.el('button', 'abtn');
       b.dataset.sec = s.id;
       b.dataset.label = s.label;
-      b.appendChild(App.icon(s.icon));
+      const icon = App.el('span', 'abtn-icon');
+      icon.appendChild(App.icon(s.icon));
+      b.appendChild(icon);
+      b.appendChild(App.el('span', 'abtn-label', s.label));
       if (s.id === 'reports') {
         const badge = App.el('span', 'badge hidden', '0');
         badge.id = 'r-badge'; b.appendChild(badge);
@@ -275,7 +281,11 @@
 
   // fecha popover ao clicar fora (no jogo)
   document.addEventListener('mousedown', (e) => {
-    if (!$popover.contains(e.target) && !$aside.contains(e.target)) {
+    if (
+      !$popover.contains(e.target) &&
+      !$aside.contains(e.target) &&
+      !$rail.contains(e.target)
+    ) {
       $popover.classList.add('hidden');
       $anav.querySelectorAll('.abtn').forEach(b => b.classList.remove('active'));
       _activeSec = null;
@@ -353,6 +363,9 @@
     _activeSec = null;
   };
 
+  const $asideClose = document.getElementById('aside-close');
+  $asideClose.onclick = () => App.post('close');
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!$mbg.classList.contains('hidden')) {
@@ -376,19 +389,33 @@
   const $finvis  = document.getElementById('f-invis');
   const $fnoclip = document.getElementById('f-noclip');
 
-  $fgod.appendChild(App.icon('shield'));
-  $finvis.appendChild(App.icon('eyeoff'));
-  $fnoclip.appendChild(App.icon('feather'));
+  function buildFlag(btn, icon, label) {
+    const iconWrap = App.el('span', 'aflag-icon');
+    iconWrap.appendChild(App.icon(icon));
+    btn.appendChild(iconWrap);
+    btn.appendChild(App.el('span', 'aflag-label', label));
+    btn.appendChild(App.el('span', 'aflag-state', 'Inativo'));
+  }
+
+  buildFlag($fgod, 'shield', 'Invencivel');
+  buildFlag($finvis, 'eyeoff', 'Invisivel');
+  buildFlag($fnoclip, 'feather', 'Noclip');
 
   $fgod.onclick    = () => App.post('act', { action: 'god',   fields: {} });
   $finvis.onclick  = () => App.post('act', { action: 'invis', fields: {} });
   $fnoclip.onclick = () => App.post('noclip');
 
+  function syncFlagState(el, on) {
+    el.classList.toggle('on', !!on);
+    const status = el.querySelector('.aflag-state');
+    if (status) status.textContent = on ? 'Ativo' : 'Inativo';
+  }
+
   App.syncFlags = () => {
     const f = App.state.flags || {};
-    $fnoclip.classList.toggle('on', !!f.noclip);
-    $fgod.classList.toggle('on', !!f.god);
-    $finvis.classList.toggle('on', !!f.invis);
+    syncFlagState($fnoclip, !!f.noclip);
+    syncFlagState($fgod, !!f.god);
+    syncFlagState($finvis, !!f.invis);
   };
 
 
@@ -400,7 +427,8 @@
     const m = ev.data || {};
     switch (m.action) {
       case 'open':
-        $aside.classList.remove('hidden');
+        $bg.classList.remove('hidden');
+        $shell.classList.remove('hidden');
         const selectors = m.data?.selectors || {};
         App.state.actions  = m.data?.actions  || {};
         App.state.zones    = selectors.zones || [];
@@ -420,9 +448,11 @@
         break;
 
       case 'close':
-        $aside.classList.add('hidden');
+        $bg.classList.add('hidden');
+        $shell.classList.add('hidden');
         $popover.classList.add('hidden');
         $mbg.classList.add('hidden');
+        $anav.querySelectorAll('.abtn').forEach(b => b.classList.remove('active'));
         _activeSec = null;
         break;
 

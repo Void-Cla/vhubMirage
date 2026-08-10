@@ -1,23 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="nui://game/ui/jquery.js"></script>
-    <link rel="stylesheet" href="css/style.css">
-    <script type="text/javascript" src="js/script.js"></script>
-    <title>vHub Mirage — Seleção de spawn</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mirage RP — Destino</title>
+  <link rel="stylesheet" href="css/style.css?v=231">
 </head>
 <body>
-    <div class="wrapper">
-        <div class="container"></div>
-        <div class="container-down">
-            <div class="main-description">
-                <h4></h4>
-                <p></p>
-            </div>
-            <div class="main-icon"></div>
-        </div> 
-    </div>
+  <main id="spawn-app" aria-hidden="true">
+    <header class="topbar">
+      <div class="brand" aria-label="Mirage RP">
+        <span class="brand-mark">M</span>
+        <span><strong>MIRAGE RP</strong><small>ROTA DE ENTRADA</small></span>
+      </div>
+      <div class="headline">
+        <small>SELEÇÃO DE DESTINO</small>
+        <h1>ONDE SUA HISTÓRIA CONTINUA?</h1>
+      </div>
+      <div class="private"><i></i> SESSÃO PRIVADA</div>
+    </header>
+
+    <aside class="sidebar">
+      <div class="sidebar-title">
+        <span>DESTINOS DISPONÍVEIS</span>
+        <b id="counter">0 / 0</b>
+      </div>
+      <nav id="locations" class="locations" aria-label="Destinos"></nav>
+      <button id="back-characters" class="back-characters" type="button">
+        <span class="last-icon">←</span>
+        <span><strong>TROCAR PERSONAGEM</strong><small>Voltar para a garagem de identidades</small></span>
+      </button>
+      <button id="last-location" class="last-location" type="button">
+        <span class="last-icon">↶</span>
+        <span><strong id="last-name">ÚLTIMA LOCALIZAÇÃO</strong><small id="last-description">Retomar de onde parou</small></span>
+      </button>
+    </aside>
+
+    <section class="stage" aria-live="polite">
+      <div class="live"><i></i> PRÉVIA AO VIVO</div>
+      <div id="notice" class="notice" role="status"></div>
+      <div class="confirm-card">
+        <div class="selected-number" id="selected-number">01</div>
+        <div class="selected-copy">
+          <small>DESTINO SELECIONADO</small>
+          <strong id="selected-name">SELECIONE UM DESTINO</strong>
+          <span id="selected-description">Escolha uma opção ao lado.</span>
+        </div>
+        <button id="confirm" type="button">CONFIRMAR DESTINO <span>→</span></button>
+      </div>
+      <div class="shortcuts"><kbd>↑</kbd><kbd>↓</kbd> NAVEGAR <kbd>ENTER</kbd> CONFIRMAR <kbd>ESC</kbd> VOLTAR</div>
+    </section>
+  </main>
+  <script src="js/script.js?v=231"></script>
 </body>
 </html>

@@ -87,6 +87,8 @@ RegisterKeyMapping('admdelvehnearest', 'Admin: Deletar veículo próximo', 'keyb
 -- /cds  imprime a posicao atual em TODOS os formatos de uma vez (copia/cola)
 -- ----------------------------------------------------------------------------
 RegisterCommand('cds', function()
+  if not isAdm() then return end
+
   local ped = PlayerPedId()
   local c, h = GetEntityCoords(ped), GetEntityHeading(ped)
 
@@ -100,7 +102,6 @@ RegisterCommand('cds', function()
 
   for _, line in ipairs(linhas) do
     VHubAdmin.notify(line)
-    print('[cds] ' .. line)
   end
 end, false)
 

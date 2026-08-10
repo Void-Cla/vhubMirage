@@ -81,7 +81,7 @@ if [ -n "$MANIFEST" ] && [ "$BASE" != "fxmanifest.lua" ]; then
 fi
 # módulo-fantasma: interface depende do return top-level (sem global/exports/handlers)
 if grep -qE "^return\s+[A-Za-z_]" "$FILE"; then
-  if ! grep -qE "(vHub\.[A-Za-z_]+\s*=|exports\s*\(|RegisterNetEvent|AddEventHandler|RegisterNUICallback|RegisterCommand)" "$FILE"; then
+  if ! grep -qE "(vHub\.[A-Za-z_]+\s*=|VHub[A-Za-z]*\.[A-Za-z_]+\s*=|exports\s*\(|RegisterNetEvent|AddEventHandler|RegisterNUICallback|RegisterCommand|AddStateBagChangeHandler)" "$FILE"; then
     add_issue "L-15: módulo-fantasma — interface só via 'return' top-level; loader de manifest descarta o valor"
   fi
 fi
@@ -110,8 +110,10 @@ fi
 
 # ── L-12: SQL inline no CORE fora de sql/state ───────────────────────────────
 if [ "$IS_CORE" -eq 1 ]; then
+  # fxmanifest declara `dependency 'oxmysql'` legitimamente — nunca contém SQL inline;
+  # sem a isenção o hook dá falso-positivo L-12 ao editar o manifest do CORE.
   case "$FILE" in
-    *sql.lua|*state.lua|*bootstrap.lua) : ;;
+    *sql.lua|*state.lua|*bootstrap.lua|*fxmanifest.lua) : ;;
     *) if grep -qnE "oxmysql|MySQL\.|S:prepare|S:query" "$FILE"; then
          add_issue "L-12: SQL inline no CORE fora de sql.lua/state.lua"
        fi ;;

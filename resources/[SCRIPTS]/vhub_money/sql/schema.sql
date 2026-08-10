@@ -5,6 +5,8 @@
 --
 -- Tabelas:
 --   vh_money_accounts      : saldo de carteira + banco por char_id
+--   vh_money_operations    : débitos idempotentes e estornos exatos
+--   vh_money_payment_requests: unicidade forte por request de saga
 --   vh_money_transactions  : log auditavel de toda movimentacao
 
 CREATE TABLE IF NOT EXISTS `vh_money_accounts` (
@@ -36,6 +38,22 @@ CREATE TABLE IF NOT EXISTS `vh_money_operations` (
   CONSTRAINT `fk_money_operation_char` FOREIGN KEY (`char_id`)
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `vh_money_payment_requests` (
+  `char_id`       INT UNSIGNED NOT NULL,
+  `request_key`   VARCHAR(55)  NOT NULL,
+  `operation_id`  VARCHAR(64)  NOT NULL,
+  `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`char_id`, `request_key`),
+  UNIQUE KEY `uq_money_request_operation` (`operation_id`),
+  CONSTRAINT `fk_money_request_char` FOREIGN KEY (`char_id`)
+    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `vh_money_payment_requests` (`char_id`, `request_key`, `operation_id`)
+SELECT `char_id`, LEFT(`operation_id`, CHAR_LENGTH(`operation_id`) - 9), `operation_id`
+FROM `vh_money_operations`
+WHERE `operation_id` LIKE 'vc:%' AND CHAR_LENGTH(SUBSTRING_INDEX(`operation_id`, ':', -1)) = 8;
 
 CREATE TABLE IF NOT EXISTS `vh_money_transactions` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,

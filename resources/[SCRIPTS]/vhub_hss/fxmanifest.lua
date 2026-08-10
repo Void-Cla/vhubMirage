@@ -4,7 +4,7 @@ lua54 'yes'
 
 name        'vhub_hss'
 description 'Sistema autoritativo de estado humano, ped, spawn e fisiologia por char_id'
-version     '2.2.2'
+version     '2.3.0'
 author      'vHub Mirage'
 
 dependency 'vhub'
@@ -36,6 +36,8 @@ server_scripts {
     'server/items.lua',
     'server/damage.lua',
     'server/exports.lua',
+    'server/movement.lua',
+    'server/afk.lua',
     'server/init.lua',
 }
 
@@ -45,10 +47,13 @@ server_scripts {
 
 client_scripts {
     'client/bootstrap.lua',
+    'client/hud_native.lua',
     'client/damage.lua',
     'client/native_bridge.lua',
     'client/customization.lua',
     'client/effects.lua',
+    'client/movement.lua',
+    'client/afk.lua',
 }
 
 -- ============================================================

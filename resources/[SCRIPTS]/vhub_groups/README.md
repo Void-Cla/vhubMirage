@@ -129,3 +129,38 @@ AddEventHandler('playerDropped',       function()    _cache[source] = nil end)
 | L-17 | Handler `vHub:characterLoad` tem replay-guard interno |
 | §3.4 | Use o padrão `Core.hasPerm` (owner > ACE > grupo) em todo resource |
 | §4.3 | Cache de export com invalidação por `vhub_groups:changed` + `playerDropped` |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `hasGroup` | `(src, group) → bool` | vhub_garage, vhub_inventory, vhub_spawselector |
+| 2 | `hasPermission` | `(src, perm) → bool` | vhub_garage, vhub_inventory, vhub_coinshop, vhub_admin, vhub_lspdtool |
+| 3 | `getGroups` | `(src) → lista` | vhub_admin |
+| 4 | `getGroupLevel` | `(src, group) → level` | vhub_lspdtool |
+| 5 | `getUsersByGroup` | `(group) → lista` | vhub_admin, vhub_lspdtool |
+| 6 | `getUsersByPermission` | `(perm) → lista` | vhub_admin |
+| 7 | `isOwner` | `(src, group) → bool` | vhub_groups interno |
+| 8 | `getCatalog` | `() → catalogo` | vhub_admin |
+| 9 | `addGroup` | `(src, group, level?) → ok` | vhub_admin |
+| 10 | `removeGroup` | `(src, group) → ok` | vhub_admin |
+| 11 | `setGroupLevel` | `(src, group, level) → ok` | vhub_admin |
+| 12 | `hasPermissionByChar` | `(char_id, perm) → bool` | vhub_voicePMA (freq policial) |
+| 13 | `getGroupsByChar` | `(char_id) → lista` | vhub_lspdtool |
+| 14 | `hasGroupLocal` | `(group) → bool` *(client)* | vhub_spawselector NUI |
+| 15 | `getGroupsLocal` | `() → lista` *(client)* | vhub_spawselector NUI |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `getCData`, `setCData` |
+| `oxmysql` | Persistência de grupos (`vh_groups`) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_groups:changed` | server→client (player) | `{src, groups}` |

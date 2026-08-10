@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mirage RP — Acesso</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=4" />
 </head>
 <body>
   <div id="app" class="hidden">
@@ -138,45 +138,58 @@
 
     <section id="view-charselect" class="view hidden">
       <div class="cs-layout">
-
-        <aside class="cs-side">
+        <header class="cs-topbar">
           <div class="cs-brand">
             <div class="brand-seal" aria-hidden="true">M</div>
             <div>
               <span class="eyebrow">Mirage RP</span>
-              <p class="cs-brand-line">Cidade de corrida</p>
+              <p class="cs-brand-line">Identidade de piloto</p>
             </div>
           </div>
-          <div class="cs-ped-frame" aria-hidden="true">
-            <div class="cs-ped-ring"></div>
-            <div class="cs-ped-shadow"></div>
+          <div class="cs-top-title">
+            <span class="section-kicker">Seus personagens</span>
+            <h2 class="cs-title">Escolha quem entra hoje</h2>
           </div>
-          <div class="cs-side-foot">
-            <span class="cs-slot-label" id="cs-slot-info">— / — slots</span>
+          <div class="cs-session-status">
+            <span class="status-pill"><i></i> Sessão privada</span>
+            <span class="cs-map-label">Depósito Mirage</span>
           </div>
-        </aside>
+        </header>
 
-        <main class="cs-main">
-          <header class="cs-header">
-            <div>
-              <span class="section-kicker">Seus pilotos</span>
-              <h2 class="cs-title">Quem entra hoje?</h2>
-            </div>
-            <span class="status-pill"><i></i> Online</span>
-          </header>
+        <aside class="cs-side">
+          <div class="cs-side-head">
+            <span class="cs-side-kicker">Garagem de identidades</span>
+            <strong id="cs-slot-info">— / — slots</strong>
+          </div>
 
-          <div id="char-list" class="char-grid"></div>
+          <div id="char-list" class="char-grid" role="listbox" aria-label="Personagens"></div>
 
           <div id="btn-create-wrap" class="cs-create-wrap">
             <button id="btn-create" class="cs-btn-create" type="button">
               <span class="cs-create-icon" aria-hidden="true">+</span>
-              <span>Novo personagem</span>
+              <span><b>Novo personagem</b><small>Ocupar slot disponível</small></span>
             </button>
           </div>
+        </aside>
 
-          <div id="msg2" class="msg cs-msg" role="status" aria-live="polite"></div>
+        <main class="cs-main">
+          <div class="cs-viewport-label" aria-hidden="true">
+            <i></i><span>Visualização ao vivo</span>
+          </div>
+
+          <section class="cs-confirm" aria-label="Confirmar personagem">
+            <div class="cs-confirm-index" id="cs-selected-index">01</div>
+            <div class="cs-confirm-copy">
+              <span>Personagem selecionado</span>
+              <strong id="cs-selected-name">Selecione um personagem</strong>
+              <small id="cs-selected-meta">A aparência carregada é a última salva.</small>
+            </div>
+            <button id="btn-confirm" class="cs-btn-confirm" type="button" disabled>
+              <span>Confirmar entrada</span><b aria-hidden="true">→</b>
+            </button>
+            <div id="msg2" class="msg cs-msg" role="status" aria-live="polite"></div>
+          </section>
         </main>
-
       </div>
     </section>
 
@@ -205,6 +218,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=2"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>

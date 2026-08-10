@@ -179,6 +179,147 @@ Inventory.Items = {
     legalidade = 'legal', negociavel = true, perdivel = false,
     permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
   },
+
+  -- PEÇAS DE DESEMPENHO (FASE 3 ADR #81) ----------------------
+  -- Instaláveis na oficina via OFICINA_INSTALL_PART. meta={index, stage} define o slot GTA.
+  -- handler registrado por vhub_custom; consume_policy='never' pois a oficina consome o item
+  -- diretamente via takeItem (estorno em falha) — o inventory NÃO auto-consume.
+  -- ADR #85 F2.5: peças BRANDED (nome+efeito por marca) alinhadas 1:1 ao parts_catalog.lua do
+  -- vhub_custom (campo `item`). Famílias com slot GTA carregam meta={index,stage}; ecu/aero/peso/
+  -- freio-de-mão não têm slot GTA (instalam por lógica pura). Substituíram os antigos part_*_stageN.
+
+  -- Motor (bloco) -------------------------------------------------
+  ['part_engine_aspirado'] = {
+    nome = 'Motor Aspirado 4-Cil', peso = 9.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 11, stage = 2 },
+  },
+  ['part_engine_turbo'] = {
+    nome = 'Motor V6 Biturbo', peso = 12.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 11, stage = 3 },
+  },
+  -- Indução (turbinas) -------------------------------------------
+  ['part_turbo_kit'] = {
+    nome = 'Turbo Garrett Single', peso = 6.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 18, stage = 1 },
+  },
+  ['part_turbo_big'] = {
+    nome = 'Big Single Precision', peso = 7.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 18, stage = 1 },
+  },
+  -- ECU / Mapa (sem slot GTA) ------------------------------------
+  ['part_ecu_street'] = {
+    nome = 'Remap ECU Stage 1', peso = 0.30, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['part_ecu_race'] = {
+    nome = 'Mapa de Pista (ECU)', peso = 0.30, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['part_ecu_launch'] = {
+    nome = 'Mapa Arrancada (ECU)', peso = 0.30, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  -- Transmissão --------------------------------------------------
+  ['part_trans_sport'] = {
+    nome = 'Câmbio Esportivo', peso = 8.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 13, stage = 2 },
+  },
+  ['part_trans_race'] = {
+    nome = 'Sequencial de Corrida', peso = 9.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 13, stage = 3 },
+  },
+  ['part_trans_long'] = {
+    nome = 'Câmbio Relação Longa', peso = 8.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 13, stage = 1 },
+  },
+  -- Freios -------------------------------------------------------
+  ['part_brakes_sport'] = {
+    nome = 'Freios Esportivos', peso = 6.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 12, stage = 2 },
+  },
+  ['part_brakes_race'] = {
+    nome = 'Freios de Competição', peso = 7.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 12, stage = 3 },
+  },
+  ['part_brakes_drift'] = {
+    nome = 'Kit Freio Traseiro Drift', peso = 5.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 12, stage = 1 },
+  },
+  -- Suspensão ----------------------------------------------------
+  ['part_susp_street'] = {
+    nome = 'Coilover Regulável', peso = 7.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 15, stage = 2 },
+  },
+  ['part_susp_race'] = {
+    nome = 'Suspensão de Pista', peso = 7.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 15, stage = 3 },
+  },
+  ['part_susp_drift'] = {
+    nome = 'Suspensão de Drift', peso = 7.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+    meta = { index = 15, stage = 1 },
+  },
+  -- Aerodinâmica (sem slot GTA) ----------------------------------
+  ['part_aero_lip'] = {
+    nome = 'Lip Frontal + Difusor', peso = 4.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['part_aero_wing'] = {
+    nome = 'Asa GT (Downforce)', peso = 6.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['part_aero_active'] = {
+    nome = 'Aerofólio Ativo (DRS)', peso = 6.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  -- Peso / Chassi (sem slot GTA) ---------------------------------
+  ['part_carbon_kit'] = {
+    nome = 'Kit Fibra de Carbono', peso = 3.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['part_ballast'] = {
+    nome = 'Lastro de Estabilidade', peso = 20.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  -- Freio de Mão (sem slot GTA; hydraulic_handbrake definido acima) -----
+  ['part_handbrake_pro'] = {
+    nome = 'Freio de Mão Profissional', peso = 3.00, stack = false, serial = true,
+    legalidade = 'legal', negociavel = true, perdivel = false,
+    permitido_bau = true, categoria = 'ferramenta', consume_policy = 'never',
+  },
   ['fuel_can'] = {
     nome = 'Galão de Combustível', peso = 5.00, stack = false, serial = true,
     legalidade = 'legal', negociavel = true, perdivel = true,

@@ -1,7 +1,4 @@
--- server/oficina.lua — tuning de performance (stages 11/12/13/15/16/18, source='tune')
--- Cap de stage: por classe GTA (estático). Score/tier real vêm de vhub_vehcontrol (decisão #27) —
--- esta oficina NUNCA calcula score por conta própria, só compra stages e consulta a ficha.
--- INVARIANTE: todo caminho de retorno com src em menu dispara OFICINA_CONFIRM para fechar a NUI.
+-- server/oficina.lua — tuning, calibração e kit de nitro sob lease física
 ---@diagnostic disable: undefined-global
 
 local Core = VHubCustom.Core
@@ -9,275 +6,574 @@ local CFG  = VHubCustom.cfg
 local U    = VHubCustom.U
 local E    = VHubCustom.E
 
--- índices de mods de performance e seus nomes PT-BR (para mensagens)
 local PERF_NAMES = {
-  [11] = 'Motor',      [12] = 'Freios',
-  [13] = 'Câmbio',    [15] = 'Suspensão',
-  [16] = 'Blindagem', [18] = 'Turbo',
+  [11] = 'Motor', [12] = 'Freios', [13] = 'Câmbio',
+  [15] = 'Suspensão', [16] = 'Blindagem', [18] = 'Turbo',
 }
-
--- custo por mod de performance (mapeia índice → chave de CFG.prices)
 local PERF_PRICE_KEY = {
-  [11] = 'engine_stage', [12] = 'brakes_stage',
-  [13] = 'transmission_stage', [15] = 'suspension_stage',
-  [16] = 'armor_stage',  [18] = 'turbo',
+  [11] = 'engine_stage', [12] = 'brakes_stage', [13] = 'transmission_stage',
+  [15] = 'suspension_stage', [16] = 'armor_stage', [18] = 'turbo',
 }
 
-
--- ============================================================
--- HELPERS
--- ============================================================
-
--- retorna o cap de stage para a classe do veículo (estático, sem carskill)
-local function getStageCapStatic(veh_class)
-  return CFG.stage_cap_by_class[veh_class] or CFG.stage_cap_default
-end
-
--- calcula custo de um único mod de performance
-local function calcModCost(mod_idx, level)
-  local key = PERF_PRICE_KEY[mod_idx]
-  if not key then return 0 end
-  if mod_idx == 18 then
-    return level >= 1 and CFG.prices.turbo or 0
-  end
-  local tbl = CFG.prices[key]
-  if type(tbl) == 'table' then
-    return tbl[level] or 0
-  end
-  return 0
-end
-
--- ficha derivada real (tier/score/budget/alloc) — fonte única é vhub_vehcontrol (decisão #27)
-local function vehSheet(plate)
+local function vehicleSheet(plate)
   local ok, sheet = pcall(function() return exports.vhub_vehcontrol:getVehicleSheet(plate) end)
   return ok and sheet or nil
 end
 
+local function priceAt(index, stage)
+  local value = CFG.prices[PERF_PRICE_KEY[index]]
+  if index == 18 then return stage >= 1 and (tonumber(value) or 0) or 0 end
+  return type(value) == 'table' and (tonumber(value[stage]) or 0) or 0
+end
 
--- ============================================================
--- PRÉ-CHECAGEM DE ACESSO (antes de abrir o NUI)
--- Valida sessão + canOperate sem cobrar nem salvar nada.
--- Responde OFICINA_AUTH_OK(plate, ok, msg) ao cliente.
--- ============================================================
+local function currentStage(customization, index)
+  if index == 18 then return customization.turbo == true and 1 or 0 end
+  local mods = type(customization.mods) == 'table' and customization.mods or {}
+  return (tonumber(mods[index]) or tonumber(mods[tostring(index)]) or -1) + 1
+end
 
-RegisterNetEvent(E.OFICINA_AUTH)
-AddEventHandler(E.OFICINA_AUTH, function(plate)
-  local src = source
-  local cid = Core.getCharId(src)
-  if not cid then
-    TriggerClientEvent(E.OFICINA_AUTH_OK, src, plate, false, 'Personagem não carregado.')
-    return
-  end
-  local p = U.normalizePlate(plate)
-  if not p then
-    TriggerClientEvent(E.OFICINA_AUTH_OK, src, plate, false, 'Placa inválida.')
-    return
-  end
-  local ok = Core.canOperate(src, p)
-  if not ok then
-    TriggerClientEvent(E.OFICINA_AUTH_OK, src, plate, false,
-      'Veículo não registrado no sistema ou sem chave no inventário.')
-    return
-  end
-  -- ficha real (tier/score/budget/ranges) viaja JUNTO com a autorização: evita 2º
-  -- round-trip e garante que a NUI nunca exiba número que o servidor não calculou (L-04)
-  TriggerClientEvent(E.OFICINA_AUTH_OK, src, p, true, nil, vehSheet(p))
-end)
-
-
--- ============================================================
--- PRÉVIA DE CALIBRAÇÃO (não persiste — só leitura via vhub_vehcontrol)
--- ============================================================
-
--- cliente arrasta slider → pede ficha hipotética com o alloc em rascunho;
--- mesma autorização de OFICINA_AUTH, zero escrita (decisão #27, export getVehicleSheetPreview)
 RegisterNetEvent(E.OFICINA_PREVIEW)
-AddEventHandler(E.OFICINA_PREVIEW, function(plate, draftAlloc)
+AddEventHandler(E.OFICINA_PREVIEW, function(leaseId, draftAlloc)
   local src = source
-  local p = U.normalizePlate(plate)
-  if not p or type(draftAlloc) ~= 'table' or not Core.canOperate(src, p) then return end
-
+  if not Core.rateOK(src, 'oficina_preview') or type(draftAlloc) ~= 'table' then return end
+  local context = Core.validateLease(src, 'oficina', leaseId)
+  if not context then return end
   local ok, sheet = pcall(function()
-    return exports.vhub_vehcontrol:getVehicleSheetPreview(p, draftAlloc)
+    return exports.vhub_vehcontrol:getVehicleSheetPreview(context.plate, draftAlloc)
   end)
   TriggerClientEvent(E.OFICINA_PREVIEW_OK, src, ok and sheet or nil)
 end)
 
+RegisterNetEvent(E.OFICINA_RECALIBRATE)
+AddEventHandler(E.OFICINA_RECALIBRATE, function(leaseId, requestId, alloc)
+  local src = source
+  local function reply(ok, message, sheet)
+    TriggerClientEvent(E.OFICINA_RECALIBRATE_OK, src, ok == true, message or '', sheet)
+  end
+  if not Core.rateOK(src, 'oficina_recal') then return reply(false, 'Aguarde um instante.') end
+  if type(alloc) ~= 'table' then return reply(false, 'Distribuição inválida.') end
 
--- ============================================================
--- KIT NITRO (decisão #29) — a oficina COBRA; o vhub_nitro ESCREVE o estado na placa
--- (Doutrina da Placa: customization.nitro só é escrito por vhub_nitro via conce)
--- ============================================================
+  local context, lock, why = Core.beginMutation(src, 'oficina', leaseId)
+  if not context then return reply(false, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.') end
+  local function finish(ok, message, sheet)
+    Core.releaseLock(src, context.plate, lock)
+    reply(ok, message, sheet)
+  end
 
-local NITRO_KIT_PRICE = 5000   -- preço do kit (a oficina é a vendedora; o estado mora no vhub_nitro)
+  local reserved, reservation = pcall(function()
+    return exports.vhub_vehcontrol:reserveWorkshopRecalibration(src, context.plate, alloc)
+  end)
+  if not reserved or type(reservation) ~= 'table' or reservation.ok ~= true
+      or type(reservation.token) ~= 'string' or type(reservation.alloc) ~= 'table' then
+    return finish(false, (type(reservation) == 'table' and reservation.msg)
+      or 'Falha ao reservar a calibração.')
+  end
+  local reservationToken, before, cleanAlloc = reservation.token, reservation.before, reservation.alloc
+  local function cancelReservation()
+    pcall(function() return exports.vhub_vehcontrol:cancelWorkshopRecalibration(src, reservationToken) end)
+  end
+  local alreadyApplied = reservation.replayed == true
+  local cost = alreadyApplied and 0 or CFG.prices.recalibration
+  local after = { customization = { handling = cleanAlloc } }
+  local paid, operationId, paymentErr, replayed, charged, operation =
+    Core.commitPayment(context, 'handling', requestId, cost, cleanAlloc,
+      { customization = { handling = before } }, after)
+  if not paid then
+    cancelReservation()
+    return finish(false, paymentErr == 'insufficient' and ('Saldo insuficiente. Custo: R$ %d.'):format(cost)
+      or 'Falha ao processar pagamento.')
+  end
+
+  if replayed then
+    cancelReservation()
+    return finish(true, 'Operação já concluída.', vehicleSheet(context.plate))
+  end
+  cost = tonumber(operation and operation.amount) or cost
+  if alreadyApplied then
+    cancelReservation()
+    Core.completeOperation(operationId)
+    Core.auditVehicle(context, 'handling', operationId, before, cleanAlloc, 'recovered_applied')
+    return finish(true, 'Calibração já aplicada.', vehicleSheet(context.plate))
+  end
+
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    cancelReservation()
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'handling', operationId, before, cleanAlloc, 'lease_lost_' .. compensation)
+    return finish(false, compensated and 'Sessao encerrada. Valor estornado.'
+      or 'Falha critica. Operacao em reconciliacao.')
+  end
+
+  local called, result = pcall(function()
+    return exports.vhub_vehcontrol:commitWorkshopRecalibration(src, reservationToken)
+  end)
+  if not called or type(result) ~= 'table' or result.ok ~= true then
+    cancelReservation()
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'handling', operationId, before, cleanAlloc, 'save_failed_' .. compensation)
+    return finish(false, compensated and ((type(result) == 'table' and result.msg)
+      or 'Falha ao salvar. Valor estornado.') or 'Falha critica. Operacao em reconciliacao.')
+  end
+
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'handling', operationId, before, cleanAlloc,
+    replayed and 'replayed' or 'committed')
+  Core.log(context.plate, 'oficina_handling', context.char_id, { cost = cost, operation_id = operationId })
+  finish(true, 'Veículo recalibrado!', result.sheet)
+end)
 
 RegisterNetEvent(E.OFICINA_NITRO_KIT)
-AddEventHandler(E.OFICINA_NITRO_KIT, function(plate)
+AddEventHandler(E.OFICINA_NITRO_KIT, function(leaseId, requestId)
   local src = source
-  local function reply(ok, msg) TriggerClientEvent(E.OFICINA_NITRO_KIT_OK, src, ok == true, msg or '') end
-
+  local function reply(ok, message)
+    TriggerClientEvent(E.OFICINA_NITRO_KIT_OK, src, ok == true, message or '')
+  end
   if not Core.rateOK(src, 'oficina_nitro') then return reply(false, 'Aguarde um instante.') end
-  local cid = Core.getCharId(src); if not cid then return reply(false, 'Personagem não carregado.') end
-  local p = U.normalizePlate(plate); if not p then return reply(false, 'Placa inválida.') end
-  if not Core.canOperate(src, p) then return reply(false, 'Sem autorização para este veículo.') end
 
-  -- já tem kit? (lê a fonte única vhub_nitro) → não cobra
-  local cur
-  pcall(function() cur = exports.vhub_nitro:getNitro(p) end)
-  if type(cur) == 'table' and cur.kit then return reply(false, 'Este veículo já tem kit de nitro.') end
-
-  if not Core.pay(src, NITRO_KIT_PRICE) then
-    return reply(false, ('Saldo insuficiente. Custo: R$ %d.'):format(NITRO_KIT_PRICE))
+  local context, lock, why = Core.beginMutation(src, 'oficina', leaseId)
+  if not context then return reply(false, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.') end
+  local function finish(ok, message)
+    Core.releaseLock(src, context.plate, lock)
+    reply(ok, message)
   end
 
-  -- vhub_nitro é o ÚNICO escritor de customization.nitro (escreve via conce); a oficina só CHAMA
-  local ok = false
-  pcall(function() ok = exports.vhub_nitro:installKit(src, p) == true end)
-  if not ok then
-    pcall(function() exports.vhub_money:giveBank(src, NITRO_KIT_PRICE, 'estorno_kit_nitro') end)
-    return reply(false, 'Falha ao instalar o kit. Valor estornado.')
+  local current = VHubCustom.nitroGetInternal(context.plate)
+  local alreadyApplied = type(current) == 'table' and current.kit == true
+  local cost = alreadyApplied and 0 or CFG.prices.nitro_kit
+  local paid, operationId, paymentErr, replayed, charged, operation = Core.commitPayment(context,
+    'nitro_kit', requestId, cost, { kit = true }, current, { kit = true })
+  if not paid then
+    return finish(false, paymentErr == 'insufficient' and ('Saldo insuficiente. Custo: R$ %d.'):format(cost)
+      or 'Falha ao processar pagamento.')
   end
 
-  Core.log(p, 'nitro_kit', cid, { price = NITRO_KIT_PRICE })
-  reply(true, ('Kit de nitro instalado! R$ %d cobrados.'):format(NITRO_KIT_PRICE))
+  if replayed then
+    return finish(true, 'Operação já concluída.')
+  end
+  cost = tonumber(operation and operation.amount) or cost
+  if alreadyApplied then
+    Core.completeOperation(operationId)
+    Core.auditVehicle(context, 'nitro_kit', operationId, current, { kit = true }, 'recovered_applied')
+    return finish(true, 'Kit de nitro já instalado.')
+  end
+
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'nitro_kit', operationId, current, { kit = true },
+      'lease_lost_' .. compensation)
+    return finish(false, compensated and 'Sessao encerrada. Valor estornado.'
+      or 'Falha critica. Operacao em reconciliacao.')
+  end
+
+  local called, installed = pcall(function() return VHubCustom.nitroInstallKitInternal(src, context.plate) end)
+  if not called or installed ~= true then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'nitro_kit', operationId, current, { kit = true },
+      'install_failed_' .. compensation)
+    return finish(false, compensated and 'Falha ao instalar. Valor estornado.'
+      or 'Falha critica. Operacao em reconciliacao.')
+  end
+
+  local after = VHubCustom.nitroGetInternal(context.plate)
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'nitro_kit', operationId, current, after,
+    replayed and 'replayed' or 'committed')
+  Core.log(context.plate, 'oficina_nitro_kit', context.char_id, { cost = cost, operation_id = operationId })
+  finish(true, ('Kit de nitro instalado. R$ %d cobrados.'):format(cost))
 end)
 
-
--- ============================================================
--- HANDLER PRINCIPAL
--- ============================================================
-
+-- ⚠️ DEPRECADO (ADR #82, R15): OFICINA_TUNE (stage escalar dos mods GTA) será substituído pelas
+-- PEÇAS de engenharia (parts_catalog + OFICINA_INSTALL_PART) — mesmo domínio `mods`, um escritor.
+-- Mantido funcional por 1 versão (deprecation path); deleção na FASE 3. Warn one-shot no boot.
+local _tune_deprecation_warned = false
 RegisterNetEvent(E.OFICINA_TUNE)
-AddEventHandler(E.OFICINA_TUNE, function(plate, proposed_mods, veh_class)
+AddEventHandler(E.OFICINA_TUNE, function(leaseId, requestId, proposedMods)
   local src = source
-
-  -- helper: fecha NUI em qualquer saída antecipada (previne UI presa)
-  local function bail(msg, lvl)
-    if msg then Core.notify(src, msg, lvl or 'error') end
-    TriggerClientEvent(E.OFICINA_CONFIRM, src, plate, false, nil)
+  if not _tune_deprecation_warned then
+    _tune_deprecation_warned = true
+    VHubCustom.log('[DEPRECADO ADR #82] OFICINA_TUNE — migre p/ peças de engenharia (OFICINA_INSTALL_PART); deleção na FASE 3.')
+  end
+  if not Core.rateOK(src, 'oficina_tune') then
+    Core.notify(src, 'Aguarde antes de aplicar outro tuning.', 'error')
+    TriggerClientEvent(E.OFICINA_CONFIRM, src, nil, false, nil, nil); return
   end
 
-  Citizen.CreateThread(function()
-    Core.dbg(src, '1/9 OFICINA_TUNE recebido')
+  local context, lock, why = Core.beginMutation(src, 'oficina', leaseId)
+  if not context then
+    Core.notify(src, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.', 'error')
+    TriggerClientEvent(E.OFICINA_CONFIRM, src, nil, false, nil, nil); return
+  end
+  local function finish(ok, mods)
+    Core.releaseLock(src, context.plate, lock)
+    TriggerClientEvent(E.OFICINA_CONFIRM, src, context.plate, ok == true, mods, context.net_id)
+  end
 
-    -- 1. rate
-    if not Core.rateOK(src, 'oficina_tune') then
-      bail('Aguarde antes de aplicar outro tuning.'); return
+  local clean = U.sanitizeMods(proposedMods, CFG.performance_mods, 3)
+  if not clean or not next(clean) then Core.notify(src, 'Nenhum upgrade válido.', 'error'); return finish(false) end
+  local sheet = vehicleSheet(context.plate)
+  local cap = Core.stageCap(context.vehicle, sheet)
+  if cap <= 0 then Core.notify(src, 'Este veículo não aceita tuning de performance.', 'error'); return finish(false) end
+  for index, level in pairs(clean) do
+    if level < 0 or level > cap then
+      Core.notify(src, ('%s excede o stage máximo %d.'):format(PERF_NAMES[index] or 'Peça', cap), 'error')
+      return finish(false)
     end
+  end
 
-    -- 2. sessão
-    local cid = Core.getCharId(src)
-    if not cid then
-      VHubCustom.log('[oficina] bail: sem sessão para src=' .. tostring(src))
-      bail('Personagem não carregado.'); return
-    end
-    Core.dbg(src, '2/9 sessão OK cid=' .. tostring(cid))
+  local state = Core.getVehicleState(context.plate)
+  local customization = state and type(state.customization) == 'table' and state.customization or nil
+  if not customization then Core.notify(src, 'Prontuário indisponível.', 'error'); return finish(false) end
 
-    -- 3. placa
-    local p = U.normalizePlate(plate)
-    if not p then
-      VHubCustom.log('[oficina] bail: placa inválida raw=' .. tostring(plate))
-      bail('Placa inválida.'); return
-    end
-    if type(proposed_mods) ~= 'table' then
-      bail('Dados inválidos.'); return
-    end
-    Core.dbg(src, '3/9 placa=' .. p)
+  local before, cost, changed = {}, 0, false
+  for index, level in pairs(clean) do
+    local current = currentStage(customization, index)
+    before[index] = current
+    if level ~= current then changed = true end
+    if level > current then cost = cost + math.max(0, priceAt(index, level) - priceAt(index, current)) end
+  end
+  local gtaMods, patch = {}, {}
+  for index, stage in pairs(clean) do if index ~= 18 then gtaMods[index] = stage - 1 end end
+  if next(gtaMods) then patch.mods = gtaMods end
+  if clean[18] ~= nil then patch.turbo = clean[18] >= 1 end
+  local paid, operationId, paymentErr, replayed, charged, operation =
+    Core.commitPayment(context, 'tune', requestId, changed and cost or 0, clean,
+      { customization = { mods = before } }, { customization = patch })
+  if not paid then
+    Core.notify(src, paymentErr == 'insufficient' and ('Saldo insuficiente. Custo: R$ %d.'):format(cost)
+      or 'Falha ao processar pagamento.', 'error')
+    return finish(false)
+  end
 
-    -- 4. autorização (ANTES de qualquer leitura de estado)
-    if not Core.canOperate(src, p) then
-      VHubCustom.log('[oficina] bail: canOperate false | placa=' .. p .. ' cid=' .. tostring(cid))
-      bail('Sem autorização para este veículo.'); return
-    end
-    Core.dbg(src, '4/9 canOperate OK')
+  if replayed then
+    Core.notify(src, 'Operação já concluída.', 'info')
+    return finish(true)
+  end
+  cost = tonumber(operation and operation.amount) or cost
+  if not changed then
+    Core.completeOperation(operationId)
+    Core.auditVehicle(context, 'tune', operationId, before, clean, 'recovered_applied')
+    Core.notify(src, 'Tuning já aplicado.', 'info')
+    return finish(true)
+  end
 
-    -- 5. classe GTA: usa o valor enviado pelo cliente mas clampa ao range válido
-    local cls = U.clamp(tonumber(veh_class), 0, 20) or 0
-    local cap  = getStageCapStatic(cls)
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'tune', operationId, before, clean, 'lease_lost_' .. compensation)
+    Core.notify(src, compensated and 'Sessao encerrada. Valor estornado.'
+      or 'Falha critica. Operacao em reconciliacao.', 'error')
+    return finish(false)
+  end
+  if not Core.saveVehicleState(context.plate, { customization = patch }, 'tune') then
+    local compensated, compensation = Core.compensatePayment(operationId, replayed, charged)
+    Core.auditVehicle(context, 'tune', operationId, before, clean, 'save_failed_' .. compensation)
+    Core.notify(src, compensated and 'Falha ao salvar. Valor estornado.'
+      or 'Falha critica. Operacao em reconciliacao.', 'error')
+    return finish(false)
+  end
 
-    if cap == 0 then
-      bail('Este tipo de veículo não aceita tuning de performance.'); return
-    end
-    Core.dbg(src, '5/9 classe=' .. cls .. ' cap=' .. cap)
-
-    -- 6. sanitiza mods: aceita APENAS índices performance dentro do cap
-    local clean = U.sanitizeMods(proposed_mods, CFG.performance_mods)
-    if not clean or not next(clean) then
-      bail('Nenhum mod de performance válido informado.'); return
-    end
-    do
-      local parts = {}
-      for idx, lvl in pairs(clean) do parts[#parts+1] = (PERF_NAMES[idx] or idx) .. '=' .. lvl end
-      Core.dbg(src, '6/9 mods: ' .. table.concat(parts, ', '))
-    end
-
-    -- valida nível de cada mod contra o cap
-    local invalid = {}
-    for idx, lvl in pairs(clean) do
-      if lvl > cap then
-        invalid[#invalid+1] = PERF_NAMES[idx]
-        clean[idx] = cap   -- clampa silenciosamente ao cap
-      end
-    end
-    if #invalid > 0 then
-      Core.notify(src,
-        ('Stage máximo para este veículo: %d. Ajustado: %s.'):format(cap, table.concat(invalid, ', ')),
-        'warning')
-    end
-
-    -- 7. lê estado atual do prontuário para calcular delta de custo
-    -- (cobramos apenas pelo UPGRADE — downgrade ou sem mudança é gratuito)
-    -- CONVENÇÃO: o prontuário guarda mods em GTA-level (stock=-1) e turbo no campo
-    -- booleano `turbo` (dono = garagem). Aqui convertemos para "stage" (stock=0) só
-    -- para comparar com o `clean` do menu, que é stage.
-    local st       = Core.getVehicleState(p)
-    local cur_cust = (st and type(st.customization) == 'table') and st.customization or {}
-    local cur_mods = (type(cur_cust.mods) == 'table') and cur_cust.mods or {}
-    local cur_turbo = cur_cust.turbo == true
-
-    -- nível atual em STAGE para o índice (turbo deriva do booleano; resto = GTA-level+1)
-    local function curStage(idx)
-      if idx == 18 then return cur_turbo and 1 or 0 end
-      local gta = tonumber(cur_mods[idx]) or tonumber(cur_mods[tostring(idx)]) or -1
-      return gta + 1
-    end
-
-    Core.dbg(src, '7/8 estado lido (st=' .. tostring(st ~= nil) .. ')')
-
-    local custo = 0
-    for idx, lvl in pairs(clean) do
-      if lvl > curStage(idx) then
-        custo = custo + calcModCost(idx, lvl)
-      end
-    end
-    Core.dbg(src, '7/8 custo calculado: R$ ' .. custo)
-
-    if custo > 0 and not Core.pay(src, custo) then
-      Core.dbg(src, '7/8 PAGAMENTO FALHOU (tryFullPayment=false) — saldo?')
-      bail(('Saldo insuficiente. Custo: R$ %d.'):format(custo)); return
-    end
-    Core.dbg(src, '7/8 pagamento OK (R$ ' .. custo .. ')')
-
-    -- 8. converte STAGE → convenção da garagem ANTES de persistir:
-    --    mods em GTA-level (stage-1; stock vira -1) e turbo no campo booleano `turbo`.
-    --    Índice 18 NUNCA vai em `mods` (é toggle, dirigido pelo campo `turbo`).
-    local gta_mods = {}
-    for idx, stage in pairs(clean) do
-      if idx ~= 18 then gta_mods[idx] = stage - 1 end
-    end
-    local patch_cust = { mods = gta_mods }
-    if clean[18] ~= nil then patch_cust.turbo = clean[18] >= 1 end
-
-    -- persiste (source='tune' — guard no vstate restringe a customization; merge por chave)
-    local ok = Core.saveVehicleState(p, { customization = patch_cust }, 'tune')
-    if not ok then
-      Core.dbg(src, '8/8 saveVehicleState=FALSE — placa fora de vhub_vehicles? (carro de rua/test-drive não persiste)')
-      bail('Erro ao salvar tuning. Tente novamente.'); return
-    end
-    Core.dbg(src, '8/8 saveVehicleState OK — PERSISTIU!')
-
-    Core.log(p, 'oficina_tune', cid, { custo = custo, cls = cls, cap = cap })
-    TriggerClientEvent(E.OFICINA_CONFIRM, src, p, true, clean)
-    Core.notify(src, ('Tuning aplicado! R$ %d cobrados.'):format(custo), 'success')
-  end)
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'tune', operationId, before, clean,
+    replayed and 'replayed' or 'committed')
+  Core.log(context.plate, 'oficina_tune', context.char_id,
+    { cost = cost, cap = cap, operation_id = operationId })
+  Core.notify(src, ('Tuning aplicado. R$ %d cobrados.'):format(cost), 'success')
+  finish(true, clean)
 end)
+
+
+-- ============================================================
+-- PEÇA DE INVENTÁRIO → DESEMPENHO (FASE 3 ADR #81)
+-- ============================================================
+-- Mapa fechado: item_id → {index GTA, stage}. Escritor: vhub_custom (L-13).
+-- A oficina consome o item via takeItem e aplica customization.mods (Doutrina da Placa).
+-- skillApplyHandling PERMANECE false — peça altera stage GTA, não handling runtime (ADR #81).
+
+-- ⚠️ DEPRECADO (ADR #82 F2.1, R15): PART_MAP legado (itemId de inventário → stage GTA). O install
+-- agora opera por part_id do parts_catalog (fonte única = customization.parts). Mantido só como
+-- TRADUTOR de compat por 1 versão: quem tiver item antigo no bolso ainda instala. Deleção na F3.
+-- NB: o handler antigo passava action='part_'..itemId a commitPayment, que NÃO existe em ACTION_CODE
+-- → sempre 'invalid_request'. Ou seja, o install legado nunca chegou a persistir. A versão nova usa
+-- action='tune' (válido) + fingerprint por part_id — primeiro caminho de install que de fato grava.
+local PART_MAP_LEGACY = {
+  ['part_engine_stage2']       = 'engine_aspirado',
+  ['part_engine_stage3']       = 'engine_turbo',
+  ['part_brakes_stage2']       = 'brakes_sport',
+  ['part_brakes_stage3']       = 'brakes_race',
+  ['part_transmission_stage2'] = 'transmission_sport',
+  ['part_transmission_stage3'] = 'transmission_race',
+  ['part_suspension_stage2']   = 'suspension_coilover',
+  ['part_suspension_stage3']   = 'suspension_race',
+}
+local _partmap_deprecation_warned = false
+
+-- resolve o id recebido do cliente → id canônico do catálogo (aplica shim legado 1x c/ warn)
+local function resolveCatalogId(id)
+  local cat = VHubCustom.PartsCatalog
+  if cat and cat.get(id) then return id end                 -- já é id do catálogo
+  local mapped = PART_MAP_LEGACY[id]
+  if mapped then
+    if not _partmap_deprecation_warned then
+      _partmap_deprecation_warned = true
+      VHubCustom.log('[DEPRECADO ADR #82 F2.1] itemId legado no install de peça — migre p/ part_id do catálogo; deleção na F3.')
+    end
+    return mapped
+  end
+  return nil
+end
+
+-- snapshot AUTORITATIVO pós-install/remove p/ a NUI re-renderizar sem 2ª verdade local (A-04):
+-- ids instalados + STATUS honesto por peça (mesmo juízo do auth) + ficha derivada fresca (sheet.eng).
+local function freshState(src, context)
+  local plate = context.plate
+  local st; pcall(function() st = Core.getVehicleState(plate) end)
+  local cust = (st and type(st.customization) == 'table') and st.customization or {}
+  local curParts = type(cust.parts) == 'table' and cust.parts or {}
+  local installed = {}
+  for id, v in pairs(curParts) do if v ~= nil and v ~= false then installed[id] = true end end
+  local sheet; pcall(function() sheet = exports.vhub_vehcontrol:getVehicleSheet(plate) end)
+  sheet = type(sheet) == 'table' and sheet or nil
+  local cap = Core.stageCap(context.vehicle, sheet)
+  return {
+    installed_parts = installed,
+    parts_status = Core.computePartsStatus(src, cap, curParts),
+    sheet = sheet,
+  }
+end
+
+-- mensagem honesta por estado de compatibilidade (ADR #85 D1) — o server é o juiz; a NUI só ecoa.
+local function installRejectMsg(state, part)
+  local name = part.name or 'Peça'
+  if state == 'already_installed' then return ('%s já está instalada.'):format(name) end
+  if state == 'missing_item'      then return 'Você não possui esta peça.' end
+  if state == 'conflict'          then return ('%s é incompatível com uma peça já instalada.'):format(name) end
+  if state == 'requires_missing'  then return ('%s exige outra peça instalada antes.'):format(name) end
+  return 'Não foi possível instalar esta peça.'
+end
+
+RegisterNetEvent(E.OFICINA_INSTALL_PART)
+AddEventHandler(E.OFICINA_INSTALL_PART, function(leaseId, requestId, partId)
+  local src = source
+  local function reply(ok, message, fresh)
+    TriggerClientEvent(E.OFICINA_INSTALL_PART_OK, src, ok == true, message or '', fresh)
+  end
+  if not Core.rateOK(src, 'oficina_install_part') then return reply(false, 'Aguarde um instante.') end
+  if type(partId) ~= 'string' then return reply(false, 'Peça inválida.') end
+
+  -- whitelist fechada: só id do catálogo (ou item legado traduzido) entra
+  local canonId = resolveCatalogId(partId)
+  local part = canonId and VHubCustom.PartsCatalog.get(canonId) or nil
+  if not part then return reply(false, 'Peça desconhecida.') end
+
+  local context, lock, why = Core.beginMutation(src, 'oficina', leaseId)
+  if not context then return reply(false, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.') end
+  local function finish(ok, message, fresh)
+    Core.releaseLock(src, context.plate, lock)
+    reply(ok, message, fresh)
+  end
+
+  local state = Core.getVehicleState(context.plate)
+  local customization = state and type(state.customization) == 'table' and state.customization or nil
+  if not customization then return finish(false, 'Prontuário indisponível.') end
+  local curParts = type(customization.parts) == 'table' and customization.parts or {}
+  local gtaMod   = type(part.gta_mod) == 'table' and part.gta_mod or nil
+  local needItem = type(part.item) == 'string' and part.item or nil
+
+  -- ADR #85 D1: o GATE agora é COMPATIBILIDADE (família/conflito/dependência/item/já-instalada),
+  -- NÃO mais um teto de stage. `Core.stageCap` continua vivo, mas rebaixado a `hint` não-bloqueante
+  -- (o veículo aceita a peça; o DNA/classe só avisa quando ela é agressiva p/ o chassi). O status
+  -- é o MESMO juízo que o payload de auth (init.lua) devolve à NUI — fonte única (Core.resolvePartStatus).
+  local cap     = Core.stageCap(context.vehicle, vehicleSheet(context.plate))
+  local hasItem = function(it)
+    local ok, has = pcall(function() return exports.vhub_inventory:hasItem(src, it, 1) == true end)
+    return ok and has == true
+  end
+  local status = Core.resolvePartStatus(part, curParts, cap, hasItem)
+  if status.state ~= 'ok' then return finish(false, installRejectMsg(status.state, part)) end
+
+  -- PATCH ATÔMICO (parts = fonte única; mods/turbo/drift_capable derivados NA MESMA transação):
+  --  - parts[canonId]=true                        → a peça instalada
+  --  - parts[substituída]=false p/ cada replaces  → libera o slot da família (merge esparso)
+  --  - mods[idx]=stage-1 OU turbo=bool            → projeção GTA (stage 0 = revert: mods[idx]=-1)
+  --  - drift_capable                              → liga se a peça habilita; DESLIGA se substituiu
+  --                                                 quem habilitava (ex.: trocar hidráulico→profissional)
+  local partsPatch = { [canonId] = true }
+  local newHasDrift, replacedHadDrift = false, false
+  if type(part.capabilities) == 'table' then
+    for _, c in ipairs(part.capabilities) do if c == 'drift' then newHasDrift = true end end
+  end
+  if type(part.replaces) == 'table' then
+    for _, rid in ipairs(part.replaces) do
+      partsPatch[rid] = false
+      local rp = VHubCustom.PartsCatalog.get(rid)
+      if rp and type(rp.capabilities) == 'table' then
+        for _, c in ipairs(rp.capabilities) do if c == 'drift' then replacedHadDrift = true end end
+      end
+    end
+  end
+  local patch = { parts = partsPatch }
+  if gtaMod then
+    local idx   = tonumber(gtaMod.index)
+    local stage = tonumber(gtaMod.stage) or 1
+    if idx == 18 then
+      patch.turbo = stage >= 1                 -- stage 0 (Aspiração Natural) = turbo OFF
+    elseif idx then
+      patch.mods = { [idx] = stage - 1 }       -- GTA level = stage-1 (stage 0 → -1 = stock)
+    end
+  end
+  if newHasDrift then patch.drift_capable = true
+  elseif replacedHadDrift then patch.drift_capable = false end
+
+  local before = { parts = curParts, mods = customization.mods, turbo = customization.turbo }
+
+  -- action='tune' (válido em ACTION_CODE); fingerprint por part_id garante operationId único por peça
+  local paid, operationId, paymentErr, replayed, charged =
+    Core.commitPayment(context, 'tune', requestId, tonumber(part.price) or 0,
+      { part = canonId }, { customization = before }, { customization = patch })
+  if not paid then
+    return finish(false, paymentErr == 'insufficient' and 'Saldo insuficiente.' or 'Falha ao processar.')
+  end
+
+  if replayed then
+    return finish(true, ('%s já instalada.'):format(part.name or 'Peça'))
+  end
+
+  -- tomar item só se a peça exige (estorna em qualquer falha posterior)
+  local took = not needItem
+  if needItem then
+    pcall(function() took = exports.vhub_inventory:takeItem(src, needItem, 1) == true end)
+    if not took then
+      Core.compensatePayment(operationId, false, charged)
+      return finish(false, 'Falha ao consumir a peça do inventário.')
+    end
+  end
+
+  local function refund()
+    if needItem then pcall(function() exports.vhub_inventory:giveItem(src, needItem, 1) end) end
+    Core.compensatePayment(operationId, false, charged)
+  end
+
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    refund()
+    Core.auditVehicle(context, 'tune', operationId, before, patch, 'lease_lost')
+    return finish(false, 'Sessão encerrada. Peça devolvida.')
+  end
+
+  if not Core.saveVehicleState(context.plate, { customization = patch }, 'tune') then
+    refund()
+    Core.auditVehicle(context, 'tune', operationId, before, patch, 'save_failed')
+    return finish(false, 'Falha ao salvar. Peça devolvida.')
+  end
+
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'tune', operationId, before, patch, 'committed')
+  Core.log(context.plate, 'oficina_install_part', context.char_id,
+    { part = canonId, family = part.family, operation_id = operationId })
+
+  -- ADR #82 F2.1: push live da ficha recomposta ao motorista (traz sheet.eng novo → o applier
+  -- da Camada A reaplica a base sem esperar sair/entrar). O vehcontrol filtra por placa: só
+  -- afeta o carro se este src o dirige. Best-effort (pcall): falha de push não desfaz a compra.
+  pcall(function() exports.vhub_vehcontrol:refreshSheet(context.plate, src) end)
+
+  -- devolve estado fresco (peças + status + ficha) p/ a NUI re-renderizar autoritativo (A-04)
+  finish(true, ('%s instalada com sucesso!'):format(part.name or 'Peça'), freshState(src, context))
+end)
+
+
+-- ============================================================
+-- REMOVER PEÇA (ADR #85 F2.5-A — remoção como primeira classe)
+-- ============================================================
+-- Reverte customization.parts[id]=false + desfaz a projeção GTA/capability NA MESMA transação
+-- (L-13, escritor único vhub_custom). Custo 0 e SEM devolução de item na F2.5-A (refund fora do
+-- escopo — ADR #85 D2). Idempotente por fingerprint { remove=id } (operationId distinto do install).
+RegisterNetEvent(E.OFICINA_REMOVE_PART)
+AddEventHandler(E.OFICINA_REMOVE_PART, function(leaseId, requestId, partId)
+  local src = source
+  local function reply(ok, message, fresh)
+    TriggerClientEvent(E.OFICINA_REMOVE_PART_OK, src, ok == true, message or '', fresh)
+  end
+  if not Core.rateOK(src, 'oficina_remove_part') then return reply(false, 'Aguarde um instante.') end
+  if type(partId) ~= 'string' then return reply(false, 'Peça inválida.') end
+
+  local canonId = resolveCatalogId(partId)
+  local part = canonId and VHubCustom.PartsCatalog.get(canonId) or nil
+  if not part then return reply(false, 'Peça desconhecida.') end
+
+  local context, lock, why = Core.beginMutation(src, 'oficina', leaseId)
+  if not context then return reply(false, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.') end
+  local function finish(ok, message, fresh)
+    Core.releaseLock(src, context.plate, lock)
+    reply(ok, message, fresh)
+  end
+
+  local state = Core.getVehicleState(context.plate)
+  local customization = state and type(state.customization) == 'table' and state.customization or nil
+  if not customization then return finish(false, 'Prontuário indisponível.') end
+  local curParts = type(customization.parts) == 'table' and customization.parts or {}
+  if curParts[canonId] ~= true then
+    return finish(false, ('%s não está instalada.'):format(part.name or 'Peça'))
+  end
+
+  -- PATCH REVERSO (mesma transação, L-13):
+  --  - parts[canonId]=false  → merge esparso marca removido (não apaga a chave)
+  --  - mods[idx]=-1 OU turbo=false → volta o mod GTA ao "original" (-1 é stock; 0 seria stage 1)
+  --  - drift_capable=false   → se a peça habilitava a capability 'drift'
+  local partsPatch = { [canonId] = false }
+  local patch = { parts = partsPatch }
+  local gtaMod = type(part.gta_mod) == 'table' and part.gta_mod or nil
+  if gtaMod then
+    local idx = tonumber(gtaMod.index)
+    if idx == 18 then
+      patch.turbo = false
+    elseif idx then
+      patch.mods = { [idx] = -1 }
+    end
+  end
+  if type(part.capabilities) == 'table' then
+    for _, capName in ipairs(part.capabilities) do
+      if capName == 'drift' then patch.drift_capable = false end
+    end
+  end
+
+  local before = { parts = curParts, mods = customization.mods, turbo = customization.turbo }
+
+  -- custo 0; fingerprint { remove=canonId } → operationId distinto do install da mesma peça
+  local paid, operationId, paymentErr, replayed, charged =
+    Core.commitPayment(context, 'tune', requestId, 0,
+      { remove = canonId }, { customization = before }, { customization = patch })
+  if not paid then
+    return finish(false, paymentErr == 'insufficient' and 'Saldo insuficiente.' or 'Falha ao processar.')
+  end
+  if replayed then
+    return finish(true, ('%s já removida.'):format(part.name or 'Peça'))
+  end
+
+  if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tune', operationId, before, patch, 'lease_lost')
+    return finish(false, 'Sessão encerrada.')
+  end
+
+  if not Core.saveVehicleState(context.plate, { customization = patch }, 'tune') then
+    Core.compensatePayment(operationId, false, charged)
+    Core.auditVehicle(context, 'tune', operationId, before, patch, 'save_failed')
+    return finish(false, 'Falha ao salvar.')
+  end
+
+  Core.completeOperation(operationId)
+  Core.auditVehicle(context, 'tune', operationId, before, patch, 'committed')
+  Core.log(context.plate, 'oficina_remove_part', context.char_id,
+    { part = canonId, family = part.family, operation_id = operationId })
+
+  pcall(function() exports.vhub_vehcontrol:refreshSheet(context.plate, src) end)
+  finish(true, ('%s removida.'):format(part.name or 'Peça'), freshState(src, context))
+end)
+
+
+-- ============================================================
+-- HANDLING LIVRE (handling_ext) — REMOVIDO (ADR #82, código zumbi L-15)
+-- ============================================================
+-- O handler OFICINA_HANDLING gravava customization.handling_ext via saveVehicleState('handling_ext'),
+-- MAS `handling_ext` nunca esteve em CUST_KEYS (vhub_conce/vstate.lua) → sanitizeCustJson descartava
+-- silenciosamente. Nunca funcionou. Os knobs de handling (freio de mão, direção, largada, rigidez)
+-- passam a ser cobertos pelas PEÇAS de engenharia (parts_catalog) na Camada B (ADR #83, física
+-- model-wide gated). Não há substituto físico na FASE 1 — a superfície zumbi apenas some.

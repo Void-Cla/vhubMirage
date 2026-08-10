@@ -23,8 +23,9 @@ window.vhubSims = window.vhubSims || {};
       pendingPreview = { ...(pendingPreview || {}), ...(patch || {}) };
       if (!previewTimer) previewTimer = window.setTimeout(flushPreview, 100);
     },
-    camera: (view) => vhub.native.post('camera', { view, heading: 0 }),
+    camera: (view) => vhub.native.post('camera', { view }),
     rotate: (delta) => vhub.native.post('rotate', { delta }),
+    orbit: (delta) => vhub.native.post('orbit', delta),
     checkout: () => vhub.native.post('checkout', sessionPayload({
       patch: vhubSims.store.get().patch || {},
     })),
@@ -34,6 +35,7 @@ window.vhubSims = window.vhubSims || {};
       label,
       patch: vhubSims.store.get().patch || {},
     })),
+    outfitRename: (outfitId, label) => vhub.native.post('outfitRename', sessionPayload({ outfit_id: outfitId, label })),
     outfitDelete: (outfitId) => vhub.native.post('outfitDelete', sessionPayload({ outfit_id: outfitId })),
     outfitApply: (outfitId) => vhub.native.post('outfitApply', sessionPayload({ outfit_id: outfitId })),
     destroy: () => {

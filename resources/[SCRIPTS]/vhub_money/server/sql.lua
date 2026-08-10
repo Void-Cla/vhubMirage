@@ -207,21 +207,47 @@ function S.find_payment_operation(operation_id)
 end
 
 -- Debita carteira+banco e grava o ledger na mesma transação SQL.
-function S.commit_payment(char_id, amount, operation_id, reason)
+function S.commit_payment(char_id, amount, operation_id, reason, request_conflict_key)
   local outcome = { err = 'storage' }
   local canonical = ('v1:%d:%d:%s'):format(char_id, amount, reason)
 
   local called, committed = pcall(MySQL.startTransaction, function(query)
-    local prior = query([[
-      SELECT char_id, amount, wallet_debit, bank_debit, reason, state
-      FROM vh_money_operations
-      WHERE operation_id = ?
-      FOR UPDATE
-    ]], { operation_id })
+    local prior
+    if type(request_conflict_key) == 'string' and #request_conflict_key >= 8 then
+      query([[
+        INSERT IGNORE INTO vh_money_payment_requests (char_id, request_key, operation_id)
+        VALUES (?, ?, ?)
+      ]], { char_id, request_conflict_key, operation_id })
+      local requests = query([[
+        SELECT operation_id
+        FROM vh_money_payment_requests
+        WHERE char_id = ? AND request_key = ?
+        FOR UPDATE
+      ]], { char_id, request_conflict_key })
+      local request = requests and requests[1]
+      if not request or tostring(request.operation_id) ~= operation_id then
+        outcome = { err = 'conflict' }
+        return false
+      end
+      prior = query([[
+        SELECT operation_id, char_id, amount, wallet_debit, bank_debit, reason, state
+        FROM vh_money_operations
+        WHERE operation_id = ?
+        FOR UPDATE
+      ]], { operation_id })
+    else
+      prior = query([[
+        SELECT operation_id, char_id, amount, wallet_debit, bank_debit, reason, state
+        FROM vh_money_operations
+        WHERE operation_id = ?
+        FOR UPDATE
+      ]], { operation_id })
+    end
     local row = prior and prior[1]
 
     if row then
-      if tonumber(row.char_id) ~= char_id
+      if tostring(row.operation_id) ~= operation_id
+        or tonumber(row.char_id) ~= char_id
         or tonumber(row.amount) ~= amount
         or tostring(row.reason) ~= reason then
         outcome = { err = 'conflict' }

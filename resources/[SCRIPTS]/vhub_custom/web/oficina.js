@@ -1,102 +1,80 @@
 'use strict';
 
-// IIFE: isola todo o estado/funções deste domínio do escopo global window,
-// compartilhado com bennys.js/mec.js no mesmo documento (1 ui_page por resource).
+// oficina.js — NUI da OFICINA — bancada de engenharia AAA (ADR #82 F2.3 redesign).
+//
+// Layout: diagrama SVG central com 9 slots clicáveis → gaveta horizontal de peças da família
+// ativa → aside de telemetria/calibração (preservado). Drag & drop via Pointer Events (não
+// HTML5 drag API — quirks de ghost no CEF). Server-authoritative: NUI dispara intenção,
+// re-renderiza do estado fresco devolvido (applyFresh — sem 2ª fonte de verdade, A-04).
+//
+// Contratos preservados:
+//   oficina:instalarParte → instalarParteResultado
+//   oficina:removerParte  → removerParteResultado
+//   oficina:recalibrar    → recalibrarResultado
+//   oficina:previewCalibrar → previewCalibrarResultado
+//   oficina:instalarKitNitro → nitroKitResultado
+//   oficina:fechar
+//
+// IIFE: isola estado deste domínio (documento compartilhado com bennys/mec).
 (function () {
 
-// ============================================================
-// CONFIG DE COMPONENTES (visual + estimativas de boost)
-// Os boost são estimativas para preview — não afetam a lógica server-side.
-// ============================================================
+let _module = null;
 
-const COMPONENT_DEFS = [
-  {
-    idx: 11, label: 'MOTOR',
-    stages: [
-      { stage: 0, name: 'Original',         desc: 'Motor de fábrica, sem modificações.',                        boost: {} },
-      { stage: 1, name: 'EMS Upgrade Nv.1', desc: 'Filtro de ar esportivo e ajuste de injeção eletrônica.',    boost: { vel: 2, acel: 4 } },
-      { stage: 2, name: 'EMS Upgrade Nv.2', desc: 'Cabeçotes polidos, velas de alta performance e intercooler.',boost: { vel: 5, acel: 7 } },
-      { stage: 3, name: 'EMS Upgrade Nv.3', desc: 'Motor de corrida completo. Máximo de desempenho possível.', boost: { vel: 8, acel: 11 } },
-    ],
-  },
-  {
-    idx: 12, label: 'FREIOS',
-    stages: [
-      { stage: 0, name: 'Original',           desc: 'Sistema de série.',                                         boost: {} },
-      { stage: 1, name: 'Street Brakes',      desc: 'Pastilhas performance e fluido DOT 5.',                    boost: { freio: 3 } },
-      { stage: 2, name: 'Sport Brakes',       desc: 'Discos ventilados e pinças monobloco esportivas.',         boost: { freio: 6 } },
-      { stage: 3, name: 'Race Brakes',        desc: 'Sistema de frenagem de competição com pinças 6 pistões.',  boost: { freio: 9 } },
-    ],
-  },
-  {
-    idx: 13, label: 'CÂMBIO',
-    stages: [
-      { stage: 0, name: 'Original',           desc: 'Câmbio de fábrica.',                                       boost: {} },
-      { stage: 1, name: 'Street Transmission',desc: 'Óleo sintético e ajuste fino das relações.',               boost: { acel: 2, vel: 1 } },
-      { stage: 2, name: 'Sport Transmission', desc: 'Relações recalibradas para troca mais rápida.',            boost: { acel: 4, vel: 2 } },
-      { stage: 3, name: 'Race Transmission',  desc: 'Câmbio sequencial de corrida com paddle shift.',           boost: { acel: 6, vel: 3 } },
-    ],
-  },
-  {
-    idx: 15, label: 'SUSPENSÃO',
-    stages: [
-      { stage: 0, name: 'Original',            desc: 'Suspensão de série.',                                      boost: {} },
-      { stage: 1, name: 'Lowering Kit',        desc: 'Rebaixamento moderado e molas esportivas.',                boost: { dir: 2 } },
-      { stage: 2, name: 'Street Suspension',   desc: 'Amortecedores coilover reguláveis.',                       boost: { dir: 4 } },
-      { stage: 3, name: 'Competition Setup',   desc: 'Suspensão de competição com geometria otimizada.',         boost: { dir: 6 } },
-    ],
-  },
-  {
-    idx: 16, label: 'BLINDAGEM',
-    stages: [
-      { stage: 0, name: 'Sem Proteção',     desc: 'Sem blindagem adicional.',                                 boost: {} },
-      { stage: 1, name: 'Blindagem Leve',   desc: 'Proteção leve nas portas. Não afeta aceleração.',         boost: {} },
-      { stage: 2, name: 'Blindagem Parcial',desc: 'Proteção no painel e portas. Pequena redução de velocidade.', boost: {} },
-      { stage: 3, name: 'Blindagem Total',  desc: 'Blindagem completa. Resistência máxima a projéteis.',      boost: {} },
-    ],
-  },
-  {
-    idx: 18, label: 'TURBO', isTurbo: true,
-    stages: [
-      { stage: 0, name: 'Motor Aspirado',    desc: 'Sem compressor. Motor natural aspirado.',                 boost: {} },
-      { stage: 1, name: 'Turbo Kit',         desc: 'Compressor turbo instalado. Ganho expressivo de torque.', boost: { vel: 4, acel: 5 } },
-    ],
-  },
-];
+
+// ============================================================
+// CONSTANTES
+// ============================================================
 
 // rótulos PT-BR dos 5 eixos reais (vhub_vehcontrol — fonte única, decisão #27)
 const AXIS_DEFS = [
-  { key: 'potencia',  label: 'POTÊNCIA'   },
-  { key: 'grip',      label: 'ADERÊNCIA'  },
-  { key: 'frenagem',  label: 'FRENAGEM'   },
-  { key: 'aero',      label: 'AERO'       },
-  { key: 'suspensao', label: 'SUSPENSÃO'  },
+  { key: 'potencia',  label: 'POTÊNCIA'  },
+  { key: 'grip',      label: 'ADERÊNCIA' },
+  { key: 'frenagem',  label: 'FRENAGEM'  },
+  { key: 'aero',      label: 'AERO'      },
+  { key: 'suspensao', label: 'SUSPENSÃO' },
 ];
 
-const TIER_CLS = { D: 't-D', C: 't-C', B: 't-B', A: 't-A', S: 't-S', 'S+': 't-Sp' };
-
-const PRICE_KEYS = {
-  11: 'engine_stage', 12: 'brakes_stage',
-  13: 'transmission_stage', 15: 'suspension_stage',
-  16: 'armor_stage',  18: 'turbo',
+const AXIS_SHORT = {
+  potencia: 'POT', grip: 'ADER', frenagem: 'FRE', aero: 'AERO', suspensao: 'SUSP',
 };
 
-const STAGE_BADGE_CLS = ['sc-badge-default', 'sc-badge-1', 'sc-badge-2', 'sc-badge-3'];
+const MAX_PILLS = 3;
+
+// rótulos PT-BR das 9 famílias — mapeado pelo data-family do SVG
+const FAM_LABELS = {
+  engine:       'MOTOR',
+  turbo:        'TURBO',
+  ecu:          'ECU / MAPEAMENTO',
+  transmission: 'CÂMBIO',
+  brakes:       'FREIOS',
+  suspension:   'SUSPENSÃO',
+  aero:         'AERODINÂMICA',
+  weight:       'REDUÇÃO DE PESO',
+  handbrake:    'FREIO DE MÃO',
+};
 
 
 // ============================================================
 // STATE
 // ============================================================
 
-let _data         = null;   // payload do Lua (inclui _data.sheet — ficha REAL do vhub_vehcontrol)
-let _selected     = {};     // { "modIdx": stage } seleções pendentes (compra de stage)
-let _activeComp   = 0;      // índice em COMPONENT_DEFS do componente visível
-let _closeTimeout = null;   // failsafe de fechamento
-let _calibrating  = false;  // true = modo redistribuição ativo (sliders no lugar das barras)
-let _draftAlloc   = null;   // alloc em edição durante calibração (não persistido até salvar)
-let _previewSheet = null;   // ficha hipotética do draftAlloc (vem do servidor — getVehicleSheetPreview)
-let _previewTimer = null;   // debounce do pedido de prévia ao arrastar slider
-let _previewPending = false; // true entre o fetch e a resposta (distingue "carregando" de "erro")
+let _data           = null;   // payload do Lua (parts_catalog + sheet + installed_parts)
+let _activeFamId    = null;   // family_id (string) do slot SVG selecionado
+let _installing     = false;  // trava anti-duplo-clique durante install em voo
+let _calibrating    = false;  // modo redistribuição de pontos (sliders)
+let _draftAlloc     = null;   // alloc em edição durante calibração
+let _previewSheet   = null;   // ficha hipotética do draftAlloc (server)
+let _previewTimer   = null;   // debounce do pedido de prévia
+let _previewPending = false;
+
+// drag & drop — estado isolado (nunca persiste entre gestos)
+let _drag = { active: false, partId: null, ghostEl: null, origFamId: null, hitSlot: null };
+
+// referências de handlers para removeEventListener posterior (runtime condição 2)
+let _onTrayPointerDown = null;
+let _onDocPointerMove  = null;
+let _onDocPointerUp    = null;
+let _onDocPointerCancel = null;
 
 
 // ============================================================
@@ -104,200 +82,265 @@ let _previewPending = false; // true entre o fetch e a resposta (distingue "carr
 // ============================================================
 
 function fmtMoney(v) {
-  return 'R$ ' + Number(v).toLocaleString('pt-BR');
+  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR');
 }
 
-function calcTotalCost() {
-  if (!_data) return 0;
-  let total = 0;
-  const prices  = _data.prices || {};
-  const current = _data.stages || {};
-  for (const def of COMPONENT_DEFS) {
-    const key      = String(def.idx);
-    const curStage = Number(current[key] ?? 0);
-    const selStage = Number(_selected[key] ?? curStage);
-    if (selStage <= curStage) continue;
-    if (def.isTurbo) {
-      if (selStage >= 1 && curStage < 1) total += Number(prices.turbo ?? 0);
-    } else {
-      const tbl = prices[PRICE_KEYS[def.idx]] || {};
-      total += Number(tbl[selStage] ?? 0);
-    }
-  }
-  return total;
+function pct(v) {
+  return '+' + Math.round((Number(v) || 0) * 100) + '%';
 }
 
-function effectiveStage(defIdx) {
-  const key = String(defIdx);
-  const cur = Number((_data.stages || {})[key] ?? 0);
-  return Number(_selected[key] ?? cur);
+// famílias do catálogo com suas peças; filtra vazias
+function familiesWithParts() {
+  const cat = (_data && _data.parts_catalog) || null;
+  if (!cat || !Array.isArray(cat.families) || !Array.isArray(cat.parts)) return [];
+  const byFamily = {};
+  for (const p of cat.parts) (byFamily[p.family] = byFamily[p.family] || []).push(p);
+  return cat.families
+    .map((f) => ({ ...f, parts: byFamily[f.id] || [] }))
+    .filter((f) => f.parts.length > 0);
+}
+
+// partes de uma família pelo id
+function partsOfFamily(famId) {
+  const fams = familiesWithParts();
+  const fam  = fams.find((f) => f.id === famId);
+  return fam ? fam.parts : [];
+}
+
+// status HONESTO da peça (server-authoritative), { state, hint?, replaces? }
+// state: ok | already_installed | conflict | requires_missing | missing_item
+function partStatus(part) {
+  const ps = (_data && _data.parts_status) || null;
+  if (ps && ps[part.id]) return ps[part.id];
+  const inst = (_data && _data.installed_parts) || {};
+  return { state: inst[part.id] === true ? 'already_installed' : 'ok' };
+}
+
+function isInstalled(part) { return partStatus(part).state === 'already_installed'; }
+
+function nameOfPart(id) {
+  const cat = (_data && _data.parts_catalog) || null;
+  if (!cat || !Array.isArray(cat.parts)) return id;
+  const p = cat.parts.find((x) => x.id === id);
+  return (p && p.name) || id;
+}
+
+// se alguma peça de uma família está instalada (ponto no slot SVG)
+function famHasInstalled(famId) {
+  const parts = partsOfFamily(famId);
+  return parts.some((p) => isInstalled(p));
 }
 
 
 // ============================================================
-// RENDER — NAV
+// RENDER — DIAGRAMA SVG (slots por família)
 // ============================================================
 
-function renderNav() {
-  const nav = document.getElementById('comp-nav');
-  nav.innerHTML = '';
-  const cap     = Number(_data.stage_cap ?? 0);
-  const current = _data.stages || {};
+// aplica classes de estado aos <g class="slot"> do SVG
+function renderDiagram() {
+  const diagramEl = document.getElementById('oficina-diagram');
+  if (!diagramEl) return;
 
-  COMPONENT_DEFS.forEach((def, i) => {
-    const key      = String(def.idx);
-    const curStage = Number(current[key] ?? 0);
-    const selStage = Number(_selected[key] ?? curStage);
-    const maxStage = def.isTurbo ? 1 : Math.min(cap, 3);
+  const slots = diagramEl.querySelectorAll('.slot[data-family]');
+  slots.forEach((slot) => {
+    const famId    = slot.dataset.family;
+    const active   = famId === _activeFamId;
+    const hasInst  = famHasInstalled(famId);
+    const hasParts = partsOfFamily(famId).length > 0;
 
-    const item = document.createElement('div');
-    item.className = 'nav-item' + (i === _activeComp ? ' active' : '');
-    item.addEventListener('click', () => setActiveComp(i));
-
-    const lbl = document.createElement('span');
-    lbl.className   = 'nav-label';
-    lbl.textContent = def.label;
-
-    const dots = document.createElement('div');
-    dots.className = 'nav-stage-dots';
-
-    for (let s = 1; s <= maxStage; s++) {
-      const dot     = document.createElement('div');
-      dot.className = 'nav-dot'
-        + (s <= selStage  ? ' current' : '')
-        + (s <= curStage && s !== selStage ? ' filled' : '');
-      dots.appendChild(dot);
-    }
-
-    item.appendChild(lbl);
-    if (maxStage > 0) item.appendChild(dots);
-    nav.appendChild(item);
+    // remove todas as classes de estado e reaplica (evita acúmulo)
+    slot.classList.remove('active', 'installed', 'empty');
+    if (!hasParts) slot.classList.add('empty');
+    if (hasInst)  slot.classList.add('installed');
+    if (active)   slot.classList.add('active');
   });
 }
 
-
-// ============================================================
-// RENDER — DETAIL (stage cards)
-// ============================================================
-
-function renderDetail() {
-  const section = document.getElementById('comp-detail');
-  section.innerHTML = '';
-
-  const def     = COMPONENT_DEFS[_activeComp];
-  const key     = String(def.idx);
-  const cap     = Number(_data.stage_cap ?? 0);
-  const curStage = Number((_data.stages || {})[key] ?? 0);
-  const selStage = effectiveStage(def.idx);
-  const prices  = _data.prices || {};
-  const maxStage = def.isTurbo ? 1 : Math.min(cap, 3);
-
-  const title = document.createElement('div');
-  title.className   = 'comp-section-title';
-  title.textContent = def.label + ' — selecione o nível';
-  section.appendChild(title);
-
-  for (const stageDef of def.stages) {
-    const s   = stageDef.stage;
-    const isInstalled = s === curStage && s > 0;
-    const isSelected  = s === selStage;
-    const isCapped    = s > maxStage && s > 0;
-
-    const card = document.createElement('div');
-    card.className = 'stage-card'
-      + (isSelected  ? ' selected'    : '')
-      + (isInstalled && !isSelected ? ' installed' : '')
-      + (isCapped    ? ' disabled-cap' : '');
-
-    if (!isCapped) card.addEventListener('click', () => selectStage(def.idx, s));
-
-    // header
-    const hdr = document.createElement('div');
-    hdr.className = 'sc-header';
-
-    const badge = document.createElement('span');
-    badge.className   = 'sc-badge ' + (STAGE_BADGE_CLS[s] || 'sc-badge-default');
-    badge.textContent = s === 0 ? 'PADRÃO' : 'STG ' + s;
-    hdr.appendChild(badge);
-
-    const name = document.createElement('span');
-    name.className   = 'sc-name';
-    name.textContent = stageDef.name;
-    hdr.appendChild(name);
-
-    if (isInstalled) {
-      const tag = document.createElement('span');
-      tag.className   = 'sc-installed-tag';
-      tag.textContent = 'INSTALADO';
-      hdr.appendChild(tag);
-    } else if (s > 0 && !isCapped) {
-      let price = null;
-      if (def.isTurbo) {
-        price = prices.turbo;
-      } else {
-        const tbl = prices[PRICE_KEYS[def.idx]] || {};
-        price = tbl[s];
-      }
-      if (price != null) {
-        const pr = document.createElement('span');
-        pr.className   = 'sc-price';
-        pr.textContent = fmtMoney(price);
-        hdr.appendChild(pr);
-      }
-    } else if (isCapped) {
-      const pr = document.createElement('span');
-      pr.className   = 'sc-price';
-      pr.style.color = 'var(--text-3)';
-      pr.textContent = 'CAP atingido';
-      hdr.appendChild(pr);
-    }
-
-    card.appendChild(hdr);
-
-    // descrição
-    const desc = document.createElement('div');
-    desc.className   = 'sc-desc';
-    desc.textContent = stageDef.desc;
-    card.appendChild(desc);
-
-    // boost pills
-    if (s > 0 && Object.keys(stageDef.boost || {}).length > 0) {
-      const boosts = document.createElement('div');
-      boosts.className = 'sc-boosts';
-      for (const [stat, delta] of Object.entries(stageDef.boost)) {
-        const pill = document.createElement('span');
-        pill.className   = 'boost-pill';
-        pill.textContent = '+' + delta + ' ' + stat.toUpperCase();
-        boosts.appendChild(pill);
-      }
-      card.appendChild(boosts);
-    } else if (s > 0) {
-      const boosts = document.createElement('div');
-      boosts.className = 'sc-boosts';
-      const pill = document.createElement('span');
-      pill.className   = 'boost-pill neutral';
-      pill.textContent = 'sem boost de desempenho';
-      boosts.appendChild(pill);
-      card.appendChild(boosts);
-    }
-
-    section.appendChild(card);
+// label da família ativa no cabeçalho do diagrama
+function renderDiagramLabel() {
+  const el = document.getElementById('diagram-fam-label');
+  if (!el) return;
+  if (_activeFamId) {
+    el.textContent = FAM_LABELS[_activeFamId] || _activeFamId.toUpperCase();
+  } else {
+    el.textContent = 'SELECIONE UM SISTEMA';
   }
 }
 
 
 // ============================================================
-// RENDER — FICHA REAL (tier/score/alloc do vhub_vehcontrol)
+// RENDER — GAVETA DE PEÇAS (horizontal, família ativa)
 // ============================================================
 
-// soma os valores de um alloc { eixo: pontos }
+function renderTray() {
+  const tray = document.getElementById('parts-tray');
+  if (!tray) return;
+  tray.innerHTML = '';
+
+  if (!_activeFamId || !_data) {
+    const msg = document.createElement('div');
+    msg.className   = 'tray-empty';
+    msg.textContent = 'Selecione um sistema no diagrama acima.';
+    tray.appendChild(msg);
+    return;
+  }
+
+  const parts = partsOfFamily(_activeFamId);
+  if (parts.length === 0) {
+    const msg = document.createElement('div');
+    msg.className   = 'tray-empty';
+    msg.textContent = 'Nenhuma peça disponível para este sistema.';
+    tray.appendChild(msg);
+    return;
+  }
+
+  for (const part of parts) {
+    const st        = partStatus(part);
+    const state     = st.state;
+    const installed = state === 'already_installed';
+    const blocked   = state === 'conflict' || state === 'requires_missing';
+    const noItem    = state === 'missing_item';
+
+    const card = document.createElement('div');
+    card.className = 'tray-card'
+      + (installed ? ' installed' : '')
+      + (blocked   ? ' blocked'   : '')
+      + (noItem    ? ' need-item' : '');
+    card.dataset.partId  = part.id;
+    card.dataset.famId   = part.family;
+    card.draggable       = false; // drag via Pointer Events, não HTML5
+
+    // badge de estado
+    const badge = document.createElement('span');
+    badge.className = 'tray-badge';
+    if (installed)    { badge.classList.add('on');   badge.textContent = 'INSTALADA'; }
+    else if (blocked) { badge.classList.add('warn'); badge.textContent = 'BLOQUEADA'; }
+    else if (noItem)  { badge.classList.add('muted');badge.textContent = 'SEM ITEM';  }
+    else              { badge.textContent = Number(part.price || 0) > 0 ? fmtMoney(part.price) : 'incluso'; }
+    card.appendChild(badge);
+
+    // nome da peça
+    const nameEl = document.createElement('div');
+    nameEl.className   = 'tray-name';
+    nameEl.textContent = part.name;
+    card.appendChild(nameEl);
+
+    // deltas compactos (máx 3 pílulas)
+    card.appendChild(deltaPills(part.deltas));
+
+    // hint não-bloqueante (ADR #85)
+    if (st.hint) {
+      const h = document.createElement('div');
+      h.className   = 'tray-hint';
+      h.textContent = '⚠ ' + st.hint;
+      card.appendChild(h);
+    }
+
+    // botões de ação
+    const btnsRow = document.createElement('div');
+    btnsRow.className = 'tray-btns';
+    if (installed) {
+      const btn = document.createElement('button');
+      btn.className   = 'part-remove';
+      btn.textContent = 'REMOVER';
+      btn.disabled    = _installing;
+      btn.addEventListener('click', (e) => { e.stopPropagation(); removePart(part.id, btn); });
+      btnsRow.appendChild(btn);
+    } else if (state === 'ok') {
+      const btn = document.createElement('button');
+      btn.className   = 'part-install';
+      btn.textContent = 'INSTALAR';
+      btn.disabled    = _installing;
+      btn.addEventListener('click', (e) => { e.stopPropagation(); installPart(part.id, btn); });
+      btnsRow.appendChild(btn);
+    }
+    if (btnsRow.children.length > 0) card.appendChild(btnsRow);
+
+    tray.appendChild(card);
+  }
+}
+
+// pílulas de trade-off (reutilizadas na gaveta)
+function deltaPills(deltas) {
+  const wrap = document.createElement('div');
+  wrap.className = 'eng-deltas';
+  const entries = Object.entries(deltas || {}).filter(([, n]) => Number(n) !== 0);
+
+  if (entries.length === 0) {
+    const pill = document.createElement('span');
+    pill.className = 'eng-pill neutral';
+    pill.textContent = 'sem efeito';
+    wrap.appendChild(pill);
+    return wrap;
+  }
+
+  entries.sort((a, b) => Number(b[1]) - Number(a[1]));
+  const shown = entries.slice(0, MAX_PILLS);
+  const rest  = entries.length - shown.length;
+
+  for (const [ax, n] of shown) {
+    const v = Number(n);
+    const pill = document.createElement('span');
+    pill.className = 'eng-pill ' + (v > 0 ? 'pos' : 'neg');
+    pill.textContent = (v > 0 ? '+' : '') + v + ' ' + (AXIS_SHORT[ax] || ax.toUpperCase());
+    wrap.appendChild(pill);
+  }
+  if (rest > 0) {
+    const more = document.createElement('span');
+    more.className = 'eng-pill neutral';
+    more.textContent = '+' + rest;
+    wrap.appendChild(more);
+  }
+  return wrap;
+}
+
+// badge de estado por peça (usado na gaveta)
+function stateTag(state, part) {
+  const tag = document.createElement('span');
+  if (state === 'already_installed')     { tag.className = 'part-badge on';   tag.textContent = 'INSTALADA'; }
+  else if (state === 'conflict')         { tag.className = 'part-badge warn'; tag.textContent = 'INCOMPATÍVEL'; }
+  else if (state === 'requires_missing') { tag.className = 'part-badge warn'; tag.textContent = 'REQUER PEÇA'; }
+  else if (state === 'missing_item')     { tag.className = 'part-badge muted';tag.textContent = 'SEM PEÇA'; }
+  else { tag.className = 'part-price'; tag.textContent = Number(part.price || 0) > 0 ? fmtMoney(part.price) : 'incluso'; }
+  return tag;
+}
+
+function blockReason(state) {
+  if (state === 'missing_item')     return 'Você não possui esta peça no inventário.';
+  if (state === 'conflict')         return 'Incompatível com uma peça já instalada.';
+  if (state === 'requires_missing') return 'Requer outra peça instalada antes.';
+  return '';
+}
+
+
+// ============================================================
+// RENDER — EFEITO DERIVADO + FICHA/CALIBRAÇÃO (aside — preservado)
+// ============================================================
+
+function renderEngEffect() {
+  const sheet = (_data && _data.sheet) || {};
+  const eng   = (sheet && sheet.eng) || null;
+  document.getElementById('ee-power').textContent = eng ? pct(eng.power_boost)   : '+0%';
+  document.getElementById('ee-top').textContent   = eng ? pct(eng.top_speed_pct) : '+0%';
+
+  const massEl = document.getElementById('ee-mass');
+  if (massEl) {
+    if (sheet && typeof sheet.mass === 'number') {
+      const d = Number(sheet.mass_delta || 0);
+      const sign = d > 0 ? ' (+' + d + ')' : d < 0 ? ' (' + d + ')' : '';
+      massEl.textContent = Math.round(sheet.mass) + ' kg' + sign;
+    } else {
+      massEl.textContent = '—';
+    }
+  }
+}
+
 function sumAlloc(a) {
   let t = 0;
   for (const ax of AXIS_DEFS) t += Number((a || {})[ax.key] || 0);
   return t;
 }
 
-// devolve o alloc ativo: rascunho em calibração ou o persistido da ficha
 function activeAlloc() {
   const sheet = (_data && _data.sheet) || {};
   return _calibrating ? (_draftAlloc || {}) : (sheet.alloc || {});
@@ -306,11 +349,6 @@ function activeAlloc() {
 function renderStats() {
   const sheet = (_data && _data.sheet) || null;
 
-  const badgeEl = document.getElementById('tier-badge');
-  const tier    = (sheet && sheet.tier) || 'D';
-  badgeEl.textContent = tier;
-  badgeEl.className   = 'tier-badge ' + (TIER_CLS[tier] || 't-D');
-
   const score = sheet ? Number(sheet.score || 0) : 0;
   document.getElementById('score-base').textContent = score;
   document.getElementById('sm-cur-base').style.left  = Math.min(100, score / 10) + '%';
@@ -318,64 +356,59 @@ function renderStats() {
   const budget = sheet ? Number(sheet.budget || 0) : 0;
   const alloc  = activeAlloc();
 
-  // stat rows — 5 eixos reais, barra estática ou slider conforme o modo
   const rowsEl = document.getElementById('stat-rows');
   rowsEl.innerHTML = '';
   for (const ax of AXIS_DEFS) {
     const ranges = (sheet && sheet.ranges && sheet.ranges[ax.key]) || { min: 0, max: budget };
     const value  = Number(alloc[ax.key] || 0);
-    const pct    = budget > 0 ? Math.min(100, (value / budget) * 100) : 0;
+    const p      = budget > 0 ? Math.min(100, (value / budget) * 100) : 0;
 
     const row = document.createElement('div');
     row.className = 'stat-row';
 
     const hdr = document.createElement('div');
     hdr.className = 'sr-header';
-
     const lbl = document.createElement('span');
     lbl.className   = 'sr-label';
     lbl.textContent = ax.label;
     hdr.appendChild(lbl);
-
     const nums = document.createElement('span');
     nums.className   = 'sr-nums';
     nums.textContent = value + ' pts';
     hdr.appendChild(nums);
-
     row.appendChild(hdr);
 
     if (_calibrating) {
       const slider = document.createElement('input');
-      slider.type      = 'range';
-      slider.className = 'sr-slider';
-      slider.min       = ranges.min;
-      slider.max       = ranges.max;
-      slider.step      = 1;
-      slider.value     = value;
+      slider.type       = 'range';
+      slider.className  = 'sr-slider';
+      slider.min        = ranges.min;
+      slider.max        = ranges.max;
+      slider.step       = 1;
+      slider.value      = value;
       slider.dataset.ax = ax.key;
       slider.addEventListener('input', () => onSliderDrag(slider));
       row.appendChild(slider);
     } else {
       const barWrap = document.createElement('div');
       barWrap.className = 'sr-bar-wrap';
-
       const barPrev = document.createElement('div');
       barPrev.className   = 'sr-bar-prev';
-      barPrev.style.width = pct + '%';
-
+      barPrev.style.width = p + '%';
       barWrap.appendChild(barPrev);
       row.appendChild(barWrap);
     }
-
     rowsEl.appendChild(row);
   }
 
   renderCalibFooter(sheet, budget, alloc);
 }
 
-// redistribui pontos entre eixos ao arrastar um slider, mantendo soma == budget
-// (mesmo algoritmo do vhub_vehcontrol/html/app.js — cópia independente por design,
-// sem componente compartilhado entre resources)
+
+// ============================================================
+// CALIBRAÇÃO — redistribuição de pontos livres
+// ============================================================
+
 function onSliderDrag(input) {
   if (!_draftAlloc) return;
   const sheet  = (_data && _data.sheet) || {};
@@ -389,10 +422,9 @@ function onSliderDrag(input) {
   let delta = next - prev;
   if (delta === 0) return;
 
-  const others = AXIS_DEFS.map(a => a.key).filter(k => k !== ax);
+  const others = AXIS_DEFS.map((a) => a.key).filter((k) => k !== ax);
 
   if (delta > 0) {
-    // toma pontos das outras (respeitando o piso .min de cada uma)
     for (const ok of others) {
       if (delta <= 0) break;
       const or_  = ranges[ok] || { min: 0, max: 0 };
@@ -400,15 +432,14 @@ function onSliderDrag(input) {
       const take = Math.min(delta, Math.max(0, ov - or_.min));
       if (take > 0) { _draftAlloc[ok] = ov - take; delta -= take; }
     }
-    next -= delta; // se não havia sobra suficiente, devolve o que não coube
+    next -= delta;
   } else {
-    // devolve o excedente às outras (respeitando o teto .max de cada uma)
     let surplus = -delta;
     for (const ok of others) {
       if (surplus <= 0) break;
-      const or_   = ranges[ok] || { min: 0, max: 0 };
-      const ov    = Number(_draftAlloc[ok] || 0);
-      const give  = Math.min(surplus, Math.max(0, or_.max - ov));
+      const or_  = ranges[ok] || { min: 0, max: 0 };
+      const ov   = Number(_draftAlloc[ok] || 0);
+      const give = Math.min(surplus, Math.max(0, or_.max - ov));
       if (give > 0) { _draftAlloc[ok] = ov + give; surplus -= give; }
     }
   }
@@ -418,23 +449,23 @@ function onSliderDrag(input) {
   renderStats();
 }
 
-// pede ao servidor a ficha hipotética do draftAlloc atual (debounced — não persiste nada)
 function requestPreview() {
   clearTimeout(_previewTimer);
   _previewPending = true;
   _previewTimer = setTimeout(() => {
     if (!_calibrating || !_draftAlloc || !_data) return;
-    fetch('https://vhub_custom/oficina:previewCalibrar', {
-      method: 'POST',
-      body:   JSON.stringify({ plate: _data.plate, alloc: _draftAlloc }),
-    });
+    window.vhub.request('oficina:previewCalibrar', { plate: _data.plate, alloc: _draftAlloc })
+      .catch(() => { _previewPending = false; });
   }, 120);
 }
 
 function onPreviewCalibrarResultado(sheet) {
   _previewSheet   = sheet;
   _previewPending = false;
-  if (_calibrating) renderCalibFooter((_data && _data.sheet) || null, Number((_data && _data.sheet && _data.sheet.budget) || 0), activeAlloc());
+  if (_calibrating) {
+    const s = (_data && _data.sheet) || null;
+    renderCalibFooter(s, Number((s && s.budget) || 0), activeAlloc());
+  }
 }
 
 function renderCalibFooter(sheet, budget, alloc) {
@@ -445,7 +476,7 @@ function renderCalibFooter(sheet, budget, alloc) {
   document.getElementById('calib-ftr').classList.toggle('hidden', !_calibrating);
 
   const compareEl = document.getElementById('score-compare');
-  const hintEl     = document.getElementById('tier-hint');
+  const hintEl    = document.getElementById('tier-hint');
 
   if (!_calibrating) {
     compareEl.classList.add('hidden');
@@ -460,18 +491,8 @@ function renderCalibFooter(sheet, budget, alloc) {
   if (ok && _previewSheet) {
     compareEl.classList.remove('hidden');
     hintEl.classList.add('hidden');
-
     document.getElementById('sc-base-num').textContent = sheet ? Number(sheet.score || 0) : 0;
-    const baseTier = (sheet && sheet.tier) || 'D';
-    const sbEl = document.getElementById('sc-base-tier');
-    sbEl.textContent = baseTier;
-    sbEl.className   = 'sc-tier ' + (TIER_CLS[baseTier] || 't-D');
-
     document.getElementById('sc-prev-num').textContent = Number(_previewSheet.score || 0);
-    const prevTier = _previewSheet.tier || 'D';
-    const spEl = document.getElementById('sc-prev-tier');
-    spEl.textContent = prevTier;
-    spEl.className   = 'sc-tier ' + (TIER_CLS[prevTier] || 't-D');
   } else {
     compareEl.classList.add('hidden');
     hintEl.classList.remove('hidden');
@@ -488,105 +509,13 @@ function renderCalibFooter(sheet, budget, alloc) {
   }
 }
 
-
-// ============================================================
-// RENDER — FOOTER
-// ============================================================
-
-function renderFooter() {
-  const total = calcTotalCost();
-  const cap   = Number(_data.stage_cap ?? 0);
-  document.getElementById('total-cost').textContent  = fmtMoney(total);
-  document.getElementById('btn-apply').disabled      = (total === 0);
-  document.getElementById('cap-info').textContent    =
-    cap === 0 ? '⚠ Tuning indisponível para esta classe' : `Cap: Stage ${cap}  ·  Classe GTA ${_data.classe_gta ?? '?'}`;
-}
-
-
-// ============================================================
-// INTERACTION
-// ============================================================
-
-function setActiveComp(idx) {
-  _activeComp = idx;
-  renderNav();
-  renderDetail();
-}
-
-function selectStage(modIdx, stage) {
-  const key      = String(modIdx);
-  const curStage = Number((_data.stages || {})[key] ?? 0);
-  if (stage === curStage) {
-    delete _selected[key];
-  } else {
-    _selected[key] = stage;
-  }
-  renderNav();
-  renderDetail();
-  renderStats();
-  renderFooter();
-}
-
-
-// ============================================================
-// OPEN / CLOSE
-// ============================================================
-
-function openOficina(data) {
-  _data           = data;
-  _selected       = {};
-  _activeComp     = 0;
-  _calibrating    = false;
-  _draftAlloc     = null;
-  _previewSheet   = null;
-  _previewPending = false;
-
-  document.getElementById('veh-nome').textContent = data.nome || '—';
-  document.getElementById('veh-sub').textContent  =
-    (data.categoria || '—') + '  ·  ' + (data.plate || '—');
-
-  renderNav();
-  renderDetail();
-  renderStats();
-  renderFooter();
-
-  document.getElementById('overlay').classList.remove('hidden');
-  document.getElementById('btn-cancel').disabled = false;
-  document.getElementById('btn-apply').disabled  = (calcTotalCost() === 0);
-
-  // SEM timeout de inatividade (removido): a NUI fecha só por ação explícita do jogador
-  // (Cancelar/ESC) ou pela confirmação server-authoritative — nunca por temporizador.
-}
-
-function closeNUI() {
-  clearTimeout(_closeTimeout);
-  clearTimeout(_previewTimer);
-  _closeTimeout = null;
-  document.getElementById('overlay').classList.add('hidden');
-  _data           = null;
-  _selected       = {};
-  _calibrating    = false;
-  _draftAlloc     = null;
-  _previewSheet   = null;
-  _previewPending = false;
-}
-
-function cancelarOficina() {
-  closeNUI();
-  fetch('https://vhub_custom/oficina:fechar', { method: 'POST', body: '{}' });
-}
-
-// ============================================================
-// CALIBRAÇÃO — redistribuição de pontos livres (decisão #27)
-// ============================================================
-
 function entrarCalibragem() {
   const sheet = (_data && _data.sheet) || null;
   if (!sheet || !sheet.tier) return;
   _calibrating = true;
   _draftAlloc  = {};
   for (const ax of AXIS_DEFS) _draftAlloc[ax.key] = Number((sheet.alloc || {})[ax.key] || 0);
-  _previewSheet   = sheet; // ponto de partida = ficha real (alloc atual == draft atual)
+  _previewSheet   = sheet;
   _previewPending = false;
   renderStats();
 }
@@ -603,10 +532,8 @@ function cancelarCalibragem() {
 function salvarCalibragem() {
   if (!_draftAlloc || !_data) return;
   document.getElementById('btn-calib-save').disabled = true;
-  fetch('https://vhub_custom/oficina:recalibrar', {
-    method: 'POST',
-    body:   JSON.stringify({ plate: _data.plate, alloc: _draftAlloc }),
-  });
+  window.vhub.request('oficina:recalibrar', { plate: _data.plate, alloc: _draftAlloc })
+    .catch(() => { if (_data) document.getElementById('btn-calib-save').disabled = false; });
 }
 
 function onRecalibrarResultado(ok, sheet) {
@@ -617,65 +544,364 @@ function onRecalibrarResultado(ok, sheet) {
     _draftAlloc     = null;
     _previewSheet   = null;
     _previewPending = false;
+    renderEngEffect();
   }
   renderStats();
 }
 
-function aplicarTuning() {
-  if (!_data || calcTotalCost() === 0) return;
-
-  const mods = {};
-  const current = _data.stages || {};
-  for (const def of COMPONENT_DEFS) {
-    const key      = String(def.idx);
-    const curStage = Number(current[key] ?? 0);
-    mods[key]      = Number(_selected[key] ?? curStage);
-  }
-
-  document.getElementById('btn-apply').disabled  = true;
-  document.getElementById('btn-cancel').disabled = true;
-
-  fetch('https://vhub_custom/oficina:aplicarTuning', {
-    method: 'POST',
-    body:   JSON.stringify({ plate: _data.plate, mods }),
-  });
-  // NUI fecha ao receber action='fecharOficina' do Lua (OFICINA_CONFIRM → SendNUIMessage)
+function toggleCalibragem() {
+  if (_calibrating) cancelarCalibragem(); else entrarCalibragem();
 }
 
 
 // ============================================================
-// LUA MESSAGE BUS
+// INSTALAR / REMOVER PEÇA (server-authoritative)
 // ============================================================
 
-window.addEventListener('message', function (ev) {
-  const msg = ev.data || {};
-  if (msg.action === 'openOficina')             openOficina(msg.data);
-  if (msg.action === 'fecharOficina')           closeNUI();
-  if (msg.action === 'recalibrarResultado')     onRecalibrarResultado(msg.ok === true, msg.data || null);
-  if (msg.action === 'previewCalibrarResultado') onPreviewCalibrarResultado(msg.data || null);
-  if (msg.action === 'nitroKitResultado')       { var bn = document.getElementById('btn-nitro-kit'); if (bn) bn.disabled = false; }
-});
+function setActiveFam(famId) {
+  _activeFamId = famId || null;
+  renderDiagram();
+  renderDiagramLabel();
+  renderTray();
+}
 
-document.getElementById('btn-close').addEventListener('click',  cancelarOficina);
-document.getElementById('btn-cancel').addEventListener('click', cancelarOficina);
-document.getElementById('btn-apply').addEventListener('click',  aplicarTuning);
+function installPart(partId, btn) {
+  if (_installing || !_data || !partId) return;
+  _installing = true;
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  window.vhub.request('oficina:instalarParte', { part_id: partId })
+    .catch(() => { _installing = false; renderTray(); });
+}
 
-// kit nitro: instala via oficina (cobra); estado real escrito por vhub_nitro (decisão #29)
-var _btnNitro = document.getElementById('btn-nitro-kit');
-if (_btnNitro) _btnNitro.addEventListener('click', function () {
+function removePart(partId, btn) {
+  if (_installing || !_data || !partId) return;
+  _installing = true;
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  window.vhub.request('oficina:removerParte', { part_id: partId })
+    .catch(() => { _installing = false; renderTray(); });
+}
+
+// aplica estado fresco AUTORITATIVO — nunca 2ª fonte de verdade (A-04, skill nui_fresh_state_rerender)
+function applyFresh(data) {
+  if (!data || !_data) return false;
+  if (data.installed_parts) _data.installed_parts = data.installed_parts;
+  if (data.parts_status)    _data.parts_status    = data.parts_status;
+  if (data.sheet)           _data.sheet           = data.sheet;
+  return true;
+}
+
+function onParteResultado(ok, data) {
+  _installing = false;
+  if (ok && applyFresh(data)) renderEngEffect();
+  renderDiagram();
+  renderTray();
+  renderStats();
+}
+
+
+// ============================================================
+// DRAG & DROP — Pointer Events (não HTML5 — quirks de ghost no CEF)
+// Fluxo: pointerdown na gaveta → cria ghost → pointermove move ghost →
+//        hit-test sobre slot SVG → pointerup confirma drop → installPart() (server)
+// ============================================================
+
+function createDragGhost(partName, x, y) {
+  const ghost = document.createElement('div');
+  ghost.className   = 'drag-ghost';
+  ghost.textContent = partName;
+  ghost.style.left  = x + 'px';
+  ghost.style.top   = y + 'px';
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function destroyDragGhost() {
+  if (_drag.ghostEl) {
+    _drag.ghostEl.remove();
+    _drag.ghostEl = null;
+  }
+}
+
+// cancela o drag em curso (pointercancel, ESC, onDestroy mid-drag)
+function cancelDrag() {
+  destroyDragGhost();
+  // limpa highlight de slot que estava com drop-target
+  if (_drag.hitSlot) {
+    _drag.hitSlot.classList.remove('drop-target', 'drop-ok', 'drop-bad');
+    _drag.hitSlot = null;
+  }
+  _drag.active    = false;
+  _drag.partId    = null;
+  _drag.origFamId = null;
+}
+
+// Delegação de pointerdown no container da gaveta — bind em onMount (handler nomeado)
+function _buildTrayPointerDown() {
+  return function onTrayPointerDown(event) {
+    if (event.button !== 0) return;  // só botão primário
+    const card = event.target.closest('.tray-card[data-part-id]');
+    if (!card) return;
+
+    const partId  = card.dataset.partId;
+    const famId   = card.dataset.famId;
+
+    // só peças no estado "ok" são arrastáveis
+    const part = ((_data && _data.parts_catalog && _data.parts_catalog.parts) || []).find((p) => p.id === partId);
+    if (!part) return;
+    const st = partStatus(part);
+    if (st.state !== 'ok') return;
+
+    _drag.active    = true;
+    _drag.partId    = partId;
+    _drag.origFamId = famId;
+    _drag.hitSlot   = null;
+    _drag.ghostEl   = createDragGhost(part.name, event.clientX + 12, event.clientY + 12);
+
+    // captura o pointer para receber eventos mesmo fora do elemento
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+}
+
+function _buildDocPointerMove() {
+  return function onDocPointerMove(event) {
+    if (!_drag.active) return;
+
+    // guard: se o botão primário foi solto fora da janela CEF, o pointerup pode não ter chegado
+    if (!(event.buttons & 1)) { cancelDrag(); return; }
+
+    // move ghost
+    if (_drag.ghostEl) {
+      _drag.ghostEl.style.left = (event.clientX + 12) + 'px';
+      _drag.ghostEl.style.top  = (event.clientY + 12) + 'px';
+    }
+
+    // hit-test sobre o SVG — elementFromPoint pode retornar filho interno do <g>
+    _drag.ghostEl && (_drag.ghostEl.style.display = 'none');
+    const el   = document.elementFromPoint(event.clientX, event.clientY);
+    _drag.ghostEl && (_drag.ghostEl.style.display = '');
+
+    const slot = el && el.closest('.slot[data-family]');
+
+    // limpa highlight anterior
+    if (_drag.hitSlot && _drag.hitSlot !== slot) {
+      _drag.hitSlot.classList.remove('drop-target', 'drop-ok', 'drop-bad');
+    }
+
+    if (slot) {
+      const targetFam = slot.dataset.family;
+      const validDrop = targetFam === _drag.origFamId;
+      slot.classList.add('drop-target');
+      slot.classList.toggle('drop-ok',  validDrop);
+      slot.classList.toggle('drop-bad', !validDrop);
+      _drag.hitSlot = slot;
+    } else {
+      _drag.hitSlot = null;
+    }
+  };
+}
+
+function _buildDocPointerUp() {
+  return function onDocPointerUp() {
+    if (!_drag.active) return;
+
+    // captura antes de cancelDrag resetar o estado
+    const partId  = _drag.partId;
+    const hitSlot = _drag.hitSlot;
+
+    // cleanup obrigatório (A-07): ghost, highlight, _drag reset
+    cancelDrag();
+
+    // avalia se o drop caiu num slot compatível com a peça arrastada
+    if (hitSlot && partId) {
+      const part = ((_data && _data.parts_catalog && _data.parts_catalog.parts) || []).find((p) => p.id === partId);
+      const validFam = part && hitSlot.dataset.family === part.family;
+      if (validFam && !_installing) {
+        installPart(partId, null);
+      }
+    }
+  };
+}
+
+function _buildDocPointerCancel() {
+  return function onDocPointerCancel() {
+    if (_drag.active) cancelDrag();
+  };
+}
+
+
+// ============================================================
+// SLOT SVG — clique direto (sem drag)
+// ============================================================
+
+function onSlotClick(event) {
+  // ignora durante drag ou logo após soltar
+  if (_drag.active) return;
+  const slot = event.target.closest('.slot[data-family]');
+  if (!slot) return;
+  const famId = slot.dataset.family;
+  if (famId === _activeFamId) {
+    // clique no slot já ativo: desseleciona
+    setActiveFam(null);
+  } else {
+    setActiveFam(famId);
+  }
+}
+
+
+// ============================================================
+// FOOTER / CAP
+// ============================================================
+
+function renderCapInfo() {
+  const cat = (_data && _data.categoria) || 'categoria desconhecida';
+  document.getElementById('cap-info').textContent =
+    'Classe base: ' + cat + '  ·  peças acima do ideal recebem aviso, mas podem ser instaladas';
+}
+
+
+// ============================================================
+// OPEN / CLOSE
+// ============================================================
+
+function openOficina(data) {
+  _data           = data;
+  _activeFamId    = null;
+  _installing     = false;
+  _calibrating    = false;
+  _draftAlloc     = null;
+  _previewSheet   = null;
+  _previewPending = false;
+  cancelDrag();
+
+  document.getElementById('veh-nome').textContent = data.nome || '—';
+  document.getElementById('veh-sub').textContent  =
+    (data.categoria || '—') + '  ·  ' + (data.plate || '—');
+
+  renderDiagram();
+  renderDiagramLabel();
+  renderTray();
+  renderEngEffect();
+  renderStats();
+  renderCapInfo();
+
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('btn-cancel').disabled = false;
+}
+
+function closeNUI() {
+  clearTimeout(_previewTimer);
+  _previewTimer = null;
+  cancelDrag();  // cleanup ghost mid-drag (A-07)
+  document.getElementById('overlay').classList.add('hidden');
+  _data           = null;
+  _activeFamId    = null;
+  _installing     = false;
+  _calibrating    = false;
+  _draftAlloc     = null;
+  _previewSheet   = null;
+  _previewPending = false;
+}
+
+function cancelarOficina() {
+  _module.hide();
+  window.vhub.request('oficina:fechar', {}).catch(() => {});
+}
+
+
+// ============================================================
+// NITRO (contrato preservado)
+// ============================================================
+
+const _btnNitro = document.getElementById('btn-nitro-kit');
+
+function instalarNitro() {
   if (!_data || !_data.plate) return;
   _btnNitro.disabled = true;
-  fetch('https://vhub_custom/oficina:instalarKitNitro', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ plate: _data.plate }),
-  }).catch(function () { _btnNitro.disabled = false; });
-});
+  window.vhub.request('oficina:instalarKitNitro', { plate: _data.plate })
+    .catch(() => { if (_data) _btnNitro.disabled = false; });
+}
 
-document.getElementById('btn-calibrar').addEventListener('click', function () {
-  if (_calibrating) cancelarCalibragem(); else entrarCalibragem();
+
+// ============================================================
+// LUA MESSAGE BUS + LIFECYCLE
+// ============================================================
+
+function onKeydown(event) {
+  if (event.key === 'Escape' && _data) cancelarOficina();
+}
+
+_module = window.vhub.createModule('oficina', {
+  actions: {
+    openOficina:             (message, api) => api.show(message.data),
+    fecharOficina:           (_message, api) => api.hide(),
+    instalarParteResultado:  (message) => onParteResultado(message.ok === true, message.data || null),
+    removerParteResultado:   (message) => onParteResultado(message.ok === true, message.data || null),
+    recalibrarResultado:     (message) => onRecalibrarResultado(message.ok === true, message.data || null),
+    previewCalibrarResultado:(message) => onPreviewCalibrarResultado(message.data || null),
+    nitroKitResultado:       () => { if (_btnNitro) _btnNitro.disabled = false; },
+  },
+
+  onInit() {
+    // botões estáticos — DOM garantido antes de onInit pelo runtime
+    document.getElementById('btn-close').addEventListener('click', cancelarOficina);
+    document.getElementById('btn-cancel').addEventListener('click', cancelarOficina);
+    if (_btnNitro) _btnNitro.addEventListener('click', instalarNitro);
+    document.getElementById('btn-calibrar').addEventListener('click', toggleCalibragem);
+    document.getElementById('btn-calib-cancel').addEventListener('click', cancelarCalibragem);
+    document.getElementById('btn-calib-save').addEventListener('click', salvarCalibragem);
+    window.addEventListener('keydown', onKeydown);
+
+    // clique nos slots SVG (delegado ao diagrama, não a cada <g>)
+    const diagramEl = document.getElementById('oficina-diagram');
+    if (diagramEl) diagramEl.addEventListener('click', onSlotClick);
+  },
+
+  onMount() {
+    // drag & drop via Pointer Events — handlers nomeados para removeEventListener (runtime condição 2)
+    // bind em onMount pois o container da gaveta precisa do DOM montado
+    const tray = document.getElementById('parts-tray');
+    if (!tray) return;
+
+    _onTrayPointerDown  = _buildTrayPointerDown();
+    _onDocPointerMove   = _buildDocPointerMove();
+    _onDocPointerUp     = _buildDocPointerUp();
+    _onDocPointerCancel = _buildDocPointerCancel();
+
+    tray.addEventListener('pointerdown', _onTrayPointerDown);
+    document.addEventListener('pointermove',   _onDocPointerMove);
+    document.addEventListener('pointerup',     _onDocPointerUp);
+    document.addEventListener('pointercancel', _onDocPointerCancel);
+  },
+
+  onShow(data) { openOficina(data); },
+  onHide()     { closeNUI(); },
+
+  onDestroy() {
+    // remove listeners estáticos de onInit
+    document.getElementById('btn-close').removeEventListener('click', cancelarOficina);
+    document.getElementById('btn-cancel').removeEventListener('click', cancelarOficina);
+    if (_btnNitro) _btnNitro.removeEventListener('click', instalarNitro);
+    document.getElementById('btn-calibrar').removeEventListener('click', toggleCalibragem);
+    document.getElementById('btn-calib-cancel').removeEventListener('click', cancelarCalibragem);
+    document.getElementById('btn-calib-save').removeEventListener('click', salvarCalibragem);
+    window.removeEventListener('keydown', onKeydown);
+
+    const diagramEl = document.getElementById('oficina-diagram');
+    if (diagramEl) diagramEl.removeEventListener('click', onSlotClick);
+
+    // remove handlers de drag (A-07 obrigatório — cleanup completo)
+    const tray = document.getElementById('parts-tray');
+    if (tray && _onTrayPointerDown) tray.removeEventListener('pointerdown', _onTrayPointerDown);
+    if (_onDocPointerMove)   document.removeEventListener('pointermove',   _onDocPointerMove);
+    if (_onDocPointerUp)     document.removeEventListener('pointerup',     _onDocPointerUp);
+    if (_onDocPointerCancel) document.removeEventListener('pointercancel', _onDocPointerCancel);
+
+    // ghost mid-drag — nunca vazar elemento fixed no DOM (A-07, runtime condição 1)
+    cancelDrag();
+
+    closeNUI();
+  },
 });
-document.getElementById('btn-calib-cancel').addEventListener('click', cancelarCalibragem);
-document.getElementById('btn-calib-save').addEventListener('click',   salvarCalibragem);
 
 })();

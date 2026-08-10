@@ -4,15 +4,17 @@ lua54     'yes'
 
 name        'vhub_login'
 author      'vHub Mirage'
-version     '0.3.1'
+version     '0.6.1'
 description 'Gate de entrada Mirage: conta, seleção e handoff autoritativo ao criador.'
 
 dependencies {
+  'oxmysql',
   'vhub',
   'vhub_hss',
   'vhub_identity',
   'vhub_sims',
   'vhub_spawselector',
+  'depzitamadasptlnd',
 }
 
 shared_scripts {

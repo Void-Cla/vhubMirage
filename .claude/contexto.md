@@ -1,4 +1,5 @@
 # vHub Mirage — Memória Institucional
+_HEAD 2026-07-29: **`vhub_outdoors` 3.0.7 + `vhub_wow` 2.0.3**: distancia visual independente do audio por preset: pequeno 55/65 m, medio 160/180 m, grande 200/225 m. Frustum apenas prioriza slot; LOD acompanha unload. Plano DUI usa offset por depth buffer: TV 6 mm, medio 15 mm, billboard 1 mm, impedindo o fundo original de cobrir video à distancia. Slots mantêm `TXD+TXN+DUI+texture` e reciclam URL. YouTube só confirma após `PLAYING+currentTime`; watchdog detecta stall, lifecycle `ready` zera backoff e pending expira em 15 s. Testes isolados validaram geometria, slot, progresso, retry e limites. Sintaxe/estática aprovadas; restart de `vhub_outdoors` + smoke FiveM pendentes._
 _AMEND 2026-07-23 (#74): **Tela preta/cursor ausente no handoff Login → Spawn Selector corrigidos.** `vhub_spawselector` 2.1.2 nasce fechado, remove fallback autônomo/véu/vignette, limpa timers/listeners/DOM/foco no close/stop e mantém CEF transparente; `RequestOpen` não rejeita mais a primeira chamada nos 5s iniciais. `vhub_hss` 2.2.2 fecha todos os fades no abort/stop e reancora `pending`+bucket de forma idempotente no replay do mesmo `char_id` somente sob `_creation_hold`; `vhub_login` 0.3.1 não escreve mais o ped canônico e revela a tela antes do handoff. Gates contrato/segurança/natives/designer/runtime aprovados; JS/Lua, assets/manifest e lifecycle estático OK. Smoke FiveM permanece obrigatório._
 
 _AMEND 2026-07-23 (#74): **`vhub_sims` 1.0.2 elimina vazamento/tela preta da NUI.** Close client é idempotente e sempre remove foco/envia `sims:close`; mounts assíncronos são cancelados por revisão+token antes de executar hooks; estado fechado nasce com `body.hidden {display:none}`; wizard/checkout não aplicam véu fullscreen. Gates designer/runtime aprovados; 16 JS + 19 Lua e teste determinístico `open→close` com fetch pendente OK. Smoke CEF/resmon in-game permanece obrigatório._
@@ -827,6 +828,20 @@ Qualquer alteração em `resources/[CORE]/vhub/**` exige:
 3. Bump de major: `core-frozen-v2.0` (não patch).
 
 Para extensões/novas features, criar resource externo em `resources/[SCRIPTS]/vhub_*` seguindo `metas/manual_dev_vhub.md`.
+
+---
+
+## Atualização 2026-08-02 — decisão #66 (vhub_custom 2.1)
+
+- `vhub_custom` é o orquestrador único da intenção de oficina: valida zona+réplica+placa+modelo+bucket+distância, emite lease efêmero e serializa mutações por placa. Cliente mantém somente preview/câmera/animação.
+- Escritores veiculares preservados: `vhub_conce` persiste custom/repair/position e `vhub_vehicle_log`; `vhub_money` debita/estorna; `vhub_vehcontrol` persiste handling; `vhub_nitro` persiste nitro. `vhub_custom` possui somente o ledger de orquestração `vh_custom_operations`; zero toque no CORE.
+- `vhub_vehcontrol:recalibrate` é toolbox-only e exige prova física completa. Oficina usa reserva/commit/cancel exact-gated; toolbox e oficina compartilham o mesmo lock por placa antes de consumir item/dinheiro.
+- Reboque é exclusivamente server-side, com destino configurado, pós-condição na réplica e rollback físico se a posição não persistir. Removidos `SetNetworkIdCanMigrate`, destino/posição cliente e eventos legados.
+- NUI v2 usa runtime modular, dispatcher/bridge únicos, CSP, preview 10 Hz e órbita/zoom 30 Hz com cleanup integral.
+- Contratos de eventos 1.x foram removidos sem fallback inseguro; versão do resource `2.1.0`.
+- Lock custom não é roubável; token+lease+modelo são revalidados após `Await`. Reserva handling expira em 30 s e limpa em drop/stop sem permitir commit antigo. Saga durável `prepared/charged/applied/refunded` cobre custo zero, usa UNIQUE por request em custom+money, guard SQL por placa, claim CAS de 300 s e guarda actor/before/after. Recovery limitado (20/30 s) confirma aplicação ou estorna offline; replay concluído nunca reaplica payload antigo no client.
+
+`Serviço veicular | vhub_custom | vhub_conce(custom/repair/position/audit), vhub_money(payment/refund), vhub_vehcontrol(handling), vhub_nitro(nitro) | lease efêmero + locks não roubáveis | zona+bucket+distância+netId+placa+modelo; reboque físico server-side`
 
 ## Atualização 2026-07-10 — decisão #61 (Fuel v2)
 

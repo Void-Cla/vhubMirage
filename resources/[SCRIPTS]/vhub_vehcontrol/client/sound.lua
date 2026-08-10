@@ -111,7 +111,7 @@ end)
 -- LIFECYCLE — sai do carro = para o som (evita radio fantasma tocando vazio)
 -- ============================================================
 
-RegisterNetEvent(VHubVeh.E.LEFT_VEHICLE, function()
+AddEventHandler(VHubVeh.E.LEFT_VEHICLE, function()
   if playing then
     TriggerServerEvent(VHubVeh.E.SOUND_STOP)
     playing = false
@@ -133,8 +133,9 @@ RegisterNetEvent(VHubVeh.E.SOUND_NOW, function(title, artist)
   SendNUIMessage({ type = 'soundNow', data = { title = title, artist = artist } })
 end)
 
-AddEventHandler(VHubVeh.E.WOW_AUDIO_LIFECYCLE, function(name)
+AddEventHandler(VHubVeh.E.WOW_AUDIO_LIFECYCLE, function(name, status)
   if name ~= localSoundName() or not playing then return end
+  if status == 'ready' then return end   -- som pronto: nao parar
   playing = false
   TriggerServerEvent(VHubVeh.E.SOUND_STOP)
   SendNUIMessage({ type = 'soundEnded', data = {} })

@@ -6,100 +6,135 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-
-  <!-- Toast (notificações rápidas, visíveis com painel fechado) -->
   <div id="toast" class="hidden"></div>
-
-  <!-- Announce (mensagem global full-width) -->
   <div id="announce" class="hidden"><div></div></div>
-
-  <!-- Spec HUD -->
   <div id="spec-hud" class="hidden">Espectando <span id="spec-id"></span></div>
 
-  <!-- ============================================================
-       ASIDE: barra lateral estreita, sempre visível quando admin logado
-  ============================================================ -->
-  <aside id="aside" class="hidden">
-    <nav id="aside-nav"><!-- botões gerados por app.js --></nav>
+  <div id="vhub-bg" class="hidden"></div>
 
-    <div id="aside-foot">
-      <button class="aflag" id="f-god"    title="Invencível"></button>
-      <button class="aflag" id="f-invis"  title="Invisível"></button>
-      <button class="aflag" id="f-noclip" title="Noclip"></button>
-    </div>
-  </aside>
-
-  <!-- ============================================================
-       POPOVER: painel de conteúdo ao lado do aside (abre ao clicar seção)
-  ============================================================ -->
-  <div id="popover" class="hidden">
-    <header id="pop-header">
-      <span id="pop-title"></span>
-      <nav id="subtabs"><!-- subcategorias --></nav>
-      <div id="pop-actions">
-        <input id="tb-search" placeholder="Buscar…" class="hidden" />
-        <button id="btn-refresh" title="Atualizar"></button>
-        <button id="btn-close"   title="Fechar"></button>
+  <div id="admin-shell" class="hidden">
+    <aside id="aside">
+      <div id="aside-brand">
+        <img src="assets/logo.png" alt="vHub" />
+        <div class="aside-brand-copy">
+          <strong>Admin</strong>
+          <span>controle operacional</span>
+        </div>
       </div>
-    </header>
 
-    <div id="pop-body">
-      <!-- Painel · Visão geral -->
-      <section class="view" id="view-dash-geral">
-        <div class="cards" id="dash-cards"></div>
-        <h3>Ações rápidas</h3>
-        <div class="quick" id="quick-actions"></div>
-        <h3>Equipe online</h3>
-        <div id="staff-list" class="list-flat"></div>
-      </section>
+      <nav id="aside-nav"></nav>
 
-      <!-- Painel · Economia -->
-      <section class="view hidden" id="view-dash-economia">
-        <div class="cards" id="eco-cards"></div>
-        <h3>Maiores saldos (online)</h3>
-        <div id="eco-top" class="list-flat"></div>
-        <p class="hint">Totais cobrem apenas jogadores online — verdade é o vhub_money.</p>
-      </section>
+      <button id="aside-close" class="aside-ghost" title="Fechar painel">
+        <span>ESC</span>
+        <strong>Fechar</strong>
+      </button>
+    </aside>
 
-      <!-- Jogadores -->
-      <section class="view hidden" id="view-players">
-        <div class="split">
-          <div id="players-list" class="list-cards"></div>
-          <div id="player-detail" class="detail empty">
-            <div class="empty-msg" id="player-empty">Selecione um jogador</div>
+    <div id="popover" class="hidden">
+      <header id="pop-header">
+        <div class="pop-heading">
+          <span class="pop-kicker">vHub Admin</span>
+          <span id="pop-title"></span>
+        </div>
+
+        <nav id="subtabs"></nav>
+
+        <div id="pop-actions">
+          <input id="tb-search" placeholder="Buscar..." class="hidden" />
+          <button id="btn-refresh" title="Atualizar"></button>
+          <button id="btn-close" title="Recuar"></button>
+        </div>
+      </header>
+
+      <div id="pop-body">
+        <section class="view" id="view-dash-geral">
+          <div class="cards" id="dash-cards"></div>
+          <h3>Acoes rapidas</h3>
+          <div class="quick" id="quick-actions"></div>
+          <h3>Equipe online</h3>
+          <div id="staff-list" class="list-flat"></div>
+        </section>
+
+        <section class="view hidden" id="view-dash-economia">
+          <div class="cards" id="eco-cards"></div>
+          <h3>Maiores saldos (online)</h3>
+          <div id="eco-top" class="list-flat"></div>
+          <p class="hint">Totais cobrem apenas jogadores online. A verdade segue no vhub_money.</p>
+        </section>
+
+        <section class="view hidden" id="view-players">
+          <div class="split">
+            <div id="players-list" class="list-cards"></div>
+            <div id="player-detail" class="detail empty">
+              <div class="empty-msg" id="player-empty">Selecione um jogador</div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Ações -->
-      <section class="view hidden" id="view-actions">
-        <div class="action-grid" id="action-grid"></div>
-      </section>
+        <section class="view hidden" id="view-actions">
+          <div class="action-grid" id="action-grid"></div>
+        </section>
 
-      <!-- Frota -->
-      <section class="view hidden" id="view-fleet">
-        <div class="fleet-toolbar" id="fleet-toolbar"></div>
-        <div id="fleet-list" class="list-flat"></div>
-        <div id="fleet-detail" class="detail empty" style="margin-top:8px">
-          <div class="empty-msg">Selecione um veículo</div>
-        </div>
-      </section>
+        <section class="view hidden" id="view-fleet">
+          <div class="fleet-toolbar" id="fleet-toolbar"></div>
+          <div class="split split-fleet">
+            <div id="fleet-list" class="list-flat"></div>
+            <div id="fleet-detail" class="detail empty">
+              <div class="empty-msg">Selecione um veiculo</div>
+            </div>
+          </div>
+        </section>
 
-      <!-- Denúncias -->
-      <section class="view hidden" id="view-reports">
-        <div id="reports-list" class="list-flat"></div>
-      </section>
+        <section class="view hidden" id="view-reports">
+          <div id="reports-list" class="list-flat"></div>
+        </section>
 
-      <!-- Histórico -->
-      <section class="view hidden" id="view-logs">
-        <div id="logs-list" class="list-flat"></div>
-      </section>
+        <section class="view hidden" id="view-logs">
+          <div id="logs-list" class="list-flat"></div>
+        </section>
+      </div>
     </div>
+
+    <aside id="utility-rail">
+      <section class="utility-card utility-card--hero">
+        <div class="utility-kicker">Operacao</div>
+        <h2>Painel tatico</h2>
+        <p>Layout lateral mais largo, leitura mais limpa e foco preso fora do mundo.</p>
+        <div class="utility-shortcuts">
+          <span>F6 painel</span>
+          <span>ESC recua</span>
+          <span>Enter confirma</span>
+        </div>
+      </section>
+
+      <section class="utility-card">
+        <div class="utility-head">
+          <span class="utility-title">Estados rapidos</span>
+          <span class="utility-meta">sync local</span>
+        </div>
+
+        <div id="aside-foot">
+          <button class="aflag" id="f-god" title="Invencivel"></button>
+          <button class="aflag" id="f-invis" title="Invisivel"></button>
+          <button class="aflag" id="f-noclip" title="Noclip"></button>
+        </div>
+      </section>
+
+      <section class="utility-card utility-card--notes">
+        <div class="utility-head">
+          <span class="utility-title">Leitura</span>
+          <span class="utility-meta">fluxo</span>
+        </div>
+
+        <div class="utility-notes">
+          <span>Jogadores e detalhe agora respiram lado a lado.</span>
+          <span>Acoes e frota usam grade mais larga.</span>
+          <span>O rail direito concentra toggles e atalhos sem esmagar o conteudo.</span>
+        </div>
+      </section>
+    </aside>
   </div>
 
-  <!-- ============================================================
-       MODAL: confirmações e formulários (sobre tudo)
-  ============================================================ -->
   <div id="modal-bg" class="hidden">
     <div id="modal">
       <h3 id="modal-title"></h3>
@@ -111,7 +146,6 @@
     </div>
   </div>
 
-  <!-- Overlay 3D: cards flutuantes sobre jogadores próximos (client/overlay.lua → NUI) -->
   <div id="overlay-container"></div>
 
   <script src="js/app.js"></script>

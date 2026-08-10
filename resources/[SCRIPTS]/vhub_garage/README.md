@@ -127,3 +127,36 @@ A garagem **nunca** escreve estado físico diretamente — usa `commitVehicleSta
 | L-13 | Estado físico escrito via `commitVehicleState` (CORE); nunca `setVData` |
 | §3.2 | Ciclo completo documentado: compra→spawn→store→pátio |
 | §3.8 | Despawn de entidade usa padrão `TaskLeaveVehicle` + `NetworkRequestControlOfEntity` + `DeleteEntity` |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `openGarage` | `(src) → ok` | vhub_ipad (app), vhub_admin |
+| 2 | `storeVehicle` | `(src, plate) → ok` | vhub_admin, vhub_lspdtool (via forceImpound) |
+| 3 | `retrieveVehicle` | `(src, plate, coord) → netid` | vhub_admin |
+| 4 | `getPlayerVehicles` | `(src) → lista` | vhub_admin |
+| 5 | `forceImpound` | `(plate, actor) → ok` | vhub_lspdtool |
+| 6 | `adminSpawnVehicle` | `(src, model) → netid` | vhub_admin |
+| 7 | `updateStatus` | `(plate, status) → ok` | vhub_ferinha (após leilão) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `notify` |
+| `vhub_conce` | `getPlayerVehicles`, `spawnVehicle`, `despawnVehicle`, `saveVehicleState`, `loadVehicleState`, `forceImpound`, `givePhysicalKey`, `takePhysicalKey`, `getZones`, `resolveConc` |
+| `vhub_ferinha` | `listActiveAuctions`, `getZones` (boot) |
+| `vhub_inventory` | `hasVehicleKey`, `giveVehicleKey`, `takeVehicleKey` |
+| `vhub_money` | `tryPayment` (taxa de retirada) |
+| `vhub_identity` | `getIdentity` (opcional, prontuário) |
+| `vhub_groups` | `hasPermission` (ações admin) |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_garage:vehicleStored` | server→client (player) | `{plate}` |
+| `vhub_garage:vehicleRetrieved` | server→client (player) | `{plate, netid}` |

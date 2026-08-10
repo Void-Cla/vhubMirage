@@ -5,13 +5,14 @@ lua54      'yes'
 
 name        'vhub_lspdtool'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.0.1'
 description 'LSPD Tool: radar automatico + leitura de placa (radar/helicam) + BOLO e dispatch nativos vHub'
 
 -- Integração com sd-policeradar / helicam é SOFT (via pcall) — não são dependências.
 -- vhub_groups é usado via exports (sempre presente no stack vHub).
 dependencies {
     'vhub',
+    'vhub_hss',
     'oxmysql',
 }
 

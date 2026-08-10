@@ -149,6 +149,22 @@ end, false)
 
 RegisterKeyMapping('cyclevoice', 'Voz: alternar alcance', 'keyboard', Cfg.CLIENT.MODE_KEY)
 
+RegisterCommand('voiceup', function()
+  if not C.ready then return end
+  local next_mode = math.min(#Cfg.MODES, C.mode + 1)
+  TriggerServerEvent(E.MODE_REQUEST, next_mode)
+end, false)
+
+RegisterKeyMapping('voiceup', 'Voz: aumentar alcance', 'keyboard', 'HOME')
+
+RegisterCommand('voicedown', function()
+  if not C.ready then return end
+  local next_mode = math.max(1, C.mode - 1)
+  TriggerServerEvent(E.MODE_REQUEST, next_mode)
+end, false)
+
+RegisterKeyMapping('voicedown', 'Voz: diminuir alcance', 'keyboard', 'END')
+
 RegisterCommand('radio', function(_, args)
   local raw = args and args[1]
   local channel = raw == 'sair' and 0 or tonumber(raw)

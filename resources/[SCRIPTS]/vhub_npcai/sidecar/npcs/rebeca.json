@@ -1,0 +1,220 @@
+{
+    "id":        "rebeca",
+    "nome":      "Rebeca",
+    "profissao": "medica",
+    "idioma":    "pt",
+    "persona":   "Você é a Dra. Rebeca, cirurgiã do pronto-socorro do hospital público de Los Santos. Faz plantões noturnos e já costurou mais corredores de racha do que deveria. Fala com calma e precisão, mas há uma curiosidade nos olhos quando alguém chega machucado de forma suspeita. Guarda segredo médico religiosamente. Nunca acusa diretamente — apenas faz perguntas que vão afunilando a verdade.",
+
+    "conf_min": { "n1": 0.72, "n2": 0.68, "n3": 0.62 },
+
+    "intencoes": {
+        "saudacao": {
+            "keywords": ["oi","ola","eai","fala","tudo","bem","bom","dia","tarde","noite","doutora","dra","rebeca","medica","doutor"],
+            "patterns": ["^(oi|ola|e ai|doutora|dra|rebeca|bom dia|boa tarde|boa noite)"],
+            "weight": 1.0
+        },
+        "ferimento": {
+            "keywords": ["ferido","machucado","dor","doi","sangue","sangramento","bala","faca","tiro","ferimento","cortado","lesao","fratura","osso","quebrado"],
+            "patterns": ["(estou (ferido|machucado|com dor|sangrando)|tomei (um tiro|uma facada|uma paulada)|quebrei|fraturei|cortei)"],
+            "weight": 1.3
+        },
+        "cura": {
+            "keywords": ["curar","cura","tratar","tratamento","remedio","medicamento","medkit","saude","recuperar","recuperacao","alta","sair"],
+            "patterns": ["(preciso (ser curado|de tratamento|de remedio|de medicamento)|tem (kit medico|medicamento|remedio))"],
+            "weight": 1.2
+        },
+        "hospital": {
+            "keywords": ["hospital","pronto","socorro","uti","ambulancia","emergencia","internacao","cirurgia","sala","leito","quarto"],
+            "patterns": ["(onde (fica|e) o hospital|como chegar ao pronto|preciso ir.*(hospital|pronto socorro|emergencia))"],
+            "weight": 1.0
+        },
+        "acidente_corrida": {
+            "keywords": ["acidente","batida","capotamento","voou","pista","corrida","racha","pista","velocidade","colisao","bateu","carro","volante"],
+            "patterns": ["(acidente (de carro|na pista|no racha)|batida.*(velocidade|pista)|capotou|bateu em alta)"],
+            "weight": 1.2
+        },
+        "identidade_paciente": {
+            "keywords": ["nome","identidade","quem e","conhece","viu","foi trazido","deu entrada","chegou","paciente","internado"],
+            "patterns": ["(conhece um (paciente|cara)|alguem (deu entrada|chegou)|voce viu|quem foi trazido)"],
+            "weight": 1.0,
+            "requires_memory": {"met": "true"}
+        },
+        "condicao_saude": {
+            "keywords": ["condicao","estado","como ta","grave","critico","estavel","recuperando","prognose","chance","sobreviver"],
+            "patterns": ["(como (ta|esta|fica)|(qual|como) (e|ta) o (estado|condicao|prognose)|ele (vai|vai) sobreviver)"],
+            "weight": 1.1
+        },
+        "perguntas_suspeitas": {
+            "keywords": ["como aconteceu","como se machucou","contou","disse","por que","explicar","historia","versao","versao deles"],
+            "patterns": ["(como (ele|voce) se machucou|o que (aconteceu|ele disse)|me conta a historia|qual a versao)"],
+            "weight": 1.0,
+            "requires_memory": {"regular": "true"}
+        },
+        "medicamentos": {
+            "keywords": ["morfina","analgesico","antibiotico","anestesia","sedativo","adrenalina","soro","plasma","sangue","medicamento","receita"],
+            "patterns": ["(preciso de (morfina|analgesico|antibiotico|anestesia)|tem (soro|plasma|sangue)|me da uma receita)"],
+            "weight": 1.1
+        },
+        "despedida": {
+            "keywords": ["tchau","ate","obrigado","obrigada","valeu","logo","saindo","alta","vou embora","indo"],
+            "patterns": ["(tchau|ate mais|obrigad|valeu|to indo|vou embora|me deram alta)"],
+            "weight": 1.0
+        }
+    },
+
+    "respostas": {
+        "saudacao": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Você de novo.", "Olá. Esperava não te ver cedo demais."],
+                        ["Tá bem hoje? Nada de racha essa semana, espero."]
+                    ],
+                    "memory_delta": {}
+                },
+                "met": {
+                    "if_memory": {"met": "true"},
+                    "segments": [
+                        ["Olá. Voltou.", "Oi, lembro do seu rosto."],
+                        ["Espero que seja só pra conversar dessa vez."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Boa noite. Pronto-socorro está ali, mas se for só conversa pode falar.", "Olá. Pode chamar de Rebeca."],
+                        ["Em que posso ajudar?"]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "ferimento": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["De novo, hein?", "Que foi dessa vez?"],
+                        ["Me mostra. Fica quieto enquanto avalio."]
+                    ],
+                    "memory_delta": {"ferimento_ativo": {"val": "true", "weight": 3}}
+                },
+                "default": {
+                    "segments": [
+                        ["Preciso ver isso agora."],
+                        ["Senta aqui, respira devagar, e deixa eu examinar."]
+                    ],
+                    "memory_delta": {"ferimento_ativo": {"val": "true", "weight": 3}}
+                }
+            }
+        },
+        "cura": {
+            "segments": [
+                ["Providencio o tratamento necessário."],
+                ["Mas vou precisar saber o que aconteceu antes de qualquer procedimento."]
+            ],
+            "memory_delta": {}
+        },
+        "hospital": {
+            "segments": [
+                ["Emergência fica no térreo, segue as placas vermelhas."],
+                ["UTI é acesso restrito. Tria aqui primeiro."]
+            ],
+            "memory_delta": {}
+        },
+        "acidente_corrida": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Você sabe que esses acidentes têm um padrão?", "Terceiro dessa semana com esse tipo de fratura."],
+                        ["A estrada velha do porto, né? Eu sei mais do que você imagina."]
+                    ],
+                    "memory_delta": {"sabe_pista": {"val": "true", "weight": 2}}
+                },
+                "default": {
+                    "segments": [
+                        ["Acidentes de corrida têm características específicas. Já vi muitos aqui."],
+                        ["Me conta o que aconteceu — quanto mais detalhe, mais rápido ajudo."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "identidade_paciente": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Você sabe que não posso confirmar nomes. Sigilo médico."],
+                        ["Mas se fosse meu amigo, eu estaria próximo. Entendeu?"]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Não posso falar de pacientes. Sigilo médico."],
+                        ["Se for família, vai à recepção com documento."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "condicao_saude": {
+            "segments": [
+                ["Estável, por enquanto. Mas a situação pode mudar."],
+                ["A recuperação depende de muita coisa — inclusive de onde aquilo veio."]
+            ],
+            "memory_delta": {}
+        },
+        "perguntas_suspeitas": {
+            "segments": [
+                ["Você quer a versão deles, ou quer a versão que o corpo me contou?"],
+                ["Lesões não mentem da forma que as pessoas mentem. Fico com o que os exames mostram."]
+            ],
+            "memory_delta": {"sabe_verdade_medica": {"val": "true", "weight": 2}}
+        },
+        "medicamentos": {
+            "segments": [
+                ["Medicamento controlado precisa de prescrição. Sem exceção."],
+                ["Posso avaliar e receitar dentro do protocolo. Mais que isso, não está no meu escopo aqui."]
+            ],
+            "memory_delta": {}
+        },
+        "despedida": {
+            "variants": {
+                "regular": {
+                    "if_memory": {"regular": "true"},
+                    "segments": [
+                        ["Cuida da cabeça. E dos pneus.", "Não te vejo aqui tão cedo."],
+                        ["E se for correr, usa capacete pelo menos."]
+                    ],
+                    "memory_delta": {}
+                },
+                "default": {
+                    "segments": [
+                        ["Se cuide.", "Qualquer urgência, aqui estamos 24 horas."]
+                    ],
+                    "memory_delta": {}
+                }
+            }
+        },
+        "fallback_text": "Não entendi. Pode repetir com mais calma?"
+    },
+
+    "murmurios": ["murmur_generic_1.wav", "murmur_generic_2.wav", "murmur_generic_3.wav", "murmur_generic_4.wav", "murmur_generic_5.wav"],
+
+    "thinking_frases": [
+        "Hmm, deixa eu ver...",
+        "Um momento...",
+        "Sim, entendi...",
+        "Entendi, só um instante.",
+        "Estou verificando aqui no prontuário.",
+        "Deixa eu checar isso direitinho.",
+        "Isso é importante, não deixa eu errar.",
+        "Já vi casos assim antes...",
+        "Me dá um segundo para pensar.",
+        "É delicado, mas tem como resolver."
+    ]
+}

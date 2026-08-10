@@ -198,6 +198,15 @@ function VHubHSS_ApplyCustomization(ped, custom)
     return true
 end
 
+-- Aparencia somente em ped local de preview criado pelo vhub_login.
+exports('applyPreviewCustomization', function(ped, custom)
+    if GetInvokingResource() ~= 'vhub_login' then return false end
+    ped = tonumber(ped)
+    if not ped or ped == PlayerPedId() or not DoesEntityExist(ped) or not IsEntityAPed(ped)
+        or NetworkGetEntityIsNetworked(ped) then return false end
+    return VHubHSS_ApplyCustomization(ped, custom) == true
+end)
+
 -- Aplica somente as chaves alteradas durante o preview local.
 function VHubHSS_ApplyCustomizationPatch(ped, patch, merged)
     if not ped or ped == 0 or not DoesEntityExist(ped) then return false end
@@ -299,6 +308,7 @@ end
 local function finish_spawn(first_spawn)
     local ped = PlayerPedId()
     FreezeEntityPosition(ped, false)
+    SetEntityCollision(ped, true, true)
     SetEntityVisible(ped, true, false)
     SetEntityInvincible(ped, false)
     DoScreenFadeIn(500)

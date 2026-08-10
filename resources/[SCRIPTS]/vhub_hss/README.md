@@ -55,7 +55,16 @@ Client HSS expõe exclusivamente ao `vhub_sims`: `beginCustomizationPreview`,
 
 `setPedModel` preserva skins legadas como override transitório, confirmado pela réplica server-side.
 
-Todos os exports de mutação são server-side, default-deny e validam alvo online.
+Todos os exports server-side de mutação são default-deny e validam alvo online.
+
+## Export cliente do HUD nativo
+
+```lua
+exports.vhub_hss:setNativeHudSuppressed('hud'|'radar', true|false)
+```
+
+Gated por resource: `vhub_login` pode suprimir `hud`; `vhub_lspdtool`, `radar`.
+Somente o HSS executa `DisplayHud`, `DisplayRadar` e o Scaleform do minimapa.
 
 ## Exports fisiológicos
 
@@ -90,3 +99,53 @@ vivo (grep global zero) e os aliases `LEGACY_*` morreram junto. Todo acesso é d
 
 Após aprovação: ADR #71 remove `ensure`, aliases/allowlists legados e a pasta da fachada no
 mesmo commit.
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `spawnAt` | `(src, {x,y,z,heading}) → ok` | vhub_spawselector (via chooseSpawn) |
+| 2 | `isPendingSpawn` | `(src) → bool` | vhub_login |
+| 3 | `teleport` | `(src, x, y, z, heading) → ok` | vhub_admin |
+| 4 | `getPosition` | `(src) → x, y, z` | vhub_racha, vhub_vrcs |
+| 5 | `setHealth` | `(src, hp) → ok` | vhub_admin, vhub_hss interno |
+| 6 | `setArmour` | `(src, arm) → ok` | vhub_admin |
+| 7 | `revive` | `(src) → ok` | vhub_admin, vhub_lspdtool |
+| 8 | `kill` | `(src) → ok` | vhub_admin |
+| 9 | `setPedModel` | `(src, model) → ok` | vhub_sims |
+| 10 | `setCustomization` | `(src, custom) → ok` | vhub_sims |
+| 11 | `giveWeapons` | `(src, weapons, clear) → ok` | vhub_coinshop |
+| 12 | `beginActivity` | `(src) → ok` | vhub_racha |
+| 13 | `attachActivityVehicle` | `(src, entity) → ok` | vhub_racha |
+| 14 | `endActivity` | `(src) → ok` | vhub_racha |
+| 15 | `authorizePosition` | `(src, position) → ok` | vhub_racha |
+| 16 | `beginPendingStage` | `(src, session_id) → token` | vhub_racha |
+| 17 | `endPendingStage` | `(src, stage_token) → ok` | vhub_racha |
+| 18 | `getCustomization` | `(src) → custom` | vhub_sims |
+| 19 | `getCharacterSummaries` | `(src) → lista` | vhub_login |
+| 20 | `sanitizeCustomizationPatch` | `(patch) → patch_safe` | vhub_sims |
+| 21 | `commitCustomization` | `(src, patch, rev, op_id) → ok` | vhub_sims |
+| 22 | `rollbackCustomization` | `(src, token) → ok` | vhub_sims |
+| 23 | `getState` | `(src) → fisiologia` | vhub_animacao, vhub_lspdtool |
+| 24 | `setHandcuffed` | `(src, bool) → ok` | vhub_lspdtool |
+| 25 | `isHandcuffed` | `(src) → bool` | vhub_animacao |
+| 26 | `isConscious` | `(src) → bool` | vhub_animacao |
+| 27 | `getAnimBlocks` | `(src) → blocks` | vhub_animacao |
+| 28 | `fullHeal` | `(src) → ok` | vhub_admin |
+| 29 | `registerItem` | `(item, handler) → ok` | vhub_hss interno |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `getCData`, `setCData`, `notify` |
+| `oxmysql` | Persistência direta do estado do ped |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_hss:chooseSpawn` | server→providers registrados | `{src, char_id}` |
+| `vhub_hss:spawned` | server→client (player) | `{coord, char_id}` |

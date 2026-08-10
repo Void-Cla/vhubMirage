@@ -22,10 +22,10 @@ files {
     'nui/index.html',
     'nui/velo-controller.js',
     'nui/velo-core.js',
+    'nui/velo-dials.js',   -- builder de face (dial spec → SVG). HUDs incluem junto do velo-core.
     -- HUDs (cada um isolado por iframe). Cobre html/css/js/svg. Se seu HUD usar imagem LOCAL
     -- (.png/.jpg), adicione o glob correspondente; fundos por LINK externo não precisam.
     'nui/huds/**/*.html',
     'nui/huds/**/*.css',
     'nui/huds/**/*.js',
-    'nui/huds/**/*.svg',
 }

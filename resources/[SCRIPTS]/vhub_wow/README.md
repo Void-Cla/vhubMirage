@@ -1,8 +1,8 @@
 # vhub_wow — Motor de Áudio/Vídeo
 
-**Versão:** 2.0.0 | **Owner:** vhub_wow
+**Versão:** 2.1.0 | **Owner:** vhub_wow
 
-Motor de áudio standalone (porta mínima do xsound, decisão #34): player YouTube nocookie, busca InnerTube/APIv3 e rádio com playlist curada. Consumidor principal: rádio do `vhub_vehcontrol`. Áudio = vhub_wow; vídeo (telinha) = responsabilidade do consumidor de UI (decisão #53).
+Motor de áudio standalone (porta mínima do xsound, decisão #34): player YouTube, busca InnerTube/APIv3 e rádio com playlist curada. Consumidor principal: rádio do `vhub_vehcontrol`. Áudio = vhub_wow; vídeo (telinha) = responsabilidade do consumidor de UI (decisão #53).
 
 ---
 
@@ -16,12 +16,37 @@ Motor de áudio standalone (porta mínima do xsound, decisão #34): player YouTu
 - Modo streamer local persistente: silêncio total do WOW, sem afetar voz
 - Rate-limit por resource chamador + whitelist default-deny
 
+## Migração 2.1.0
+
+Os exports `Play`, `PlayAtEntity` e `PlayAtCoords` aceitam `duckStrength` opcional no
+último argumento. O padrão permanece `0.5`; `1.0` silencia totalmente a fonte quando a
+atividade de voz chega a 100%. O valor fica isolado por som e não altera o modo streamer.
+
+## Migração 2.0.3
+
+- Protocolo YouTube usa `channel=widget`, iframe 200x200 e autoplay inicialmente mudo.
+- Somente `PLAYING` com avanço de `currentTime` libera volume; stall reporta erro ao consumidor.
+- Lifecycle `ready` zera backoff acumulado. Volumes espaciais seguem em lote unico por ciclo.
+- Volumes espaciais usam lote unico; entidade fora do escopo apenas recebe volume zero.
+
+## Migração 2.0.2
+
+- Player YouTube aguarda `onReady`; comandos enviados no `load` foram removidos.
+- Handshake possui retry de 250 ms e timeout explícito de 10 s.
+
+## Migração 2.0.1
+
+- `vhub_outdoors` pode usar somente `PlayAtCoords`, `SetVolume` e `Destroy`.
+- Rate-limit combina deduplicacao por som, burst global por caller/jogador e memoria limitada.
+- Cada cliente aceita no maximo 16 sons simultaneos.
+- Erros do player retornam por evento server-side rate-limited para retry do consumidor.
+
 ## Migração 1.x para 2.0
 
 - Permalink `soundcloud.com` foi removido; use URL direta HTTPS de CDN permitida.
 - Exports filtram targets offline/duplicados, limitam 128 destinos e podem retornar
   `false` quando nenhum destinatário for aceito ou o rate-limit bloquear a chamada.
-- Scripts remotos de player foram removidos; YouTube usa iframe `youtube-nocookie` direto.
+- Scripts remotos de player foram removidos; YouTube usa iframe direto.
 
 ---
 
@@ -45,7 +70,9 @@ Integração opcional: `vhub_voicePMA`. O WOW pede atividade somente enquanto h�
 
 ## Exports disponíveis (server-side, TRUSTED default-deny)
 
-Whitelist em `WOW_Config.TrustedResources` — sem entrada, **ninguém passa** (N0-2). `targets` é sempre uma lista de server ids.
+Whitelist em `WOW_Config.TrustedResources` e ACL por export em
+`WOW_Config.TrustedActions` — sem ambas, **ninguém passa** (N0-2). `targets` é sempre
+uma lista de server ids.
 
 ### Playback
 
@@ -57,7 +84,9 @@ exports.vhub_wow:Play({src}, 'radio_carro_12', url, 0.5, false)  -- (targets, so
 exports.vhub_wow:PlayAtEntity({src}, 'radio_carro_12', url, 0.5, netId, 20.0, true)
 
 -- som 3D preso a COORDENADA fixa (TV da cidade/palco/boteco — export-first, decisão #35)
-exports.vhub_wow:PlayAtCoords({src}, 'palco_rap', url, 0.8, { x=0, y=0, z=0 }, 30.0, true)
+exports.vhub_wow:PlayAtCoords(
+  {src}, 'palco_rap', url, 0.8, { x=0, y=0, z=0 }, 30.0, true, 0.9
+)
 
 -- destrói som ativo nos targets
 exports.vhub_wow:Destroy({src}, 'radio_carro_12')
@@ -92,7 +121,14 @@ local track = exports.vhub_wow:GetRadioTrack()
 -- shared/config.lua
 WOW_Config.TrustedResources = {
   'vhub_vehcontrol',
+  'vhub_outdoors',
   'meu_resource',   -- adicione o seu aqui (com ownership registrado)
+}
+
+WOW_Config.TrustedActions = {
+  vhub_vehcontrol = { ['*'] = true },
+  vhub_outdoors = { play_coords = true, destroy = true },
+  meu_resource = { play = true, destroy = true },
 }
 ```
 
@@ -136,3 +172,36 @@ O volume efetivo preserva separadamente volume-base, fator espacial e ducking de
 | §4.6 | Rate-limit por resource chamador (janela mínima entre disparos) |
 | L-19 | Coordenadas cruzam o export como flat `{x,y,z}` |
 | L-08 | Sem leak de estado: `_opAt` indexado por resource (conjunto finito) |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `Play` | `(targets, soundName, url, vol, loop, duckStrength?) → ok` | vhub_vehcontrol (rádio) |
+| 2 | `PlayAtEntity` | `(targets, soundName, url, vol, netId, dist, loop, duckStrength?) → ok` | vhub_vehcontrol (rádio 3D) |
+| 3 | `PlayAtCoords` | `(targets, soundName, url, vol, coord, dist, loop, duckStrength?) → ok` | vhub_outdoors |
+| 4 | `Destroy` | `(targets, soundName) → ok` | vhub_vehcontrol |
+| 5 | `Pause` | `(targets, soundName) → ok` | vhub_vehcontrol |
+| 6 | `Resume` | `(targets, soundName) → ok` | vhub_vehcontrol |
+| 7 | `SetVolume` | `(targets, soundName, vol) → ok` | vhub_vehcontrol, vhub_outdoors |
+| 8 | `SetDistance` | `(targets, soundName, dist) → ok` | vhub_vehcontrol |
+| 9 | `RequestSearch` | `(playerSrc, query) → void` | vhub_vehcontrol (busca de música) |
+| 10 | `GetRadioTrack` | `() → track\|nil` | vhub_vehcontrol (rádio aleatório) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `notify` |
+| `vhub_voicePMA` | `getVoiceState` (ducking de voz) — soft-dep |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_wow:searchResults` | server→client (player) | `{query, items[]}` |
+| `vhub_wow:play` | server→client (targets) | `{soundName, url, vol, loop}` |
+| `vhub_wow:destroy` | server→client (targets) | `{soundName}` |
+| `vhub_wow:server:audioLifecycle` | server interno | `{src, soundName, status}` |

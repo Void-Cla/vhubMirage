@@ -70,7 +70,7 @@ VRCS.Cfg = {
     -- isolado (F5), NUNCA no servidor principal. Este publisher e uma CONCESSAO DE
     -- TESTE: envia um embed de RESULTADO (texto, sem video) ao finalizar a corrida.
     -- Em producao migra para o renderer. Segredo SEMPRE via convar (nunca versionado):
-    --   set vrcs_discord_webhook "https://discord.com/api/webhooks/...."
+    --   set vrcs_discord_webhook "<URL_PRIVADA>"
     DISCORD = {
         enabled        = true,                -- liga o publisher de teste
         webhook_convar = 'vrcs_discord_webhook',

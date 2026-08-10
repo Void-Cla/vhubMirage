@@ -1,4 +1,4 @@
-/* modules/backpack/backpack.css — player hub: topbar identidade + sidebar + tabs. Escopo .mod-backpack. */
+/* modules/backpack/backpack.css — Player Hub: topbar + sidebar + grade + detalhe. Escopo .mod-backpack. */
 
 .mod-backpack {
   position: fixed;
@@ -6,20 +6,49 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.52);
+  background: var(--vh-scrim);
+
+  /* tokens locais do módulo (A-11: fora do :root) */
+  --bp-w:        900px;
+  --bp-h:        min(88vh, 660px);
+  --bp-pad:      18px;
+  --bp-detail-w: 264px;
 }
 
+/* campo de areia (assinatura Mirage) — atrás do painel, sem capturar mouse */
+.mod-backpack .vh-sand {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+
+/* ============================================================
+   SHELL (vidro em camadas — sem backdrop-filter sobre o jogo, A-09)
+   ============================================================ */
+
 .mod-backpack .bp-shell {
-  width: 820px;
+  position: relative;
+  z-index: 1;
+  width: var(--bp-w);
   max-width: 96vw;
-  height: min(88vh, 640px);
+  height: var(--bp-h);
   display: flex;
   flex-direction: column;
-  background: rgba(13, 11, 8, 0.92);
-  border: 1px solid rgba(248, 200, 105, 0.14);
-  border-radius: 16px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  background:
+    var(--vh-sheen),
+    linear-gradient(180deg, rgba(24, 20, 14, 0.94), rgba(13, 11, 8, 0.95));
+  border: 1px solid var(--vh-border);
+  border-radius: var(--vh-r-xl);
+  box-shadow: var(--vh-shadow);
   overflow: hidden;
+  animation: bp-in var(--vh-slow) var(--vh-ease);
+}
+
+@keyframes bp-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
 }
 
 
@@ -32,23 +61,24 @@
   align-items: center;
   gap: 14px;
   padding: 0 20px;
-  height: 64px;
+  height: 66px;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(248, 200, 105, 0.10);
-  background: rgba(248, 200, 105, 0.02);
+  border-bottom: 1px solid var(--vh-hair);
+  background: rgba(243, 181, 58, 0.02);
 }
 
 .mod-backpack .bp-avatar {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(248, 200, 105, 0.22), rgba(248, 200, 105, 0.08));
-  border: 1.5px solid rgba(248, 200, 105, 0.38);
+  background: linear-gradient(135deg, rgba(243, 181, 58, 0.26), rgba(243, 181, 58, 0.06));
+  border: 1.5px solid var(--vh-border-2);
+  box-shadow: var(--vh-glow-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--vh-font-title);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--vh-gold);
   flex-shrink: 0;
@@ -56,11 +86,7 @@
   user-select: none;
 }
 
-.mod-backpack .bp-idbk {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
+.mod-backpack .bp-idbk { display: flex; flex-direction: column; gap: 3px; }
 
 .mod-backpack .bp-pname {
   font-size: 14px;
@@ -70,263 +96,300 @@
 }
 
 .mod-backpack .bp-pmeta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 11px;
-  color: rgba(185, 173, 147, 0.50);
+  color: var(--vh-text-mut);
 }
+.mod-backpack .bp-pmeta b   { color: var(--vh-text-dim); font-weight: 600; }
+.mod-backpack .bp-dot       { width: 3px; height: 3px; border-radius: 50%; background: var(--vh-text-mut); }
 
-.mod-backpack .bp-pmeta b {
-  color: rgba(185, 173, 147, 0.70);
-  font-weight: 500;
+.mod-backpack .bp-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--vh-text-mut);
+  letter-spacing: 0.2px;
+}
+.mod-backpack .bp-hint kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 1px;
+  font-family: var(--vh-font-body);
+  font-size: 10px;
+  color: var(--vh-sand-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--vh-hair);
+  border-radius: 5px;
 }
 
 .mod-backpack .bp-close {
-  margin-left: auto;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: var(--vh-r-sm);
   cursor: pointer;
-  color: rgba(185, 173, 147, 0.45);
+  color: var(--vh-text-mut);
   font-size: 13px;
   border: 1px solid transparent;
-  transition: color .12s, border-color .12s, background .12s;
+  transition: color var(--vh-fast), border-color var(--vh-fast), background var(--vh-fast);
 }
-
 .mod-backpack .bp-close:hover {
   color: var(--vh-danger);
-  border-color: rgba(224, 106, 90, 0.28);
-  background: rgba(224, 106, 90, 0.07);
+  border-color: rgba(224, 120, 90, 0.32);
+  background: rgba(224, 120, 90, 0.08);
 }
-
-.mod-backpack .bp-close:focus-visible {
-  outline: 2px solid var(--vh-gold);
-  outline-offset: 2px;
-}
+.mod-backpack .bp-close:focus-visible { outline: 2px solid var(--vh-gold); outline-offset: 2px; }
 
 
 /* ============================================================
-   LAYOUT — sidebar + conteúdo
+   LAYOUT + SIDEBAR
    ============================================================ */
 
-.mod-backpack .bp-layout {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-
-/* ============================================================
-   SIDEBAR — navegação lateral
-   ============================================================ */
+.mod-backpack .bp-layout { flex: 1; display: flex; overflow: hidden; }
 
 .mod-backpack .bp-sidebar {
-  width: 88px;
+  width: 90px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 4px;
   padding: 14px 8px;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.12);
+  border-right: 1px solid var(--vh-hair);
+  background: rgba(0, 0, 0, 0.14);
 }
 
 .mod-backpack .bp-nav {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 12px 0;
-  border-radius: 10px;
+  gap: 6px;
+  padding: 13px 0;
+  border-radius: var(--vh-r-md);
   cursor: pointer;
   background: transparent;
   border: 1px solid transparent;
-  color: rgba(185, 173, 147, 0.40);
+  color: var(--vh-text-mut);
   font-family: var(--vh-font-title);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 1.1px;
   text-transform: uppercase;
-  transition: color .14s, background .14s, border-color .14s;
+  transition: color var(--vh-fast), background var(--vh-fast), border-color var(--vh-fast);
 }
-
 .mod-backpack .bp-nav svg {
-  width: 20px;
-  height: 20px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  flex-shrink: 0;
+  width: 21px; height: 21px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
 }
-
-.mod-backpack .bp-nav:hover {
-  color: var(--vh-text);
-  background: rgba(255, 255, 255, 0.04);
-}
-
+.mod-backpack .bp-nav:hover { color: var(--vh-text); background: rgba(255, 255, 255, 0.04); }
 .mod-backpack .bp-nav--active {
-  color: var(--vh-gold) !important;
-  background: rgba(248, 200, 105, 0.08) !important;
-  border-color: rgba(248, 200, 105, 0.22) !important;
+  color: var(--vh-gold);
+  background: rgba(243, 181, 58, 0.09);
+  border-color: var(--vh-border-2);
+}
+/* indicador ativo — fio dourado à esquerda */
+.mod-backpack .bp-nav--active::before {
+  content: '';
+  position: absolute;
+  left: -8px; top: 22%; bottom: 22%;
+  width: 3px; border-radius: 3px;
+  background: var(--vh-gold);
+  box-shadow: var(--vh-glow);
 }
 
 
 /* ============================================================
-   CONTEÚDO — área dos tabs
+   CONTEÚDO (tabs)
    ============================================================ */
 
-.mod-backpack .bp-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.mod-backpack .bp-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.mod-backpack .bp-tab--hidden {
-  display: none;
-}
+.mod-backpack .bp-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.mod-backpack .bp-tab { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.mod-backpack .bp-tab--hidden { display: none; }
 
 
-/* ============================================================
-   ABA MOCHILA — filtros
-   ============================================================ */
+/* ---- ferramentas (busca + categorias) ---- */
 
 .mod-backpack .bp-tools {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  gap: 9px;
+  padding: 13px var(--bp-pad);
+  border-bottom: 1px solid var(--vh-hair);
   flex-shrink: 0;
 }
 
+.mod-backpack .bp-search-wrap { position: relative; }
+.mod-backpack .bp-search-ic {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px;
+  stroke: var(--vh-text-mut); fill: none; stroke-width: 1.8; stroke-linecap: round;
+  pointer-events: none;
+}
 .mod-backpack .bp-search {
   width: 100%;
-  padding: 7px 11px;
+  padding: 8px 12px 8px 32px;
   font-size: 12px;
   color: var(--vh-text);
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 7px;
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-sm);
   outline: none;
-  transition: border-color .12s;
+  transition: border-color var(--vh-fast), background var(--vh-fast);
 }
+.mod-backpack .bp-search::placeholder { color: var(--vh-text-mut); }
+.mod-backpack .bp-search:focus { border-color: var(--vh-border-2); background: rgba(255, 255, 255, 0.06); }
 
-.mod-backpack .bp-search::placeholder { color: rgba(185, 173, 147, 0.35); }
-.mod-backpack .bp-search:focus        { border-color: rgba(248, 200, 105, 0.38); }
-
-.mod-backpack .bp-cats { display: flex; flex-wrap: wrap; gap: 5px; }
-
+.mod-backpack .bp-cats { display: flex; flex-wrap: wrap; gap: 6px; }
 .mod-backpack .bp-chip {
-  padding: 3px 9px;
+  padding: 3px 10px;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .7px;
+  letter-spacing: 0.7px;
   cursor: pointer;
   color: var(--vh-text-dim);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 20px;
-  transition: border-color .12s, color .12s, background .12s;
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-pill);
+  transition: border-color var(--vh-fast), color var(--vh-fast), background var(--vh-fast);
 }
-
-.mod-backpack .bp-chip:hover  { border-color: rgba(248, 200, 105, 0.35); color: var(--vh-text); }
+.mod-backpack .bp-chip:hover  { border-color: var(--vh-border-2); color: var(--vh-text); }
 .mod-backpack .bp-chip.active {
-  background: rgba(248, 200, 105, 0.11);
+  background: rgba(243, 181, 58, 0.12);
   color: var(--vh-gold);
-  border-color: rgba(248, 200, 105, 0.42);
+  border-color: var(--vh-border-2);
 }
 
 
-/* ============================================================
-   ABA MOCHILA — grid + inspector
-   ============================================================ */
+/* ---- corpo: grade + detalhe ---- */
 
 .mod-backpack .bp-body {
   flex: 1;
+  display: grid;
+  grid-template-columns: 1fr var(--bp-detail-w);
+  gap: var(--bp-pad);
+  padding: var(--bp-pad);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mod-backpack .bp-grid-wrap {
   overflow-y: auto;
-  padding: 14px 18px;
+  padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(248, 200, 105, 0.18) transparent;
+  scrollbar-color: rgba(243, 181, 58, 0.18) transparent;
 }
 
 .mod-backpack .bp-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 7px;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 9px;
+  align-content: start;
 }
 
-.mod-backpack .slot {
-  border-color: rgba(255, 255, 255, 0.07);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.025);
+.mod-backpack .slot--sel {
+  border-color: var(--vh-gold) !important;
+  box-shadow: 0 0 0 1px var(--vh-gold) inset, var(--vh-glow-soft);
 }
 
-.mod-backpack .slot[data-filled] {
-  background: rgba(20, 17, 12, 0.80);
-  border-color: rgba(248, 200, 105, 0.22);
+
+/* ---- painel de detalhe ---- */
+
+.mod-backpack .bp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(243, 181, 58, 0.18) transparent;
 }
 
-.mod-backpack .slot[data-filled]:hover { border-color: var(--vh-gold); }
-
-.mod-backpack .slot:focus-visible {
-  outline: 2px solid var(--vh-gold);
-  outline-offset: 2px;
+.mod-backpack .bp-detail-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  color: var(--vh-text-mut);
+  font-size: 11px;
+  line-height: 1.5;
 }
+.mod-backpack .bp-detail-empty svg {
+  width: 40px; height: 40px;
+  stroke: var(--vh-text-mut); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.6;
+}
+.mod-backpack .bp-detail--empty .bp-insp,
+.mod-backpack .bp-detail--empty .bp-actions { display: none; }
+.mod-backpack .bp-detail:not(.bp-detail--empty) .bp-detail-empty { display: none; }
 
-.mod-backpack .bp-insp { margin-top: 12px; }
+.mod-backpack .bp-actions { display: flex; gap: 8px; }
+.mod-backpack .bp-act {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--vh-text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vh-hair);
+  border-radius: var(--vh-r-sm);
+  cursor: pointer;
+  transition: border-color var(--vh-fast), background var(--vh-fast), transform var(--vh-fast), opacity var(--vh-fast);
+}
+.mod-backpack .bp-act:hover  { border-color: var(--vh-border-2); }
+.mod-backpack .bp-act:active { transform: scale(0.97); }
+.mod-backpack .bp-act:disabled { opacity: 0.4; cursor: default; }
+.mod-backpack .bp-act--use {
+  background: var(--vh-gold);
+  color: #1a1710;
+  border-color: var(--vh-gold);
+  font-weight: 700;
+}
+.mod-backpack .bp-act--use:hover { background: var(--vh-gold-soft); }
 
 
 /* ============================================================
-   ABA MOCHILA — footer (peso)
+   FOOTER — peso + contagem de slots
    ============================================================ */
 
 .mod-backpack .bp-footer {
-  padding: 10px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 11px var(--bp-pad);
+  border-top: 1px solid var(--vh-hair);
   flex-shrink: 0;
 }
-
-.mod-backpack .bp-weight-wrap { flex: 1; }
-
 .mod-backpack .bp-weight-label {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  color: rgba(185, 173, 147, 0.55);
-  margin-bottom: 5px;
+  font-size: 10.5px;
+  color: var(--vh-text-mut);
+  margin-bottom: 6px;
 }
-
+.mod-backpack .bp-weight-label b { color: var(--vh-text-dim); font-weight: 600; }
 .mod-backpack .bp-weight-val { color: var(--vh-sand); font-weight: 600; }
-
 .mod-backpack .bp-weight-track {
-  height: 2px;
-  border-radius: 2px;
+  height: 4px;
+  border-radius: var(--vh-r-pill);
   background: rgba(255, 255, 255, 0.07);
   overflow: hidden;
 }
-
-/* scaleX => compositor-only, sem layout recalc */
+/* scaleX => compositor-only, sem layout recalc (L-18) */
 .mod-backpack .bp-weight-bar {
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, var(--vh-gold), var(--vh-sand));
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform .18s ease;
+  transition: transform var(--vh-med) var(--vh-ease);
 }
 
 
@@ -334,78 +397,7 @@
    ABA LOJA
    ============================================================ */
 
-.mod-backpack .bp-promo-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 32px 24px;
-}
-
-.mod-backpack .bp-promo-icon {
-  width: 68px;
-  height: 68px;
-  border-radius: 20px;
-  background: rgba(248, 200, 105, 0.08);
-  border: 1.5px solid rgba(248, 200, 105, 0.22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mod-backpack .bp-promo-icon svg {
-  width: 32px;
-  height: 32px;
-  stroke: var(--vh-gold);
-  fill: none;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.mod-backpack .bp-promo-title {
-  font-family: var(--vh-font-title);
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--vh-sand);
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-}
-
-.mod-backpack .bp-promo-sub {
-  font-size: 12px;
-  color: var(--vh-text-dim);
-  text-align: center;
-  max-width: 280px;
-  line-height: 1.6;
-}
-
-.mod-backpack .bp-promo-btn {
-  margin-top: 6px;
-  padding: 11px 30px;
-  font-family: var(--vh-font-title);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.8px;
-  text-transform: uppercase;
-  color: rgba(13, 11, 8, 0.95);
-  background: var(--vh-gold);
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: opacity .14s, transform .10s;
-}
-
-.mod-backpack .bp-promo-btn:hover  { opacity: 0.86; }
-.mod-backpack .bp-promo-btn:active { transform: scale(0.97); }
-
-
-/* ============================================================
-   ABA SKIN — em breve
-   ============================================================ */
-
+.mod-backpack .bp-promo-card,
 .mod-backpack .bp-soon-card {
   flex: 1;
   display: flex;
@@ -414,70 +406,62 @@
   justify-content: center;
   gap: 14px;
   padding: 32px 24px;
-  opacity: 0.55;
 }
+.mod-backpack .bp-soon-card { opacity: 0.55; }
 
+.mod-backpack .bp-promo-icon,
 .mod-backpack .bp-soon-icon {
-  width: 68px;
-  height: 68px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1.5px solid rgba(255, 255, 255, 0.07);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 72px; height: 72px;
+  border-radius: var(--vh-r-lg);
+  display: flex; align-items: center; justify-content: center;
 }
-
+.mod-backpack .bp-promo-icon {
+  background: rgba(243, 181, 58, 0.09);
+  border: 1.5px solid var(--vh-border-2);
+  box-shadow: var(--vh-glow-soft);
+}
+.mod-backpack .bp-soon-icon { background: rgba(255, 255, 255, 0.03); border: 1.5px solid var(--vh-hair); }
+.mod-backpack .bp-promo-icon svg,
 .mod-backpack .bp-soon-icon svg {
-  width: 32px;
-  height: 32px;
-  stroke: var(--vh-text-dim);
-  fill: none;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 33px; height: 33px; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
 }
+.mod-backpack .bp-promo-icon svg { stroke: var(--vh-gold); }
+.mod-backpack .bp-soon-icon svg  { stroke: var(--vh-text-dim); }
 
+.mod-backpack .bp-promo-title,
 .mod-backpack .bp-soon-title {
   font-family: var(--vh-font-title);
   font-size: 17px;
   font-weight: 700;
-  color: var(--vh-text-dim);
-  letter-spacing: 1.5px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
 }
+.mod-backpack .bp-promo-title { color: var(--vh-sand); }
+.mod-backpack .bp-soon-title  { color: var(--vh-text-dim); }
 
+.mod-backpack .bp-promo-sub,
 .mod-backpack .bp-soon-sub {
-  font-size: 12px;
-  color: rgba(185, 173, 147, 0.40);
-  text-align: center;
-  line-height: 1.6;
+  font-size: 12px; color: var(--vh-text-dim); text-align: center; max-width: 300px; line-height: 1.6;
 }
+.mod-backpack .bp-soon-sub { color: var(--vh-text-mut); }
 
-
-/* ============================================================
-   PENDING (slot aguardando confirmação do servidor)
-   ============================================================ */
-
-.slot--pending {
-  opacity: 0.45;
-  pointer-events: none;
-  position: relative;
+.mod-backpack .bp-promo-btn {
+  margin-top: 6px;
+  padding: 11px 32px;
+  font-family: var(--vh-font-title);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #1a1710;
+  background: var(--vh-gold);
+  border: none;
+  border-radius: var(--vh-r-md);
+  cursor: pointer;
+  transition: background var(--vh-fast), transform var(--vh-fast);
 }
-
-.slot--pending::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--vh-pending);
-  border-radius: inherit;
-  animation: pending-pulse 0.9s ease-in-out infinite alternate;
-}
-
-@keyframes pending-pulse {
-  from { opacity: 0.4; }
-  to   { opacity: 1.0; }
-}
+.mod-backpack .bp-promo-btn:hover  { background: var(--vh-gold-soft); }
+.mod-backpack .bp-promo-btn:active { transform: scale(0.97); }
 
 
 /* ============================================================
@@ -488,23 +472,23 @@
   position: fixed;
   bottom: 96px;
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(13, 11, 8, 0.94);
-  border: 1px solid rgba(248, 200, 105, 0.28);
-  border-radius: 8px;
-  padding: 8px 16px;
+  transform: translate(-50%, 8px);
+  z-index: 3;
+  background: var(--vh-glass-3);
+  border: 1px solid var(--vh-border-2);
+  border-radius: var(--vh-r-sm);
+  padding: 9px 18px;
   color: var(--vh-text);
   font-size: 12px;
-  letter-spacing: .3px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  letter-spacing: 0.3px;
+  box-shadow: var(--vh-shadow-sm);
   opacity: 0;
-  transition: opacity .18s;
+  transition: opacity var(--vh-med), transform var(--vh-med) var(--vh-ease);
   pointer-events: none;
   white-space: nowrap;
 }
-
-.mod-backpack .bp-toast.show { opacity: 1; }
-.mod-backpack .bp-toast.err  { border-color: rgba(224, 106, 90, 0.5); color: #ffd9d2; }
+.mod-backpack .bp-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.mod-backpack .bp-toast.err  { border-color: rgba(224, 120, 90, 0.55); color: #ffd9d2; }
 
 
 /* ============================================================
@@ -512,8 +496,8 @@
    ============================================================ */
 
 @media (prefers-reduced-motion: reduce) {
-  .mod-backpack .bp-weight-bar { transition-duration: 1ms !important; }
-  .mod-backpack .bp-chip       { transition-duration: 1ms !important; }
+  .mod-backpack .bp-shell      { animation: none; }
+  .mod-backpack .bp-weight-bar,
+  .mod-backpack .bp-chip,
   .mod-backpack .bp-toast      { transition-duration: 1ms !important; }
-  .slot--pending::after        { animation-duration: 1ms !important; }
 }

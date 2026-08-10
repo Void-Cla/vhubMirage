@@ -101,3 +101,34 @@ O provider legado `mercadopago` direto (`server/pix_mp.lua`) permanece como dono
 | §3.7 | Exports gated default-deny; `ipadRelay` aceita só o broker vhub_ipad |
 | A-10 | Assets do app remoto do iPad declarados em `files{}` (servidos via `cfx-nui-vhub_coinshop`) |
 | L-12 | Débito/reembolso de compra em transação atômica |
+
+---
+
+## Mapa de Integração
+
+| # | Export | Assinatura resumida | Quem consome |
+|---|--------|---------------------|--------------|
+| 1 | `getCoins` | `(char_id) → number` | vhub_admin |
+| 2 | `creditCoins` | `(char_id, qtd) → bool` | vhub_df (handler do prefixo 'coins') |
+| 3 | `getItems` | `() → lista` | vhub_ipad (app CoinShop) |
+| 4 | `getDeals` | `() → lista` | vhub_ipad (app CoinShop) |
+| 5 | `createRedeemCode` | `(coins) → code` | vhub_admin |
+| 6 | `ipadRelay` | `(src, action, data) → resp` | vhub_ipad (broker app CoinShop) |
+
+## Consome de
+
+| Resource | Exports usados |
+|----------|----------------|
+| `vhub` (CORE) | `getUser`, `getCharacterId`, `getCData`, `setCData` (coinshop_coins) |
+| `oxmysql` | Itens, deals, redeems, auditoria |
+| `vhub_groups` | `hasPermission` (coinshop.admin) |
+| `vhub_inventory` | `giveItem` (entrega de itens) |
+| `vhub_conce` | `createVehicle` (entrega de veículo comprado) |
+| `vhub_df` | `registerHandler` (prefixo 'coins'), `createPayment` |
+
+## Eventos emitidos
+
+| Evento | Direção | Payload resumido |
+|--------|---------|-----------------|
+| `vhub_coinshop:purchase` | server interno + webhook Discord | `{char_id, item, coins}` |
+| `vhub_coinshop:coinsUpdated` | server→client (player) | `{char_id, coins}` |

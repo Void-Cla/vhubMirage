@@ -15,6 +15,8 @@ LEITURA OBRIGATÓRIA:
 3. `.claude/AGENTS.md` → leis A-01..A-08
 4. Arquivos tocados: `web/runtime/*`, `web/modules/<modulo>/*`, `core/client/native_bridge.lua`
 
+> MCPs úteis: `codegraph` (grafo de imports JS/TS — habilitar no `enabledMcpjsonServers`; **não usar para Lua**, usar Grep).
+
 ---
 
 ## LEIS A-01 a A-08
