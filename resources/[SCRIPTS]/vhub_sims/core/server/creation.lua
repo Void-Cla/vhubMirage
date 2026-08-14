@@ -35,6 +35,11 @@ local function sanitizeName(value)
   return value
 end
 
+local VALID_ROLES = {
+  legal = true, ilegal = true, mecanica = true,
+  hospital = true, policia = true, livre = true,
+}
+
 local function sanitizeIdentity(payload)
   if type(payload) ~= 'table' then return nil end
   local firstname = sanitizeName(payload.firstname)
@@ -43,7 +48,15 @@ local function sanitizeIdentity(payload)
   if not firstname or not lastname or not age or age ~= math.floor(age) or age < 16 or age > 120 then
     return nil
   end
-  return { firstname = firstname, lastname = lastname, age = age }
+  local role = type(payload.role) == 'string' and payload.role or nil
+  if role and not VALID_ROLES[role] then return nil end
+  local backstory = nil
+  if type(payload.backstory) == 'string' then
+    backstory = payload.backstory:match('^%s*(.-)%s*$'):sub(1, 1000)
+    if backstory == '' then backstory = nil end
+  end
+  return { firstname = firstname, lastname = lastname, age = age,
+           role = role, backstory = backstory }
 end
 
 local function getCustomization(src)
@@ -190,6 +203,7 @@ end
 function Creation.beginCreation(src, requestId)
   if not Core.ready then return { ok = false, err = 'storage' } end
   if not validId(requestId, 64) then return { ok = false, err = 'invalid_request' } end
+  if not Core.rate(src, 'begin') then return { ok = false, err = 'rate_limited' } end
 
   local user, charId = Core.getUser(src)
   if not user then return { ok = false, err = 'offline' } end
@@ -213,7 +227,28 @@ function Creation.beginCreation(src, requestId)
       sendOpen(src, active)
       return { ok = true, session_id = active.session_id, replayed = true }
     end
-    return { ok = false, err = 'conflict' }
+    -- Self-heal: sessão creator órfã em 'studio' sem checkout saga bloqueante.
+    -- Happens quando Session.retry deixou sessão em memória mas a saga de stage ficou em 'prepared'.
+    -- Só heala se 'studio' (não 'committing') — nunca interrompe um commit em voo.
+    -- endPendingStage deve ter êxito; falha = stage físico duplo (P1) → abortar sem cleanup.
+    if active.mode == 'creator' and active.state == 'studio' and active.stage_token
+      and not checkoutRecovery then
+      local endOk, endResult = Core.call('vhub_hss', 'endPendingStage', src, active.stage_token)
+      if not endOk or not Core.resultOk(endResult) then
+        Core.log('warn', 'beginCreation: self-heal abortado — endPendingStage falhou.', {
+          src = src, char_id = charId, stage_token = active.stage_token,
+        })
+        return { ok = false, err = 'not_ready' }
+      end
+      SQL.transitionSaga(active.stage_saga_id, { 'prepared' }, 'refunded', 'orphan_selfheal')
+      Core.log('info', 'beginCreation: sessão creator órfã limpa (self-heal).', {
+        src = src, char_id = charId, old_session = active.session_id,
+      })
+      Session.cleanup(src)
+      -- prossegue para nova criação abaixo
+    else
+      return { ok = false, err = 'conflict' }
+    end
   end
 
   local needed = Creation.needsCreation(src)

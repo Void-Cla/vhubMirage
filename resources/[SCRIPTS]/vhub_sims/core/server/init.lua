@@ -90,8 +90,80 @@ local function boot()
   Core.ready = false
   if not recoverBoot() then return end
   Core.ready = true
-  Core.log('info', 'SIMS 1.0.1 pronto.', {})
+  Core.log('info', 'SIMS 1.2.3 pronto.', {})
 end
+
+VHubSimsAdmin = VHubSimsAdmin or {}
+
+-- força saga de charId de 'manual_reconcile' → 'refunded' e relança o boot recovery
+local function forceResolveSaga(charId)
+  charId = tonumber(charId)
+  if not charId then return false, 'char_id_invalido' end
+  local saga = SQL.getRecoverableSaga(charId)
+  if not saga or saga.state ~= 'manual_reconcile' then
+    return false, 'saga_nao_encontrada_ou_estado_invalido'
+  end
+  local ok = SQL.transitionSaga(tonumber(saga.id), { 'manual_reconcile' }, 'refunded', 'admin_force')
+  if not ok then return false, 'transicao_falhou' end
+  Core.log('warn', 'Saga manual_reconcile forçada para refunded por admin.', {
+    saga_id = tonumber(saga.id),
+    char_id = charId,
+  })
+  if not Core.ready then
+    Citizen.CreateThread(function()
+      Core.ready = false
+      if recoverBoot() then
+        Core.ready = true
+        Core.log('info', 'SIMS reativado após resolução de saga.', {})
+      end
+    end)
+  end
+  return true
+end
+
+VHubSimsAdmin.forceResolveSaga = forceResolveSaga
+
+RegisterCommand('sims_clear_saga', function(src, args)
+  if src ~= 0 then return end  -- somente console do servidor
+  local charId = tonumber(args[1])
+  if not charId then
+    Core.log('warn', 'Uso: sims_clear_saga <char_id>', {})
+    return
+  end
+  local ok, err = forceResolveSaga(charId)
+  if ok then
+    Core.log('info', 'Saga resolvida por admin via console.', { char_id = charId })
+  else
+    Core.log('error', 'Falha ao resolver saga via console.', { char_id = charId, err = err })
+  end
+end, true)
+
+-- desbloqueio de emergência: mata sessão em memória do SIMS independente de saga SQL.
+-- Uso: sims_reset_session <src>
+-- Quando usar: sims_clear_saga não bastou (a saga estava em 'prepared', não 'manual_reconcile'),
+-- e o jogador recebe 'conflitou' ao tentar selecionar o char na próxima vez.
+RegisterCommand('sims_reset_session', function(src, args)
+  if src ~= 0 then return end  -- somente console do servidor
+  local targetSrc = tonumber(args[1])
+  if not targetSrc then
+    Core.log('warn', 'Uso: sims_reset_session <src>', {})
+    return
+  end
+  local session = Session.get(targetSrc)
+  if not session then
+    Core.log('warn', 'sims_reset_session: nenhuma sessão em memória.', { src = targetSrc })
+    return
+  end
+  -- Encerrar stage físico antes de limpar para não deixar o jogador preso no interior de criação.
+  if session.mode == 'creator' and session.stage_token then
+    Core.call('vhub_hss', 'endPendingStage', targetSrc, session.stage_token)
+    SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'admin_reset_session')
+  end
+  Session.cleanup(targetSrc)
+  Core.log('warn', 'sims_reset_session: sessão removida por admin.', {
+    src = targetSrc, mode = session.mode, session_id = session.session_id,
+  })
+end, true)
 
 AddEventHandler('onResourceStart', function(resource)
   if resource ~= GetCurrentResourceName() then return end

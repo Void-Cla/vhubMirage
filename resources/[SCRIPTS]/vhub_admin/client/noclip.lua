@@ -297,7 +297,12 @@ end
 RegisterNetEvent(E.TOGGLE_NOCLIP)
 AddEventHandler(E.TOGGLE_NOCLIP, toggleNoclip)
 
+-- 1ª barreira (client): o keymapping 'N' continua ativo mesmo com a NUI de gate (login/criação)
+-- focada — SetNuiFocus NÃO suprime RegisterKeyMapping no FiveM. Sem esta guarda, digitar 'n' num
+-- campo de login disparava o noclip. Recusa quando há QUALQUER NUI com foco de teclado. A verdade
+-- server-side (gate step) é a 2ª barreira, à prova de spoof, no handler de ACT_NOCLIP.
 local function requestNoclip()
+  if IsNuiFocused() then return end
   TriggerServerEvent(E.ACT_NOCLIP)
 end
 

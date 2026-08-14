@@ -47,9 +47,19 @@ AddEventHandler(E.ACT_GOD, function()
   Core:audit(src, 'god', src, {})
 end)
 
+-- 2ª barreira (server, à prova de spoof): recusa noclip enquanto o jogador está no gate de entrada
+-- (login/seleção/criação). O owner (uid=1) tem permissão de admin, então sem isto o 'N' de dentro da
+-- NUI de login disparava o noclip no servidor. O gate step é verdade autoritativa do vhub_login.
+local function inEntryGate(src)
+  if GetResourceState('vhub_login') ~= 'started' then return false end
+  local ok, step = pcall(function() return exports.vhub_login:getSessionStep(src) end)
+  return ok and step ~= nil and step ~= 'ready'
+end
+
 RegisterNetEvent(E.ACT_NOCLIP)
 AddEventHandler(E.ACT_NOCLIP, function()
   local src = source
+  if inEntryGate(src) then return end
   if not Core:guard(src, 'noclip', 'moderation') then return end
   TriggerClientEvent(E.TOGGLE_NOCLIP, src)
   Core:audit(src, 'noclip', src, {})

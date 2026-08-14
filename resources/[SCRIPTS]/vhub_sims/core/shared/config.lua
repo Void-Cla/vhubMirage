@@ -10,6 +10,7 @@ VHubSims.cfg = {
   paid_session_ttl_ms = 300000,
   creator_session_ttl_ms = 900000,
   rates = {
+    begin = 1000,
     open = 1000,
     checkout = 1500,
     wizard = 1000,
@@ -21,7 +22,9 @@ VHubSims.cfg = {
     outfit_apply = 1500,
   },
   trusted = {
-    needs_creation = { vhub_login = true },
-    begin_creation = { vhub_login = true },
+    needs_creation     = { vhub_login = true },
+    begin_creation     = { vhub_login = true },
+    cancel_creation    = { vhub_login = true },
+    force_resolve_saga = { vhub_admin = true },
   },
 }

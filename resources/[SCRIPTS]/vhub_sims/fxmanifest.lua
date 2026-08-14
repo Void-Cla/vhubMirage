@@ -5,7 +5,7 @@ lua54 'yes'
 
 name 'vhub_sims'
 author 'vHub Mirage'
-version '1.2.0'
+version '1.2.3'
 description 'Editor autoritativo de aparência e identidade do vHub Mirage.'
 
 dependencies {

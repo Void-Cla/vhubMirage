@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_admin'
 author      'vHub Mirage'
-version     '3.1.0'
+version     '3.1.2'
 description 'Painel admin completo: moderação, teleporte, player ops, veículos, mundo, economia, spec, reports, jail/mute persistentes.'
 
 dependencies {
