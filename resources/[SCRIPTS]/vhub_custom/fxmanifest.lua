@@ -4,17 +4,20 @@ game 'gta5'
 
 name        'vhub_custom'
 description 'Oficina vHub — Bennys (estética), Mec (reparo/reboque), Oficina/Engenharia (peças), Drift, Nitro'
-version     '2.9.0'
+version     '2.10.9'
 author      'vHub Mirage'
 
 ui_page 'web/index.html'
 
 files {
+  'stream/mirage_backfire_rgb.ypt',
+  'stream/mirage_nitrous_rgb.ypt',
   'sql/schema.sql',
   'web/index.html',
   'web/style.css',
   'web/bennys.css',
   'web/mec.css',
+  'web/design.css',
   'web/runtime.js',
   'web/oficina.js',
   'web/bennys.js',
@@ -34,6 +37,7 @@ shared_scripts {
 
 server_scripts {
   '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',
   'server/core.lua',
   'server/visual.lua',   -- reidrata State Bags de stance/escapamento/drift a partir da placa
@@ -44,6 +48,7 @@ server_scripts {
   'server/oficina.lua',
   'server/engine_bay.lua', -- ADR #82 F2.2: leitura gated do motor (imersão capô→engine bay)
   'server/drift.lua',    -- Freio de Mão Hidráulico (peça instalável — FASE 1 ADR #81)
+  'server/shop.lua',
 }
 
 client_scripts {
@@ -51,13 +56,14 @@ client_scripts {
   'client/camera.lua',   -- L2 HAL: câmera orbital livre (dependência de bennys/oficina)
   'client/zones.lua',
   'client/stance.lua',   -- L2 HAL: rebaixamento visual per-entidade (State Bag)
-  'client/exhaust.lua',  -- L2 HAL: chamas coloridas não-ignitáveis (State Bag)
+  'client/exhaust.lua',  -- L2 HAL: emissor único oficina/preview/nitro (State Bag)
   'client/bennys.lua',
   'client/mec.lua',
   'client/nitro.lua',    -- L2 HAL: boost RSHIFT + drain + HUD (FASE 2 ADR #81)
   'client/oficina.lua',
   'client/drift.lua',    -- L2 HAL: mecânica de drift + pontuação bruta (Freio de Mão Hidráulico — FASE 1 ADR #81)
   'client/target_hood.lua', -- L2 HAL: interação capô via vhub_target (ADR #82 F2.2) — soft-dep, pcall
+  'client/shop.lua',
 }
 
 dependencies {
@@ -67,4 +73,5 @@ dependencies {
   'vhub_money',
   'vhub_inventory',
   'vhub_vehcontrol',
+  'vhub_target',
 }

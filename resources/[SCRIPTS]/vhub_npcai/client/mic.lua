@@ -46,7 +46,7 @@ function VHubNpcAI.startTalk(npcId, directText)
     -- WAVs gerados por sidecar/gerar_audio_npcs.py; contagem deriva do JSON do NPC
     do
         local npcCfg  = cfg.npcs[npcId]
-        local count   = npcCfg and #(npcCfg.thinking_frases or {}) or 0
+        local count   = npcCfg and tonumber(npcCfg.thinking_count) or 0
         if count > 0 then
             local idx = math.random(0, count - 1)
             local src = ('audio/thinking/%s/thinking_%02d.wav'):format(npcId, idx)
@@ -69,7 +69,13 @@ function VHubNpcAI.startTalk(npcId, directText)
         _pendingInterrupt = interrupting
         _recording        = true
         state.recording   = true
-        VHubNpcAI.sendNui(E.NUI_SHOW_REC, { max_ms = cfg.talk_max_ms })
+        VHubNpcAI.sendNui(E.NUI_SHOW_REC, {
+            max_ms        = cfg.talk_max_ms,
+            vad_enabled   = cfg.talk_vad.enabled,
+            vad_threshold = cfg.talk_vad.threshold,
+            silence_ms    = cfg.talk_vad.silence_ms,
+            min_speech_ms = cfg.talk_vad.min_speech_ms,
+        })
     end
 end
 

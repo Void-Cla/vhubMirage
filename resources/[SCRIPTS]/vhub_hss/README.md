@@ -1,6 +1,6 @@
 # vhub_hss — Human State System
 
-**Versão:** 2.2.1 | **Owner:** `vhub_hss`
+**Versão:** 2.4.1 | **Owner:** `vhub_hss`
 
 Owner único do ped associado ao `char_id`: spawn, posição, vida, colete, modelo,
 customização, routing buckets e fisiologia. `char_id` continua pertencendo ao CORE.
@@ -14,6 +14,7 @@ customização, routing buckets e fisiologia. `char_id` continua pertencendo ao 
 - Armas: efêmeras por sessão; não persistem.
 - Customização: somente por export confiável, sanitizada e com modelo allowlisted.
 - APV2: revisão exclusiva, CAS persistido e rollback one-shot auditável.
+- Executor SQL preserva `nil`/`false` em leituras válidas; ausência de operação não é conflito.
 - Spawn/buckets/monitor funcionam mesmo se SQL/inventário falharem.
 - `vhub_routing_bucket`: State Bag server-owned consumida pelo transporte de voz.
 - Inventário é integração opcional registrada após o boot.
@@ -52,6 +53,11 @@ exports.vhub_hss:rollbackCustomization(src, rollback_token)
 Client HSS expõe exclusivamente ao `vhub_sims`: `beginCustomizationPreview`,
 `previewCustomization`, `restoreCustomizationPreview`, `setCustomizationCamera`,
 `rotateCustomizationPed` e `endCustomizationPreview`.
+
+No criador, `beginCustomizationPreview(snapshot, true)` exige estágio físico pronto.
+O HSS aguarda o `PED_APPLY` inicial antes de montar o ped no estúdio; eventos tardios
+de apply não reposicionam o ped durante esse estágio. O SIMS mantém o patch local
+até o checkout; conflito de revisão só permite retry se a aparência viva não mudou.
 
 `setPedModel` preserva skins legadas como override transitório, confirmado pela réplica server-side.
 

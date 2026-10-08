@@ -13,35 +13,9 @@ function convertValue (value, oldMin, oldMax, newMin, newMax) {
     return newValue
 }
 
-$(document).ready(function () {
-    $(".video").append(`
-        <video id="myVideo" autoplay muted loop>
-            <source src="./img/video.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-        </video>
-    `)
-})
-
-var tag = document.createElement('script');
-
-tag.src = "https://www.youtube.com/iframe_api";
-var firstScriptTag = document.getElementsByTagName('script')[0];
-firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-var player;
 var muted = false;
-function onYouTubeIframeAPIReady() {
-    player = new YT.Player("youtube-player", {
-        events: {
-            'onReady': onPlayerReady
-        }
-    });
-}
-
 let interval;
-function onPlayerReady() {
-    player.mute();
-
+$(function () {
     $('#sounds').on("change", function(){
         muted = !muted;
         clearInterval(interval)
@@ -69,77 +43,75 @@ function onPlayerReady() {
             }, 1);
         }
     });
-}
+});
 
 $(async function () {
     const Config = await fetch(`../../config.json`).then((res) => res.json())
 
-    let rulehtml = ''
-    let galleryhtml = ''
-    let teamhtml = ''
-    let updatehtml = ''
-    let keys = Config.Keys
+    const safeFile = (value) => typeof value === 'string' && /^[\w.-]+$/.test(value) ? value : null
+    const node = (tag, className, text) => {
+        const element = document.createElement(tag)
+        if (className) element.className = className
+        if (text !== undefined) element.textContent = String(text)
+        return element
+    }
 
-    for (const key in keys) {
-		const data = keys[key]
-		const $el = $(`[data-key="${key}"]`)
-
-		$el.addClass("selectkey")
-
-		$el.click(() => {
-			$(".keyInfoBox").html(`
-            <div class="keyInfo">
-              <div class="keyIcon">${key.toLocaleUpperCase()}</div>
-              <h2>
-              ${data.title}
-                <p>${data.description}</p>
-              </h2>
-            </div>`)
-		})
-	}
+    for (const [key, data] of Object.entries(Config.Keys || {})) {
+        const element = [...document.querySelectorAll('[data-key]')]
+            .find(candidate => candidate.dataset.key === key)
+        if (!element) continue
+        element.classList.add('selectkey')
+        element.addEventListener('click', () => {
+            const info = node('div', 'keyInfo')
+            const title = node('h2', '', data.title || '')
+            title.append(node('p', '', data.description || ''))
+            info.append(node('div', 'keyIcon', key.toLocaleUpperCase()), title)
+            document.querySelector('.keyInfoBox')?.replaceChildren(info)
+        })
+    }
 
     $(".keyboardBox>div").data("key", function(){
         console.log()
     });
 
-    Config.Rules.forEach(rule => {
-        rulehtml += `
-        <div class="rulesBox">
-            <h2>
-                <span>${rule.title}</span>
-                <p>${rule.rule}</p>
-            </h2>
-        </div>`
-    });
+    const rulesList = document.querySelector('.rulesList')
+    rulesList?.replaceChildren(...(Config.Rules || []).map(rule => {
+        const box = node('div', 'rulesBox')
+        const title = node('h2')
+        title.append(node('span', '', rule.title || ''), node('p', '', rule.rule || ''))
+        box.append(title)
+        return box
+    }))
 
-    Config.Gallery.forEach(photo => {
-        galleryhtml += `<img src="img/gallery/${photo}" class="galleryImg"/>`
-    });
+    const images = (Config.Gallery || []).map(photo => {
+        const file = safeFile(photo)
+        if (!file) return null
+        const image = node('img', 'galleryImg')
+        image.src = `img/gallery/${file}`
+        return image
+    }).filter(Boolean)
+    document.querySelector('.imagesWrapper')?.replaceChildren(...images)
 
-    Config.Team.forEach(member => {
-        teamhtml += `
-        <div class="teamBox">
-            <div class="teamProfileImg" style="background-image: url(img/team/${member.img});"></div>
-            <h2 class="teamRank">${member.rank}</h2>
-            <div class="teamName">${member.name}</div>
-        </div>`
+    const team = (Config.Team || []).map(member => {
+        const box = node('div', 'teamBox')
+        const profile = node('div', 'teamProfileImg')
+        const file = safeFile(member.img)
+        if (file) profile.style.backgroundImage = `url("img/team/${file}")`
+        box.append(profile, node('h2', 'teamRank', member.rank || ''), node('div', 'teamName', member.name || ''))
+        return box
+    })
+    document.querySelector('.teamListBox')?.replaceChildren(...team)
 
-    });
-
-    Config.Updates.forEach(update => {
-        updatehtml += `
-        <div class="updateBox" style="background-image: url(img/updates/${update.img})">
-            <h2>
-                <span>${update.title}</span>
-                <p>${update.update}</p>
-            </h2>
-        </div>`
-    });
-
-    $(".updateListBox").html(updatehtml)
-    $(".teamListBox").html(teamhtml)
-    $(".imagesWrapper").html(galleryhtml)
-    $(".rulesList").html(rulehtml)
+    const updatesList = (Config.Updates || []).map(update => {
+        const box = node('div', 'updateBox')
+        const file = safeFile(update.img)
+        if (file) box.style.backgroundImage = `url("img/updates/${file}")`
+        const title = node('h2')
+        title.append(node('span', '', update.title || ''), node('p', '', update.update || ''))
+        box.append(title)
+        return box
+    })
+    document.querySelector('.updateListBox')?.replaceChildren(...updatesList)
 
     $(".galleryImg").click(function(){
         $(".galleryBig img").attr("src", $(this).attr("src"))
@@ -170,10 +142,10 @@ $(async function () {
     $("#videoHideBtn").click(function(){
         if(video){
             video = false
-            $("iframe").fadeOut()
+            $("#local-video").fadeOut()
         }else{
             video = true
-            $("iframe").fadeIn()
+            $("#local-video").fadeIn()
         }
     })
 
@@ -345,10 +317,12 @@ $(async function () {
 		stopAudio()
 	
 		const music = Config.Music[id]
+		const musicFile = music && typeof music.path === 'string'
+			? music.path.match(/^musics\/([\w.-]+)$/) : null
 	
-		if (music) {
+		if (music && musicFile) {
 			audio = new Howl({
-				src: music.path,
+				src: [`musics/${musicFile[1]}`],
 				volume: $(".volumeBox input").val() / 100,
 				onend: () => nextSong(),
 			})
@@ -416,7 +390,14 @@ $(async function () {
 		}
 	})
 
-    $("#discord").click(() => window.invokeNative('openUrl', Config.Discord))
-    $("#instagram").click(() => window.invokeNative('openUrl', Config.Instagram))
-    $("#youtube").click(() => window.invokeNative('openUrl', Config.Youtube))
+    const openExternal = (raw, allowedHosts) => {
+        try {
+            const url = new URL(raw)
+            if (url.protocol !== 'https:' || !allowedHosts.includes(url.hostname.toLowerCase())) return
+            window.invokeNative('openUrl', url.href)
+        } catch (_) {}
+    }
+    $("#discord").click(() => openExternal(Config.Discord, ['discord.gg', 'www.discord.gg']))
+    $("#instagram").click(() => openExternal(Config.Instagram, ['tiktok.com', 'www.tiktok.com', 'instagram.com', 'www.instagram.com']))
+    $("#youtube").click(() => openExternal(Config.Youtube, ['youtube.com', 'www.youtube.com', 'youtu.be']))
 });

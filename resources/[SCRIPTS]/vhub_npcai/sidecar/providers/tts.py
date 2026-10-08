@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from pathlib import Path
 from typing import Optional
 
 
@@ -90,6 +91,125 @@ def _pcm_to_wav(pcm: bytes, sample_rate: int = 16000, channels: int = 1, bits: i
         b'data', len(pcm),
     )
     return header + pcm
+
+
+# ============================================================
+# POCKET-TTS (padrão local)
+# ============================================================
+
+_POCKET_VOICES = frozenset({'rafael'})
+_POCKET_VOICES_DIR = (Path(__file__).resolve().parent.parent / 'voices').resolve()
+
+
+class PocketTTS(TTSProvider):
+    """Pocket-TTS local com modelo único, vozes cacheadas e inferência serial."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._model = None
+        self._model_key: Optional[tuple[str, bool]] = None
+        self._voices: dict[str, dict] = {}
+        try:
+            from pocket_tts import TTSModel
+            self._model_class = TTSModel
+        except ImportError:
+            self._model_class = None
+
+    @property
+    def name(self) -> str:
+        return 'pocket'
+
+    def available(self) -> bool:
+        return self._model_class is not None
+
+    @staticmethod
+    def _threads() -> int:
+        try:
+            return max(1, min(4, int(os.environ.get('NPCAI_POCKET_THREADS', '2'))))
+        except ValueError:
+            return 2
+
+    @staticmethod
+    def _resolve_voice(voice: str) -> str:
+        voice = voice.strip()
+        if voice in _POCKET_VOICES:
+            return voice
+        if not voice or '://' in voice:
+            raise ValueError('voz Pocket-TTS invalida')
+
+        try:
+            path = (_POCKET_VOICES_DIR / voice).resolve(strict=True)
+            path.relative_to(_POCKET_VOICES_DIR)
+        except (OSError, ValueError) as exc:
+            raise ValueError('voz Pocket-TTS fora do diretorio permitido') from exc
+        if path.suffix.lower() not in {'.wav', '.safetensors'}:
+            raise ValueError('formato de voz Pocket-TTS invalido')
+        return str(path)
+
+    def _ensure_ready(self, spec: dict) -> tuple[object, dict]:
+        if not self._model_class:
+            raise RuntimeError('pocket-tts nao instalado')
+
+        language = str(spec.get('model') or 'portuguese_24l')
+        if language != 'portuguese_24l':
+            raise ValueError('modelo Pocket-TTS nao permitido')
+        quantize = spec.get('quantize') is True
+        model_key = (language, quantize)
+
+        if self._model is None:
+            import torch
+            torch.set_num_threads(self._threads())
+            try:
+                torch.set_num_interop_threads(1)
+            except RuntimeError:
+                pass
+            self._model = self._model_class.load_model(
+                language=language,
+                quantize=quantize,
+            )
+            self._model_key = model_key
+        elif self._model_key != model_key:
+            raise RuntimeError('Pocket-TTS ja carregado com outro modelo')
+
+        voice = self._resolve_voice(str(spec.get('voice') or 'rafael'))
+        voice_state = self._voices.get(voice)
+        if voice_state is None:
+            voice_state = self._model.get_state_for_audio_prompt(voice)
+            self._voices[voice] = voice_state
+        return self._model, voice_state
+
+    def prewarm(self, spec: dict) -> None:
+        """Carrega modelo e voz antes de aceitar tráfego."""
+        with self._lock:
+            self._ensure_ready(spec)
+
+    def synthesize(self, text: str, spec: dict) -> Optional[bytes]:
+        with self._lock:
+            model, voice_state = self._ensure_ready(spec)
+            audio = model.generate_audio(voice_state, text[:240])
+
+            import torch
+            pcm = (
+                audio.detach()
+                .cpu()
+                .flatten()
+                .clamp(-1.0, 1.0)
+                .mul(32767.0)
+                .to(torch.int16)
+                .contiguous()
+                .numpy()
+                .tobytes()
+            )
+            return _pcm_to_wav(pcm, int(model.sample_rate), 1, 16) if pcm else None
+
+    def stats(self) -> dict:
+        return {
+            'provider': self.name,
+            'available': self.available(),
+            'ready': self._model is not None,
+            'model': self._model_key[0] if self._model_key else None,
+            'voices': len(self._voices),
+        }
 
 
 class _SapiWorker:
@@ -272,6 +392,87 @@ class OpenAITTS(TTSProvider):
 
 
 # ============================================================
+# POCKET TTS (HTTP local / self-hosted — compatível com voz curta)
+# ============================================================
+
+class PocketTTSTTS(TTSProvider):
+    """Sintetiza voz em um servidor Pocket-TTS local via HTTP JSON/WAV."""
+
+    @property
+    def name(self) -> str:
+        return 'pocket'
+
+    def available(self) -> bool:
+        return bool((os.environ.get('POCKET_TTS_URL') or '').strip())
+
+    @staticmethod
+    def _resolve_base_url(spec: dict) -> str:
+        for key in ('base_url', 'url', 'endpoint'):
+            value = str((spec or {}).get(key) or '').strip()
+            if value:
+                return value.rstrip('/')
+        for key in ('POCKET_TTS_URL', 'POCKET_TTS_SERVER', 'POCKET_TTS_ENDPOINT'):
+            value = str(os.environ.get(key, '') or '').strip()
+            if value:
+                return value.rstrip('/')
+        return ''
+
+    def synthesize(self, text: str, spec: dict) -> Optional[bytes]:
+        if not text:
+            return None
+        base_url = self._resolve_base_url(spec or {})
+        if not base_url:
+            return None
+
+        voice = str((spec or {}).get('voice') or 'pt-BR').strip() or 'pt-BR'
+        payload = {
+            'text': text,
+            'voice': voice,
+            'format': str((spec or {}).get('format') or 'wav'),
+        }
+        endpoints = [
+            '/api/tts',
+            '/tts',
+            '/synthesize',
+            '/v1/audio/speech',
+            '/api/v1/tts',
+        ]
+
+        for endpoint in endpoints:
+            url = base_url + endpoint
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST',
+                )
+                with urllib.request.urlopen(req, timeout=float((spec or {}).get('timeout') or os.environ.get('POCKET_TTS_TIMEOUT', '12'))) as resp:
+                    raw = resp.read()
+                    if not raw:
+                        continue
+                    content_type = (resp.headers.get_content_type() or '').lower()
+                    if 'application/json' in content_type:
+                        obj = json.loads(raw.decode('utf-8', errors='ignore'))
+                        for key in ('audio', 'audio_b64', 'data', 'wav', 'file'):
+                            value = obj.get(key) if isinstance(obj, dict) else None
+                            if isinstance(value, str) and value:
+                                try:
+                                    b = base64.b64decode(value, validate=False)
+                                except Exception:
+                                    b = value.encode('utf-8', errors='ignore')
+                                if b:
+                                    return _to_wav_16k_mono(b)
+                    return _to_wav_16k_mono(raw)
+            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
+                continue
+            except Exception:
+                continue
+
+        return None
+
+
+# ============================================================
 # NORMALIZAÇÃO — WAV 16kHz mono (compatível com o stitch)
 # ============================================================
 
@@ -297,6 +498,7 @@ _REGISTRY: dict[str, TTSProvider] = {}
 _reg_lock = threading.Lock()
 
 _FACTORY = {
+    'pocket': PocketTTS,
     'sapi':   SapiTTS,
     'openai': OpenAITTS,
 }
@@ -317,7 +519,10 @@ def get_tts(provider: str) -> Optional[TTSProvider]:
         return inst
 
 
-def reset_tts_registry():
+def reset_tts_registry(provider: Optional[str] = None):
     """Descarta as instâncias — força re-init com chaves/config atualizadas."""
     with _reg_lock:
-        _REGISTRY.clear()
+        if provider:
+            _REGISTRY.pop(provider, None)
+        else:
+            _REGISTRY.clear()

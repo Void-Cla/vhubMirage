@@ -1,132 +1,172 @@
-// nui/js/app.js — bootstrap, postMessage router, modal/toast util (vHub theme)
+// Bootstrap NUI. Nenhum dado de dominio entra em HTML interpretado.
 (() => {
   const App = (window.vhubApp = {
     resName: 'vhub_garage',
-    state: { view: null, conc: null, garagem: null, payload: null },
+    state: { view: null, payload: null },
     views: {},
   });
 
-  // ---------- POST helper ---------------------------------------------------
   App.post = async (callback, data = {}) => {
     try {
-      const resp = await fetch(`https://${App.resName}/${callback}`, {
+      const response = await fetch(`https://${App.resName}/${callback}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      return await resp.json().catch(() => ({}));
-    } catch (e) { return {}; }
+      return await response.json().catch(() => ({}));
+    } catch (_) { return {}; }
   };
 
-  // ---------- Toast (borda dourada padrão vHub) ----------------------------
-  const $toast = document.getElementById('vhub-toast');
-  let toastT = null;
-  App.toast = (msg, type = 'info', ttl = 3500) => {
-    $toast.textContent = msg;
-    $toast.classList.remove('hidden');
-    if (type === 'err')      $toast.style.borderColor = 'rgba(232,81,63,0.7)';
-    else if (type === 'ok')  $toast.style.borderColor = 'rgba(107,191,107,0.7)';
-    else                     $toast.style.borderColor = 'rgba(243,181,58,0.7)';
-    if (toastT) clearTimeout(toastT);
-    toastT = setTimeout(() => $toast.classList.add('hidden'), ttl);
+  App.el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  };
+  App.clear = (node) => node.replaceChildren();
+  App.icon = (name) => App.el('i', `fa-solid fa-${name}`);
+  App.button = (text, classes = '', icon = null) => {
+    const button = App.el('button', `btn ${classes}`.trim());
+    button.type = 'button';
+    if (icon) button.append(App.icon(icon));
+    button.append(document.createTextNode(text));
+    return button;
+  };
+  App.empty = (container, icon, text) => {
+    const empty = App.el('div', 'empty-state');
+    empty.append(App.icon(icon), App.el('span', '', text));
+    container.replaceChildren(empty);
+  };
+  App.vehicleVisual = (type, large = false) => {
+    const names = { car:'car', bike:'motorcycle', plane:'plane', heli:'helicopter',
+      boat:'ship', truck:'truck', trailer:'truck-moving' };
+    const box = App.el('div', large ? 'img' : 'thumb');
+    box.append(App.icon(names[type] || 'car'));
+    return box;
+  };
+  App.tag = (text, warn = false) => App.el('span', `tag${warn ? ' warn' : ''}`, text);
+  App.infoLine = (key, value, valueClass = '') => {
+    const line = App.el('div', 'info-line');
+    line.append(App.el('span', 'k', key), App.el('span', `v ${valueClass}`.trim(), value));
+    return line;
+  };
+  App.stat = (label, raw) => {
+    const value = Math.min(100, Math.max(0, Number(raw) || 0));
+    const stat = App.el('div', 'stat');
+    const bar = App.el('span', 'bar');
+    const fill = App.el('span');
+    fill.style.width = `${value}%`;
+    bar.append(fill);
+    stat.append(App.el('span', 'label', label), bar, App.el('span', 'v', value));
+    return stat;
+  };
+  App.field = (label, name, options = {}) => {
+    const wrap = App.el('div');
+    const caption = App.el('label', '', label);
+    const input = App.el(options.multiline ? 'textarea' : 'input');
+    input.dataset.field = name;
+    if (!options.multiline) input.type = options.type || 'text';
+    for (const key of ['value', 'placeholder', 'min', 'max', 'maxLength']) {
+      if (options[key] !== undefined) input[key] = options[key];
+    }
+    wrap.append(caption, input);
+    return wrap;
   };
 
-  // ---------- Modal universal ----------------------------------------------
-  const $mbg = document.getElementById('modal-bg');
-  const $mt  = document.getElementById('modal-title');
-  const $mb  = document.getElementById('modal-body');
-  const $mok = document.getElementById('modal-ok');
-  const $mc  = document.getElementById('modal-cancel');
+  const toast = document.getElementById('vhub-toast');
+  let toastTimer = null;
+  App.toast = (message, type = 'info', ttl = 3500) => {
+    toast.textContent = String(message || '');
+    toast.classList.remove('hidden');
+    toast.style.borderColor = type === 'err' ? 'rgba(232,81,63,0.7)'
+      : type === 'ok' ? 'rgba(107,191,107,0.7)' : 'rgba(243,181,58,0.7)';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), Number(ttl) || 3500);
+  };
 
-  App.modal = (opts) => new Promise((resolve) => {
-    $mt.textContent = opts.title || 'Confirmar';
-    $mb.innerHTML = opts.html || `<p>${opts.text || ''}</p>`;
-    $mok.textContent = opts.okText || 'Confirmar';
-    $mc.textContent  = opts.cancelText || 'Cancelar';
-    const close = (val) => {
-      $mbg.classList.add('hidden');
-      $mok.onclick = null; $mc.onclick = null;
-      resolve(val);
+  const modalBg = document.getElementById('modal-bg');
+  const modalTitle = document.getElementById('modal-title');
+  const modalBody = document.getElementById('modal-body');
+  const modalOk = document.getElementById('modal-ok');
+  const modalCancel = document.getElementById('modal-cancel');
+  App.modal = (options = {}) => new Promise((resolve) => {
+    modalTitle.textContent = String(options.title || 'Confirmar');
+    modalBody.replaceChildren();
+    if (options.text) modalBody.append(App.el('p', '', options.text));
+    for (const field of options.fields || []) {
+      modalBody.append(App.field(field.label, field.name, field));
+    }
+    modalOk.textContent = String(options.okText || 'Confirmar');
+    modalCancel.textContent = String(options.cancelText || 'Cancelar');
+    const close = (value) => {
+      modalBg.classList.add('hidden');
+      modalOk.onclick = null;
+      modalCancel.onclick = null;
+      resolve(value);
     };
-    $mok.onclick = () => {
+    modalOk.onclick = () => {
       const fields = {};
-      $mb.querySelectorAll('[data-field]').forEach((el) => {
-        fields[el.dataset.field] = el.value;
+      modalBody.querySelectorAll('[data-field]').forEach((field) => {
+        fields[field.dataset.field] = field.value;
       });
       close({ ok: true, fields });
     };
-    $mc.onclick = () => close({ ok: false });
-    $mbg.classList.remove('hidden');
+    modalCancel.onclick = () => close({ ok: false, fields: {} });
+    modalBg.classList.remove('hidden');
   });
 
-  // ---------- View router (liga/desliga areia automaticamente) -------------
   App.show = (id) => {
-    document.querySelectorAll('.vhub-view').forEach((v) => v.classList.add('hidden'));
+    document.querySelectorAll('.vhub-view').forEach((view) => view.classList.add('hidden'));
     document.getElementById('vhub-bg').classList.remove('hidden');
-    window.vhubSand && window.vhubSand.start();
-    if (id) document.getElementById(id).classList.remove('hidden');
+    window.vhubSand?.start();
+    if (id) document.getElementById(id)?.classList.remove('hidden');
   };
   App.hideAll = () => {
-    document.querySelectorAll('.vhub-view').forEach((v) => v.classList.add('hidden'));
+    document.querySelectorAll('.vhub-view').forEach((view) => view.classList.add('hidden'));
     document.getElementById('vhub-bg').classList.add('hidden');
-    $mbg.classList.add('hidden');
-    window.vhubSand && window.vhubSand.stop();
+    modalBg.classList.add('hidden');
+    window.vhubSand?.stop();
   };
 
-  // ---------- ESC + close buttons ------------------------------------------
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') App.post('close');
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') App.post('close');
   });
-  document.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-close]');
-    if (t) App.post('close');
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-close]')) App.post('close');
   });
 
-  // ---------- Mensagens vindas do client.lua --------------------------------
-  window.addEventListener('message', (ev) => {
-    const m = ev.data || {};
-    switch (m.action) {
-      case 'openGarage':
-        App.state.view = 'garage'; App.state.payload = m.data;
-        App.views.garage?.render(m.data); App.show('view-garage'); break;
-      case 'openDealership':
-        App.state.view = 'dealer'; App.state.payload = m.data;
-        App.views.dealer?.render(m.data); App.show('view-dealer'); break;
-      case 'openAuction':
-        App.state.view = 'auction'; App.state.payload = m.data;
-        App.views.auction?.render(m.data); App.show('view-auction'); break;
-      case 'openImpound':
-        App.state.view = 'impound'; App.state.payload = m.data;
-        App.views.impound?.render(m.data); App.show('view-impound'); break;
-      case 'refresh':
-        if (App.state.view && App.views[App.state.view]?.render) {
-          App.views[App.state.view].render(m.data || App.state.payload);
-        }
-        break;
-      case 'notify':
-        App.toast(m.data?.text || '', m.data?.kind || 'info', m.data?.ttl);
-        break;
-      case 'close':
-        App.hideAll();
-        break;
+  window.addEventListener('message', (event) => {
+    const message = event.data || {};
+    const routes = {
+      openGarage: ['garage', 'view-garage'],
+      openDealership: ['dealer', 'view-dealer'],
+      openAuction: ['auction', 'view-auction'],
+      openImpound: ['impound', 'view-impound'],
+    };
+    if (routes[message.action]) {
+      const [view, element] = routes[message.action];
+      App.state.view = view;
+      App.state.payload = message.data || {};
+      App.views[view]?.render(App.state.payload);
+      App.show(element);
+    } else if (message.action === 'refresh' && App.state.view) {
+      App.state.payload = message.data || App.state.payload;
+      App.views[App.state.view]?.render(App.state.payload);
+    } else if (message.action === 'notify') {
+      App.toast(message.data?.text, message.data?.kind, message.data?.ttl);
+    } else if (message.action === 'close') {
+      App.hideAll();
     }
   });
 
-  // ---------- Imagem do veículo (FiveM docs fallback) ----------------------
-  App.imgFor = (model) => {
-    if (!model) return null;
-    return `https://docs.fivem.net/vehicles/${model}.webp`;
-  };
-
-  // ---------- Format helpers ------------------------------------------------
-  App.fmtMoney = (n) => 'R$ ' + (n || 0).toLocaleString('pt-BR');
-  App.fmtDate  = (ts) => ts ? new Date(ts * 1000).toLocaleString('pt-BR',
+  App.fmtMoney = (value) => `R$ ${Math.max(0, Number(value) || 0).toLocaleString('pt-BR')}`;
+  App.fmtDate = (timestamp) => timestamp ? new Date(Number(timestamp) * 1000).toLocaleString('pt-BR',
     { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
-  App.fmtDur   = (s) => {
-    s = Math.max(0, Math.floor(s));
-    if (s >= 86400) return `${Math.floor(s/86400)}d ${Math.floor((s%86400)/3600)}h`;
-    if (s >= 3600)  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
-    if (s >= 60)    return `${Math.floor(s/60)}m ${s%60}s`;
-    return `${s}s`;
+  App.fmtDur = (raw) => {
+    const seconds = Math.max(0, Math.floor(Number(raw) || 0));
+    if (seconds >= 86400) return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
+    if (seconds >= 3600) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+    if (seconds >= 60) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    return `${seconds}s`;
   };
 })();

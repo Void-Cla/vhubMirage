@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_admin'
 author      'vHub Mirage'
-version     '3.1.2'
+version     '3.1.3'
 description 'Painel admin completo: moderação, teleporte, player ops, veículos, mundo, economia, spec, reports, jail/mute persistentes.'
 
 dependencies {
@@ -28,6 +28,8 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',
   'server/core.lua',
   'server/init.lua',

@@ -395,6 +395,54 @@ function Auth:deleteCharacterRequest(src, char_id)
   return { ok = true, deleted = true }
 end
 
+-- Descarta um RASCUNHO de personagem (criação nunca concluída) em rollback de erro/cancelamento
+-- do criador (ADR #97 — regra L-03: falha na criação = rollback, sem boneco default órfão).
+-- INVARIANTE DE SEGURANÇA: só apaga se NÃO houver linha em vh_sims_creation (created=false).
+-- Um personagem que concluiu o criador tem essa linha → recusa 'not_draft' (nunca apaga char real).
+-- Ao contrário de deleteCharacterRequest, PODE apagar o char ATIVO da sessão quando ele é o rascunho
+-- em criação: nesse caso limpa a seleção ativa (o player volta à seleção, estado válido do gate).
+-- Idempotente por efeito (char_id monotônico nunca reusa; ausência = já descartado). Audita (R12).
+function Auth:discardDraftCharacter(src, char_id)
+  vHub.assertThread()
+  src = tonumber(src)
+  char_id = tonumber(char_id)
+  local user = src and self:getUser(src) or nil
+  if not user then return { ok = false, err = "offline" } end
+  if not char_id or char_id < 1 then return { ok = false, err = "invalid_request" } end
+
+  -- Ownership em profundidade: char precisa ser do uid. Ausência = já apagado → no-op idempotente.
+  local rows = queryRows("vh/get_char_ids", { user_id = user.id })
+  if not rows then return { ok = false, err = "storage" } end
+  local owned = false
+  for _, row in ipairs(rows) do
+    if tonumber(row.id) == char_id then owned = true; break end
+  end
+  if not owned then return { ok = true, discarded = false, replayed = true } end
+
+  -- INVARIANTE: recusa qualquer char que concluiu o criador (tem linha em vh_sims_creation).
+  -- Isto impede que o rollback vire vetor para apagar personagem real com estado/dinheiro/veículos.
+  local created = queryRows("vh/get_sims_creation", { char_id = char_id })
+  if not created then return { ok = false, err = "storage" } end
+  if created[1] then return { ok = false, err = "not_draft" } end
+
+  -- Rascunho ativo da sessão: limpa a seleção antes de apagar (não há estado crítico — nunca
+  -- concluiu). O player volta à seleção; próxima escolha/criação re-seleciona (char_id nil é
+  -- estado válido no passo de seleção do gate).
+  if char_id == tonumber(user.char_id) then
+    user.char_id = nil
+    user.data.last_character = nil
+  end
+
+  local ok = pcall(function()
+    Citizen.Await(vHub.State:exec("vh/delete_char", { id = char_id, user_id = user.id }))
+  end)
+  if not ok then return { ok = false, err = "storage" } end
+
+  vHub.audit("vhub_login", "discardDraftCharacter", tostring(char_id), tostring(src),
+    { user_id = user.id }, { discarded = true })
+  return { ok = true, discarded = true }
+end
+
 -- Retorna a marca persistida de conclusão do criador do personagem atual.
 function Auth:getSimsCreation(src)
   vHub.assertThread()

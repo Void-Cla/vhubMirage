@@ -39,7 +39,7 @@ VHubGarage.cfg = {
   spawn_offset_heli  = vec3(0.0, 0.0,  0.0),
 
   raio_guardar       = 5.0,     -- raio para guardar ve culo na garagem
-  report_intervalo_s = 30,       -- cliente reporta posi  o/customiza  o a cada 30s
+  persist_intervalo_s = 30,      -- réplica server: salva só posição alterada; sem heartbeat client
 
   -- ---------- Garagens (multi-tipo) ----------------------------------------
   -- Cada garagem suporta uma OU mais classes de ve culo: car / bike / boat / plane / heli / truck

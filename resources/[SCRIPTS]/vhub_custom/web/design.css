@@ -1,0 +1,131 @@
+/* Mirage Garage: grafite, areia e ouro. Sem blur sobre o jogo ou assets externos. */
+:root {
+  --vh-black: #0d1118;
+  --vh-black-2: #161b24;
+  --vh-black-3: #202734;
+  --vh-sand-soft: #f4eee2;
+  --vh-sand-dim: #aca99f;
+  --text-3: #96948c;
+  --radius: 12px;
+  --glass-border: 1px solid rgba(217,193,154,.24);
+  --glass-shadow: 0 18px 54px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05);
+  --garage-floor: linear-gradient(145deg, rgba(33,39,49,.98), rgba(12,16,23,.97));
+}
+
+body { cursor: default; }
+button, [role="button"] { cursor: pointer; }
+button:disabled { cursor: wait; }
+button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--vh-gold-soft);
+  outline-offset: 3px;
+}
+.service-chrome {
+  position: fixed;
+  z-index: 10010;
+  top: 18px;
+  left: 26px;
+  right: 26px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 34px;
+  padding: 0 14px;
+  border-left: 3px solid var(--vh-gold);
+  border-radius: 3px 8px 8px 3px;
+  background: rgba(13,17,24,.94);
+  color: var(--vh-sand-dim);
+  font: 10px var(--font-mono);
+  letter-spacing: .13em;
+  pointer-events: none;
+}
+.service-wordmark { color: var(--vh-sand-soft); font-weight: 700; font-size: 12px; }
+.service-wordmark i { color: var(--vh-gold); font-style: normal; }
+#service-status { margin-left: auto; }
+#service-status::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--vh-ok); margin-right: 9px; }
+.service-busy #service-status::before { background: var(--vh-gold); }
+.service-chrome::after {
+  content: '';
+  position: absolute;
+  height: 2px;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: var(--vh-gold);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.service-busy .service-chrome::after { animation: garage-progress 1.8s ease-in-out infinite; }
+.service-notice {
+  position: fixed;
+  z-index: 10020;
+  left: 50%;
+  top: 62px;
+  transform: translateX(-50%);
+  max-width: min(640px, 90vw);
+  padding: 12px 18px;
+  border: var(--glass-border);
+  border-left: 3px solid var(--vh-gold);
+  border-radius: 8px;
+  background: #171e29;
+  box-shadow: var(--glass-shadow);
+  color: var(--vh-sand-soft);
+  font: 12px var(--font-sans);
+  pointer-events: none;
+}
+.service-notice[data-tipo="error"] { border-left-color: var(--vh-danger); }
+.service-notice[data-tipo="success"] { border-left-color: var(--vh-ok); }
+.service-chrome.hidden, .service-notice.hidden { display: none; }
+
+.mod-oficina .panel, .mod-bennys .bn-aside, .mod-mec .mec-card, .shop-card { background: var(--garage-floor); }
+.mod-oficina .panel { width: min(1180px, 94vw); max-height: calc(100vh - 96px); }
+.mod-oficina .env-glow { opacity: .24; }
+.mod-oficina .env-scan { display: none; }
+.mod-oficina .hdr, .mod-mec .mc-hdr { background: rgba(8,12,18,.5); }
+.mod-oficina .brand-mark, .mod-bennys .brand-mark { box-shadow: none; border-color: rgba(217,193,154,.3); }
+.mod-oficina .slot { transition: transform 160ms ease; }
+.mod-oficina .slot:focus-visible .slot-plate { stroke: var(--vh-gold-soft); stroke-width: 2; }
+.mod-oficina .tray-card { border-radius: 9px; transition: border-color 150ms, background-color 150ms; }
+.mod-oficina .tray-card:hover { background: rgba(243,181,58,.07); }
+.mod-bennys .bn-top { top: 64px; background: rgba(14,19,27,.96); padding: 10px 20px; }
+.mod-bennys .bn-aside { top: 152px; bottom: 94px; }
+.mod-bennys .bn-aside-left { width: clamp(235px, 21vw, 300px); }
+.mod-bennys .bn-aside-right { width: clamp(300px, 26vw, 380px); }
+.mod-bennys .bn-aside-title { padding: 15px 18px; text-shadow: none; letter-spacing: .12em; font-size: 12px; }
+.mod-bennys .bn-cat { padding: 12px; }
+.mod-bennys .bn-cat.active { background: linear-gradient(90deg, rgba(243,181,58,.17), rgba(243,181,58,.03)); box-shadow: none; }
+.mod-bennys .bn-block-sub { color: var(--vh-sand-dim); }
+.mod-bennys .bn-controls { gap: 22px; }
+.mod-bennys .bn-orbit-hint { background: rgba(13,17,24,.94); font-size: 10px; }
+.mod-mec.mec-overlay { justify-content: flex-end; align-items: center; padding: 64px 36px 36px; }
+.mod-mec .mec-card { width: 460px; }
+.mod-mec .mc-hero { margin: 0 14px 14px; padding: 14px; border: 1px solid rgba(243,181,58,.2); border-left: 3px solid var(--vh-gold); background: linear-gradient(100deg, rgba(243,181,58,.1), rgba(7,12,18,.32)); }
+.mod-mec .mc-hero-kicker { display: block; margin-bottom: 5px; color: var(--vh-gold); font: 700 9px var(--font-mono); letter-spacing: .16em; }
+.mod-mec .mc-hero strong { display: block; color: var(--vh-sand); font: 800 16px var(--font-display); letter-spacing: .08em; }
+.mod-mec .mc-hero .mc-veh-sub { margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid rgba(217,193,154,.14); }
+.mod-mec .mc-opt { background: rgba(6,11,19,.3); padding: 16px 14px; border-color: rgba(217,193,154,.15); }
+.mod-mec .mc-opt-icon { font: 12px var(--font-mono); color: var(--vh-gold); border: 1px solid rgba(243,181,58,.22); padding: 9px; border-radius: 6px; }
+.mod-mec .mc-opt-price { font-size: 13px; white-space: nowrap; }
+.mod-mec .mc-opt-desc { max-width: 225px; line-height: 1.5; }
+.mod-mec .mc-health-bar { height: 3px; }
+.service-busy .mod-bennys .bn-controls, .service-busy .mod-bennys .bn-cats { pointer-events: none; opacity: .68; }
+[data-servico="bennys"] .bn-aside, [data-servico="oficina"] .panel, [data-servico="mec"] .mec-card { animation: garage-enter 200ms ease-out; }
+@keyframes garage-enter { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+@keyframes garage-progress { 0%, 100% { transform: scaleX(.05); opacity: .35; } 50% { transform: scaleX(1); opacity: .8; } }
+@media (max-width: 1280px) {
+  .service-chrome { left: 16px; right: 16px; }
+  .mod-bennys .bn-aside-left { left: 16px; width: 230px; }
+  .mod-bennys .bn-aside-right { right: 16px; width: 300px; }
+  .mod-bennys .bn-cat-label { font-size: 12px; }
+  .mod-bennys .bn-top .brand-mark { width: 34px; height: 34px; }
+  .mod-bennys .bn-veh-nome { font-size: 20px; }
+}
+@media (max-height: 780px) {
+  .mod-bennys .bn-aside { top: 130px; bottom: 80px; }
+  .mod-bennys .bn-cat { padding: 9px 12px; }
+  .mod-bennys .bn-aside-title { padding: 11px 14px; }
+  .mod-oficina .hdr { padding-top: 12px; padding-bottom: 12px; }
+  .mod-mec.mec-overlay { padding-right: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

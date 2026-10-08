@@ -339,13 +339,17 @@ AddEventHandler('onResourceStart', function(res)
     Citizen.CreateThread(function()
         local schema = LoadResourceFile(res, 'sql/schema.sql')
         if schema and schema ~= '' then
-            -- schema MULTI-statement: usar :query (o :execute do oxmysql não aplica
-            -- lotes multi-statement de forma confiável — mesmo padrão do CORE bootstrap)
-            exports.oxmysql:query(schema, {}, function()
+            -- schema aplicado em instruções isoladas (ADR #98).
+            local ok, err = VHubSQLScript.aplicar(schema, function(statement)
+                MySQL.query.await(statement, {})
+            end)
+            if ok then
                 Log('info', 'schema aplicado')
                 if VHubLspd.Bolo   then VHubLspd.Bolo.loadAll()   end
                 if VHubLspd.Wanted then VHubLspd.Wanted.loadAll() end
-            end)
+            else
+                Log('error', 'falha ao aplicar schema: ' .. tostring(err))
+            end
         else
             if VHubLspd.Bolo   then VHubLspd.Bolo.loadAll()   end
             if VHubLspd.Wanted then VHubLspd.Wanted.loadAll() end

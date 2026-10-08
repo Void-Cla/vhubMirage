@@ -6,10 +6,19 @@
 local function safePrint(...) print("[vhub_test]", ...) end
 
 local tests = {}
+local vHub = nil
+
+local function resolve_vhub()
+  if vHub then return vHub end
+  local ok, value = pcall(function() return exports.vhub:getVHub() end)
+  if ok and type(value) == 'table' then vHub = value end
+  return vHub
+end
 
 -- Confirma que vHub e módulos essenciais foram carregados
 function tests.check_vhub_loaded()
-  return type(vHub) == 'table' and type(vHub.State) == 'table' and type(vHub.Auth) == 'table'
+  local core = resolve_vhub()
+  return type(core) == 'table' and type(core.State) == 'table' and type(core.Auth) == 'table'
 end
 
 -- Verifica se vHub._next_user_id foi seedado (mitigação LAST_INSERT_ID)
@@ -103,6 +112,44 @@ function tests.test_vdata_roundtrip()
     done:resolve(type(lido) == "table"
       and lido.probe == marcador.probe
       and math.abs((lido.fuel or 0) - 42.5) < 0.001)
+  end)
+  return Citizen.Await(done)
+end
+
+-- Regressão CORE-001 (ADR #95): transação com write-set SQL DIFERIDO.
+-- Trava o P0 em que o rollback restaurava a VRAM mas o SQL enfileirado PERSISTIA.
+-- Cobre os 3 caminhos que mudaram: (1) commit drena o write-set → banco tem o valor;
+-- (2) rollback descarta o write-set → banco NÃO tem o valor (nem batch pendente);
+-- (3) dupla escrita da mesma chave na tx → último valor vence após o commit.
+function tests.test_tx_deferred_writeset()
+  if not (vHub.State and vHub.State._ready) then
+    safePrint("State._ready=false — pulando test_tx_deferred_writeset"); return nil
+  end
+  local done = promise.new()
+  Citizen.CreateThread(function()
+    local plate = "TRTX01"
+    Citizen.Await(vHub.State:exec("vh/veh_create", { plate = plate, key_uid = nil }))
+
+    -- (2) ROLLBACK: escreve na tx, aborta → banco continua sem a chave.
+    local txA = vHub.State:begin()
+    vHub.setVData(plate, "tx_probe", { v = 111 }, txA)
+    vHub.State:rollback(txA)
+    vHub.State:_flush()
+    Citizen.Wait(800)
+    local afterRollback = vHub.getVData(plate, "tx_probe")   -- deve ser nil (nada persistiu)
+    local okRollback = (afterRollback == nil)
+
+    -- (1)+(3) COMMIT com dupla escrita da mesma chave: 222 depois 333 → vence 333.
+    local txB = vHub.State:begin()
+    vHub.setVData(plate, "tx_probe", { v = 222 }, txB)
+    vHub.setVData(plate, "tx_probe", { v = 333 }, txB)
+    local okCommit = vHub.State:commit(txB)                  -- true
+    vHub.State:_flush()
+    Citizen.Wait(800)
+    local afterCommit = vHub.getVData(plate, "tx_probe")     -- VRAM invalidada → lê do banco
+    local okCommitVal = (type(afterCommit) == "table" and afterCommit.v == 333)
+
+    done:resolve(okRollback == true and okCommit == true and okCommitVal == true)
   end)
   return Citizen.Await(done)
 end
@@ -230,6 +277,62 @@ function tests.test_login_persistence_roundtrip()
   return false
 end
 
+-- Carga descartável: 70 cadastros/autenticações no domínio real, sem jogadores externos.
+function tests.test_login_registration_load_70()
+  if GetConvar('vhub_test_mode', '0') ~= '1'
+    or GetResourceState('vhub_login') ~= 'started' then
+    safePrint("login test mode indisponível — pulando test_login_registration_load_70")
+    return nil
+  end
+  local token = exports.vhub_login:runRegistrationLoadTest()
+  if type(token) ~= 'string' then return false end
+  local deadline = GetGameTimer() + 120000
+  while GetGameTimer() < deadline do
+    Citizen.Wait(100)
+    local result = exports.vhub_login:getRegistrationLoadTest(token)
+    if result and result.done == true then
+      safePrint(('login_load_70 metrics=%s'):format(json.encode(result.result)))
+      return type(result.result) == 'table' and result.result.ok == true
+    end
+  end
+  return false
+end
+
+-- Garante separação determinística sem cortar conteúdo citado ou comentários.
+function tests.test_sql_script_splitter()
+  local script = [=[
+    -- comentário com ; ignorado
+    CREATE TABLE `teste;nome` (`valor` VARCHAR(32) DEFAULT 'a;b');
+    # outro comentário ; ignorado
+    INSERT INTO `teste;nome` (`valor`) VALUES ("c;d");
+    /* bloco ; ignorado */ SELECT 1
+  ]=]
+  local statements = VHubSQLScript.separar(script)
+  if type(statements) ~= 'table' or #statements ~= 3 then return false end
+  if not statements[1]:find("'a;b'", 1, true) then return false end
+  if not statements[2]:find('"c;d"', 1, true) then return false end
+  local invalid = VHubSQLScript.separar("SELECT 'sem_fim")
+  return invalid == nil
+end
+
+-- Confirma que o driver rejeita duas instruções na mesma chamada.
+function tests.test_multiple_statements_blocked()
+  local ok = pcall(function()
+    MySQL.query.await('SELECT 1; SELECT 2', {})
+  end)
+  return ok == false
+end
+
+-- P0 financeiro: commit real com retry, conflito e limpeza de fixture.
+function tests.test_money_atomic_transfer()
+  if GetConvar('vhub_test_mode', '0') ~= '1' or GetResourceState('vhub_money') ~= 'started' then
+    safePrint('money test mode indisponivel — pulando test_money_atomic_transfer')
+    return nil
+  end
+  local result = exports.vhub_money:runAtomicTransferTest()
+  return type(result) == 'table' and result.ok == true
+end
+
 -- Cobertura end-to-end do engine de skill (decisão #27): cria um veículo de teste
 -- com bloco p1 (nissan370z = tier A, budget 800) e valida que os exports read-only
 -- do vhub_vehcontrol derivam a ficha a partir do prontuário do conce. Espelha o
@@ -308,7 +411,35 @@ local function run_all()
   safePrint("Testes completados. Revise as saídas acima.")
 end
 
+local function run_login_suite()
+  local persistence = tests.test_login_persistence_roundtrip()
+  local load = tests.test_login_registration_load_70()
+  safePrint(('login_persistence=%s login_load_70=%s'):format(tostring(persistence), tostring(load)))
+  return persistence == true and load == true
+end
+
 RegisterCommand('vhub_run_tests', function(source, args, raw)
   if source ~= 0 then safePrint('execute a partir do console do servidor (source 0)') return end
   run_all()
 end, false)
+
+RegisterCommand('vhub_run_login_suite', function(source)
+  if source ~= 0 then safePrint('execute a partir do console do servidor (source 0)') return end
+  run_login_suite()
+end, false)
+
+AddEventHandler('onResourceStart', function(resource)
+  if resource ~= GetCurrentResourceName()
+    or GetConvar('vhub_test_mode', '0') ~= '1'
+    or GetConvar('vhub_test_autorun', '0') ~= '1' then
+    return
+  end
+  Citizen.SetTimeout(15000, function()
+    local parser = tests.test_sql_script_splitter()
+    safePrint(('sql_script_splitter_autorun=%s'):format(tostring(parser)))
+    local blocked = tests.test_multiple_statements_blocked()
+    safePrint(('multiple_statements_blocked_autorun=%s'):format(tostring(blocked)))
+    local result = tests.test_money_atomic_transfer()
+    safePrint(('money_atomic_transfer_autorun=%s'):format(tostring(result)))
+  end)
+end)

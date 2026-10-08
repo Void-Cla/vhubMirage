@@ -1,14 +1,16 @@
 fx_version 'cerulean'
 game      'gta5'
 lua54     'yes'
+node_version '22'
 
 name        'vhub_login'
 author      'vHub Mirage'
-version     '0.6.1'
+version     '0.7.1'
 description 'Gate de entrada Mirage: conta, seleção e handoff autoritativo ao criador.'
 
 dependencies {
   'oxmysql',
+  'vhub_crypto',
   'vhub',
   'vhub_hss',
   'vhub_identity',
@@ -27,6 +29,9 @@ shared_scripts {
 
 server_scripts {
   '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
+  '@vhub_crypto/server/scrypt.js',
+  '@vhub_crypto/server/scrypt.lua',
   'server/dominio/contas.lua',
   'server/dominio/fluxo.lua',
   'server/api/exports.lua',

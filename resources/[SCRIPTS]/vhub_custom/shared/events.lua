@@ -16,10 +16,13 @@ VHubCustom.E = {
   MEC_REPAIR     = 'vhub_custom:server:mecRepair',      -- cliente → servidor: reparar componente
   MEC_TOW_REQ    = 'vhub_custom:server:mecTowReq',      -- cliente → servidor: solicitar reboque
   MEC_CONFIRM    = 'vhub_custom:client:mecConfirm',     -- servidor → cliente: confirmar/rollback
+  MEC_PHYSICAL   = 'vhub_custom:client:mecPhysical',
+  MEC_PHYSICAL_OK= 'vhub_custom:server:mecPhysicalOk',
 
   -- oficina (tuning)
   OFICINA_TUNE   = 'vhub_custom:server:oficinaTune',    -- cliente → servidor: aplicar stage
   OFICINA_CONFIRM= 'vhub_custom:client:oficinaConfirm', -- servidor → cliente: confirmar/rollback
+  OFICINA_PROJECTION = 'vhub_custom:client:oficinaProjection',
 
   -- calibração (redistribuição de pontos livres — decisão #27, motor em vhub_vehcontrol)
   OFICINA_PREVIEW    = 'vhub_custom:server:oficinaPreview',   -- cliente → servidor: prévia de alloc (não persiste)
@@ -70,6 +73,9 @@ VHubCustom.E = {
 -- nomes canônicos dos State Bags de entidade (equivalente a R9 p/ eventos — fonte única).
 -- Escritores: server/visual.lua (hydrate) + server/drift.lua (install/remove).
 VHubCustom.BAG = {
+  REPAIR   = 'vhub_custom:repair',
+  REVISION = 'vhub_custom:physicalRevision',
+  TUNE_REVISION = 'vhub_custom:tuneRevision',
   STANCE  = 'vhub_custom:stance',
   EXHAUST = 'vhub_custom:exhaust',
   DRIFT   = 'vhub_custom:drift',   -- bool; true = Freio de Mão Hidráulico instalado

@@ -275,7 +275,7 @@ local function collectDamage(v)
     end
   end
   if GetVehicleTyresCanBurst(v) then
-    for i = 0, 7 do
+    for _, i in ipairs({ 0, 1, 2, 3, 4, 5, 6, 7, 45, 47 }) do
       if IsVehicleTyreBurst(v, i, true) then d.tyres_rim[#d.tyres_rim+1] = i
       elseif IsVehicleTyreBurst(v, i, false) then d.tyres[#d.tyres+1] = i end
     end
@@ -300,6 +300,7 @@ local function buildSnapshot(v, final)
     odo_delta_km  = vc_odoAcc,
     damage        = collectDamage(v),
     final         = final == true or nil,
+    physical_revision = Entity(v).state['vhub_custom:physicalRevision'] or 0,
   }
   vc_odoAcc = 0.0
   return snap
@@ -318,19 +319,19 @@ AddEventHandler(E.APPLY_STATE, function(pl, st)
   local ped = PlayerPedId()
   local v = GetVehiclePedIsIn(ped, false)   -- sempre fresh (race: trocou de carro)
   if not v or v == 0 or plateOf(v) ~= pl then return end
-  vc_applied = true
 
   -- CRITICO: '+ 0.0' força subtipo FLOAT (Lua 5.4). Numeros inteiros vindos do
   -- msgpack (100, 1000) passados a native de param float são BIT-REINTERPRETADOS
   -- (1000 → 1.4e-42) — fuel/motor viravam ~0 e o snapshot persistia o lixo.
   CreateThread(function()
     if not ensureControl(v) then return end
+    if not DoesEntityExist(v) or GetVehiclePedIsIn(PlayerPedId(), false) ~= v
+        or GetPedInVehicleSeat(v, -1) ~= PlayerPedId() or plateOf(v) ~= pl
+        or Entity(v).state['vhub_custom:repair']
+        or (st.physical_revision or 0) ~= (Entity(v).state['vhub_custom:physicalRevision'] or 0) then return end
     if type(st.engine_health) == 'number' then
-      -- engine_health=0 = motor completamente morto (estado irrecuperável sem mecânico).
-      -- Dados de sessões antigas com bug de fogo/stance ficavam persistidos como 0.
-      -- Floor: 0 exato → 100 (mínimo drivable; vai ao mecânico para reparar de verdade).
-      local eh = st.engine_health > 0 and st.engine_health or 100.0
-      SetVehicleEngineHealth(v, eh + 0.0)
+      -- Motor avariado permanece avariado até manutenção autorizada.
+      SetVehicleEngineHealth(v, st.engine_health + 0.0)
     end
     if type(st.body_health)   == 'number' then SetVehicleBodyHealth(v, st.body_health + 0.0) end
     local d = st.damage
@@ -345,10 +346,9 @@ AddEventHandler(E.APPLY_STATE, function(pl, st)
         for _, i in ipairs(d.tyres_rim or {}) do SetVehicleTyreBurst(v, i, true, 1000.0) end
       end
     end
+    vc_applied = true
+    TriggerEvent(E.STATE_APPLIED, pl, st)
   end)
-
-  -- evento LOCAL p/ HUDs (vhub_velo semeia o odometro daqui)
-  TriggerEvent(E.STATE_APPLIED, pl, st)
 end)
 
 -- detecta crash (eject sem cinto), reseta o cinto ao entrar e gerencia o ciclo

@@ -9,6 +9,9 @@ local _camera = nil
 local _base_heading = 0.0
 local _stage_failed = false
 local _loaded_ipls = {}
+local _stage_generation = 0
+
+function VHubHSS_IsCustomizationStageActive() return _stage_active end
 
 local CAMERA_PRESETS = {
     full = { bone = 24818, dist = 2.35, height = 0.15, pitch = 0.0, fov = 38.0 },
@@ -94,23 +97,33 @@ end
 
 RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_BEGIN, function(payload)
     if type(payload) ~= 'table' or type(payload.position) ~= 'table' then return end
+    -- Reserva síncrona: o SIMS não pode abrir preview fora do estágio enquanto a thread aguarda.
+    _stage_generation = _stage_generation + 1
+    local generation = _stage_generation
+    _stage_active = true
+    _stage_ready = false
+    _stage_failed = false
     Citizen.CreateThread(function()
+        -- O apply inicial do HSS deve terminar antes de mover/exibir o ped no criador.
+        local deadline = GetGameTimer() + 19000
+        while VHubHSS_IsPedApplyActive() and GetGameTimer() < deadline do Citizen.Wait(50) end
+        if generation ~= _stage_generation then return end
+        if VHubHSS_IsPedApplyActive() then abort_stage(); return end
         cleanup_camera()
         remove_scene_ipls()
         _snapshot = VHubHSS.Appearance.sanitize(payload.customization)
         _preview = VHubHSS.Appearance.copy(_snapshot)
         _base_heading = tonumber(payload.position.heading) or tonumber(payload.position.h) or 0.0
-        _stage_active = true
-        _stage_ready = false
         _preview_active = true
-        _stage_failed = false
 
         DoScreenFadeOut(150)
         Citizen.Wait(200)
+        if generation ~= _stage_generation then return end
         if not apply_preview(_snapshot) then
             abort_stage()
             return
         end
+        if generation ~= _stage_generation then return end
 
         -- Cena premium: carrega o interior e posiciona o ped (VHubHSS_MovePed já espera a colisão).
         request_scene_ipls(payload.ipl)
@@ -119,11 +132,13 @@ RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_BEGIN, function(payload)
             abort_stage()
             return
         end
+        if generation ~= _stage_generation then return end
         SetEntityCollision(ped, true, true)
         -- Interior não carregou a colisão a tempo → cai no void (que sempre existe), sem esperar de novo.
         if not HasCollisionLoadedAroundEntity(ped) and type(payload.fallback) == 'table' then
             remove_scene_ipls()
             if VHubHSS_MovePed(ped, payload.fallback) then
+                if generation ~= _stage_generation then return end
                 _base_heading = tonumber(payload.fallback.heading) or _base_heading
                 SetEntityCollision(ped, true, true)
             end
@@ -141,15 +156,20 @@ end)
 
 RegisterNetEvent(VHubHSS.E.CUSTOMIZATION_STAGE_END, function(payload)
     if type(payload) ~= 'table' then return end
+    _stage_generation = _stage_generation + 1
+    local generation = _stage_generation
+    _stage_ready = false
     Citizen.CreateThread(function()
         cleanup_camera()
         remove_scene_ipls()
         _stage_failed = false
         local authoritative = VHubHSS.Appearance.sanitize(payload.customization)
         VHubHSS_ApplyModelAndCustomization(authoritative)
+        if generation ~= _stage_generation then return end
         local ped = current_ped()
         if ped then
             if type(payload.position) == 'table' then VHubHSS_MovePed(ped, payload.position) end
+            if generation ~= _stage_generation then return end
             FreezeEntityPosition(ped, true)
             SetEntityVisible(ped, false, false)
             SetEntityInvincible(ped, true)
@@ -169,9 +189,10 @@ end)
 -- ============================================================
 
 -- Abre a sessão efêmera e retorna snapshot APV2 independente.
-exports('beginCustomizationPreview', function(snapshot)
+exports('beginCustomizationPreview', function(snapshot, require_stage)
     if not invoker_ok() then return { ok = false, err = 'forbidden' } end
     if _stage_failed then return { ok = false, err = 'inactive' } end
+    if require_stage == true and not _stage_active then return { ok = false, err = 'stage_not_ready' } end
     -- estágio iniciado mas ped ainda se movendo: aguardar VHubHSS_MovePed
     if _stage_active and not _stage_ready then return { ok = false, err = 'stage_not_ready' } end
     if not _stage_active then

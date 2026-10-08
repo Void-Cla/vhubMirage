@@ -17,7 +17,6 @@ local _qty      = 0
 local _holding  = false
 local _boosting = false
 local _running  = true
-local _fireColor = nil
 
 
 -- ============================================================
@@ -60,31 +59,6 @@ local function hudSync()
   TriggerEvent('vhub_nitro:hud', { kit = _kit, enabled = _enabled, qty = qty })
 end
 
-local _ptfxReady = false
-local function ensurePtfx()
-  if _ptfxReady then return true end
-  RequestNamedPtfxAsset('core')
-  local t = 0
-  while not HasNamedPtfxAssetLoaded('core') and t < 50 do Wait(0); t = t + 1 end
-  _ptfxReady = HasNamedPtfxAssetLoaded('core')
-  return _ptfxReady
-end
-
-local function exhaustFire(veh)
-  if not NCfg.exhaustFire or not ensurePtfx() then return end
-  local c = _fireColor
-  for _, bone in ipairs({ 'exhaust', 'exhaust_1', 'exhaust_2', 'exhaust_3', 'exhaust_4' }) do
-    local idx = GetEntityBoneIndexByName(veh, bone)
-    if idx ~= -1 then
-      UseParticleFxAssetNextCall('core')
-      if c then SetParticleFxNonLoopedColour(c.r / 255.0, c.g / 255.0, c.b / 255.0) end
-      StartNetworkedParticleFxNonLoopedOnEntityBone(
-        'veh_backfire', veh, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, idx,
-        f(NCfg.fireSize or 2.0), false, false, false)
-    end
-  end
-end
-
 -- ADR #82 FASE 2: o nitro é overlay EFÊMERO sobre a BASE per-entidade da engenharia (Camada A).
 -- Liga = seta o VALOR ABSOLUTO `base + boost` (a native é "set", não acumula → re-setar por tick
 -- é idempotente). A base é lida UMA vez no início do boost (startBoost) e passada aqui — nunca
@@ -120,7 +94,8 @@ local function startBoost()
   local baseCheat    = GetVehicleCheatPowerIncrease(boosted) or 0.0
   CreateThread(function()
     local ratePerSec = (100.0 / (NCfg.durationSec or 10)) * (lp.consumeMult or 1.0)
-    local last, fireTick = GetGameTimer(), 0
+    local last, lastFire = GetGameTimer(), nil
+    local fireInterval = VHubCustom.Exhaust.intervalMs
 
     while _running and _holding and _qty > 0 do
       local p = PlayerPedId()
@@ -134,8 +109,10 @@ local function startBoost()
       last = now
       hudSync()
 
-      fireTick = fireTick + 1
-      if fireTick % 3 == 0 then exhaustFire(boosted) end
+      if not lastFire or now - lastFire >= fireInterval then
+        VHubCustom.Exhaust.nitro(boosted)
+        lastFire = now
+      end
       Wait(50)
     end
 
@@ -164,8 +141,6 @@ AddEventHandler('vhub_nitro:state', function(plate, n)
   _enabled = n.enabled == true
   _level   = math.max(1, math.min(10, math.floor(tonumber(n.level) or 1)))
   _qty     = math.max(0, math.min(100, tonumber(n.qty) or 0))
-  _fireColor = (type(n.fire) == 'table' and tonumber(n.fire.r) and tonumber(n.fire.g)
-    and tonumber(n.fire.b)) and { r = n.fire.r, g = n.fire.g, b = n.fire.b } or nil
   hudSync()
 end)
 

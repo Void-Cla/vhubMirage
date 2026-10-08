@@ -7,8 +7,8 @@ lua54      'yes'
 
 name        'vhub_df'
 author      'vHub Mirage'
-version     '1.0.0'
-description 'Gateway de pagamento Pix (MercadoPago): QR + copia-e-cola, polling + webhook, entrega via handlers registrados por exports gated.'
+version     '1.1.1'
+description 'Gateway de pagamento Pix (MercadoPago): QR + copia-e-cola, polling + webhook, entrega via handlers registrados por exports gated. v1.1.0: reentrega de orders approved-sem-crédito (FIN-001/ADR #94).'
 
 -- Dependências (exports.vhub:* são a única fronteira com o core)
 dependencies {
@@ -23,6 +23,8 @@ shared_scripts {
 }
 
 server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    '@vhub/shared/sql_script.lua',
     'server/sql.lua',
     'server/core.lua',
     'server/mercadopago.lua',

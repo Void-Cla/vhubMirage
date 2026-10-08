@@ -42,8 +42,6 @@ E.STAFF_MSG         = 'vhub_admin:staffMsg'
 E.SPEC_START        = 'vhub_admin:specStart'
 E.SPEC_STOP         = 'vhub_admin:specStop'
 E.SPEC_UPDATE       = 'vhub_admin:specUpdate'
-E.JAIL_APPLY        = 'vhub_admin:jailApply'
-E.JAIL_RELEASE      = 'vhub_admin:jailRelease'
 
 -- Cliente → servidor: consultas
 E.OPEN_PANEL        = 'vhub_admin:openPanel'

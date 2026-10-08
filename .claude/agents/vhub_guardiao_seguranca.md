@@ -19,6 +19,8 @@ VETORES JÁ EXPLORÁVEIS NESTE PROJETO (procurar primeiro):
 CHECKLIST LUA: □ `K:net` com checkPayload+rate declarado? □ Export sensível: `_invoker_allowed()`? □ Mutação crítica: validação+ownership+idempotência+fail-safe? □ Fallback faz rollback (L-03), não mascara? □ Logs sem credencial/IP completo? □ Broadcast `-1` não vaza dado privado?
 CHECKLIST NUI: □ Callback valida shape ANTES do domínio? □ JS envia só intenção/IDs (nunca cost/owner/balance)? □ Bridge com whitelist; sem `eval`/`new Function`/`innerHTML = payload`? □ Sem fetch externo? □ Rate por callback?
 
+> MCPs: `repowise` (always-on) — `get_risk(targets)` hotspot+histórico de bug por arquivo; `get_dead_code()` código morto pode ser vetor oculto; `get_why(query)` decisões de segurança existentes; `get_context(files, include=['callers'])` rastrear call-sites de export sensível. `semgrep` (varredura estática de vetor), `git` (histórico do trecho).
+
 FORMATO:
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máx 4, arquivo:linha — vetor de ataque>

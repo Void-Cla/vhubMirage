@@ -1,11 +1,11 @@
 """
 server.py — sidecar Python do vhub_npcai (porta 7513, loopback only)
-Estende o motor STT/TTS do whisper/server.py com /converse, /prewarm_name, /reload_npcs
+Pipeline local: faster-whisper → Gemini → Pocket-TTS.
 """
 
 from __future__ import annotations
 import base64
-import concurrent.futures
+import hashlib
 import hmac
 import io
 import json
@@ -13,7 +13,6 @@ import logging
 import msvcrt
 import os
 import queue
-import tempfile
 import threading
 import time
 from collections import OrderedDict, deque
@@ -43,16 +42,7 @@ def _adquirir_instancia():
 
 _INSTANCE_LOCK = _adquirir_instancia()
 
-# ── faster-whisper (upgrade do whisper base) ─────────────────────────────────
-try:
-    from faster_whisper import WhisperModel
-    _WHISPER_BACKEND = 'faster-whisper'
-except ImportError:
-    try:
-        import whisper as _whisper_orig
-        _WHISPER_BACKEND = 'whisper'
-    except ImportError:
-        _WHISPER_BACKEND = 'none'
+from faster_whisper import WhisperModel
 
 from intent    import IntentEngine
 from cache     import AudioCache
@@ -63,8 +53,11 @@ HOST      = '127.0.0.1'
 PORT      = 7513
 LOG_LEVEL = logging.INFO
 NPCS_DIR  = Path(__file__).parent / 'npcs'
-MODEL_SIZE = os.environ.get('NPCAI_WHISPER_MODEL', 'base')
+MODEL_SIZE = os.environ.get('NPCAI_WHISPER_MODEL', 'small')
 AUTH_TOKEN = os.environ.get('NPCAI_TOKEN', '').strip()
+
+if MODEL_SIZE not in {'tiny', 'base', 'small'}:
+    raise RuntimeError('NPCAI_WHISPER_MODEL invalido')
 
 if len(AUTH_TOKEN) != 64 or any(char not in '0123456789abcdef' for char in AUTH_TOKEN):
     raise RuntimeError('NPCAI_TOKEN ausente ou invalido; use start_npcai.bat')
@@ -109,21 +102,15 @@ def _erro_interno(exc):
 # ── estado global ─────────────────────────────────────────────────────────────
 _whisper_model = None
 _whisper_lock  = threading.Lock()
-_stt_queue: queue.Queue = queue.Queue()
+_stt_queue: queue.Queue = queue.Queue(maxsize=2)
 
 _npc_configs: dict[str, dict] = {}     # npc_id → config + IntentEngine
 # cache com biblioteca em disco: segmentos determinísticos sobrevivem a restart e
 # são reusados (sistema evolui sozinho; custo de TTS cai a cada gameplay).
 _audio_cache  = AudioCache(capacity=512, persist_dir=Path(__file__).parent / 'audio_cache')
 
-# pool para síntese de segmentos em paralelo (alinhado ao teto global de TTS)
-_seg_pool = concurrent.futures.ThreadPoolExecutor(
-    max_workers=max(1, int(os.environ.get('NPCAI_MAX_LIVE_TTS', '2'))),
-    thread_name_prefix='seg-tts',
-)
-
 # ── thinking audio — frases de transição pré-sintetizadas (cache 0-latência) ─
-_thinking_cache: dict[str, list[bytes]] = {}  # npc_id → lista de WAVs
+_thinking_cache: dict[str, list[bytes]] = {}
 _thinking_lock  = threading.Lock()
 
 # ── training samples (para N3) ────────────────────────────────────────────────
@@ -152,14 +139,26 @@ def _load_whisper():
     with _whisper_lock:
         if _whisper_model is not None:
             return
-        log.info(f'carregando Whisper ({_WHISPER_BACKEND}, model={MODEL_SIZE})')
-        if _WHISPER_BACKEND == 'faster-whisper':
-            _whisper_model = WhisperModel(MODEL_SIZE, device='cpu', compute_type='int8')
-        elif _WHISPER_BACKEND == 'whisper':
-            _whisper_model = _whisper_orig.load_model(MODEL_SIZE)
-        else:
-            log.warning('nenhum backend STT disponível')
-    log.info('Whisper pronto')
+        device       = os.environ.get('NPCAI_WHISPER_DEVICE', 'cpu').lower()
+        if device not in {'cpu', 'cuda'}:
+            raise RuntimeError('NPCAI_WHISPER_DEVICE invalido')
+        compute_type = 'float16' if device == 'cuda' else 'int8'
+        try:
+            cpu_threads = max(1, min(8, int(os.environ.get('NPCAI_WHISPER_THREADS', '4'))))
+        except ValueError:
+            cpu_threads = 4
+        log.info(
+            'carregando faster-whisper model=%s device=%s compute=%s threads=%d',
+            MODEL_SIZE, device, compute_type, cpu_threads,
+        )
+        _whisper_model = WhisperModel(
+            MODEL_SIZE,
+            device=device,
+            compute_type=compute_type,
+            cpu_threads=cpu_threads,
+            num_workers=1,
+        )
+    log.info('faster-whisper pronto')
 
 
 def _load_npc_configs():
@@ -232,15 +231,18 @@ def _prewarm_thinking():
 
 
 def _start_stt_worker():
-    """Fila serial para STT — 1 req/s (faster-whisper: ~3-5x mais rápido)."""
+    """Fila serial e limitada para manter latência e RAM previsíveis."""
     def _worker():
         while True:
             job = _stt_queue.get()
             if job is None:
                 break
-            fn, audio_bytes, result_holder, evt = job
+            audio_bytes, result_holder, evt, deadline = job
             try:
-                result_holder['text'] = fn(audio_bytes)
+                if result_holder.get('cancelled') or time.monotonic() >= deadline:
+                    result_holder['error'] = 'stt_deadline'
+                else:
+                    result_holder['text'] = _do_transcribe(audio_bytes)
             except Exception as e:
                 result_holder['error'] = str(e)
                 result_holder['text']  = ''
@@ -254,73 +256,131 @@ def _start_stt_worker():
 # STT
 # ============================================================
 
-def _transcribe_bytes(audio_bytes: bytes, language: str = 'pt') -> str:
-    """Transcreve áudio WAV (bytes) via Whisper, fila serial (thread-safe)."""
-    if _WHISPER_BACKEND == 'none':
-        return ''
-
+def _transcribe_bytes(audio_bytes: bytes) -> str:
+    """Transcreve WebM validado em fila serial limitada."""
     result_holder: dict = {}
     evt = threading.Event()
-    _stt_queue.put((lambda ab: _do_transcribe(ab, language), audio_bytes, result_holder, evt))
-    evt.wait(timeout=15)
+    deadline = time.monotonic() + 15.0
+    try:
+        _stt_queue.put_nowait((audio_bytes, result_holder, evt, deadline))
+    except queue.Full as exc:
+        raise RuntimeError('stt_busy') from exc
+    if not evt.wait(timeout=15.0):
+        result_holder['cancelled'] = True
+        raise TimeoutError('stt_timeout')
+    if result_holder.get('error'):
+        raise RuntimeError(result_holder['error'])
     return result_holder.get('text', '')
 
 
-def _do_transcribe(audio_bytes: bytes, language: str = 'pt') -> str:
-    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
-    try:
-        if _WHISPER_BACKEND == 'faster-whisper':
-            segments, _ = _whisper_model.transcribe(tmp_path, language=language, beam_size=5)
-            return ' '.join(s.text for s in segments).strip()
-        elif _WHISPER_BACKEND == 'whisper':
-            result = _whisper_model.transcribe(tmp_path, language=language)
-            return result.get('text', '').strip()
-    finally:
-        os.unlink(tmp_path)
-    return ''
+def _do_transcribe(audio_bytes: bytes) -> str:
+    pcm = _webm_para_pcm(audio_bytes)
+    segments, _ = _whisper_model.transcribe(
+        pcm,
+        language='pt',
+        beam_size=1,
+        temperature=0.0,
+        condition_on_previous_text=False,
+        without_timestamps=True,
+        word_timestamps=False,
+        vad_filter=True,
+        vad_parameters={
+            'min_silence_duration_ms': 400,
+            'speech_pad_ms': 120,
+        },
+    )
+    return ' '.join(segment.text for segment in segments).strip()
 
 
 # ============================================================
 # DECODIFICAÇÃO DE ÁUDIO (webm → WAV via pydub)
 # ============================================================
 
-def _decode_audio(b64_audio: str) -> Optional[bytes]:
-    """Decodifica base64 + converte webm→WAV 16kHz mono via pydub."""
-    try:
-        raw = base64.b64decode(b64_audio)
-    except Exception:
+_MAX_AUDIO_RAW = 210 * 1024
+_MAX_AUDIO_SAMPLES = 16_000 * 5
+
+
+def _decode_audio_base64(b64_audio: str) -> Optional[bytes]:
+    """Valida base64 canônico, tamanho e assinatura EBML do WebM."""
+    if len(b64_audio) > 280_000:
         return None
     try:
-        from pydub import AudioSegment
-        seg = AudioSegment.from_file(io.BytesIO(raw))
-        seg = seg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
-        buf = io.BytesIO()
-        seg.export(buf, format='wav')
-        return buf.getvalue()
+        raw = base64.b64decode(b64_audio, validate=True)
+    except (ValueError, TypeError):
+        return None
+    if not 128 <= len(raw) <= _MAX_AUDIO_RAW or raw[:4] != b'\x1aE\xdf\xa3':
+        return None
+    return raw
+
+
+def _webm_para_pcm(raw: bytes):
+    """Decodifica Opus/Vorbis e rejeita duração descompactada acima de 5s."""
+    try:
+        import av
+        import numpy as np
+
+        chunks = []
+        total = 0
+        with av.open(io.BytesIO(raw), mode='r', format='webm') as container:
+            if len(container.streams.audio) != 1 or container.streams.video:
+                raise ValueError('streams_invalidos')
+            stream = container.streams.audio[0]
+            if stream.codec_context.name not in {'opus', 'vorbis'}:
+                raise ValueError('codec_invalido')
+            resampler = av.AudioResampler(format='fltp', layout='mono', rate=16000)
+            for frame in container.decode(audio=0):
+                for converted in resampler.resample(frame):
+                    pcm = converted.to_ndarray().reshape(-1).astype(np.float32, copy=False)
+                    total += pcm.size
+                    if total > _MAX_AUDIO_SAMPLES:
+                        raise ValueError('audio_longo')
+                    chunks.append(pcm)
+            for converted in resampler.resample(None):
+                pcm = converted.to_ndarray().reshape(-1).astype(np.float32, copy=False)
+                total += pcm.size
+                if total > _MAX_AUDIO_SAMPLES:
+                    raise ValueError('audio_longo')
+                chunks.append(pcm)
+        if total < 1_600:
+            raise ValueError('audio_curto')
+        return np.concatenate(chunks)
     except Exception as e:
         log.warning(f'decode audio falhou: {e}')
-        return None
+        raise RuntimeError('audio_decode_fail') from e
 
 
 # ============================================================
-# TTS — roteado por provedor (SAPI | OpenAI), teto de concorrência
+# TTS — roteado por provedor (Pocket | SAPI | OpenAI), teto de concorrência
 # ============================================================
 
 # teto de gerações TTS ao vivo simultâneas (config Lua ai.voice.max_live_tts)
 def _audio_para_transporte(wav_bytes: Optional[bytes]) -> str:
-    """Compacta WAV em MP3 mono; reduz HTTP/evento sem alterar o cache interno."""
+    """Compacta WAV em MP3 mono via PyAV; não depende de ffmpeg externo."""
     if not wav_bytes:
         return ''
     try:
-        from pydub import AudioSegment
-        seg = AudioSegment.from_file(io.BytesIO(wav_bytes))
-        # mantém a taxa nativa (16kHz) — voz humana < 4kHz Nyquist; upsample seria
-        # custo de CPU sem ganho perceptível. Só garante mono antes do MP3.
-        seg = seg.set_channels(1)
+        import av
+
         buf = io.BytesIO()
-        seg.export(buf, format='mp3', bitrate='48k')
+        with av.open(io.BytesIO(wav_bytes), mode='r') as source:
+            input_stream = source.streams.audio[0]
+            sample_rate = int(input_stream.codec_context.sample_rate or 24000)
+            with av.open(buf, mode='w', format='mp3') as target:
+                output_stream = target.add_stream('libmp3lame', rate=sample_rate)
+                output_stream.bit_rate = 48_000
+                output_stream.layout = 'mono'
+                resampler = av.AudioResampler(format='fltp', layout='mono', rate=sample_rate)
+                for frame in source.decode(audio=0):
+                    for converted in resampler.resample(frame):
+                        converted.pts = None
+                        for packet in output_stream.encode(converted):
+                            target.mux(packet)
+                for converted in resampler.resample(None):
+                    converted.pts = None
+                    for packet in output_stream.encode(converted):
+                        target.mux(packet)
+                for packet in output_stream.encode(None):
+                    target.mux(packet)
         return base64.b64encode(buf.getvalue()).decode()
     except Exception as exc:
         log.warning(f'compactacao de audio falhou: {exc}')
@@ -329,7 +389,12 @@ def _audio_para_transporte(wav_bytes: Optional[bytes]) -> str:
 
 _tts_sem = threading.Semaphore(int(os.environ.get('NPCAI_MAX_LIVE_TTS', '2')))
 
-_DEFAULT_VOICE = {'provider': 'sapi', 'rate': 160}
+_DEFAULT_VOICE = {
+    'provider': 'pocket',
+    'model': 'portuguese_24l',
+    'voice': 'rafael',
+    'quantize': True,
+}
 
 def _tts(text: str, voice_spec: dict) -> Optional[bytes]:
     """Sintetiza texto para WAV via o provedor escolhido (semáforo global de concorrência)."""
@@ -345,6 +410,15 @@ def _tts(text: str, voice_spec: dict) -> Optional[bytes]:
         except Exception as e:
             log.warning(f'TTS falhou ({spec.get("provider")}): {e}')
             return None
+
+
+def _load_pocket() -> None:
+    """Carrega modelo e voz Pocket-TTS antes de publicar o health-check."""
+    provider = get_tts('pocket')
+    if not provider or not provider.available() or not hasattr(provider, 'prewarm'):
+        raise RuntimeError('Pocket-TTS indisponivel')
+    provider.prewarm(_DEFAULT_VOICE)
+    log.info('Pocket-TTS pronto')
 
 
 # ============================================================
@@ -385,6 +459,18 @@ def _select_variant(intent_cfg: dict, memory: dict) -> dict:
     return variants.get('default', {})
 
 
+def _voice_cache_tag(voice_spec: dict) -> str:
+    """Gera tag determinística de provedor/modelo/voz para isolar caches."""
+    canonical = json.dumps({
+        'provider': voice_spec.get('provider'),
+        'model': voice_spec.get('model'),
+        'voice': voice_spec.get('voice'),
+        'rate': voice_spec.get('rate'),
+        'quantize': voice_spec.get('quantize') is True,
+    }, sort_keys=True, separators=(',', ':'))
+    return hashlib.blake2s(canonical.encode(), digest_size=6).hexdigest()
+
+
 def _pick_response(npc_cfg: dict, intent: str, memory: dict,
                    voice_spec: dict, char_name: str) -> tuple[str, bytes | None, dict]:
     """
@@ -404,8 +490,9 @@ def _pick_response(npc_cfg: dict, intent: str, memory: dict,
 
     import random
     npc_id      = npc_cfg['id']
-    provider    = (voice_spec or {}).get('provider', 'sapi')
-    variant_tag = 'v' + str(hash(str(selected.get('if_memory', {}))) & 0xFFFF)
+    voice_tag = _voice_cache_tag(voice_spec or _DEFAULT_VOICE)
+    variant_raw = json.dumps(selected.get('if_memory', {}), sort_keys=True, separators=(',', ':'))
+    variant_tag = hashlib.blake2s(variant_raw.encode(), digest_size=4).hexdigest()
 
     # ── 1ª passada (serial, barata): resolve cache-hits e lista o que falta TTS ──
     display_parts: list[str]              = []
@@ -418,36 +505,30 @@ def _pick_response(npc_cfg: dict, intent: str, memory: dict,
 
         if chosen == '[nome]':  # slot de nome do jogador
             display_parts.append(char_name)
-            name_wav = _audio_cache.get_name(npc_id, char_name)
+            name_key = f'{voice_tag}:{char_name}'
+            name_wav = _audio_cache.get_name(npc_id, name_key)
             slots.append(name_wav)
             if not name_wav:
-                pending.append((idx, 'name', char_name, char_name))
+                pending.append((idx, 'name', name_key, char_name))
             continue
 
         display_parts.append(chosen)
-        cache_key = f'{intent}_{variant_tag}_{provider}_{i}'
+        cache_key = f'{intent}_{variant_tag}_{voice_tag}_{i}'
         cached = _audio_cache.get(npc_id, cache_key)
         slots.append(cached)
         if not cached:
             pending.append((idx, 'seg', cache_key, chosen))
 
-    # ── síntese em paralelo dos segmentos faltantes (ordem preservada por índice) ──
-    if pending:
-        futs = {_seg_pool.submit(_tts, text, voice_spec): (idx, kind, key)
-                for (idx, kind, key, text) in pending}
-        for fut in concurrent.futures.as_completed(futs):
-            idx, kind, key = futs[fut]
-            try:
-                wav = fut.result()
-            except Exception:
-                wav = None
-            if not wav:
-                continue
-            slots[idx] = wav
-            if kind == 'name':
-                _audio_cache.put_name(npc_id, char_name, wav)
-            else:
-                _audio_cache.put(npc_id, key, wav)
+    # Pocket-TTS tem ownership serial; evita fila interna e picos de RAM.
+    for idx, kind, key, text in pending:
+        wav = _tts(text, voice_spec)
+        if not wav:
+            continue
+        slots[idx] = wav
+        if kind == 'name':
+            _audio_cache.put_name(npc_id, key, wav)
+        else:
+            _audio_cache.put(npc_id, key, wav)
 
     wav_segments = [w for w in slots if w]
     full_text = ' '.join(display_parts)
@@ -607,9 +688,9 @@ def health():
         'ok':      True,
         'service': 'vhub_npcai',
         'npcs':    list(_npc_configs.keys()),
-        'stt':     _WHISPER_BACKEND,
+        'stt':     {'provider': 'faster-whisper', 'model': MODEL_SIZE, 'ready': True},
         'llm':     _pstat(get_llm, ('gemini', 'openai')),
-        'tts':     _pstat(get_tts, ('sapi', 'openai')),
+        'tts':     _pstat(get_tts, ('pocket', 'sapi', 'openai')),
         'cache':   _audio_cache.stats(),
     })
 
@@ -627,10 +708,11 @@ def prewarm_name():
         return jsonify({'ok': False, 'err': 'npc_unknown'}), 404
 
     def _prewarm():
-        if not _audio_cache.get_name(npc_id, charname):
+        name_key = f'{_voice_cache_tag(voice_spec)}:{charname}'
+        if not _audio_cache.get_name(npc_id, name_key):
             wav = _tts(charname, voice_spec)
             if wav:
-                _audio_cache.put_name(npc_id, charname, wav)
+                _audio_cache.put_name(npc_id, name_key, wav)
 
     threading.Thread(target=_prewarm, daemon=True).start()
     return jsonify({'ok': True})
@@ -652,7 +734,9 @@ def config():
     if ok:
         os.environ['OPENAI_API_KEY'] = ok; changed.append('openai')
     if changed:
-        reset_llm_registry(); reset_tts_registry()  # re-init com as chaves novas
+        reset_llm_registry()
+        if ok:
+            reset_tts_registry('openai')
         log.info(f'[config] chaves de IA atualizadas: {changed}')
     return jsonify({'ok': True, 'set': changed})
 
@@ -674,22 +758,6 @@ def session_end():
     if char_id:
         _session_clear(char_id)
     return jsonify({'ok': True})
-
-
-@app.route('/thinking_audio/<npc_id>', methods=['GET'])
-def thinking_audio(npc_id: str):
-    """Retorna uma frase de pensamento aleatória pré-sintetizada para o NPC."""
-    npc_id = npc_id[:48]
-    with _thinking_lock:
-        wavs = _thinking_cache.get(npc_id, [])
-    if not wavs:
-        return jsonify({'ok': False, 'err': 'thinking_not_ready'}), 503
-    import random
-    wav = random.choice(wavs)
-    audio_b64 = _audio_para_transporte(wav)
-    if not audio_b64:
-        return jsonify({'ok': False, 'err': 'transport_fail'}), 500
-    return jsonify({'ok': True, 'audio_b64': audio_b64})
 
 
 @app.route('/converse', methods=['POST'])
@@ -739,10 +807,6 @@ def converse():
     llm_spec = llm_spec if isinstance(llm_spec, dict) else {}
     voice_spec = ai.get('voice') or _DEFAULT_VOICE
     voice_spec = voice_spec if isinstance(voice_spec, dict) else _DEFAULT_VOICE
-    stt_spec = ai.get('stt') or {}
-    stt_spec = stt_spec if isinstance(stt_spec, dict) else {}
-    language   = stt_spec.get('language') or data.get('lang') or 'pt'
-
     # validação básica — aceita áudio OU texto direto
     if not npc_id or (not audio_b64 and not direct_text):
         log.warning('missing_params: npc_id=%r audio_len=%d dt_len=%d',
@@ -758,10 +822,10 @@ def converse():
         # intenção pré-definida via target — skip STT
         stt_text = direct_text
     else:
-        wav_bytes = _decode_audio(audio_b64)
-        if not wav_bytes:
+        audio_bytes = _decode_audio_base64(audio_b64)
+        if not audio_bytes:
             return jsonify({'ok': False, 'err': 'audio_decode_fail'}), 422
-        stt_text = _transcribe_bytes(wav_bytes, language)
+        stt_text = _transcribe_bytes(audio_bytes)
         if not stt_text.strip():
             return jsonify({'ok': True, 'stage': 'stt_empty', 'intent': 'unknown',
                             'text': '', 'audio_b64': '', 'stt_text': ''})
@@ -841,8 +905,8 @@ def converse():
 if __name__ == '__main__':
     _load_npc_configs()
     _load_whisper()
+    _load_pocket()
     _start_stt_worker()
-    _prewarm_thinking()
     log.info(f'sidecar vhub_npcai ouvindo em {HOST}:{PORT}')
     serve(
         app,

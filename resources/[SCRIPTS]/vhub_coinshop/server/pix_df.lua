@@ -31,6 +31,36 @@ end
 -- ENTREGA — handler 'coins' chamado pelo vhub_df após aprovação
 -- ============================================================
 
+-- Idempotência de crédito por order (FIN-001, ADR #94): inbox vhub_coinshop_delivery.
+-- O vhub_df pode chamar deliverCoins mais de uma vez LEGITIMAMENTE para o mesmo
+-- order_id (rollback approved→pending→approved; recovery pós-crash — Queue.recoverStuck).
+-- Como Coins.credit é read-modify-write NÃO idempotente, a inbox garante crédito único:
+--
+--   • linha 'credited'  → já entregou → done(true) sem incrementar (sela o df).
+--   • sem linha         → INSERT 'crediting' + credita + marca 'credited' (caminho normal).
+--   • linha 'crediting' → crédito iniciou mas NÃO foi confirmado (crash entre o credit e
+--       a marca 'credited'). NÃO re-creditamos às cegas: como o setCData do core é batch
+--       assíncrono, não dá para provar que o primeiro credit não aplicou; re-creditar
+--       poderia DUPLICAR moeda. Escolha segura (CLAUDE.md: dúvida → seguro): sinaliza
+--       para reconciliação humana e responde done(true) para NÃO re-disparar em loop.
+--       Sub-crédito raro e alertável é preferível a duplicação silenciosa de dinheiro.
+
+-- estado da inbox do order: retorna state ('credited'|'crediting'|nil) e a idade em
+-- segundos da linha (para separar corrida recente de crediting realmente preso).
+local function deliveryState(orderId)
+    if not Coins then return nil, 0 end
+    local rows = SQL.query(
+        'SELECT state, TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age ' ..
+        'FROM vhub_coinshop_delivery WHERE order_id = ? LIMIT 1', { orderId })
+    local r = rows and rows[1]
+    if not r then return nil, 0 end
+    return r.state, tonumber(r.age) or 0
+end
+
+-- acima desta idade, uma linha 'crediting' deixou de ser corrida recente e vira
+-- suspeita real de crash mid-credit (dispara alarme de reconciliação).
+local STUCK_CREDITING_S = 30
+
 -- credita as moedas do pedido aprovado; done(false) faz o gateway re-tentar depois
 local function deliverCoins(charId, orderId, meta, done)
     local coinsToAdd = meta and tonumber(meta.coins) or nil
@@ -39,9 +69,55 @@ local function deliverCoins(charId, orderId, meta, done)
     end
     coinsToAdd = math.floor(coinsToAdd)
 
+    if not orderId then
+        return done(false, 'order_id ausente — idempotência impossível')
+    end
+
+    -- 1. já entregue? replay seguro sem novo incremento.
+    local state, age = deliveryState(orderId)
+    if state == 'credited' then
+        Core.log('pix_df: order já creditado (idempotência)', charId, 'order', orderId)
+        return done(true, 'ja_creditado')
+    end
+
+    -- 2. reserva a inbox ANTES de creditar (PK order_id → INSERT IGNORE atômico).
+    --    affected=1 → nós reservamos; affected=0 → outra chamada já reservou (ou 'crediting').
+    if state == nil then
+        local ins = SQL.execute(
+            "INSERT IGNORE INTO vhub_coinshop_delivery (order_id, char_id, amount, state) " ..
+            "VALUES (?, ?, ?, 'crediting')", { orderId, charId, coinsToAdd })
+        -- corrida: se dois deliver entraram juntos, quem perdeu o INSERT relê o estado
+        if not ins or tonumber(ins) == 0 then
+            state, age = deliveryState(orderId)
+            if state == 'credited' then return done(true, 'ja_creditado') end
+        end
+    end
+
+    -- 3. linha 'crediting' que NÃO é a nossa reserva: não re-credita (banner acima).
+    --    Recente (age < STUCK_CREDITING_S) = perdemos uma corrida legítima (webhook×polling):
+    --    o vencedor está creditando agora — silêncio, sem alarme. Antiga = crash mid-credit
+    --    real → alarme de reconciliação manual.
+    if state == 'crediting' then
+        if age >= STUCK_CREDITING_S then
+            Core.logErr(('pix_df: order %s em crediting PRESO há %ds — RECONCILIAR manualmente ' ..
+                '(char %s, %d moedas); crédito NÃO re-disparado p/ evitar duplicação'):format(
+                tostring(orderId), age, tostring(charId), coinsToAdd))
+        else
+            Core.log('pix_df: order em crediting concorrente (corrida) — cedendo ao vencedor', orderId)
+        end
+        return done(true, 'crediting_concorrente')
+    end
+
+    -- 4. caminho normal: credita e confirma a inbox.
     if not Coins.credit(charId, coinsToAdd) then
+        -- credit falhou: solta a reserva para o gateway re-tentar do zero.
+        SQL.execute("DELETE FROM vhub_coinshop_delivery WHERE order_id = ? AND state = 'crediting'",
+            { orderId })
         return done(false, 'credito falhou — gateway re-tenta')
     end
+
+    SQL.execute("UPDATE vhub_coinshop_delivery SET state = 'credited', credited_at = NOW() " ..
+        "WHERE order_id = ?", { orderId })
 
     -- sincroniza jogador online: saldo, toast e checkout aberto no iPad
     local src = srcByChar(charId)

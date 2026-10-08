@@ -3,28 +3,6 @@
 VHubGarage = VHubGarage or {}
 VHubGarage.U = VHubGarage.U or {}
 
--- timestamp Unix (segundos)
-function VHubGarage.U.now() return os.time() end
-
--- formata dinheiro: 1234567   "R$ 1.234.567"
-function VHubGarage.U.fmtMoney(n)
-  local s, res, c = tostring(math.floor(n or 0)), '', 0
-  for i = #s, 1, -1 do
-    res = s:sub(i, i) .. res; c = c + 1
-    if c % 3 == 0 and i > 1 then res = '.' .. res end
-  end
-  return 'R$ ' .. res
-end
-
--- formata tempo restante: 3725s   "1h 02m"
-function VHubGarage.U.fmtDur(secs)
-  secs = math.max(0, math.floor(secs or 0))
-  if secs >= 86400 then return ('%dd %02dh'):format(secs / 86400, (secs % 86400) / 3600) end
-  if secs >= 3600  then return ('%dh %02dm'):format(secs / 3600,  (secs % 3600) / 60)  end
-  if secs >= 60    then return ('%dm %02ds'):format(secs / 60,    secs % 60)            end
-  return ('%ds'):format(secs)
-end
-
 -- valida e normaliza placa  retorna string upper trim ou nil
 function VHubGarage.U.normalizePlate(plate)
   if type(plate) ~= 'string' then return nil end
@@ -42,15 +20,6 @@ function VHubGarage.U.randomPlate()
     string.char(65 + math.random(0, 25)),
     math.random(0, 9), math.random(0, 9),
     math.random(0, 9), math.random(0, 9))
-end
-
--- clamp num rico
-function VHubGarage.U.clamp(v, mn, mx) return math.max(mn, math.min(mx, v)) end
-
--- cl one shallow de tabela
-function VHubGarage.U.shallow(t)
-  if type(t) ~= 'table' then return t end
-  local out = {}; for k, v in pairs(t) do out[k] = v end; return out
 end
 
 -- json safe encode/decode com fallback
@@ -99,17 +68,9 @@ end
 function VHubGarage.U.validCoords(p)
   if type(p) ~= 'table' then return false end
   local x, y, z = tonumber(p.x), tonumber(p.y), tonumber(p.z)
-  if not (x and y and z) then return false end
+  if not (x and y and z) or x ~= x or y ~= y or z ~= z
+      or math.abs(x) == math.huge or math.abs(y) == math.huge or math.abs(z) == math.huge then return false end
   if math.abs(x) > 9000 or math.abs(y) > 9000 then return false end
   if z < -300 or z > 3500 then return false end
   return true
-end
-
--- defensive deep copy (n vel max 3)
-function VHubGarage.U.deep3(t, lvl)
-  lvl = lvl or 0
-  if type(t) ~= 'table' or lvl >= 3 then return t end
-  local out = {}
-  for k, v in pairs(t) do out[k] = VHubGarage.U.deep3(v, lvl + 1) end
-  return out
 end

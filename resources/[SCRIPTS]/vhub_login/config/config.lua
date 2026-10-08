@@ -61,8 +61,10 @@ VHubLogin.Config = {
   lockout = { fails = 5, ms = 60000 },     -- por UID: 5 falhas → trava 60s
 
   -- Export default-deny; HSS e selector consultam somente o estado do gate.
+  -- vhub_admin: autorizado SOMENTE para banPlayer (escopo verificado no export).
   login_trusted = {
-    vhub_hss = true,
+    vhub_hss        = true,
     vhub_spawselector = true,
+    vhub_admin      = true,
   },
 }

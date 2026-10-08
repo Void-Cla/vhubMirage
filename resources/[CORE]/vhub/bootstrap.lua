@@ -201,8 +201,8 @@ local function criar_driver()
       return false
     end
 
-    if not conexao:lower():find("multiplestatements=true", 1, true) then
-      logar("ERROR", "mysql_connection_string sem multipleStatements=true")
+    if conexao:lower():find("multiplestatements=true", 1, true) then
+      logar("ERROR", "mysql_connection_string insegura: remova multipleStatements=true")
       return false
     end
 
@@ -363,7 +363,10 @@ local function aplicar_schema(driver)
     falhar("schema_ausente", "sql/schema.sql nao encontrado")
   end
 
-  local ok, resultado = driver:_executar("query", schema, {})
+  local ok, resultado = VHubSQLScript.aplicar(schema, function(instrucao)
+    local executou, retorno = driver:_executar("query", instrucao, {})
+    if not executou then error(tostring(retorno)) end
+  end)
   if not ok then falhar("schema_falhou", "schema inicial falhou", {resultado = resultado}) end
 end
 

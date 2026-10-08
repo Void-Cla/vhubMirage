@@ -3,12 +3,38 @@
 -- está em hold (invisível/congelado no bucket 999) pelo vhub_hss.
 
 local _focus = false
+local _focusGeneration = 0
 local E = VHubLogin.E
 local CFG = VHubLogin.Config
 
+-- CEF pode manter o foco lógico e perder somente o cursor após uma troca de NUI.
+-- A aquisição é pulsada; cada fechamento invalida imediatamente os pulsos pendentes.
+local function restoreCursor()
+  _focusGeneration = _focusGeneration + 1
+  local generation = _focusGeneration
+  Citizen.CreateThread(function()
+    for _, delay in ipairs({ 0, 80, 260, 700 }) do
+      Citizen.Wait(delay)
+      if not _focus or generation ~= _focusGeneration then return end
+      SetNuiFocus(false, false)
+      Citizen.Wait(0)
+      if not _focus or generation ~= _focusGeneration then return end
+      if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
+      if SetNuiFocusKeepInput then SetNuiFocusKeepInput(false) end
+      SetNuiFocus(true, true)
+    end
+  end)
+end
+
 local function setFocus(on)
   _focus = on
-  SetNuiFocus(on, on)
+  _focusGeneration = _focusGeneration + 1
+  if not on then
+    SetNuiFocus(false, false)
+    return
+  end
+  SetNuiFocus(true, true)
+  restoreCursor()
 end
 
 -- ajusta somente ambiente/HUD; estado físico do ped pertence ao HSS
@@ -50,7 +76,7 @@ local function handoffPreparedSelector(payload)
   end
   _awaitSel = false
   SendNUIMessage({ type = "login:close", data = {} })
-  _focus = false
+  setFocus(false)
   ClearTimecycleModifier()
   TriggerEvent(E.SELECTOR_OPEN, payload)
 end
@@ -356,13 +382,19 @@ end)
 -- entrega foco ao SIMS sem abrir o selector nem consumir o pending do HSS
 RegisterNetEvent(E.CREATION_HANDOFF, function()
   destroyPreviewPeds(true)
-  setGateEnvironment(false)
+  -- Mantém o environment (IgnorePlayer + suppressor de HUD) ativo durante a criação:
+  -- o criador não tem permissão de suppressor própria; liberar aqui fazia o minimapa,
+  -- fome, sede e mochila aparecerem atrás do editor. A liberação REAL ocorre só quando o
+  -- char entra no mundo (VHubSpawnSelector.E.COMPLETE) ou no onResourceStop; a volta à
+  -- seleção (CREATION_RETURN) mantém o HUD suprimido de propósito (tela de seleção).
+  setGateEnvironment(true)
   SendNUIMessage({ type = "login:close", data = {} })
   -- NÃO chamar SetNuiFocus(false) aqui: o SIMS assume o foco no CLI_STUDIO_OPEN e a ordem
   -- de chegada dos eventos (STAGE_BEGIN → STUDIO_OPEN foca true → HANDOFF) faria este false
   -- roubar o foco do criador (NUI abre mas não clica). O HANDOFF só dispara quando o SIMS ESTÁ
   -- abrindo; se o SIMS falhar, ele mesmo devolve o foco (failSafe → SetNuiFocus false).
   _focus = false
+  _focusGeneration = _focusGeneration + 1
 end)
 
 -- conclusão/falha do criador → reabre a seleção e atualiza os cards

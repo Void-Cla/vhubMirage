@@ -22,9 +22,12 @@ function M.hasPerm(src, key)
   if not src or src < 1 then return false end
 
   local perm = CFG.perms[key] or key
-  local ok, uid = pcall(function() return exports.vhub:getUID(src) end)
-  if ok and tonumber(uid) == 1 then return true end
 
+  -- Permissão administrativa é resolvida por CHAR_ID (via vhub_groups, OWNER_CHAR_ID=1),
+  -- NUNCA por uid/conta: um char de suporte é admin, mas os DEMAIS chars da mesma conta
+  -- (RP) não herdam poder — isola abuso e permite apagar o char-admin sem tocar o char-RP.
+  -- O antigo bypass `uid==1` foi removido por furar exatamente esse isolamento (dava admin
+  -- a qualquer char do owner). O char owner segue admin: vhub_groups deriva owner de char_id==1.
   if IsPlayerAceAllowed then
     if IsPlayerAceAllowed(src, 'vhub.admin.full') then return true end
     local ace = perm:sub(1, 5) == 'vhub.' and perm or ('vhub.' .. perm)

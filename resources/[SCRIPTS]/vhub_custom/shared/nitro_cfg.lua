@@ -13,7 +13,7 @@ VHubCustom.NitroCfg = {
   topSpeedBoost = 1.0,
   torqueBoost   = 2.0,
   exhaustFire   = true,
-  fireSize      = 2.0,
+  -- Efeito, tamanho e cadência pertencem a cfg.exhaust_fx, iguais à oficina.
 
   LEVELS = {
     [1]  = { powerMult = 1.00, consumeMult = 0.50 },

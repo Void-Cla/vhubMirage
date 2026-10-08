@@ -276,8 +276,13 @@ function Payments.deliver(order, actor, onDone)
     local ok3, err3 = pcall(function()
         handler(order.char_id, order.id, meta, function(delivOk, delivMsg)
             if delivOk then
+                -- guard de estado (FIN-001/ADR #94): só marca credited_at se a order ainda
+                -- estiver approved-sem-crédito. Sem o guard, um rollback concorrente
+                -- (approved→pending) poderia deixar a order 'pending' COM credited_at —
+                -- incoerência de auditoria (a inbox do consumidor já barra duplo crédito).
                 SQL.execute(
-                    "UPDATE vhub_df_orders SET credited_at = NOW() WHERE txid = ?",
+                    "UPDATE vhub_df_orders SET credited_at = NOW() " ..
+                    "WHERE txid = ? AND status = 'approved' AND credited_at IS NULL",
                     { order.txid }
                 )
                 Payments.audit(order.id, order.txid, 'delivered', actor, { msg = delivMsg })
@@ -325,6 +330,76 @@ function Payments.deliver(order, actor, onDone)
         )
         Payments.audit(order.id, order.txid, 'error', actor, { exception = tostring(err3) })
         Core.logErr('Payments.deliver: handler explodiu — ' .. tostring(err3))
+        onDone(false, 'exception')
+    end
+end
+
+
+-- ============================================================
+-- REENTREGA — orders 'approved' presas sem credited_at (FIN-001, ADR #94)
+-- ============================================================
+
+-- Reentrega uma order que já está 'approved' mas nunca teve credited_at gravado.
+-- Cenário: o processo caiu ENTRE o lock pending→approved (deliver) e o handler
+-- confirmar — a order fica paga-porém-não-entregue e verifyAndSettle a ignora
+-- (sai cedo em status ≠ pending). Sem isto, a compra paga se perde para sempre.
+--
+-- IMPORTANTE (aviso do arquiteto): NÃO reutiliza o lock pending→approved (a order
+-- já está approved). Usa guard próprio 'approved AND credited_at IS NULL' para não
+-- competir com webhook/polling. A idempotência de crédito é do handler (inbox do
+-- consumidor, ADR #94) — chamar o handler 2x para a mesma order NÃO duplica moeda.
+-- onDone(ok, message)
+function Payments.redeliver(order, actor, onDone)
+    onDone = onDone or function() end
+
+    -- só reentrega quem está exatamente no estado preso (approved, sem crédito)
+    if order.status ~= 'approved' or order.credited_at ~= nil then
+        onDone(true, 'nao_preso')
+        return
+    end
+
+    local prefix  = (order.product_key or ''):match('^([^:]+)')
+    local handler = prefix and _handlers[prefix]
+    if not handler then
+        -- consumidor ainda não registrou o handler: mantém approved e re-tenta depois
+        onDone(false, 'sem_handler')
+        return
+    end
+
+    local meta = nil
+    if order.metadata and order.metadata ~= '' then
+        local ok2, dec = pcall(json.decode, order.metadata)
+        if ok2 then meta = dec end
+    end
+
+    local ok3, err3 = pcall(function()
+        handler(order.char_id, order.id, meta, function(delivOk, delivMsg)
+            if delivOk then
+                -- guard próprio: só grava credited_at se ainda estiver preso
+                local aff = SQL.execute(
+                    "UPDATE vhub_df_orders SET credited_at = NOW() " ..
+                    "WHERE txid = ? AND status = 'approved' AND credited_at IS NULL",
+                    { order.txid })
+                if aff and tonumber(aff) > 0 then
+                    Payments.audit(order.id, order.txid, 'delivered', actor,
+                        { msg = delivMsg, recovered = true })
+                    Core.log(('Payments: REENTREGUE txid=%s char=%s via %s'):format(
+                        order.txid, tostring(order.char_id), actor))
+                    _notifyPlayerIfOnline(order, true)
+                end
+                onDone(true, delivMsg)
+            else
+                -- handler não entregou: mantém approved/credited NULL p/ próxima passada
+                Payments.audit(order.id, order.txid, 'error', actor,
+                    { msg = delivMsg, recovered = true })
+                onDone(false, delivMsg)
+            end
+        end)
+    end)
+
+    if not ok3 then
+        Payments.audit(order.id, order.txid, 'error', actor, { exception = tostring(err3), recovered = true })
+        Core.logErr('Payments.redeliver: handler explodiu — ' .. tostring(err3))
         onDone(false, 'exception')
     end
 end

@@ -25,9 +25,12 @@ VERSOES_OBRIGATORIAS = {
     "Flask": "3.1.3",
     "waitress": "3.0.2",
     "faster-whisper": "1.2.1",
+    "pocket-tts": "2.1.0",
+    "torch": "2.13.0",
     "pydub": "0.25.1",
     "scikit-learn": "1.9.0",
     "numpy": "2.5.1",
+    "scipy": "1.18.0",
     "pyttsx3": "2.99",
     "google-genai": "2.15.0",
     "openai": "2.50.0",
@@ -104,7 +107,7 @@ def _ambiente_integro() -> bool:
         return False
 
     verificacao = (
-        "import flask,faster_whisper,numpy,openai,pydub,pyttsx3,sklearn,waitress;"
+        "import flask,faster_whisper,numpy,openai,pocket_tts,pydub,pyttsx3,sklearn,torch,waitress;"
         "from google import genai;"
         "from importlib.metadata import version;"
         "import struct,sys;"

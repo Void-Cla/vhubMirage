@@ -56,8 +56,8 @@ VHubHSS.Cfg = {
     },
 
     DRAIN = {
-        food = 0.001,    -- teste: ~16 min p/ zerar (produção: 0.00007)
-        water = 0.0015,  -- teste: ~11 min p/ zerar (produção: 0.00011)
+        food = 0.00007,  -- produção: ~3h50 p/ zerar
+        water = 0.00011, -- produção: ~2h25 p/ zerar
         energy = 0.00002,
         blood_per_bleed = {
             [0] = 0.0,

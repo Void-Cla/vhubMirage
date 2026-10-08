@@ -2,10 +2,11 @@
 fx_version 'cerulean'
 game       'gta5'
 lua54      'yes'
+node_version '22'
 
 name        'vhub_lspdtool'
 author      'vHub Mirage'
-version     '2.0.1'
+version     '2.1.1'
 description 'LSPD Tool: radar automatico + leitura de placa (radar/helicam) + BOLO e dispatch nativos vHub'
 
 -- Integração com sd-policeradar / helicam é SOFT (via pcall) — não são dependências.
@@ -14,6 +15,7 @@ dependencies {
     'vhub',
     'vhub_hss',
     'oxmysql',
+    'vhub_crypto',
 }
 
 shared_scripts {
@@ -23,6 +25,10 @@ shared_scripts {
 }
 
 server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    '@vhub/shared/sql_script.lua',
+    '@vhub_crypto/server/scrypt.js',
+    '@vhub_crypto/server/scrypt.lua',
     'server/main.lua',
     'server/bolo.lua',
     'server/mdt.lua',

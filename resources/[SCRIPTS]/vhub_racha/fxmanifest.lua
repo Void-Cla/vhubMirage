@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_racha'
 author      'vHub Mirage'
-version     '3.1.1'
+version     '3.1.2'
 description 'Liga clandestina premium — 7 modos, ready-zone, totem cinematografico, editor visual, ranking persistido.'
 
 dependencies {
@@ -30,6 +30,8 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/bootstrap.lua',     -- PRIMEIRO: fila on_ready (handshake vhub core)
   'server/sessions.lua',      -- cache de usuarios via vHub:characterLoad (publico)
   'server/sql.lua',

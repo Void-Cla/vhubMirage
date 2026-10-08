@@ -3,6 +3,7 @@
 
 local E = VHubSims.E
 local active = nil
+local cursorGeneration = 0
 
 
 -- ============================================================
@@ -21,6 +22,7 @@ end
 local function closeLocal(restore)
   local closing = active
   active = nil
+  cursorGeneration = cursorGeneration + 1
 
   if closing then
     if restore then hss('restoreCustomizationPreview') end
@@ -49,14 +51,36 @@ local BLOCKED_CONTROLS = {
 }
 
 -- Trava os controles do jogo enquanto o estúdio está aberto: clique não vira soco e teclas não
--- vazam para o mundo, sem esconder o cursor. Encerra sozinha quando 'active' zera.
-local function startControlLock()
+-- vazam para o mundo, sem esconder o cursor. Budget: 1 passagem/frame da sessão atual.
+local function startControlLock(session)
   Citizen.CreateThread(function()
-    while active do
+    while active == session do
       for index = 1, #BLOCKED_CONTROLS do
         DisableControlAction(0, BLOCKED_CONTROLS[index], true)
       end
       Citizen.Wait(0)
+    end
+  end)
+end
+
+-- Reforça o cursor por uma janela curta após abrir (budget bounded, L-18): no handoff
+-- login→sims o foco pode ser transitoriamente sobrescrito por outro resource fechando a
+-- própria NUI no mesmo tick, deixando o CEF sem cursor mesmo após o SetNuiFocus. O
+-- studioReady reasserta 1× quando a página revela; este watchdog cobre a corrida vencendo
+-- a sobrescrita por ~1,5s (10 × 150ms) e para no instante em que 'active' zera.
+local function startCursorGuard(session)
+  cursorGeneration = cursorGeneration + 1
+  local generation = cursorGeneration
+  Citizen.CreateThread(function()
+    for _, delay in ipairs({ 0, 80, 260, 700 }) do
+      Citizen.Wait(delay)
+      if active ~= session or generation ~= cursorGeneration then return end
+      SetNuiFocus(false, false)
+      Citizen.Wait(0)
+      if active ~= session or generation ~= cursorGeneration then return end
+      if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
+      if SetNuiFocusKeepInput then SetNuiFocusKeepInput(false) end
+      SetNuiFocus(true, true)
     end
   end)
 end
@@ -104,19 +128,23 @@ RegisterNetEvent(E.CLI_STUDIO_OPEN, function(payload)
   if active then closeLocal(true) end
 
   active = { session_id = payload.session_id, mode = payload.mode }
-  local sessionId = payload.session_id
+  local session = active -- identidade local invalida threads até no replay do mesmo session_id
 
   -- Foco + trava de controles IMEDIATOS: cursor aparece e o jogo não recebe clique/tecla
   -- mesmo enquanto o estágio físico do HSS ainda monta (evita soco no mundo / tela sem cursor).
   SetNuiFocus(true, true)
-  startControlLock()
+  startControlLock(session)
+  startCursorGuard(session)   -- reforço bounded do cursor contra sobrescrita de foco no handoff
 
   -- Aguarda o estágio HSS ficar pronto (model load + MovePed); câmera é best-effort.
   Citizen.CreateThread(function()
-    local deadline = GetGameTimer() + 12000
-    while active and active.session_id == sessionId and GetGameTimer() < deadline do
-      if hss('beginCustomizationPreview', payload.current) then
+    local deadline = GetGameTimer() + 30000
+    while active == session and GetGameTimer() < deadline do
+      if hss('beginCustomizationPreview', payload.current, payload.mode == 'creator') then
         hss('setCustomizationCamera', payload.mode == 'barber' and 'head' or 'body')
+        -- reancorar o cursor no centro antes de reassegurar o foco força o CEF a re-renderizá-lo
+        -- (mesmo padrão do vhub_spawselector, onde o cursor aparece de forma confiável)
+        if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
         SetNuiFocus(true, true)   -- reassegura foco/cursor ao revelar a página (vence corrida do handoff)
         payload.palettes = buildPalettes()   -- cores reais do jogo como guia da NUI (cacheado)
         SendNUIMessage({ type = 'sims:open', data = payload })
@@ -124,7 +152,7 @@ RegisterNetEvent(E.CLI_STUDIO_OPEN, function(payload)
       end
       Citizen.Wait(50)
     end
-    if active and active.session_id == sessionId then failSafe() end
+    if active == session then failSafe() end
   end)
 end)
 
@@ -149,7 +177,10 @@ end)
 -- chamado enquanto o body está display:none pode não revelar o cursor no CEF do FiveM — este
 -- reassert, disparado só quando há conteúdo renderizado sob o mouse, garante o cursor visível.
 RegisterNUICallback('studioReady', function(_, cb)
-  if active then SetNuiFocus(true, true) end
+  if active then
+    if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
+    SetNuiFocus(true, true)
+  end
   cb({ ok = active ~= nil })
 end)
 

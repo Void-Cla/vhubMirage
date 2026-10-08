@@ -18,6 +18,8 @@ DETECTAR E REPROVAR (NUI): subcomponente usado em 1 lugar; store slice para ref 
 
 APROVAR SE: reduz linhas sem perder função | elimina duplicação real | unifica ownership | **remove arquivo morto**.
 
+> MCPs: `repowise` (always-on — PRIMEIRO) — `get_dead_code()` lista código morto por tier de confiança (parta daqui, não de grep); `get_health(targets)` saúde e hotspot; `get_context(file, include=['callers'])` confirmar que ninguém chama o código antes de deletar. `filesystem` (path dinâmico).
+
 FORMATO:
 VEREDITO: APROVAR | REPROVAR | REDUZIR_ESCOPO
 ACHADOS: <máx 4, arquivo:linha — inflação/duplicação/órfão>

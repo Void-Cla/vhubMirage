@@ -20,21 +20,14 @@ AddEventHandler('onResourceStart', function(res)
     Citizen.CreateThread(function()
         Citizen.Wait(1500)   -- oxmysql pronto
 
-        -- aplica schema (CREATE TABLE IF NOT EXISTS — idempotente).
-        -- comentários `--` são removidos ANTES do split em ';' (um ';' dentro de
-        -- comentário quebrava o statement — visto no boot de 2026-07-13)
+        -- aplica schema idempotente em instruções isoladas (ADR #98).
         local raw = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
         if raw then
-            local clean = {}
-            for line in raw:gmatch('[^\r\n]+') do
-                local code = line:gsub('%-%-.*$', '')
-                if code:match('%S') then clean[#clean + 1] = code end
-            end
-            for stmt in table.concat(clean, '\n'):gmatch('[^;]+') do
-                if stmt:find('CREATE%s+TABLE') then
-                    local ok = pcall(SQL.execute, stmt)
-                    if not ok then Core.logErr('init: falha ao aplicar schema') end
-                end
+            local ok, err = VHubSQLScript.aplicar(raw, function(statement)
+                MySQL.query.await(statement, {})
+            end)
+            if not ok then
+                Core.logErr('init: falha ao aplicar schema: ' .. tostring(err))
             end
         else
             Core.logErr('init: sql/schema.sql ausente (declarado no files{} do fxmanifest?)')
@@ -45,6 +38,15 @@ AddEventHandler('onResourceStart', function(res)
 
         Core.log(('init: vhub_df pronto (enabled=%s, mp_token=%s, fila=%d)'):format(
             tostring(VHubDF.cfg.enabled), tostring(VHubDF.MP.isReady()), Queue.size()))
+    end)
+
+    -- FIN-001/ADR #94: reentrega de orders approved-sem-crédito (gap de crash).
+    -- Roda em thread separada com atraso: os handlers dos consumidores (ex.: coinshop
+    -- pix_df) registram com retry a cada 2s no próprio boot; esperamos ~8s para dar
+    -- tempo do handler existir antes da 1ª passada, senão reentrega volta 'sem_handler'.
+    Citizen.CreateThread(function()
+        Citizen.Wait(8000)
+        pcall(Queue.recoverStuck)
     end)
 end)
 

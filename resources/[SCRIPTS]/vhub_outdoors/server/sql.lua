@@ -108,9 +108,10 @@ local ITEM_COLUMNS = [[
 function M.initSchema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if type(schema) ~= 'string' or schema == '' then return false end
-  for statement in schema:gmatch('([^;]+);') do
-    if statement:match('%S') then await_execute(statement, {}) end
-  end
+  local ok = VHubSQLScript.aplicar(schema, function(statement)
+    MySQL.query.await(statement, {})
+  end)
+  if not ok then return false end
 
   local size_column = tonumber(await_scalar([[
     SELECT COUNT(*) FROM information_schema.columns

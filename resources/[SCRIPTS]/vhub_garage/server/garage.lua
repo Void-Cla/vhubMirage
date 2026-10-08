@@ -6,6 +6,7 @@ local Core = VHubGarage.Core
 local U    = VHubGarage.U
 local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
+local Veiculos = VHubGarage.Veiculos
 
 -- ----------------------------------------------------------------------------
 -- Lock de transferência (padrão cooperativo do ferinha #19, L-09)
@@ -75,7 +76,7 @@ AddEventHandler(E.ACT_SPAWN, function(plate, garagem_id)
   local p    = U.normalizePlate(plate); if not p then return end
   local g    = getGaragem(garagem_id); if not g then return end
 
-  Citizen.CreateThread(function()
+  Veiculos.executar(p, src, function()
     local v = SQL:getVehicle(p)
     if not v then
       Core.notify(src, 'Ve culo n o registrado.'); return
@@ -106,48 +107,18 @@ AddEventHandler(E.ACT_SPAWN, function(plate, garagem_id)
     if v.status == 'auction' then
       Core.notify(src, 'Ve culo est  em leil o.'); return
     end
+    if v.status ~= 'garage' and v.status ~= 'out' then
+      Core.notify(src, 'Status do veículo não permite retirada.'); return
+    end
     if not ipvaOk(v) then
       Core.notify(src, 'IPVA vencido. Quite antes de retirar o ve culo.'); return
     end
 
-    -- force-out: se j  estiver "out", cobra taxa
-    if v.status == 'out' then
-      if not Core.payWallet(src, CFG.taxa_force_out) then
-        Core.notify(src, ('Ve culo j  est  na rua. Force-out custa R$ %d.')
-          :format(CFG.taxa_force_out))
-        return
-      end
-    end
-
     local off = spawnOffset(v.vtype)
     local pos = { x = g.coord.x + off.x, y = g.coord.y + off.y, z = g.coord.z + off.z, h = g.h }
-
-    -- anti-dupe server-side: remove qualquer entidade no mundo com esta placa
-    -- antes de criar a nova (cobre force-out de carro perdido e clone stale).
-    for _, ent in ipairs(GetAllVehicles()) do
-      if U.normalizePlate(GetVehicleNumberPlateText(ent) or '') == p then
-        DeleteEntity(ent)
-      end
-    end
-
-    SQL:updateStatus(p, 'out')
-    SQL:updatePosition(p, U.jenc({ x = pos.x, y = pos.y, z = pos.z, h = pos.h }))
+    local ok, erro = Veiculos.retirar(src, v, pos, v.status == 'out' and CFG.taxa_force_out or 0)
+    if not ok then Core.notify(src, erro); return end
     Core:log(p, 'spawn', cid, { garagem = g.id })
-
-    -- PRONTUÁRIO: fonte única do físico+cosmético (fallback à coluna legada
-    -- vhub_vehicles.customization só p/ DB anterior ao backfill)
-    local st
-    pcall(function() st = exports.vhub_conce:getVehicleState(p) end)
-    local snapshot = {
-      plate         = p,
-      model         = v.model,
-      vtype         = v.vtype,
-      customization = (st and st.customization) or U.jdec(v.customization),
-      state         = st,   -- fuel/engine/body/damage aplicados no client pós-spawn
-      locked        = v.locked == 1,
-      surface       = VHubGarage.types.surface[v.vtype] or 'ground',
-    }
-    TriggerClientEvent(E.DO_SPAWN, src, snapshot, pos)
   end)
 end)
 
@@ -161,7 +132,7 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
   local p    = U.normalizePlate(plate); if not p then return end
   local g    = getGaragem(garagem_id); if not g then return end
 
-  Citizen.CreateThread(function()
+  Veiculos.executar(p, src, function()
     local v = SQL:getVehicle(p)
     if not v then return end
     if not Core.hasKeyItem(src, p) then
@@ -188,7 +159,8 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
     for _, ent in ipairs(GetAllVehicles()) do
       if U.normalizePlate(GetVehicleNumberPlateText(ent) or '') == p then
         plate_seen = true
-        if #(GetEntityCoords(ent) - g.coord) <= raio then
+        if GetEntityRoutingBucket(ent) == GetPlayerRoutingBucket(src)
+            and #(GetEntityCoords(ent) - g.coord) <= raio then
           vent = ent
           break
         end
@@ -224,6 +196,7 @@ AddEventHandler(E.ACT_STORE, function(plate, garagem_id, payload)
 
     -- despawn AUTORITATIVO: o servidor deleta a entidade validada (anti-dupe);
     -- o DO_DESPAWN ainda vai ao cliente para limpar o mapa local e restos.
+    Veiculos.esquecer(p)
     if DoesEntityExist(vent) then DeleteEntity(vent) end
 
     TriggerClientEvent(E.DO_DESPAWN, src, p)

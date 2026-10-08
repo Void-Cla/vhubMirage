@@ -1,135 +1,90 @@
-// nui/js/dealership.js — view "Concessionária" (tema vHub)
 (() => {
   const App = window.vhubApp;
-  const $list   = document.getElementById('d-list');
-  const $detail = document.getElementById('d-detail');
-  const $cats   = document.querySelectorAll('#view-dealer .cat');
-  const $name   = document.getElementById('d-conc-name');
-
-  let activeCat = 'all';
-  let snapshot  = null;
+  const list = document.getElementById('d-list');
+  const detail = document.getElementById('d-detail');
+  const categories = document.querySelectorAll('#view-dealer .cat');
+  const name = document.getElementById('d-conc-name');
+  let activeCategory = 'all';
   let selectedModel = null;
-
-  function iconFor(t) {
-    return { car:'car', bike:'motorcycle', plane:'plane', heli:'helicopter',
-             boat:'ship', truck:'truck', trailer:'truck-moving' }[t] || 'car';
-  }
+  let snapshot = {};
 
   function renderList() {
-    $list.innerHTML = '';
-    const items = (snapshot?.catalog || [])
-      .filter(v => activeCat === 'all' || v.tipo === activeCat);
-    if (!items.length) {
-      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--vh-text-dim2);">
-        <i class="fa-solid fa-store-slash" style="font-size:48px; display:block; margin-bottom:8px; color:rgba(243,181,58,0.25);"></i>
-        Catálogo vazio.
-      </div>`;
-      return;
-    }
-    items.forEach((v) => {
-      const c = document.createElement('div');
-      c.className = 'card' + (selectedModel === v.model ? ' selected' : '');
-      c.innerHTML = `
-        <div class="thumb">
-          <i class="fa-solid fa-${iconFor(v.tipo)}"></i>
-          <img onerror="this.style.display='none'" src="${App.imgFor(v.model) || ''}" alt="">
-        </div>
-        <h4>${v.nome}</h4>
-        <div class="meta">
-          <span>${v.tipo} / ${v.categoria}</span>
-          <span class="preco">${App.fmtMoney(v.preco)}</span>
-        </div>
-        ${v.estoque >= 0 ? `<div style="font-size:11px; color:var(--vh-text-dim2);">Estoque: ${v.estoque}</div>` : ''}`;
-      c.onclick = () => { selectedModel = v.model; renderList(); renderDetail(v); };
-      $list.appendChild(c);
-    });
-  }
-
-  function statBar(label, val) {
-    return `<div class="stat"><span class="label">${label}</span>
-      <span class="bar"><span style="width:${val}%"></span></span>
-      <span class="v">${val}</span></div>`;
-  }
-
-  function renderDetail(v) {
-    const cfg = snapshot.cfg || {};
-    $detail.innerHTML = `
-      <div class="head">
-        <h2>${v.nome}</h2>
-        <div class="preco">${App.fmtMoney(v.preco)}</div>
-      </div>
-      <div class="img">
-        <img onerror="this.replaceWith(Object.assign(document.createElement('i'),{className:'fa-solid fa-${iconFor(v.tipo)}'}))"
-             style="width:100%; height:100%; object-fit:contain;" src="${App.imgFor(v.model) || ''}" alt="">
-      </div>
-      <div class="tag-list">
-        <span class="tag">${v.tipo}</span>
-        <span class="tag">${v.categoria}</span>
-        ${(v.tags || []).map(t => `<span class="tag warn">${t}</span>`).join('')}
-      </div>
-      <div class="stats">
-        ${statBar('Velocidade',    v.stats?.vel   || 50)}
-        ${statBar('Aceleração',    v.stats?.acel  || 50)}
-        ${statBar('Freio',         v.stats?.freio || 50)}
-        ${statBar('Dirigibilidade',v.stats?.dir   || 50)}
-      </div>
-      <div class="detail-actions">
-        <button class="btn primary full" data-act="buy"><i class="fa-solid fa-credit-card"></i> Comprar ${App.fmtMoney(v.preco)}</button>
-        <button class="btn full" data-act="buy-custom"><i class="fa-solid fa-pen"></i> Comprar com placa personalizada +${App.fmtMoney(cfg.taxa_placa || 200)}</button>
-        <button class="btn" data-act="test"><i class="fa-solid fa-flag-checkered"></i> Test Drive</button>
-        <button class="btn warn" data-act="rent"><i class="fa-solid fa-key"></i> Alugar</button>
-      </div>`;
-
-    $detail.querySelectorAll('[data-act]').forEach((btn) => {
-      btn.onclick = () => handleAct(btn.dataset.act, v);
-    });
-  }
-
-  async function handleAct(act, v) {
-    const conc = snapshot.conc;
-    if (act === 'buy') {
-      const r = await App.modal({
-        title: 'Confirmar Compra',
-        text: `Comprar ${v.nome} por ${App.fmtMoney(v.preco)}?`,
-        okText: 'Comprar',
-      });
-      if (r.ok) App.post('buy', { model: v.model, conc_id: conc.id });
-    } else if (act === 'buy-custom') {
-      const r = await App.modal({
-        title: 'Comprar com Placa Personalizada',
-        html: `<p>Placa (2 a 8 caracteres, A-Z/0-9). Custo adicional: ${App.fmtMoney(snapshot.cfg?.taxa_placa || 200)}.</p>
-               <label>Placa</label><input data-field="plate" maxlength="8" placeholder="EX 1234">`,
-        okText: 'Comprar',
-      });
-      if (r.ok && r.fields.plate) App.post('buy', { model: v.model, conc_id: conc.id, plate: r.fields.plate.toUpperCase() });
-    } else if (act === 'test') {
-      App.post('testDrive', { model: v.model, conc_id: conc.id });
-    } else if (act === 'rent') {
-      const r = await App.modal({
-        title: 'Alugar Veículo',
-        html: `<label>Horas (1 a 168)</label><input data-field="horas" type="number" value="24" min="1" max="168">`,
-        okText: 'Alugar',
-      });
-      if (r.ok) App.post('rent', { model: v.model, conc_id: conc.id, horas: +r.fields.horas });
+    App.clear(list);
+    const items = (Array.isArray(snapshot.catalog) ? snapshot.catalog : [])
+      .filter((vehicle) => activeCategory === 'all' || vehicle.tipo === activeCategory);
+    if (!items.length) return App.empty(list, 'store-slash', 'Catalogo vazio.');
+    for (const vehicle of items) {
+      const card = App.el('div', `card${selectedModel === vehicle.model ? ' selected' : ''}`);
+      card.append(App.vehicleVisual(vehicle.tipo), App.el('h4', '', vehicle.nome || vehicle.model || 'Veiculo'));
+      const meta = App.el('div', 'meta');
+      meta.append(App.el('span', '', `${vehicle.tipo || '—'} / ${vehicle.categoria || '—'}`),
+        App.el('span', 'preco', App.fmtMoney(vehicle.preco)));
+      card.append(meta);
+      if (Number(vehicle.estoque) >= 0) card.append(App.el('div', 'stock', `Estoque: ${Number(vehicle.estoque)}`));
+      card.onclick = () => { selectedModel = vehicle.model; renderList(); renderDetail(vehicle); };
+      list.append(card);
     }
   }
 
-  $cats.forEach((b) => {
-    b.onclick = () => {
-      $cats.forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      activeCat = b.dataset.cat;
+  function renderDetail(vehicle) {
+    App.clear(detail);
+    const config = snapshot.cfg || {};
+    const head = App.el('div', 'head');
+    head.append(App.el('h2', '', vehicle.nome || vehicle.model || 'Veiculo'),
+      App.el('div', 'preco', App.fmtMoney(vehicle.preco)));
+    const tags = App.el('div', 'tag-list');
+    tags.append(App.tag(vehicle.tipo || 'veiculo'), App.tag(vehicle.categoria || 'sem categoria'));
+    for (const tag of Array.isArray(vehicle.tags) ? vehicle.tags : []) tags.append(App.tag(tag, true));
+    const stats = App.el('div', 'stats');
+    stats.append(App.stat('Velocidade', vehicle.stats?.vel ?? 50), App.stat('Aceleracao', vehicle.stats?.acel ?? 50),
+      App.stat('Freio', vehicle.stats?.freio ?? 50), App.stat('Direcao', vehicle.stats?.dir ?? 50));
+    const actions = App.el('div', 'detail-actions');
+    const buy = App.button(`Comprar ${App.fmtMoney(vehicle.preco)}`, 'primary full', 'credit-card');
+    const custom = App.button(`Placa personalizada +${App.fmtMoney(config.taxa_placa || 200)}`, 'full', 'pen');
+    const test = App.button('Test Drive', '', 'flag-checkered');
+    const rent = App.button('Alugar', 'warn', 'key');
+    buy.onclick = () => handle('buy', vehicle);
+    custom.onclick = () => handle('buy-custom', vehicle);
+    test.onclick = () => handle('test', vehicle);
+    rent.onclick = () => handle('rent', vehicle);
+    actions.append(buy, custom, test, rent);
+    detail.append(head, App.vehicleVisual(vehicle.tipo, true), tags, stats, actions);
+  }
+
+  async function handle(action, vehicle) {
+    const dealership = snapshot.conc || {};
+    if (action === 'buy') {
+      const result = await App.modal({ title:'Confirmar Compra', text:`Comprar ${vehicle.nome || vehicle.model} por ${App.fmtMoney(vehicle.preco)}?`, okText:'Comprar' });
+      if (result.ok) App.post('buy', { model:vehicle.model, conc_id:dealership.id });
+    } else if (action === 'buy-custom') {
+      const result = await App.modal({ title:'Comprar com Placa Personalizada',
+        text:`Use 2 a 8 caracteres A-Z/0-9. Adicional: ${App.fmtMoney(snapshot.cfg?.taxa_placa || 200)}.`,
+        fields:[{ label:'Placa', name:'plate', maxLength:8, placeholder:'EX 1234' }], okText:'Comprar' });
+      const plate = String(result.fields?.plate || '').toUpperCase();
+      if (result.ok && plate) App.post('buy', { model:vehicle.model, conc_id:dealership.id, plate });
+    } else if (action === 'test') {
+      App.post('testDrive', { model:vehicle.model, conc_id:dealership.id });
+    } else if (action === 'rent') {
+      const result = await App.modal({ title:'Alugar Veiculo', fields:[
+        { label:'Horas (1 a 168)', name:'horas', type:'number', value:24, min:1, max:168 },
+      ], okText:'Alugar' });
+      if (result.ok) App.post('rent', { model:vehicle.model, conc_id:dealership.id, horas:+result.fields.horas });
+    }
+  }
+
+  categories.forEach((button) => {
+    button.onclick = () => {
+      categories.forEach((item) => item.classList.remove('active'));
+      button.classList.add('active');
+      activeCategory = button.dataset.cat;
       renderList();
     };
   });
-
-  App.views.dealer = {
-    render(data) {
-      snapshot = data || {};
-      $name.textContent = snapshot.conc?.label ? `— ${snapshot.conc.label}` : '';
-      selectedModel = null;
-      renderList();
-      $detail.innerHTML = `<div class="empty"><i class="fa-solid fa-tag"></i><br />Selecione um modelo</div>`;
-    },
-  };
+  App.views.dealer = { render(data) {
+    snapshot = data || {};
+    name.textContent = snapshot.conc?.label ? `— ${snapshot.conc.label}` : '';
+    selectedModel = null;
+    renderList();
+    App.empty(detail, 'tag', 'Selecione um modelo');
+  } };
 })();

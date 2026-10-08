@@ -4,23 +4,6 @@ VHubAdmin   = VHubAdmin or {}
 VHubAdmin.U = VHubAdmin.U or {}
 local U     = VHubAdmin.U
 
-function U.now() return os.time() end
-
-function U.fmtDate(ts)
-  if not ts or ts == 0 then return ' ' end
-  return os.date('%d/%m %H:%M', tonumber(ts))
-end
-
-function U.fmtDur(secs)
-  secs = math.max(0, math.floor(secs or 0))
-  if secs >= 86400 then return ('%dd %02dh'):format(secs / 86400, (secs % 86400) / 3600) end
-  if secs >= 3600  then return ('%dh %02dm'):format(secs / 3600, (secs % 3600) / 60)   end
-  if secs >= 60    then return ('%dm %02ds'):format(secs / 60, secs % 60)              end
-  return ('%ds'):format(secs)
-end
-
-function U.clamp(v, mn, mx) return math.max(mn, math.min(mx, v)) end
-
 -- Retorna número finito dentro da faixa ou nil.
 function U.number(v, mn, mx)
   local n = tonumber(v)

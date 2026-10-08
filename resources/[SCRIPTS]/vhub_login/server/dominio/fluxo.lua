@@ -94,6 +94,52 @@ local function selectCore(src, char_id)
   return true
 end
 
+-- Rollback de rascunho (ADR #97 / L-03): apaga o char recém-criado que NÃO concluiu o criador,
+-- para não deixar "Piloto N" órfão após erro/cancelamento. Idempotente e seguro no CORE (a
+-- invariante lá recusa qualquer char com conclusão de criador — nunca apaga personagem real).
+local function discardDraft(src, char_id)
+  if not tonumber(char_id) then return false, "invalid_request" end
+  local ok, result = pcall(function()
+    return exports.vhub:discardDraftCharacter(src, char_id)
+  end)
+  if not ok then return false, "core_indisponivel" end
+  if type(result) ~= "table" then return false, "resposta_invalida" end
+  return result.ok == true, result.err
+end
+
+-- Compensação efêmera do login; só o CORE descarta. Mantém alvo/request até confirmar o efeito.
+local function compensarRascunho(src, sessao, char_id)
+  if F.sessions[src] ~= sessao then return false, "estado_invalido" end
+  if sessao.descarte_em_andamento then return false, "rollback_pendente" end
+  local alvo = sessao.rascunho_pendente or char_id
+  if not alvo then return true end
+  if char_id and char_id ~= alvo then return false, "rollback_pendente" end
+
+  sessao.rascunho_pendente = alvo
+  local pedido, token = sessao.create_request_id, {}
+  sessao.descarte_em_andamento = token
+  local descartado, erro = discardDraft(src, alvo)
+  if not descartado then
+    pcall(function()
+      exports.vhub:log("error", "login", "Descarte de rascunho pendente; avanço bloqueado.", {
+        src = src, char_id = alvo, erro = tostring(erro or "erro"),
+      })
+    end)
+  end
+  -- O export pode ceder execução; resposta antiga não limpa estado de outra operação/sessão.
+  if F.sessions[src] ~= sessao or sessao.descarte_em_andamento ~= token then
+    return false, "estado_invalido"
+  end
+  sessao.descarte_em_andamento = nil
+  if sessao.rascunho_pendente ~= alvo or sessao.create_request_id ~= pedido then
+    return false, "estado_invalido"
+  end
+  if not descartado then return false, "rollback_pendente" end
+  sessao.rascunho_pendente = nil
+  sessao.create_request_id = nil
+  return true
+end
+
 local function needsCreation(src)
   if GetResourceState("vhub_sims") ~= "started" then return nil, "dependency" end
   local ok, result = pcall(function() return exports.vhub_sims:needsCreation(src) end)
@@ -114,13 +160,17 @@ local function beginCreation(src, request_id)
   return result
 end
 
-local function enterCreation(src, session, char_id, request_id)
+-- is_new=true marca um char criado AGORA (F.criar). Só rascunhos assim são descartados no
+-- cancelamento (rollback L-03). Retomada de char pré-existente (F.selecionar) usa is_new=false
+-- para preservar a opção de continuar depois.
+local function enterCreation(src, session, char_id, request_id, is_new)
   local result, err = beginCreation(src, request_id)
   if not result then return false, err end
 
   session.step = "creating"
   session.deadline = nil
   session.creating_char_id = char_id
+  session.creating_is_new = is_new == true
   session.creation_session_id = result.session_id
   F.creatingByChar[char_id] = src
   return true
@@ -183,7 +233,30 @@ end
 
 function F.voltarPersonagens(src)
   local s = F.sessions[src]
-  if not s or s.step ~= "spawning" then return nil, "estado_invalido" end
+  if not s or (s.step ~= "spawning" and s.step ~= "creating") then
+    return nil, "estado_invalido"
+  end
+
+  -- Cancela criação em andamento antes de voltar à seleção.
+  if s.step == "creating" then
+    local char_id = s.creating_char_id
+    -- Rollback do rascunho NOVO ao voltar (L-03 / ADR #97): não deixa "Piloto N" órfão. Zera
+    -- create_request_id junto (evita o mapa request→char devolver o char apagado na próxima criação).
+    if char_id and s.creating_is_new then
+      local descartado, erro = compensarRascunho(src, s, char_id)
+      if not descartado then return nil, erro end
+    end
+    if char_id then F.creatingByChar[char_id] = nil end
+    s.creating_char_id  = nil
+    s.creating_is_new   = nil
+    s.creation_session_id = nil
+    s.create_request_id = nil
+    s.pick_char_id      = nil
+    s.pick_request_id   = nil
+    -- Avisa o sims para fechar sua NUI e liberar o slot (ignore falha — pode já ter saído).
+    pcall(function() exports.vhub_sims:cancelCreation(src) end)
+  end
+
   s.step = "charselect"
   s.deadline = GetGameTimer() + (CFG.auth_deadline * 1000)
   if not isolateEntry(src) then
@@ -211,14 +284,24 @@ function F.limpar(src)
 end
 
 -- abre o gate (chamado pelo chooseSpawn). retorna true se abriu login agora.
+-- check pré-auth: IP + identifiers FiveM nativos (license, fivem, discord, steam, hw token).
 function F.iniciar(src)
   if F.sessions[src] then return false end
   local uid = uidOf(src)
   if not uid then return false end
+  local ip = GetPlayerEndpoint(src)
+  local ids, hwToken = VHubLogin.Contas.extrairIdentifiers(src)
+  local banned, banReason = VHubLogin.Contas.verificarBan(ip, nil, nil, ids, hwToken)
+  if banned then
+    DropPlayer(tostring(src), "Acesso bloqueado: " .. tostring(banReason or "banido") .. ".")
+    return false
+  end
   F.sessions[src] = {
-    step     = "login",
-    uid      = uid,
-    deadline = GetGameTimer() + (CFG.auth_deadline * 1000),
+    step        = "login",
+    uid         = uid,
+    deadline    = GetGameTimer() + (CFG.auth_deadline * 1000),
+    identifiers = ids,
+    hw_token    = hwToken,
   }
   return true
 end
@@ -252,6 +335,17 @@ function F.autenticar(src, username, password)
   local acc, err = VHubLogin.Contas.autenticar(
     s.uid, username, password, GetPlayerEndpoint(src))
   if not acc then uidFail(s.uid); return false, err end
+
+  -- Ban pós-auth: IP + email/whatsapp da conta + identifiers FiveM nativos.
+  -- identifiers já coletados em F.iniciar; reusar evita segunda chamada de nativas.
+  local banned, banReason = VHubLogin.Contas.verificarBan(
+    GetPlayerEndpoint(src), acc.email_lookup, acc.whatsapp_lookup,
+    s.identifiers, s.hw_token)
+  if banned then
+    DropPlayer(tostring(src), "Acesso bloqueado: " .. tostring(banReason or "conta banida") .. ".")
+    return false, "banido"
+  end
+
   if not isolateEntry(src) then return false, "hss_indisponivel" end
   uidOK(s.uid)
   s.account = acc
@@ -298,7 +392,7 @@ function F.personagens(src)
   local cards, ordered = {}, {}
   for index, raw_id in ipairs(result.items or {}) do
     local char_id = tonumber(raw_id)
-    if char_id then
+    if char_id and char_id ~= s.rascunho_pendente then
       local card = { id = char_id, char_id = char_id, name = "Piloto " .. index }
       cards[char_id] = card
       ordered[#ordered + 1] = card
@@ -325,6 +419,8 @@ end
 function F.selecionar(src, cid)
   local s = F.sessions[src]
   if not s or s.step ~= "charselect" then return false, "estado_invalido" end
+  local compensado, erro = compensarRascunho(src, s)
+  if not compensado then return false, erro end
 
   -- Segura o pending do HSS antes de selectCore disparar characterLoad; sem o hold,
   -- handle_profile_loaded liberaria o spawn antes do SIMS abrir (R6 / replay-safe).
@@ -357,7 +453,9 @@ function F.selecionar(src, cid)
     s.pick_char_id = cid
     s.pick_request_id = newRequestId(s, "pick")
   end
-  local started, beginErr = enterCreation(src, s, cid, s.pick_request_id)
+  -- Retomada de rascunho pré-existente: is_new=false (NÃO descartar no cancelamento — preserva
+  -- a opção de continuar depois; o rollback só se aplica a char criado agora em F.criar).
+  local started, beginErr = enterCreation(src, s, cid, s.pick_request_id, false)
   if not started then
     releaseCreation(src)
     return false, beginErr
@@ -369,6 +467,8 @@ end
 function F.criar(src)
   local s = F.sessions[src]
   if not s or s.step ~= "charselect" then return false, "estado_invalido" end
+  local compensado, erro = compensarRascunho(src, s)
+  if not compensado then return false, erro end
 
   -- Segura o hold do HSS ANTES de qualquer escrita no CORE. Sem o hold, handle_profile_loaded
   -- liberaria o spawn antes do SIMS abrir (R6 / replay-safe); e travando primeiro, se o HSS
@@ -394,43 +494,53 @@ function F.criar(src)
     return false, "storage"
   end
 
-  local selected, selectErr = selectCore(src, char_id)
-  if not selected then
+  -- Falha após createCharacter = char recém-criado órfão. Rollback (L-03 / ADR #97): apaga o
+  -- rascunho e zera create_request_id (senão o mapa request→char_id devolveria o char apagado na
+  -- retentativa; zerado, a próxima criação gera char novo). discardDraft é seguro (só rascunho).
+  local function rollbackDraft(err)
+    local descartado, erroDescarte = compensarRascunho(src, s, char_id)
+    if erroDescarte == "estado_invalido" then return false, erroDescarte end
     releaseCreation(src)
-    return false, selectErr
+    return false, descartado and err or erroDescarte
   end
+
+  local selected, selectErr = selectCore(src, char_id)
+  if not selected then return rollbackDraft(selectErr) end
 
   local needed, needsErr = needsCreation(src)
-  if needed == nil then
-    releaseCreation(src)
-    return false, needsErr
-  end
-  if not needed then
-    releaseCreation(src)
-    return false, "conflict"
-  end
+  if needed == nil then return rollbackDraft(needsErr) end
+  if not needed then return rollbackDraft("conflict") end
 
-  local started, beginErr = enterCreation(src, s, char_id, s.create_request_id)
-  if not started then
-    releaseCreation(src)
-    return false, beginErr
-  end
+  local started, beginErr = enterCreation(src, s, char_id, s.create_request_id, true)
+  if not started then return rollbackDraft(beginErr) end
   return true, nil, "creating"
 end
 
 -- Finaliza o handoff do criador e devolve a sessão à seleção.
-function F.concluirCriacao(char_id)
+-- completed=true → criação concluída (mantém o char). completed~=true → cancelou/falhou: se era
+-- rascunho NOVO (is_new), rollback L-03 (ADR #97) apaga o char pra não deixar "Piloto N" órfão.
+function F.concluirCriacao(char_id, completed)
   char_id = tonumber(char_id)
   local src = char_id and F.creatingByChar[char_id] or nil
   local s = src and F.sessions[src] or nil
   if not s or s.step ~= "creating" or s.creating_char_id ~= char_id then return nil end
+  if s.descarte_em_andamento then return nil end -- o encerramento em voo é o único escritor
+
+  local erroDescarte
+  if completed ~= true and s.creating_is_new then
+    local descartado, erro = compensarRascunho(src, s, char_id)
+    if erro == "estado_invalido" then return nil end
+    if not descartado then erroDescarte = erro end
+  end
+  if F.sessions[src] ~= s or s.step ~= "creating" or s.creating_char_id ~= char_id then return nil end
 
   F.creatingByChar[char_id] = nil
   s.step = "charselect"
   s.creating_char_id = nil
+  s.creating_is_new = nil
   s.creation_session_id = nil
-  s.create_request_id = nil
+  if not s.rascunho_pendente then s.create_request_id = nil end
   s.pick_char_id = nil
   s.pick_request_id = nil
-  return src, isolateEntry(src)
+  return src, isolateEntry(src), erroDescarte
 end

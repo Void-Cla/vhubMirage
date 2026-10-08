@@ -3,6 +3,22 @@
 (function () {
   const modules = new Map();
   const actions = new Map();
+  let ativo = null;
+  let avisoTimer = null;
+  function aviso(mensagem, tipo) {
+    const elemento = document.getElementById('service-notice');
+    if (!elemento) return;
+    clearTimeout(avisoTimer);
+    elemento.textContent = String(mensagem || '').slice(0, 300);
+    elemento.dataset.tipo = ['error', 'success', 'warning'].includes(tipo) ? tipo : 'info';
+    elemento.classList.toggle('hidden', !mensagem);
+    if (mensagem) avisoTimer = setTimeout(() => elemento.classList.add('hidden'), 6000);
+  }
+  function ocupado(valor) {
+    document.body.classList.toggle('service-busy', valor === true);
+    const status = document.getElementById('service-status');
+    if (status) status.textContent = valor ? 'PROCESSANDO SERVIÇO' : 'VEÍCULO CONECTADO';
+  }
   const resourceName = typeof GetParentResourceName === 'function'
     ? GetParentResourceName()
     : 'vhub_custom';
@@ -35,6 +51,14 @@
     const api = {
       show(data) {
         if (state.destroyed) return;
+        if (ativo && ativo !== api) ativo.hide();
+        ativo = api;
+        document.body.dataset.servico = name;
+        document.getElementById('service-chrome')?.classList.remove('hidden');
+        const titulo = document.getElementById('service-domain');
+        if (titulo) titulo.textContent = ({ bennys: 'BENNYS / ESTÉTICA', mec: 'MECÂNICA / RESTAURAÇÃO', oficina: 'OFICINA / ENGENHARIA', shop: 'PEÇAS / SUPRIMENTOS' })[name] || name;
+        ocupado(false);
+        aviso('', 'info');
         if (!state.mounted) { if (hooks.onMount) hooks.onMount(api); state.mounted = true; }
         state.visible = true;
         if (hooks.onShow) hooks.onShow(data, api);
@@ -43,6 +67,13 @@
         if (state.destroyed || !state.visible) return;
         state.visible = false;
         if (hooks.onHide) hooks.onHide(api);
+        if (ativo === api) {
+          ativo = null;
+          delete document.body.dataset.servico;
+          document.getElementById('service-chrome')?.classList.add('hidden');
+          ocupado(false);
+          aviso('', 'info');
+        }
       },
       destroy() {
         if (state.destroyed) return;
@@ -66,6 +97,7 @@
   window.addEventListener('message', (event) => {
     const message = event.data;
     if (!message || typeof message.action !== 'string') return;
+    if (message.action === 'serviceNotice') { aviso(message.message, message.kind); return; }
     const route = actions.get(message.action);
     if (route) route.handler(message, route.api);
   });
@@ -74,5 +106,5 @@
     for (const module of Array.from(modules.values())) module.destroy();
   }, { once: true });
 
-  window.vhub = Object.freeze({ request, createModule });
+  window.vhub = Object.freeze({ request, createModule, aviso, ocupado });
 })();

@@ -26,9 +26,12 @@ local function pexec(sql, args)
   return Citizen.Await(p)
 end
 
-local function pquery(sql, args)
+local function pquery(sql, args, estrita)
   local p = promise.new()
-  ox():query(sql, args or {}, function(r) p:resolve(r or {}) end)
+  ox():query(sql, args or {}, function(r)
+    if estrita and type(r) ~= 'table' then p:reject('vehicle_query_failed')
+    else p:resolve(r or {}) end
+  end)
   return Citizen.Await(p)
 end
 
@@ -89,7 +92,7 @@ end
 
 -- veículos em um status
 function M:listByStatus(status)
-  return pquery('SELECT * FROM vhub_vehicles WHERE status = ?', { status })
+  return pquery('SELECT * FROM vhub_vehicles WHERE status = ?', { status }, true)
 end
 
 
@@ -130,15 +133,30 @@ function M:updateStatus(plate, status)
     { status, os.time(), plate })
 end
 
-function M:updateOwner(plate, char_id)
-  return pexec('UPDATE vhub_vehicles SET char_id = ?, updated_at = ? WHERE plate = ?',
-    { char_id, os.time(), plate })
+-- CAS da retirada: negócio e posição são confirmados em uma única escrita.
+function M:confirmarRetirada(plate, anterior, posJson)
+  local r = pexec([[UPDATE vhub_vehicles
+                     SET status = 'out', position = ?, last_seen_at = ?, updated_at = ?
+                   WHERE plate = ? AND status = ? AND model = ? AND char_id <=> ?]],
+    { posJson, os.time(), os.time(), plate, anterior.status, anterior.model, anterior.char_id })
+  return (type(r) == 'number' and r > 0)
+    or (type(r) == 'table' and (tonumber(r.affectedRows) or 0) > 0)
+end
+
+-- Compensa somente a linha ainda pertencente à retirada, sem sobrescrever mutação concorrente.
+function M:cancelarRetirada(plate, anterior, posJson)
+  local r = pexec([[UPDATE vhub_vehicles SET status = ?, position = ?, updated_at = ?
+                    WHERE plate = ? AND status = 'out' AND model = ?
+                      AND char_id <=> ? AND BINARY position <=> BINARY ?]],
+    { anterior.status, anterior.position, os.time(), plate, anterior.model, anterior.char_id, posJson })
+  return (type(r) == 'number' and r > 0)
+    or (type(r) == 'table' and (tonumber(r.affectedRows) or 0) > 0)
 end
 
 -- troca de dono ATÔMICA (L-12): char_id + revoga chave 'owner' antiga + concede a
 -- nova numa só transação SQL — fecha o estado parcial (dono trocado sem chave-owner)
 -- em crash no meio. Idempotente: re-rodar com o mesmo new_cid converge ao mesmo estado.
--- Statements idênticos aos de updateOwner+revokeKey+grantKey ('owner'), só atômicos.
+-- Escritor único da posse do veículo (o antigo updateOwner avulso foi removido — L-15).
 function M:transferOwnerTx(plate, new_cid, old_cid)
   local now = os.time()
   local q = {

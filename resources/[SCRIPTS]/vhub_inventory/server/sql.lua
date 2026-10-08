@@ -37,9 +37,9 @@ M.query   = pquery
 function M:initSchema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if not schema then return false end
-  local p = promise.new()
-  ox():execute(schema, {}, function() p:resolve(true) end)
-  return Citizen.Await(p)
+  return VHubSQLScript.aplicar(schema, function(instrucao)
+    MySQL.query.await(instrucao, {})
+  end)
 end
 
 

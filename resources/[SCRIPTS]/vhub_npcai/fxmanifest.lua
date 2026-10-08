@@ -12,6 +12,7 @@ dependencies {
     'vhub',
     'oxmysql',
     'vhub_hss',
+    'vhub_target',
 }
 
 shared_scripts {

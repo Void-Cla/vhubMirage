@@ -19,6 +19,8 @@ DETECTAR E BLOQUEAR:
 
 VERIFICAR: □ Cadência declarada e adaptativa? □ Delta-gating mantém thresholds (fuel 0.5 / health 5.0 / odo 0.05)? □ Report ignorado se não-driver? □ `_syncBags` só com netid+entidade válida? □ resmon antes/depois anexado quando toca hot path?
 
+> MCPs: `repowise` (always-on) — `get_health(targets)` hotspot score + trends antes de avaliar custo de mudança; `get_risk(targets)` coupling e dependentes afetados. `filesystem` (path dinâmico).
+
 FORMATO:
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máx 4, arquivo:linha — custo estimado>

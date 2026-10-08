@@ -15,7 +15,7 @@ LEITURA OBRIGATÓRIA:
 3. `.claude/AGENTS.md` → leis A-01..A-08
 4. Arquivos tocados: `web/runtime/*`, `web/modules/<modulo>/*`, `core/client/native_bridge.lua`
 
-> MCPs úteis: `codegraph` (grafo de imports JS/TS — habilitar no `enabledMcpjsonServers`; **não usar para Lua**, usar Grep).
+> MCPs: `repowise` (always-on) — `get_context(files, include=['callers','callees'])` grafo de dependências JS antes de auditar lifecycle; `get_health(targets)` métricas e hotspot do módulo. `codegraph` (imports JS/TS — habilitar sprint NUI; **nunca para Lua**, usar Grep), `serena` (nav semântica JS).
 
 ---
 

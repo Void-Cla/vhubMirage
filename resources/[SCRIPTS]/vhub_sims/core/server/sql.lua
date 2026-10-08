@@ -50,13 +50,9 @@ function SQL.applySchema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if type(schema) ~= 'string' or schema == '' then return false, 'schema_missing' end
 
-  for statement in schema:gmatch('([^;]+);') do
-    if statement:match('%S') then
-      local ok = execute(statement, {})
-      if not ok then return false, 'schema_failed' end
-    end
-  end
-  return true
+  return VHubSQLScript.aplicar(schema, function(statement)
+    MySQL.query.await(statement, {})
+  end)
 end
 
 
@@ -70,15 +66,6 @@ function SQL.getSagaByRequest(requestId)
   return ok and rows[1] or nil
 end
 
--- retorna saga pelo personagem e sessão
-function SQL.getSagaBySession(charId, sessionId)
-  local ok, rows = query(
-    'SELECT * FROM vhub_sims_sagas WHERE char_id = ? AND session_id = ? LIMIT 1',
-    { charId, sessionId }
-  )
-  return ok and rows[1] or nil
-end
-
 -- retorna a última saga recuperável do personagem
 function SQL.getRecoverableSaga(charId)
   local ok, rows = query([[
@@ -87,17 +74,6 @@ function SQL.getRecoverableSaga(charId)
     ORDER BY id DESC LIMIT 1
   ]], { charId })
   return ok and rows[1] or nil
-end
-
--- encerra estágios de criação sem sessão efêmera após queda/restart
-function SQL.closeStaleCreationStages(charId, requestId)
-  local ok = execute([[
-    UPDATE vhub_sims_sagas
-    SET state = 'refunded', last_error = 'superseded'
-    WHERE char_id = ? AND mode = 'creator' AND state = 'prepared'
-      AND request_id NOT LIKE 'checkout:%' AND request_id <> ?
-  ]], { charId, requestId })
-  return ok == true
 end
 
 -- cria saga e devolve a linha canônica; colisão não sobrescreve payload
@@ -152,6 +128,25 @@ function SQL.listRecoverableSagas(afterId, limit)
     ORDER BY id ASC LIMIT %d
   ]=]):format(limit), { afterId })
   return ok and rows or nil
+end
+
+-- One-shot de boot (ADR #97): fecha sagas de CRIADOR LEGADAS de bancos anteriores à separação
+-- criação↔checkout. O fluxo novo (creator.lua) NÃO gera saga, então em regime não há o que fechar;
+-- isto só limpa resíduo histórico. Guardas exigidas pelo gate de persistência:
+--   • state IN não-terminais — jamais toca 'completed'/'refunded'/'manual_reconcile';
+--   • amount = 0 — criador é grátis, nunca há dinheiro a estornar;
+--   • created_at < NOW() - INTERVAL 5 MINUTE — nunca colide com transição em voo.
+-- Idempotente (a 2ª passada não acha mais não-terminais). Retorna nº de linhas fechadas.
+function SQL.closeLegacyCreatorSagas()
+  local ok, result = execute([[
+    UPDATE vhub_sims_sagas
+    SET state = 'refunded', last_error = 'adr97_legacy_creator'
+    WHERE mode = 'creator' AND amount = 0
+      AND state IN ('prepared','charged','customized')
+      AND created_at < NOW() - INTERVAL 5 MINUTE
+  ]], {})
+  if not ok then return 0 end
+  return type(result) == 'table' and tonumber(result.affectedRows) or tonumber(result) or 0
 end
 
 

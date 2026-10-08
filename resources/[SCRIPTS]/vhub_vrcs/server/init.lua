@@ -43,15 +43,20 @@ end)
 -- LIFECYCLE
 -- ============================================================
 
--- aplica o schema (multipleStatements=true habilita o batch num unico execute)
+-- aplica o schema em instruções isoladas.
 AddEventHandler('onResourceStart', function(res)
     if res ~= GetCurrentResourceName() then return end
 
     local sql = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
     if sql and sql ~= '' then
-        exports.oxmysql:execute(sql, {}, function()
-            Log.info('schema aplicado (vh_race_replays + vh_vrcs_jobs).')
+        local ok, err = VHubSQLScript.aplicar(sql, function(statement)
+            MySQL.query.await(statement, {})
         end)
+        if ok then
+            Log.info('schema aplicado (vh_race_replays + vh_vrcs_jobs).')
+        else
+            Log.error('falha ao aplicar schema: ' .. tostring(err))
+        end
     end
 
     Log.info(('pronto. gravacao: %s'):format(

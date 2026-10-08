@@ -25,13 +25,18 @@ class AudioCache:
     """Cache de WAV em memória (LRU) com camada opcional de persistência em disco."""
 
     def __init__(self, capacity: int = 256, persist_dir: Optional[Path] = None,
-                 name_capacity: int = 1024):
+                 name_capacity: int = 1024, max_bytes: int = 64 * 1024 * 1024,
+                 name_max_bytes: int = 16 * 1024 * 1024):
         self._cap   = capacity
+        self._max_bytes = max_bytes
+        self._bytes = 0
         self._cache: OrderedDict[str, bytes] = OrderedDict()
         self._lock  = threading.Lock()
 
         # cache de nome TTS — LRU global capado (evita crescimento ilimitado)
         self._name_cap = name_capacity
+        self._name_max_bytes = name_max_bytes
+        self._name_bytes = 0
         self._names: OrderedDict[str, bytes] = OrderedDict()
 
         # camada de disco (biblioteca reutilizável)
@@ -86,10 +91,13 @@ class AudioCache:
     def _put_mem(self, k: str, data: bytes):
         with self._lock:
             if k in self._cache:
+                self._bytes -= len(self._cache[k])
                 self._cache.move_to_end(k)
             self._cache[k] = data
-            if len(self._cache) > self._cap:
-                self._cache.popitem(last=False)  # evict LRU
+            self._bytes += len(data)
+            while len(self._cache) > self._cap or self._bytes > self._max_bytes:
+                _, evicted = self._cache.popitem(last=False)
+                self._bytes -= len(evicted)
 
     def put(self, npc_id: str, intent: str, data: bytes, variant: int = 0):
         self._put_mem(self._key(npc_id, intent, variant), data)
@@ -126,10 +134,13 @@ class AudioCache:
         k = self._name_key(npc_id, name)
         with self._lock:
             if k in self._names:
+                self._name_bytes -= len(self._names[k])
                 self._names.move_to_end(k)
             self._names[k] = data
-            if len(self._names) > self._name_cap:
-                self._names.popitem(last=False)  # evict LRU
+            self._name_bytes += len(data)
+            while len(self._names) > self._name_cap or self._name_bytes > self._name_max_bytes:
+                _, evicted = self._names.popitem(last=False)
+                self._name_bytes -= len(evicted)
 
     # ──────────────────────────────────────────────────────────
     # STITCH — concatena segmentos WAV (todos 16kHz mono)
@@ -225,6 +236,9 @@ class AudioCache:
             return {
                 'entries':  len(self._cache),
                 'capacity': self._cap,
+                'bytes': self._bytes,
+                'max_bytes': self._max_bytes,
                 'names':    len(self._names),
+                'name_bytes': self._name_bytes,
                 'persist':  bool(self._persist_dir),
             }

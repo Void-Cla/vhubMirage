@@ -115,6 +115,20 @@ exports('registerItemUse', function(id, handler)
   return ItemUse.register(id, handler, caller) == true
 end)
 
+-- Registra catálogo físico de um resource confiável; compra continua pertencendo ao inventário.
+exports('registerStore', function(id, definition)
+  local caller = GetInvokingResource()
+  if not _invoker_allowed(caller) then return false end
+  return Inventory.Stores.register(id, definition, caller) == true
+end)
+
+exports('unregisterStoresByOwner', function()
+  local caller = GetInvokingResource()
+  if not _invoker_allowed(caller) then return false end
+  Inventory.Stores.unregisterOwner(caller)
+  return true
+end)
+
 -- abre um baú para o jogador (valida proximidade/permissao). desc = { kind, name|group|netId }
 exports('openContainer', function(src, desc)
   if not _invoker_allowed() then return false end

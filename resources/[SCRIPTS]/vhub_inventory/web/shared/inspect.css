@@ -64,6 +64,13 @@
 .vh-inspector .insp-pill--cat    { color: var(--vh-text-dim); border-color: var(--vh-hair); }
 .vh-inspector .insp-pill--qty    { color: var(--vh-gold); }
 
+.vh-inspector .insp-description {
+  margin: 0;
+  color: var(--vh-text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 
 /* ---- grade de propriedades ---- */
 

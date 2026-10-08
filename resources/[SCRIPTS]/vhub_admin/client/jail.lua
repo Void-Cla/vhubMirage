@@ -1,21 +1,22 @@
 -- client/jail.lua  reflexo visual do jail e bloqueio efêmero de controles
 ---@diagnostic disable: undefined-global
 
-local E = VHubAdmin.E
 local S = VHubAdmin.state
 local running = true
 
-RegisterNetEvent(E.JAIL_APPLY)
-AddEventHandler(E.JAIL_APPLY, function(data)
-  if type(data) ~= 'table' then return end
-  S.jail = { expires_at = tonumber(data.expires_at) or 0, pos = data.pos }
-  VHubAdmin.notify('Você foi preso. ' .. (data.reason or ''))
-end)
-
-RegisterNetEvent(E.JAIL_RELEASE)
-AddEventHandler(E.JAIL_RELEASE, function()
-  S.jail = nil
-  VHubAdmin.notify('Você foi liberado.')
+-- Reflete a prisão a partir da State Bag do próprio jogador (servidor é o escritor único:
+-- Player(src).state:set('vhub_admin_jail', payload, true) em server/moderation.lua). O client só
+-- ESPELHA o estado autoritativo (L-01/L-02) — nunca decide prender/soltar. Cobre late-join e
+-- reconexão (a bag replicada chega no set inicial). Mesmo padrão de vhub_admin_world (world.lua).
+AddStateBagChangeHandler('vhub_admin_jail', nil, function(bagName, _, data)
+  if bagName ~= ('player:' .. GetPlayerServerId(PlayerId())) then return end
+  if type(data) == 'table' then
+    S.jail = { expires_at = tonumber(data.expires_at) or 0, pos = data.pos }
+    VHubAdmin.notify('Você foi preso. ' .. (data.reason or ''))
+  else
+    if S.jail then VHubAdmin.notify('Você foi liberado.') end
+    S.jail = nil
+  end
 end)
 
 -- Suprimir tiro/ataque enquanto preso (frame loop só enquanto preso)

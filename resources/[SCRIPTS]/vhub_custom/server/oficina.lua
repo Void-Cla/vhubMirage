@@ -5,6 +5,28 @@ local Core = VHubCustom.Core
 local CFG  = VHubCustom.cfg
 local U    = VHubCustom.U
 local E    = VHubCustom.E
+local revisaoProjecao = 0
+
+local function atualizarDesempenho(contexto)
+  if not DoesEntityExist(contexto.entity) then return end
+  local estado = Core.getVehicleState(contexto.plate)
+  local cust = estado and estado.customization or {}
+  local mods, origem = {}, type(cust.mods) == 'table' and cust.mods or {}
+  for indice in pairs(CFG.performance_mods) do
+    if indice ~= 18 then mods[tostring(indice)] = U.integer(origem[indice] or origem[tostring(indice)], -1, 5) or -1 end
+  end
+  local dono = NetworkGetEntityOwner(contexto.entity)
+  if dono and dono > 0 then
+    local bags = Entity(contexto.entity).state
+    revisaoProjecao = revisaoProjecao + 1
+    local revisao = revisaoProjecao
+    bags:set(VHubCustom.BAG.TUNE_REVISION, revisao, true)
+    TriggerClientEvent(E.OFICINA_PROJECTION, dono, contexto.net_id, contexto.plate, revisao,
+      { mods = mods, turbo = cust.turbo == true })
+    pcall(function() exports.vhub_vehcontrol:refreshSheet(contexto.plate, dono) end)
+  end
+  pcall(function() exports.vhub_custom:refreshVisualBag(contexto.net_id) end)
+end
 
 local PERF_NAMES = {
   [11] = 'Motor', [12] = 'Freios', [13] = 'Câmbio',
@@ -33,22 +55,22 @@ local function currentStage(customization, index)
 end
 
 RegisterNetEvent(E.OFICINA_PREVIEW)
-AddEventHandler(E.OFICINA_PREVIEW, function(leaseId, draftAlloc)
+AddEventHandler(E.OFICINA_PREVIEW, function(leaseId, draftAlloc, previewId)
   local src = source
-  if not Core.rateOK(src, 'oficina_preview') or type(draftAlloc) ~= 'table' then return end
+  if not Core.requestId(previewId) or not Core.rateOK(src, 'oficina_preview') or type(draftAlloc) ~= 'table' then return end
   local context = Core.validateLease(src, 'oficina', leaseId)
   if not context then return end
   local ok, sheet = pcall(function()
     return exports.vhub_vehcontrol:getVehicleSheetPreview(context.plate, draftAlloc)
   end)
-  TriggerClientEvent(E.OFICINA_PREVIEW_OK, src, ok and sheet or nil)
+  TriggerClientEvent(E.OFICINA_PREVIEW_OK, src, ok and sheet or nil, leaseId, previewId)
 end)
 
 RegisterNetEvent(E.OFICINA_RECALIBRATE)
 AddEventHandler(E.OFICINA_RECALIBRATE, function(leaseId, requestId, alloc)
   local src = source
   local function reply(ok, message, sheet)
-    TriggerClientEvent(E.OFICINA_RECALIBRATE_OK, src, ok == true, message or '', sheet)
+    TriggerClientEvent(E.OFICINA_RECALIBRATE_OK, src, ok == true, message or '', sheet, leaseId, requestId)
   end
   if not Core.rateOK(src, 'oficina_recal') then return reply(false, 'Aguarde um instante.') end
   if type(alloc) ~= 'table' then return reply(false, 'Distribuição inválida.') end
@@ -126,7 +148,7 @@ RegisterNetEvent(E.OFICINA_NITRO_KIT)
 AddEventHandler(E.OFICINA_NITRO_KIT, function(leaseId, requestId)
   local src = source
   local function reply(ok, message)
-    TriggerClientEvent(E.OFICINA_NITRO_KIT_OK, src, ok == true, message or '')
+    TriggerClientEvent(E.OFICINA_NITRO_KIT_OK, src, ok == true, message or '', leaseId, requestId)
   end
   if not Core.rateOK(src, 'oficina_nitro') then return reply(false, 'Aguarde um instante.') end
 
@@ -354,7 +376,7 @@ RegisterNetEvent(E.OFICINA_INSTALL_PART)
 AddEventHandler(E.OFICINA_INSTALL_PART, function(leaseId, requestId, partId)
   local src = source
   local function reply(ok, message, fresh)
-    TriggerClientEvent(E.OFICINA_INSTALL_PART_OK, src, ok == true, message or '', fresh)
+    TriggerClientEvent(E.OFICINA_INSTALL_PART_OK, src, ok == true, message or '', fresh, leaseId, requestId)
   end
   if not Core.rateOK(src, 'oficina_install_part') then return reply(false, 'Aguarde um instante.') end
   if type(partId) ~= 'string' then return reply(false, 'Peça inválida.') end
@@ -388,7 +410,7 @@ AddEventHandler(E.OFICINA_INSTALL_PART, function(leaseId, requestId, partId)
     return ok and has == true
   end
   local status = Core.resolvePartStatus(part, curParts, cap, hasItem)
-  if status.state ~= 'ok' then return finish(false, installRejectMsg(status.state, part)) end
+  if status.state ~= 'ok' then return finish(false, installRejectMsg(status.state, part), freshState(src, context)) end
 
   -- PATCH ATÔMICO (parts = fonte única; mods/turbo/drift_capable derivados NA MESMA transação):
   --  - parts[canonId]=true                        → a peça instalada
@@ -434,7 +456,7 @@ AddEventHandler(E.OFICINA_INSTALL_PART, function(leaseId, requestId, partId)
   end
 
   if replayed then
-    return finish(true, ('%s já instalada.'):format(part.name or 'Peça'))
+    return finish(true, ('%s já instalada.'):format(part.name or 'Peça'), freshState(src, context))
   end
 
   -- tomar item só se a peça exige (estorna em qualquer falha posterior)
@@ -468,12 +490,11 @@ AddEventHandler(E.OFICINA_INSTALL_PART, function(leaseId, requestId, partId)
   Core.auditVehicle(context, 'tune', operationId, before, patch, 'committed')
   Core.log(context.plate, 'oficina_install_part', context.char_id,
     { part = canonId, family = part.family, operation_id = operationId })
+  atualizarDesempenho(context)
 
   -- ADR #82 F2.1: push live da ficha recomposta ao motorista (traz sheet.eng novo → o applier
   -- da Camada A reaplica a base sem esperar sair/entrar). O vehcontrol filtra por placa: só
   -- afeta o carro se este src o dirige. Best-effort (pcall): falha de push não desfaz a compra.
-  pcall(function() exports.vhub_vehcontrol:refreshSheet(context.plate, src) end)
-
   -- devolve estado fresco (peças + status + ficha) p/ a NUI re-renderizar autoritativo (A-04)
   finish(true, ('%s instalada com sucesso!'):format(part.name or 'Peça'), freshState(src, context))
 end)
@@ -489,7 +510,7 @@ RegisterNetEvent(E.OFICINA_REMOVE_PART)
 AddEventHandler(E.OFICINA_REMOVE_PART, function(leaseId, requestId, partId)
   local src = source
   local function reply(ok, message, fresh)
-    TriggerClientEvent(E.OFICINA_REMOVE_PART_OK, src, ok == true, message or '', fresh)
+    TriggerClientEvent(E.OFICINA_REMOVE_PART_OK, src, ok == true, message or '', fresh, leaseId, requestId)
   end
   if not Core.rateOK(src, 'oficina_remove_part') then return reply(false, 'Aguarde um instante.') end
   if type(partId) ~= 'string' then return reply(false, 'Peça inválida.') end
@@ -510,7 +531,7 @@ AddEventHandler(E.OFICINA_REMOVE_PART, function(leaseId, requestId, partId)
   if not customization then return finish(false, 'Prontuário indisponível.') end
   local curParts = type(customization.parts) == 'table' and customization.parts or {}
   if curParts[canonId] ~= true then
-    return finish(false, ('%s não está instalada.'):format(part.name or 'Peça'))
+    return finish(false, ('%s não está instalada.'):format(part.name or 'Peça'), freshState(src, context))
   end
 
   -- PATCH REVERSO (mesma transação, L-13):
@@ -544,7 +565,7 @@ AddEventHandler(E.OFICINA_REMOVE_PART, function(leaseId, requestId, partId)
     return finish(false, paymentErr == 'insufficient' and 'Saldo insuficiente.' or 'Falha ao processar.')
   end
   if replayed then
-    return finish(true, ('%s já removida.'):format(part.name or 'Peça'))
+    return finish(true, ('%s já removida.'):format(part.name or 'Peça'), freshState(src, context))
   end
 
   if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
@@ -563,8 +584,8 @@ AddEventHandler(E.OFICINA_REMOVE_PART, function(leaseId, requestId, partId)
   Core.auditVehicle(context, 'tune', operationId, before, patch, 'committed')
   Core.log(context.plate, 'oficina_remove_part', context.char_id,
     { part = canonId, family = part.family, operation_id = operationId })
+  atualizarDesempenho(context)
 
-  pcall(function() exports.vhub_vehcontrol:refreshSheet(context.plate, src) end)
   finish(true, ('%s removida.'):format(part.name or 'Peça'), freshState(src, context))
 end)
 

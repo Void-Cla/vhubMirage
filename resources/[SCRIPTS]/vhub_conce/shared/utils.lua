@@ -6,9 +6,6 @@ VHubConce.U = VHubConce.U or {}
 
 local U = VHubConce.U
 
--- timestamp Unix (segundos)
-function U.now() return os.time() end
-
 -- valida e normaliza placa → string upper trim ou nil
 function U.normalizePlate(plate)
   if type(plate) ~= 'string' then return nil end

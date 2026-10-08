@@ -5,7 +5,7 @@ lua54 'yes'
 
 name 'vhub_sims'
 author 'vHub Mirage'
-version '1.2.3'
+version '1.3.2'
 description 'Editor autoritativo de aparência e identidade do vHub Mirage.'
 
 dependencies {
@@ -29,12 +29,15 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'core/shared/apshape.lua',
   'core/server/sql.lua',
   'core/server/core.lua',
   'core/server/session.lua',
   'core/server/pricing.lua',
   'core/server/outfits.lua',
+  'core/server/creator.lua',
   'core/server/creation.lua',
   'core/server/shops.lua',
   'core/server/init.lua',

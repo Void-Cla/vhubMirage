@@ -51,6 +51,57 @@ function Core.is_operation_locked(entry_or_char)
   return char_id and Core._operation_locks[char_id] ~= nil or false
 end
 
+-- Reserva ordenada: evita corrida VRAM/SQL e inversao de lock entre dois chars.
+function Core.lock_operation_chars(token, char_ids)
+  if type(token) ~= 'string' or token == '' or type(char_ids) ~= 'table' then return nil end
+  local unique = {}
+  for _, char_id in ipairs(char_ids) do
+    char_id = tonumber(char_id)
+    if not char_id or char_id <= 0 then return nil end
+    unique[char_id] = true
+  end
+  local locked = {}
+  for char_id in pairs(unique) do locked[#locked + 1] = char_id end
+  table.sort(locked)
+  for _, char_id in ipairs(locked) do
+    if Core._operation_locks[char_id] then return nil end
+  end
+  for _, char_id in ipairs(locked) do Core._operation_locks[char_id] = token end
+  return locked
+end
+
+function Core.unlock_operation_chars(token, char_ids)
+  for _, char_id in ipairs(char_ids or {}) do
+    if Core._operation_locks[char_id] == token then Core._operation_locks[char_id] = nil end
+  end
+end
+
+-- Persiste o snapshot VRAM sob o lock ja adquirido pela operacao atomica.
+function Core.flush_locked(entry, token)
+  if not entry or not entry.dirty then return true end
+  if Core._operation_locks[entry.char_id] ~= token then return false end
+  local ok = SQL.save_account(entry.char_id, entry.wallet, entry.bank, entry.total_in, entry.total_out)
+  if not ok then return false end
+  entry.dirty = false
+  entry.last_save_ms = ms()
+  Core.metrics.saves = Core.metrics.saves + 1
+  return true
+end
+
+-- SQL e fonte da verdade apos commit; VRAM so e atualizada depois dele.
+function Core.apply_committed_account(char_id, snapshot)
+  local entry = Core._by_char[tonumber(char_id)]
+  if not entry or type(snapshot) ~= 'table' then return end
+  entry.wallet = tonumber(snapshot.wallet) or entry.wallet
+  entry.bank = tonumber(snapshot.bank) or entry.bank
+  entry.total_in = tonumber(snapshot.total_in) or entry.total_in
+  entry.total_out = tonumber(snapshot.total_out) or entry.total_out
+  entry.dirty = false
+  entry.revision = entry.revision + 1
+  entry.last_save_ms = ms()
+  Core.sync_state_bag(entry)
+end
+
 -- ── Cache lifecycle ─────────────────────────────────────────────────────────
 
 local function new_entry(src, char_id, row)
@@ -71,6 +122,16 @@ end
 -- Carrega conta do banco e popula VRAM
 function Core.load_entry(src, char_id)
   if not char_id or char_id <= 0 then return nil end
+
+  local attempts = 0
+  while Core._operation_locks[char_id] and attempts < 500 do
+    Citizen.Wait(10)
+    attempts = attempts + 1
+  end
+  if Core._operation_locks[char_id] then
+    print(('[vhub_money][ERRO] timeout aguardando operacao do char_id=%d'):format(char_id))
+    return nil
+  end
 
   Core._loading[char_id] = true   -- guard: cobre a janela SELECT→atribuição (race de crédito offline)
   local row = SQL.load_account(char_id, Cfg.WALLET_INITIAL, Cfg.BANK_INITIAL)

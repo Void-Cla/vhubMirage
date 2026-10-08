@@ -1,23 +1,75 @@
 {
   "mcpServers": {
+    "vhub-rag": {
+      "command": "python",
+      "args": ["tools/rag/rag.py", "mcp"],
+      "description": "RAG local de desenvolvimento: fontes próprias, BM25 e citações verificadas"
+    },
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "."
+      ]
     },
     "git": {
       "command": "uvx",
-      "args": ["mcp-server-git", "--repository", "."]
+      "args": [
+        "mcp-server-git",
+        "--repository",
+        "."
+      ]
+    },
+    "semgrep": {
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.12",
+        "semgrep-mcp"
+      ]
     },
     "codegraph": {
       "command": "npx",
-      "args": ["-y", "code-graph-mcp"],
+      "args": [
+        "-y",
+        "code-graph-mcp"
+      ],
       "env": {
         "CGM_ROOT": "."
       }
     },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.12",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "."
+      ]
+    },
     "figma": {
       "command": "npx",
-      "args": ["-y", "figma-mcp"]
+      "args": [
+        "-y",
+        "figma-mcp"
+      ]
+    },
+    "repowise": {
+      "command": "repowise",
+      "args": [
+        "mcp",
+        "C:/vHUB Mirage/vhubMirage",
+        "--transport",
+        "stdio"
+      ],
+      "description": "repowise: codebase intelligence \u2014 docs, graph, git signals, dead code, decisions"
     }
   }
 }

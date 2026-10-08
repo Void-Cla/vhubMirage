@@ -75,6 +75,7 @@ end)
 
 RegisterNetEvent(E.NOTIFY)
 AddEventHandler(E.NOTIFY, function(message, kind)
+  if VHubCustom.inMenu then SendNUIMessage({ action = 'serviceNotice', message = tostring(message or ''), kind = kind }) end
   local prefix = ({ error = '~r~', success = '~g~', warning = '~y~', info = '~w~' })[kind] or '~w~'
   BeginTextCommandThefeedPost('STRING')
   AddTextComponentSubstringPlayerName(prefix .. tostring(message or ''))

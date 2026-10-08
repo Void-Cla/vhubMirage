@@ -81,6 +81,21 @@ local function recoverBoot()
   return false
 end
 
+-- One-shot de boot (ADR #97): fecha sagas de CRIADOR legadas (o fluxo novo não gera nenhuma). Elas
+-- só existem de bancos anteriores à separação; deixadas vivas, uma 'prepared'/'charged'/'customized'
+-- de criador poderia confundir consultas. Guardas (exigidas pelo gate de persistência):
+--   • state IN não-terminais — nunca toca 'completed'/'refunded'/'manual_reconcile';
+--   • amount=0 — criador é grátis, jamais estorna dinheiro;
+--   • idade > 5 min — nunca colide com um fluxo em voo (o novo criador não usa saga, mas guarda-se
+--     contra qualquer resíduo de transição). Idempotente: re-rodar não acha mais linhas não-terminais.
+-- Best-effort: falha não bloqueia o SIMS.
+local function closeLegacyCreatorSagas()
+  local closed = SQL.closeLegacyCreatorSagas()
+  if closed and closed > 0 then
+    Core.log('info', 'Sagas de criador legadas fechadas no boot (ADR #97).', { closed = closed })
+  end
+end
+
 local function boot()
   local ok, err = SQL.applySchema()
   if not ok then
@@ -89,8 +104,10 @@ local function boot()
   end
   Core.ready = false
   if not recoverBoot() then return end
+  -- Fecha resíduo de sagas de criador de bancos antigos ANTES de liberar o SIMS (best-effort).
+  closeLegacyCreatorSagas()
   Core.ready = true
-  Core.log('info', 'SIMS 1.2.3 pronto.', {})
+  Core.log('info', 'SIMS 1.3.0 pronto.', {})
 end
 
 VHubSimsAdmin = VHubSimsAdmin or {}
@@ -157,7 +174,6 @@ RegisterCommand('sims_reset_session', function(src, args)
   -- Encerrar stage físico antes de limpar para não deixar o jogador preso no interior de criação.
   if session.mode == 'creator' and session.stage_token then
     Core.call('vhub_hss', 'endPendingStage', targetSrc, session.stage_token)
-    SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'admin_reset_session')
   end
   Session.cleanup(targetSrc)
   Core.log('warn', 'sims_reset_session: sessão removida por admin.', {
@@ -176,14 +192,23 @@ AddEventHandler('vHub:characterLoad', function(user)
   Citizen.CreateThread(function() Creation.resumeCharacter(src, charId) end)
 end)
 
+-- Criação interrompida por disconnect/stop = char nunca foi 'created' (o commit é a última etapa).
+-- Encerra o stage físico e sinaliza CANCELLED → o login descarta o rascunho (não deixa "Piloto N"
+-- órfão). Sem saga a fechar (ADR #97). Emitir CANCELLED aqui é seguro: o char ainda NÃO existe.
+local function cleanupCreatorSession(src, session, reason)
+  if session.mode ~= 'creator' then return end
+  if session.stage_token then
+    Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
+  end
+  if GetPlayerName(src) then TriggerEvent(VHubSims.E.CREATION_CANCELLED, session.char_id) end
+  Core.log('info', 'Sessão de criação encerrada.', { src = src, char_id = session.char_id, reason = reason })
+end
+
 AddEventHandler('playerDropped', function()
   local src = source
   local session = Session.cleanup(src)
   Core.cleanup(src)
-  if session and session.mode == 'creator' and session.stage_token then
-    Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
-    SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'dropped')
-  end
+  if session then cleanupCreatorSession(src, session, 'dropped') end
 end)
 
 AddEventHandler('onResourceStop', function(resource)
@@ -194,9 +219,9 @@ AddEventHandler('onResourceStop', function(resource)
         reason = 'dependency_stopped',
         restore = false,
       })
-      if session.mode == 'creator' then
-        SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'hss_stopped')
-        if GetPlayerName(src) then TriggerEvent(VHubSims.E.CREATION_CANCELLED, session.char_id) end
+      -- HSS já parou → não chamar endPendingStage; só sinaliza cancelamento da criação.
+      if session.mode == 'creator' and GetPlayerName(src) then
+        TriggerEvent(VHubSims.E.CREATION_CANCELLED, session.char_id)
       end
     end)
     return
@@ -204,11 +229,7 @@ AddEventHandler('onResourceStop', function(resource)
   if resource ~= GetCurrentResourceName() then return end
   Session.each(function(src, session)
     Session.cleanup(src)
-    if session.mode == 'creator' and session.stage_token then
-      Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
-      SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'resource_stopped')
-      if GetPlayerName(src) then TriggerEvent(VHubSims.E.CREATION_CANCELLED, session.char_id) end
-    end
+    cleanupCreatorSession(src, session, 'resource_stopped')
   end)
   Core.ready = false
 end)

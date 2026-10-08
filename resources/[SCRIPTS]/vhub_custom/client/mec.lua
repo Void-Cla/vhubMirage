@@ -44,10 +44,84 @@ local function awaitControl(ent, timeout)
   local t = GetGameTimer()
   while not NetworkHasControlOfEntity(ent) do
     if GetGameTimer() - t > timeout then return false end
+    if not DoesEntityExist(ent) then return false end
+    NetworkRequestControlOfEntity(ent)
     Citizen.Wait(50)
   end
   return true
 end
+
+local JANELAS = { 'window_lf', 'window_rf', 'window_lr', 'window_rr',
+  'window_lm', 'window_rm', 'windscreen', 'windscreen_r' }
+
+local function danoAtual(veh)
+  local dano = { doors = {}, windows = {}, tyres = {}, tyres_rim = {} }
+  for i = 0, 5 do if IsVehicleDoorDamaged(veh, i) then dano.doors[#dano.doors + 1] = i end end
+  for i = 0, 7 do
+    if GetEntityBoneIndexByName(veh, JANELAS[i + 1]) ~= -1 and not IsVehicleWindowIntact(veh, i) then
+      dano.windows[#dano.windows + 1] = i
+    end
+  end
+  for _, i in ipairs(VHubCustom.U.pneus) do
+    if IsVehicleTyreBurst(veh, i, true) then dano.tyres_rim[#dano.tyres_rim + 1] = i
+    elseif IsVehicleTyreBurst(veh, i, false) then dano.tyres[#dano.tyres + 1] = i end
+  end
+  return dano
+end
+
+RegisterNetEvent(E.MEC_PHYSICAL)
+AddEventHandler(E.MEC_PHYSICAL, function(token, netId, plate, componente)
+  if source ~= 65535 or type(token) ~= 'string' then return end
+  local veh = NetworkGetEntityFromNetworkId(tonumber(netId) or 0)
+  local lock = token:match('^(.-):')
+  local function valido()
+    return veh and veh ~= 0 and DoesEntityExist(veh)
+      and VHubCustom.U.normalizePlate(GetVehicleNumberPlateText(veh)) == plate
+      and Entity(veh).state[VHubCustom.BAG.REPAIR] == lock
+  end
+  Citizen.CreateThread(function()
+    local prazo = GetGameTimer() + 1000
+    while not valido() and GetGameTimer() < prazo do
+      Citizen.Wait(50)
+      veh = NetworkGetEntityFromNetworkId(tonumber(netId) or 0)
+    end
+    if not valido() or not awaitControl(veh, 2500) or not valido() then
+      TriggerServerEvent(E.MEC_PHYSICAL_OK, token, false); return
+    end
+    if componente == 'inspect' then
+      TriggerServerEvent(E.MEC_PHYSICAL_OK, token, true, { damage = danoAtual(veh) }); return
+    end
+    -- Sem Wait entre validação e mutação. Um reparo não concede outros componentes.
+    if componente == 'tyre' then
+      for _, i in ipairs(VHubCustom.U.pneus) do SetVehicleTyreFixed(veh, i) end
+    elseif componente == 'engine' then
+      SetVehicleEngineHealth(veh, 1000.0)
+      SetVehicleUndriveable(veh, false)
+    elseif componente == 'body' then
+      local motor, tanque, combustivel = GetVehicleEngineHealth(veh), GetVehiclePetrolTankHealth(veh), GetVehicleFuelLevel(veh)
+      local ligado, dirigivel = GetIsVehicleEngineRunning(veh), IsVehicleDriveable(veh, false)
+      local sujeira, dano = GetVehicleDirtLevel(veh), danoAtual(veh)
+      -- SET_VEHICLE_FIXED exige motor funcional; restaura-o imediatamente, sem upgrade gratuito.
+      SetVehicleEngineHealth(veh, 1000.0)
+      SetVehicleFixed(veh)
+      SetVehicleDeformationFixed(veh)
+      SetVehicleBodyHealth(veh, 1000.0)
+      SetVehicleEngineHealth(veh, motor + 0.0)
+      SetVehiclePetrolTankHealth(veh, tanque + 0.0)
+      SetVehicleFuelLevel(veh, combustivel + 0.0)
+      SetVehicleDirtLevel(veh, sujeira + 0.0)
+      SetVehicleUndriveable(veh, not dirigivel)
+      SetVehicleEngineOn(veh, ligado, true, true)
+      for _, i in ipairs(dano.tyres) do SetVehicleTyreBurst(veh, i, false, 1000.0) end
+      for _, i in ipairs(dano.tyres_rim) do SetVehicleTyreBurst(veh, i, true, 1000.0) end
+    else TriggerServerEvent(E.MEC_PHYSICAL_OK, token, false); return end
+    local dano = danoAtual(veh)
+    local sucesso = componente == 'tyre' and VHubCustom.U.contarPneus(dano) == 0
+      or componente == 'engine' and GetVehicleEngineHealth(veh) >= 999.0
+      or componente == 'body' and GetVehicleBodyHealth(veh) >= 999.0 and #dano.doors == 0 and #dano.windows == 0
+    TriggerServerEvent(E.MEC_PHYSICAL_OK, token, sucesso)
+  end)
+end)
 
 
 -- ============================================================
@@ -63,6 +137,12 @@ function VHubCustom.openMec(auth)
 
   local model    = GetEntityModel(veh)
   local prices   = CFG.prices
+  local atual = { engine_health = GetVehicleEngineHealth(veh), body_health = GetVehicleBodyHealth(veh), damage = danoAtual(veh) }
+  local estimativas = {}
+  for _, componente in ipairs({ 'tyre', 'engine', 'body' }) do
+    local _, preco = VHubCustom.U.reparo(atual, componente, prices)
+    estimativas[componente] = preco
+  end
 
   VHubCustom.inMenu = true
 
@@ -77,6 +157,9 @@ function VHubCustom.openMec(auth)
         engine = prices.motor_parcial,
         body   = prices.lataria_parcial,
       },
+      estimates = estimativas,
+      materiais = auth.materiais,
+      damaged_tyres = VHubCustom.U.contarPneus(atual.damage),
       -- health atual para exibição de estado (servidor valida de novo)
       engine_health = math.floor(GetVehicleEngineHealth(veh)),
       body_health   = math.floor(GetVehicleBodyHealth(veh)),
@@ -106,6 +189,7 @@ end)
 
 -- NUI → solicita reparo parcial do componente selecionado
 RegisterNUICallback('mec:repair', function(data, cb)
+  if type(data) ~= 'table' then cb({ ok = false }); return end
   local plate       = type(data.plate)       == 'string' and data.plate       or ''
   local repair_type = type(data.repair_type) == 'string' and data.repair_type or ''
 
@@ -137,7 +221,10 @@ end)
 local _repairActive = false
 
 RegisterNetEvent(E.MEC_CONFIRM)
-AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type, netId)
+AddEventHandler(E.MEC_CONFIRM, function(plate, ok, repair_type, netId, leaseId)
+  local servico = VHubCustom.service
+  if not servico or servico.domain ~= 'mec' or leaseId ~= servico.lease_id
+      or (plate and plate ~= servico.plate) or (netId and tonumber(netId) ~= tonumber(servico.net_id)) then return end
   -- captura veh ANTES de qualquer Wait (evita race condition com activeVeh)
   local veh = VHubCustom.activeVeh
 
@@ -159,23 +246,7 @@ AddEventHandler(E.MEC_CONFIRM, function(_, ok, repair_type, netId)
     -- revalida entidade após animação
     if not DoesEntityExist(veh) then _repairActive = false; return end
 
-    if repair_type == 'tyre' then
-      -- SetVehicleTyreFixed propaga sem controle exclusivo (CVehicleTyreStateSync)
-      for i = 0, 5 do SetVehicleTyreFixed(veh, i) end
-
-    elseif repair_type == 'engine' then
-      -- engine health usa CVehicleDamageSync: exige ser network owner para o sync persistir
-      if awaitControl(veh, 3000) then
-        SetVehicleEngineHealth(veh, 1000.0)
-      end
-
-    elseif repair_type == 'body' then
-      -- body health: mesmo contrato de owner que engine
-      if awaitControl(veh, 3000) then
-        SetVehicleBodyHealth(veh, 1000.0)
-      end
-    end
-
+    -- A física já foi aplicada e confirmada pelo owner; animação é somente apresentação.
     _repairActive = false
   end)
 end)

@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Document</title>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
+		<link rel="stylesheet" href="vendor/fontawesome/all.min.css" />
 		<link rel="stylesheet" href="main.css" />
 	</head>
 	<body>
@@ -252,18 +252,15 @@
 
 			<div class="background"></div>
 		
-					<iframe
-			id="youtube-player"
+			<video
+			id="local-video"
 			class="video"
-			src="/resources/[SCRIPTS]/vhub_loading/ui/img/video.mp4"
-			frameborder="0"
-			allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-		></iframe>
+			autoplay muted loop playsinline
+			><source src="img/video.mp4" type="video/mp4" /></video>
 		</div>
 
-		<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/BrowserFS/2.0.0/browserfs.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+		<script src="vendor/jquery-3.7.1.min.js"></script>
+		<script src="vendor/howler-2.2.3.min.js"></script>
 		<script src="main.js"></script>
 	</body>
 </html>

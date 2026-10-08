@@ -19,6 +19,8 @@ REGRAS:
 
 FRONTEIRA NUI: SendNUIMessage `{type, data}` snake_case; callbacks respondem `{ok, data?, err?}`; `vhub.native.<api>.<fn>` é nome estável; shape de store slice é contrato.
 
+> MCPs: `repowise` (always-on) — `get_context(targets, include=['callers'])` descobrir todos os emissores/listeners de um export/evento antes de declarar breaking; `get_risk(targets, changed_files)` co-change coupling histórico; `get_why(query)` confirmar ADR de contrato congelado.
+
 ANTI-ALUCINAÇÃO: crítica cita arquivo:linha real ou declara `SEM PROVA` e não bloqueia.
 
 FORMATO:

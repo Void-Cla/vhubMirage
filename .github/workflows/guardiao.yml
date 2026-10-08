@@ -1,0 +1,64 @@
+name: Guardiao
+
+# GATE LOCAL PRIMEIRO: enquanto a baseline reprova (segredo rastreado, db/default,
+# handling drift), o gate roda SÓ manualmente (workflow_dispatch) para não pintar
+# de vermelho todo push. Quando a baseline ficar verde, reative os gatilhos abaixo
+# e torne o job obrigatório em Branch Protection:
+#   pull_request:
+#   push:
+#     branches: [main]
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardiao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guardiao:
+    name: Segurança e invariantes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      # actions/checkout v4.2.2 — SHA fixado.
+      - name: Checkout completo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Instalar Lua 5.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends lua5.4
+          sudo update-alternatives --install /usr/local/bin/lua lua /usr/bin/lua5.4 100
+          sudo update-alternatives --install /usr/local/bin/luac luac /usr/bin/luac5.4 100
+
+      - name: Executar guardião
+        shell: pwsh
+        run: |
+          $saida = & ./tools/guardiao.ps1 -Raiz $PWD -Json
+          $codigo = $LASTEXITCODE
+          $saida | Set-Content -LiteralPath guardiao.json -Encoding utf8
+          $saida
+          exit $codigo
+
+      - name: Resumo redigido
+        if: always()
+        shell: pwsh
+        run: |
+          "### Guardião" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if (Test-Path -LiteralPath guardiao.json) {
+            $resultado = Get-Content -LiteralPath guardiao.json -Raw | ConvertFrom-Json
+            "Aprovado: $($resultado.aprovado) — erros: $($resultado.erros) — avisos: $($resultado.avisos)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+          "Valores de segredos nunca são impressos." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append

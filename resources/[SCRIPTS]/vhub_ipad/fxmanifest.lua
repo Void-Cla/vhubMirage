@@ -6,12 +6,13 @@ lua54      'yes'
 
 name        'vhub_ipad'
 author      'vHub Mirage'
-version     '3.0.2'
+version     '3.0.3'
 description 'Tablet iOS-style — plataforma de apps vHub (registry server-authoritative, estado per-char)'
 
 -- vhub = core (getUser/hasPerm). vhub_inventory = soft-dep (item 'ipad', verificado em runtime).
 dependencies {
   'vhub',
+  'oxmysql',
 }
 
 
@@ -31,6 +32,8 @@ shared_scripts {
 -- ============================================================
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/bootstrap.lua',
   'server/sql.lua',
   'server/state.lua',

@@ -7,6 +7,7 @@
 --   vh_money_accounts      : saldo de carteira + banco por char_id
 --   vh_money_operations    : débitos idempotentes e estornos exatos
 --   vh_money_payment_requests: unicidade forte por request de saga
+--   vh_money_transfers     : transferencias P2P atomicas e idempotentes
 --   vh_money_transactions  : log auditavel de toda movimentacao
 
 CREATE TABLE IF NOT EXISTS `vh_money_accounts` (
@@ -50,10 +51,51 @@ CREATE TABLE IF NOT EXISTS `vh_money_payment_requests` (
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `vh_money_transfers` (
+  `operation_id`     VARCHAR(64)     NOT NULL,
+  `actor_char_id`    INT UNSIGNED    NOT NULL,
+  `target_char_id`   INT UNSIGNED    NOT NULL,
+  `kind`             ENUM('bank_transfer','cash_give') NOT NULL,
+  `amount`           BIGINT UNSIGNED NOT NULL,
+  `fee`              BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `reason`           VARCHAR(180)    NOT NULL DEFAULT '',
+  `actor_wallet`     BIGINT UNSIGNED NOT NULL,
+  `actor_bank`       BIGINT UNSIGNED NOT NULL,
+  `actor_total_in`   BIGINT UNSIGNED NOT NULL,
+  `actor_total_out`  BIGINT UNSIGNED NOT NULL,
+  `target_wallet`    BIGINT UNSIGNED NOT NULL,
+  `target_bank`      BIGINT UNSIGNED NOT NULL,
+  `target_total_in`  BIGINT UNSIGNED NOT NULL,
+  `target_total_out` BIGINT UNSIGNED NOT NULL,
+  `created_at`       TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`operation_id`),
+  KEY `idx_money_transfer_actor` (`actor_char_id`, `created_at`),
+  KEY `idx_money_transfer_target` (`target_char_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT IGNORE INTO `vh_money_payment_requests` (`char_id`, `request_key`, `operation_id`)
 SELECT `char_id`, LEFT(`operation_id`, CHAR_LENGTH(`operation_id`) - 9), `operation_id`
 FROM `vh_money_operations`
 WHERE `operation_id` LIKE 'vc:%' AND CHAR_LENGTH(SUBSTRING_INDEX(`operation_id`, ':', -1)) = 8;
+
+CREATE TABLE IF NOT EXISTS `vh_money_transfers` (
+  `operation_id`   VARCHAR(80)      NOT NULL,
+  `actor_char_id`  INT UNSIGNED     NOT NULL,
+  `target_char_id` INT UNSIGNED     NOT NULL,
+  `amount`         BIGINT UNSIGNED  NOT NULL,
+  `fee`            BIGINT UNSIGNED  NOT NULL DEFAULT 0,
+  `source_account` ENUM('wallet','bank') NOT NULL,
+  `target_account` ENUM('wallet','bank') NOT NULL,
+  `reason`         VARCHAR(96)      NOT NULL,
+  `created_at`     TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`operation_id`),
+  KEY `idx_money_transfer_actor` (`actor_char_id`),
+  KEY `idx_money_transfer_target` (`target_char_id`),
+  CONSTRAINT `fk_money_transfer_actor` FOREIGN KEY (`actor_char_id`)
+    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_money_transfer_target` FOREIGN KEY (`target_char_id`)
+    REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `vh_money_transactions` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,

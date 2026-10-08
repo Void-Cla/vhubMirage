@@ -8,7 +8,24 @@ tools/*
 !tools/handling-balancer/
 !tools/test_tier_rules.lua
 !tools/test_b64_roundtrip.lua
-metas/
+!tools/test_fluxo_entrada.lua
+!tools/test_login_rollback.lua
+!tools/test_sims_creator.lua
+!tools/test_hss_sql.lua
+!tools/test_custom.lua
+!tools/test_custom_nui.js
+!tools/test_custom_exhaust.lua
+!tools/test_garage_persistencia.lua
+!tools/rag/
+!tools/ptfx_rgb/
+!tools/fix_vhub_db.ps1
+!tools/limpardadossql.ps1
+# Base derivada privada do RAG; recriada a partir das fontes locais.
+.rag/
+!metas/
+metas/*
+!metas/fivem_natives_organizadas_ptbr.md
+!metas/tudoverde.md
 
 # Exemplos e bases de referência
 exemplos de base/
@@ -41,8 +58,17 @@ resources/\[SCRIPTS\]/vhub_npcai/sidecar/logs/
 .env
 *.env
 
-# Segredos locais do FXServer
+# Segredos locais do FXServer — NUNCA versionar (ver .example ao lado de cada um).
+# SEC-001: identity.cfg carrega sv_licenseKey (segredo cripto; pepper de login deriva
+# dela). DB-002: database.cfg carrega a connection string do MySQL.
 config/local.cfg
+config/identity.cfg
+config/database.cfg
 
-# MCP config (pode conter tokens de API)
-.mcp.json
+# db/default — RocksDB runtime do FXServer (CFG-002). Estado efêmero, não versiona.
+# colchetes de [SCRIPTS] no npcai já escapados acima; aqui é caminho simples.
+db/default/
+
+# .mcp.json É RASTREADO de propósito (secret-free): comandos portáveis, sem token literal.
+# Tokens de API SÓ via variável de ambiente do usuário (ex.: FIGMA_API_KEY). Ver CLAUDE.md → MCP.
+# guardiao.ps1 escaneia segredos (cfxk/sk-/ghp/xox/figd/AIza/webhook) no HEAD e barra o commit.

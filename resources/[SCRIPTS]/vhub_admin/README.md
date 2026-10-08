@@ -1,4 +1,4 @@
-# vhub_admin — Painel de Administração
+ # vhub_admin — Painel de Administração
 
 **Versão:** 3.1.0 | **Owner:** vhub_admin
 

@@ -4,8 +4,8 @@
   "showThinkingSummaries": true,
   "autoMemory": true,
 
-  "_mcp": "Servidores declarados em ../.mcp.json (raiz do repo). 'filesystem' é auto-habilitado; adicione outros nomes ao array abaixo.",
-  "enabledMcpjsonServers": ["filesystem"],
+  "_mcp": "Servidores declarados em ../.mcp.json (raiz). Always-on = filesystem+git+semgrep+repowise (pip install repowise + repowise init no repo, sem API key). On-demand (adicionar ao array durante a sprint): codegraph (grafo JS), serena (nav semântica Lua/JS), figma (UI). Reiniciar a sessão após mudar.",
+  "enabledMcpjsonServers": ["filesystem", "git", "semgrep", "repowise", "vhub-rag"],
 
   "env": {
     "ANTHROPIC_DEFAULT_OPUS_MODEL":   "claude-opus-4-8",

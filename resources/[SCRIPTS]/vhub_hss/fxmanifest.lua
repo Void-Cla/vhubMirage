@@ -4,7 +4,7 @@ lua54 'yes'
 
 name        'vhub_hss'
 description 'Sistema autoritativo de estado humano, ped, spawn e fisiologia por char_id'
-version     '2.3.0'
+version     '2.4.2'
 author      'vHub Mirage'
 
 dependency 'vhub'
@@ -26,6 +26,7 @@ shared_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    '@vhub/shared/sql_script.lua',
     'server/sql.lua',
     'server/state.lua',
     'server/buckets.lua',
@@ -46,6 +47,7 @@ server_scripts {
 -- ============================================================
 
 client_scripts {
+    'client/focus.lua',
     'client/bootstrap.lua',
     'client/hud_native.lua',
     'client/damage.lua',

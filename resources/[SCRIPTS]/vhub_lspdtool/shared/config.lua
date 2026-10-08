@@ -50,8 +50,8 @@ VHubLspd.cfg = {
     radar = {
         autoOpen    = true,              -- abre ao entrar como MOTORISTA (pede autorização ao servidor)
         reopenAfterLeave = true,         -- re-arma o auto-open ao sair e reentrar num veículo
-        anyVehicle  = true,              -- TESTE: abre em QUALQUER veículo/heli (não só classe 18).
-                                         -- false = produção (só viatura). Servidor valida policial.
+        anyVehicle  = false,             -- produção: somente classe policial (18).
+                                         -- Servidor valida o policial independentemente do veículo.
         toggleKey   = 'X',               -- liga/desliga o radar
         lockKey     = 'K',               -- trava/destrava as leituras (congela frente+trás)
         policeClass = 18,                -- classe de veículo policial (GTA: 18) quando anyVehicle=false

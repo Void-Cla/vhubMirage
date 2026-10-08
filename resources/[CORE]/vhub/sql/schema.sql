@@ -7,8 +7,7 @@
 -- ║ Aplicação  : automática a cada boot via bootstrap.lua:307          ║
 -- ║              (todas as statements são CREATE TABLE IF NOT EXISTS)  ║
 -- ║                                                                    ║
--- ║ Pré-requisito do oxmysql:                                          ║
--- ║   multipleStatements=true na connection string (decisão #3)        ║
+-- ║ Aplicação statement-a-statement via sql_script.lua (ADR #98).       ║
 -- ║                                                                    ║
 -- ║ Migração de banco pré-freeze (MEDIUMBLOB → BLOB):                  ║
 -- ║   CREATE TABLE IF NOT EXISTS NÃO altera tipo de coluna existente.  ║

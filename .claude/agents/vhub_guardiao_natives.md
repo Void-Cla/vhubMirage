@@ -21,6 +21,8 @@ DETECTAR E REPROVAR:
 - `while true` vigiando entidade quando existe evento nativo/bag change handler
 - Bridge L2→L3: native fora de `NativeRegistry`; repasse genérico; read frequente sem cache tick; write sem rate
 
+> MCPs: `repowise` (always-on) — `get_context(files, include=['callers','callees'])` rastrear uso de native e escritores de entidade; `get_risk(targets)` dependentes afetados por mudança de spawn/entidade. `filesystem` (path dinâmico).
+
 FORMATO:
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máx 4, arquivo:linha — native/padrão correto vs custom>

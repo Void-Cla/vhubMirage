@@ -31,11 +31,8 @@ local function prepararGate(res)
     local schema = LoadResourceFile(res, "sql/login_accounts.sql")
     if not schema or #schema == 0 then return false, "schema_ausente" end
 
-    -- statement a statement (padrão vhub_hss): sem dependência de multi-statement
-    local ok, err = pcall(function()
-      for statement in schema:gmatch("([^;]+);") do
-        if statement:match("%S") then MySQL.query.await(statement, {}) end
-      end
+    local ok, err = VHubSQLScript.aplicar(schema, function(statement)
+      MySQL.query.await(statement, {})
     end)
     if not ok then return false, "schema_falhou", err end
     _stage.schema = true
@@ -218,7 +215,9 @@ local function runRequest(src, action, limit, work, done)
     if _inflight[src] ~= token or F.get(src) ~= token.session then return end
     _inflight[src] = nil
     if not ran then
-      log("error", "Operação de autenticação falhou.", { action = action, src = src })
+      -- `ok` carrega a mensagem de erro quando pcall falhou; registrar torna a causa raiz
+      -- visível em vez de mascarar tudo como "erro" (diagnóstico do throw de autenticação).
+      log("error", "Operação de autenticação falhou.", { action = action, src = src, erro = tostring(ok) })
       return done(false, "erro")
     end
     done(ok, err, detail, extra)
@@ -353,28 +352,31 @@ AddEventHandler(E.REQUEST_CREATE, function()
   end)
 end)
 
-local function returnFromCreation(char_id)
+-- completed=true → criação concluída (mantém o char); false → cancelou/falhou (rollback do
+-- rascunho novo em F.concluirCriacao, ADR #97).
+local function returnFromCreation(char_id, completed)
   Citizen.CreateThread(function()
-    local src, isolated = F.concluirCriacao(char_id)
+    local src, isolated, err = F.concluirCriacao(char_id, completed)
     if not src or GetPlayerName(src) == nil then return end
     if not isolated then
       DropPlayer(tostring(src), "Falha ao isolar a sessão de personagens.")
       return
     end
-    TriggerClientEvent(E.CREATION_RETURN, src, F.personagens(src) or {})
+    TriggerClientEvent(E.CREATION_RETURN, src, F.personagens(src) or {}, err)
   end)
 end
 
 -- O SIMS concluiu; reabre a seleção com resumos autoritativos atualizados.
 AddEventHandler(E.CREATION_DONE, function(char_id)
   if GetInvokingResource() ~= "vhub_sims" then return end
-  returnFromCreation(char_id)
+  returnFromCreation(char_id, true)
 end)
 
 -- O SIMS cancelou; retorna ao charselect sem abrir selector nem gravar conclusão.
+-- completed=false → rollback do rascunho novo (não deixa "Piloto N" órfão).
 AddEventHandler(E.CREATION_CANCELLED, function(char_id)
   if GetInvokingResource() ~= "vhub_sims" then return end
-  returnFromCreation(char_id)
+  returnFromCreation(char_id, false)
 end)
 
 

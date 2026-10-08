@@ -117,6 +117,13 @@ vHub.Kernel:export("deleteCharacter", function(src, char_id)
   return vHub.Auth:deleteCharacterRequest(src, char_id)
 end)
 
+-- Rollback de rascunho (criação não concluída) exclusivamente pelo gate de login (ADR #97).
+-- Só apaga se o char NÃO tem conclusão de criador (invariante em Auth:discardDraftCharacter).
+vHub.Kernel:export("discardDraftCharacter", function(src, char_id)
+  if not _invoker_is("vhub_login") then return { ok = false, err = "forbidden" } end
+  return vHub.Auth:discardDraftCharacter(src, char_id)
+end)
+
 -- Consulta conclusão do criador para login e SIMS.
 vHub.Kernel:export("getSimsCreation", function(src)
   if SIMS_READ_CALLERS[GetInvokingResource() or ""] ~= true then

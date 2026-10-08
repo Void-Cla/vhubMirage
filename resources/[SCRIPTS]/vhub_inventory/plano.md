@@ -1,4 +1,4 @@
-# vHub Inventory — Super Plano da Mochila Perfeita
+ vHub Inventory — Super Plano da Mochila Perfeita
 
 > **Resource:** `resources/[SCRIPTS]/vhub_inventory`
 > **Escopo exclusivo:** Mochila do jogador · Baús (fixos/facção, porta-malas, drops no chão) · Player Info HUD (ID, telefone)

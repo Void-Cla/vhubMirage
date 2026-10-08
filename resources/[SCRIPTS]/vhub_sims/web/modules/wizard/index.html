@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <!-- campos em linha: nome · sobrenome · idade -->
+    <!-- linha 1: nome · sobrenome · idade -->
     <div class="mod-wizard__fields">
       <label class="sims-field">
         <span>Nome</span>
@@ -24,6 +24,45 @@
         <span>Idade</span>
         <input name="age" type="number" min="16" max="120" step="1" required placeholder="18">
       </label>
+    </div>
+
+    <!-- linha 2: história + papel (full-width abaixo) -->
+    <div class="mod-wizard__extra">
+      <label class="sims-field mod-wizard__backstory-field">
+        <span>História do personagem <em class="mod-wizard__optional">(opcional)</em></span>
+        <textarea name="backstory" maxlength="1000" rows="3"
+          placeholder="Conte de onde vem, o que busca… (max 1000 caracteres)"></textarea>
+      </label>
+
+      <fieldset class="mod-wizard__role-group">
+        <legend>Intenção de vida</legend>
+        <div class="mod-wizard__role-options">
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="legal" required>
+            <span>⚖️ Legal</span>
+          </label>
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="ilegal">
+            <span>🌑 Ilegal</span>
+          </label>
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="mecanica">
+            <span>🔧 Mecânica</span>
+          </label>
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="hospital">
+            <span>🏥 Hospital</span>
+          </label>
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="policia">
+            <span>🚔 Polícia</span>
+          </label>
+          <label class="mod-wizard__role-btn">
+            <input type="radio" name="role" value="livre" checked>
+            <span>🌊 Livre</span>
+          </label>
+        </div>
+      </fieldset>
     </div>
 
     <!-- status + submit -->

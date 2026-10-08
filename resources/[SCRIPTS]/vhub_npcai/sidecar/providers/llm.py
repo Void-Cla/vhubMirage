@@ -13,6 +13,7 @@ Segurança (§15 do plano):
 
 from __future__ import annotations
 import os
+import re
 import time
 import threading
 from typing import Optional
@@ -110,6 +111,13 @@ class LLMProvider:
             f"<<<\n{user_text[:300]}\n>>>"
         )
 
+    @staticmethod
+    def _limit_response(text: str) -> str:
+        """Normaliza e limita a resposta a duas frases e 240 caracteres."""
+        clean = ' '.join(text.split())
+        sentences = re.split(r'(?<=[.!?])\s+', clean)
+        return ' '.join(sentences[:2])[:240].strip()
+
     # ──────────────────────────────────────────────────────────
     # API PÚBLICA
     # ──────────────────────────────────────────────────────────
@@ -130,7 +138,7 @@ class LLMProvider:
             text = self._generate(system, user, spec)
             if text and text.strip():
                 self._on_success()
-                return text.strip()
+                return self._limit_response(text)
             self._on_failure()
             return None
         except Exception:
@@ -181,7 +189,7 @@ class GeminiLLM(LLMProvider):
         return self._client is not None
 
     def _generate(self, system: str, user: str, spec: dict) -> Optional[str]:
-        model_name = spec.get('model') or 'gemini-2.0-flash-lite'
+        model_name = spec.get('model') or 'gemini-flash-lite-latest'
         resp = self._client.models.generate_content(
             model=model_name,
             contents=user,

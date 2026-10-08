@@ -1,7 +1,6 @@
-# limpardadossql.ps1 - VARREDURA TOTAL do banco: zera TODAS as base tables
-# (TRUNCATE) descobertas via information_schema. Pega tabelas herdadas de
-# updates (vrp_*, vh_*, vhub_*, qualquer coisa) sem lista fixa. Use p/ resetar
-# ambiente de TESTE e garantir que nao sobrou estado/bug herdado.
+# limpardadossql.ps1 - VARREDURA TOTAL do banco: zera TODAS as base tables descobertas via
+# information_schema (DELETE + reset de AUTO_INCREMENT). Pega tabelas herdadas de updates
+# (vrp_*, vh_*, vhub_*, qualquer coisa) sem lista fixa. Use p/ resetar ambiente de TESTE.
 #
 #   Uso comum:
 #     .\tools\limpardadossql.ps1                     # zera TUDO (confirma com LIMPAR)
@@ -9,6 +8,21 @@
 #     .\tools\limpardadossql.ps1 -Force              # sem prompt (cuidado)
 #     .\tools\limpardadossql.ps1 -Excluir tabela_a   # preserva tabelas
 #     .\tools\limpardadossql.ps1 -Somente tabela_a   # limpa somente estas
+#
+# ============================================================================================
+# WIPE REALMENTE DO ZERO = 3 PASSOS (a ordem importa). Fazer com o FXServer DESLIGADO:
+#   1. Este script (SQL): DELETE + AUTO_INCREMENT=1 em todas as tabelas + VERIFICACAO de 0 linhas.
+#      (Usa DELETE, nao TRUNCATE: no MariaDB o TRUNCATE de tabela-pai com FK e BLOQUEADO mesmo com
+#       FK_CHECKS=0 -> com --force o erro era mascarado e conta/char SOBREVIVIAM. Era a causa dos
+#       "bugs bizarros": conta admin fantasma, char ja criado, char_id orfao com FK error.)
+#   2. KVP do FiveM (nao e SQL, vive em db/default/ RocksDB): apagar a pasta db/default/ inteira
+#      com o servidor parado (recria vazia no boot). Limpa hss_outbox:* (aparencia sobrevivente =
+#      "cabelo herdado") e o pepper de login. Alternativa cirurgica com servidor no ar: comando de
+#      console 'vhub_hss_wipe_outbox' (exige vhub_test_mode=1).
+#   3. Ligar o FXServer. So agora o alocador _next_char_id / _next_user_id re-semeia de MAX+1=1.
+# Pular o passo 1 ou 2 = wipe incompleto = estado herdado = bug bizarro. Apagar o banco no XAMPP
+# equivale so ao passo 1; NAO substitui o passo 2 (KVP nao e SQL).
+# ============================================================================================
 param(
   [string]$ConfigPath = "",
   [switch]$Force,
@@ -386,13 +400,21 @@ if (-not $Force) {
 # revalida cada ident DESCOBERTO antes de injetar no SQL (defesa em profundidade)
 foreach ($t in $alvo) { [void](Sql-Ident $t) }
 
-# MySQL CLI nao suporta multiplos statements via --execute em uma unica chamada.
-# Solucao: gravar um arquivo SQL temporario e passa-lo via pipe para o mysql.exe,
-# que aceita multi-statement quando recebe via stdin (sem a restricao do --execute).
+# DELETE + ALTER AUTO_INCREMENT, NAO TRUNCATE. Motivo (causa raiz de wipe falho, 2026-08-16):
+# no MariaDB/InnoDB, TRUNCATE numa tabela-PAI referenciada por FK e BLOQUEADO mesmo com
+# FOREIGN_KEY_CHECKS=0 ("Cannot truncate a table referenced in a foreign key constraint").
+# vh_characters/vh_users/login_accounts tem 26+ filhas com FK -> o TRUNCATE delas falhava e o
+# --force MASCARAVA o erro, reportando "sucesso" enquanto conta/char/estado SOBREVIVIAM ao wipe.
+# DELETE FROM RESPEITA FK_CHECKS=0 (apaga a pai mesmo com filhas), e ALTER ... AUTO_INCREMENT=1
+# reseta o contador que o TRUNCATE zerava de graca. Ordem irrelevante com FK_CHECKS=0.
 $tempSql = [System.IO.Path]::GetTempFileName() + ".sql"
 try {
   $linhas = @("SET FOREIGN_KEY_CHECKS=0;")
-  foreach ($t in $alvo) { $linhas += "TRUNCATE TABLE " + (Sql-Ident $t) + ";" }
+  foreach ($t in $alvo) {
+    $id = Sql-Ident $t
+    $linhas += "DELETE FROM $id;"
+    $linhas += "ALTER TABLE $id AUTO_INCREMENT = 1;"
+  }
   $linhas += "SET FOREIGN_KEY_CHECKS=1;"
   [System.IO.File]::WriteAllLines($tempSql, $linhas, [System.Text.UTF8Encoding]::new($false))
 
@@ -403,8 +425,8 @@ try {
     "--user=$($conn.User)",
     "--database=$($conn.Database)",
     "--default-character-set=utf8mb4",
-    "--batch",
-    "--force"   # continua mesmo em erro de FK residual
+    "--batch"
+    # SEM --force: um erro real DEVE parar o wipe, nunca ser mascarado (era a raiz do falso-sucesso)
   )
 
   $oldPwdExiste = Test-Path Env:MYSQL_PWD
@@ -415,7 +437,7 @@ try {
 
     Get-Content -LiteralPath $tempSql | & $mysql @mysqlArgs 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      throw "mysql.exe retornou $LASTEXITCODE ao executar truncates via stdin."
+      throw "mysql.exe retornou $LASTEXITCODE ao executar o wipe via stdin."
     }
   } finally {
     if ($oldPwdExiste) { $env:MYSQL_PWD = $oldPwd }
@@ -425,5 +447,32 @@ try {
   if (Test-Path -LiteralPath $tempSql) { Remove-Item -LiteralPath $tempSql -Force }
 }
 
-Write-Host "[OK] $($alvo.Count) tabela(s) zerada(s) no banco '$($conn.Database)'."
-Write-Host "[OK] AUTO_INCREMENT resetado (TRUNCATE) - proximo usuario novo deve receber user_id = 1."
+# VERIFICACAO PoS-WIPE (fecha o buraco do falso-sucesso): reconta as linhas de TODAS as tabelas
+# alvo. Se QUALQUER uma sobreviveu, o wipe FALHOU de verdade e o script grita — nunca mais
+# reporta "OK" com estado remanescente. Uma unica linha residual e um wipe incompleto.
+$verifSql = "SELECT COALESCE(SUM(n),0) FROM ("
+$partes = @()
+foreach ($t in $alvo) { $partes += "SELECT COUNT(*) AS n FROM " + (Sql-Ident $t) }
+$verifSql += ($partes -join " UNION ALL ") + ") AS w"
+$restantes = (Invocar-Mysql -MysqlExe $mysql -Conn $conn -Sql $verifSql | Where-Object { $_ -match '\d' } | Select-Object -First 1)
+$restantes = [int]($restantes -replace '\D', '')
+
+if ($restantes -gt 0) {
+  throw "[FALHA] Wipe INCOMPLETO: $restantes linha(s) sobreviveram nas tabelas alvo. " +
+        "Verifique FKs/permissoes. O banco NAO esta limpo."
+}
+
+Write-Host "[OK] $($alvo.Count) tabela(s) zerada(s) no banco '$($conn.Database)' (DELETE + AUTO_INCREMENT=1)."
+Write-Host "[OK] VERIFICADO: 0 linhas remanescentes nas tabelas alvo. Proximo id = 1."
+Write-Host ""
+Write-Host "[!] WIPE INCOMPLETO SEM O PASSO 2 - o banco SQL foi zerado, MAS o KVP do FiveM (RocksDB"
+Write-Host "    em db/default/) NAO e SQL e NAO foi tocado por este script. O 'hss_outbox:<char_id>'"
+Write-Host "    sobrevive e, com char_id reusado, REINSTALA a aparencia de um personagem antigo"
+Write-Host "    (bug do 'cabelo herdado'). Apagar/recriar o banco no XAMPP NAO resolve isso."
+Write-Host ""
+Write-Host "    PASSO 2 (limpar o KVP) - no CONSOLE do FXServer, com vhub_test_mode=1:"
+Write-Host "        vhub_hss_wipe_outbox"
+Write-Host ""
+Write-Host "    Para um reset TOTALMENTE do zero, alternativa nuclear: parar o servidor e apagar a"
+Write-Host "    pasta db/default/ inteira (o FXServer recria vazia no proximo boot). Isso limpa TODO"
+Write-Host "    KVP de uma vez (inclui o pepper de login, que sera re-derivado do sv_licenseKey)."

@@ -116,16 +116,121 @@
   min-height: 16px;
 }
 
+/* ====== EXTRA (backstory + role) ====== */
+
+.mod-wizard__extra {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 2px;
+}
+
+.mod-wizard__backstory-field {
+  flex: 1;
+}
+
+.mod-wizard__backstory-field textarea {
+  width: 100%;
+  resize: none;
+  min-height: 68px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vh-text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vh-line);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 120ms;
+}
+
+.mod-wizard__backstory-field textarea:focus {
+  border-color: var(--vh-gold-soft);
+}
+
+.mod-wizard__optional {
+  font-style: normal;
+  font-size: 9px;
+  opacity: .55;
+  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+/* role group */
+
+.mod-wizard__role-group {
+  border: none;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mod-wizard__role-group legend {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  opacity: .6;
+  margin-bottom: 6px;
+}
+
+.mod-wizard__role-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mod-wizard__role-btn {
+  cursor: pointer;
+}
+
+.mod-wizard__role-btn input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mod-wizard__role-btn span {
+  display: inline-block;
+  padding: 5px 9px;
+  font-size: 11px;
+  border-radius: 8px;
+  border: 1px solid var(--vh-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--vh-text);
+  transition: background 100ms, border-color 100ms, color 100ms;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.mod-wizard__role-btn input[type="radio"]:checked + span {
+  background: rgba(255, 217, 120, 0.18);
+  border-color: var(--vh-gold-soft);
+  color: var(--vh-gold);
+}
+
+.mod-wizard__role-btn:hover span {
+  border-color: var(--vh-gold-soft);
+}
+
 /* ====== RESPONSIVO ====== */
 
 @media (max-width: 720px) {
   .mod-wizard__card {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
     padding: 16px 18px;
     border-radius: 18px 18px 0 0;
     width: 100%;
   }
   .mod-wizard__fields { flex-wrap: wrap; }
   .mod-wizard__age { flex: 0 0 80px !important; }
+  .mod-wizard__extra { flex-direction: column; }
+  .mod-wizard__role-group { width: 100%; }
 }

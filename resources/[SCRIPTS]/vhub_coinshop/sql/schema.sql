@@ -113,6 +113,21 @@ CREATE TABLE IF NOT EXISTS `vhub_coinshop_pix_tx` (
     KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Inbox de entrega Pix (FIN-001, ADR #94): idempotência de CRÉDITO por order_id.
+-- Garante que um order_id do vhub_df credite ESTE saldo no máximo uma vez, mesmo
+-- que o gateway re-chame deliverCoins (rollback approved→pending→approved ou
+-- recovery pós-crash). order_id = vhub_df_orders.id (chave lógica cross-resource,
+-- SEM FK física — evita acoplar o schema de dois resources distintos).
+CREATE TABLE IF NOT EXISTS `vhub_coinshop_delivery` (
+    `order_id`    INT UNSIGNED  NOT NULL,   -- vhub_df_orders.id (chave lógica, não FK)
+    `char_id`     INT UNSIGNED  NOT NULL,
+    `amount`      INT UNSIGNED  NOT NULL,   -- moedas creditadas por este order
+    `state`       ENUM('crediting','credited') NOT NULL DEFAULT 'crediting',
+    `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `credited_at` DATETIME      NULL DEFAULT NULL,
+    PRIMARY KEY (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- SEED — categorias padrão (veículos, itens, armas, ferramentas)
 -- ============================================================

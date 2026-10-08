@@ -5,13 +5,14 @@ lua54      'yes'
 
 name        'vhub_vrcs'
 author      'vHub Mirage'
-version     '1.0.1'
+version     '1.0.2'
 description 'VHUB Race Cinema System — gravador de telemetria autoritativa -> .vhr + fila de render (Fase 1 MVP).'
 
 -- Soft-coupling com vhub_racha: o racha EMPURRA telemetria validada via export
 -- (sob pcall do lado de la). vhub_vrcs nao depende do racha em runtime — so do driver.
 dependencies {
   'oxmysql',
+  'vhub',
   'vhub_hss',
 }
 
@@ -23,6 +24,8 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'core/server/queue.lua',    -- VRCS.Db + VRCS.Queue (escritor de vh_vrcs_jobs)
   'core/server/recorder.lua', -- VRCS.Recorder (escritor unico do .vhr + vh_race_replays)
   'server/publisher.lua',     -- VRCS.Publisher (Discord — TESTE Fase 1)

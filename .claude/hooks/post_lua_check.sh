@@ -36,6 +36,11 @@ L13_ALLOWED=0
 case "$FILE" in
   # vhub_coinshop: escritor único de 'coinshop_coins' (CData) — campo próprio, gated via trust
   *vhub_coinshop/server/coins.lua) L13_ALLOWED=1 ;;
+  # vhub_testrunner: harness de teste server-side em [TOOLS]. Exercita a API interna do
+  # State (setVData/tx) DE PROPÓSITO — é o que valida o contrato de persistência (round-trip,
+  # write-set diferido da ADR #95). Não é resource de jogo nem cria 2ª fonte de verdade; roda
+  # só em ambiente de teste (vhub_run_tests, source 0). Não distribui estado.
+  *vhub_testrunner/test_runner.lua) L13_ALLOWED=1 ;;
 esac
 if [ "$IS_CORE" -eq 0 ] && [ "$L13_ALLOWED" -eq 0 ]; then
   HITS=$(grep -nE "set(V|U|C|G)Data\s*\(" "$FILE" | grep -v "commitVehicleState" || true)

@@ -97,7 +97,7 @@ end
 local function audit_conflict(stage, meta)
     meta = type(meta) == 'table' and meta or {}
     meta.stage = stage
-    pcall(function() exports.vhub:log('warn', 'hss', 'commitCustomization diag', meta) end)
+    pcall(function() exports.vhub:log('warn', 'hss', 'cus_conflict', meta) end)
 end
 
 local function operation_replay(row, char_id, src)
@@ -224,6 +224,18 @@ local function commit_customization(src, patch, expected_revision, operation_id)
     if not clean then return { ok = false, err = 'invalid_patch' } end
     local char_id = resolve_online(src)
     if not char_id then return { ok = false, err = 'offline' } end
+
+    -- Guard do vetor 2 do FK fk_hss_char: o char pode ter sido cancelado/deletado (discardDraft)
+    -- entre a edição no SIMS e este commit. Persistir aparência de char inexistente ressuscitaria
+    -- a linha e violaria a FK. Confere a VERDADE (vh_characters, do CORE — lida, não espelhada).
+    -- Anti-mascaramento (L-17/R12): read_ok=false é falha de LEITURA, não ausência → 'storage'
+    -- (nunca engolir como sucesso). exists=false = char realmente deletado → recusa limpa, o SIMS
+    -- trata como criação cancelada. Só prossegue se o char comprovadamente existe.
+    -- Comparação explícita com true: ausência do char é um resultado válido, distinto de falha SQL.
+    local exists_ok, exists = await_sql(function(cb) SQL.character_exists(char_id, cb) end)
+    if not exists_ok then return { ok = false, err = 'storage' } end
+    if exists ~= true then return { ok = false, err = 'char_gone' } end
+
     local payload_json = stable_encode({ patch = clean, expected_revision = expected_revision })
 
     local read_ok, existing = await_sql(function(cb)
@@ -237,25 +249,39 @@ local function commit_customization(src, patch, expected_revision, operation_id)
     -- de aparência. Durante o await do SQL acima, um flush pode marcar in_flight e fazer a reserva
     -- abaixo falhar com 'conflict' espúrio. Serializa: aguarda janela limpa e RESERVA na mesma
     -- continuação síncrona (sem yield entre await_customization_idle e prepare_customization).
+    -- Três estados distintos por tentativa no loop CAS:
+    --  • snapshot == nil     → entry em (re)instalação pelo replay characterLoad/playerSpawn.
+    --                          TRANSITÓRIO: reespera dentro do budget. Colapsar em 'conflict' aqui
+    --                          era a raiz do "aparência mudou em outra sessão" no 1º commit de char
+    --                          recém-criado pós-wipe (a entry ainda não materializou no cache VRAM).
+    --  • revision divergente → CONFLITO TERMINAL real: retorna imediato, sem reespera.
+    --  • prepare 'busy'      → flush/lock em voo: retenta preservando a MESMA revisão CAS.
+    -- Autoridade atômica final é sempre State.prepare_customization (recheca a revisão na fonte viva,
+    -- na mesma continuação síncrona); o snapshot aqui é advisório. Esgotar as tentativas → 'busy'
+    -- (transitório: o SIMS reespera e a saga é recuperável), nunca sai do loop sem retorno definido.
     local prepared, prepare_error, after
     for attempt = 1, 4 do
         State.await_customization_idle(char_id)
 
         local snapshot = State.customization_snapshot(char_id)
-        if not snapshot or snapshot.revision ~= expected_revision then
+        if not snapshot then
+            audit_conflict('snapshot_absent', { expected = expected_revision, attempt = attempt })
+            Citizen.Wait(50)
+        elseif snapshot.revision ~= expected_revision then
             audit_conflict('revision_mismatch', { expected = expected_revision,
-                in_memory = snapshot and snapshot.revision or nil, attempt = attempt })
-            return { ok = false, err = 'conflict' }
-        end
-        local ped = GetPlayerPed(src)
-        if not ped or ped == 0 or not DoesEntityExist(ped) then return { ok = false, err = 'native' } end
+                in_memory = snapshot.revision, attempt = attempt })
+            return { ok = false, err = 'conflict', reason = 'revision_mismatch' }
+        else
+            local ped = GetPlayerPed(src)
+            if not ped or ped == 0 or not DoesEntityExist(ped) then return { ok = false, err = 'native' } end
 
-        after = VHubHSS.Appearance.merge(snapshot.customization, clean)
-        prepared, prepare_error = State.prepare_customization(char_id, after, expected_revision)
-        if prepared then break end
-        if prepare_error ~= 'busy' then
-            audit_conflict('prepare_failed', { err = prepare_error, attempt = attempt })
-            return { ok = false, err = prepare_error or 'conflict' }
+            after = VHubHSS.Appearance.merge(snapshot.customization, clean)
+            prepared, prepare_error = State.prepare_customization(char_id, after, expected_revision)
+            if prepared then break end
+            if prepare_error ~= 'busy' then
+                audit_conflict('prepare_failed', { err = prepare_error, attempt = attempt })
+                return { ok = false, err = prepare_error or 'conflict' }
+            end
         end
     end
     if not prepared then
@@ -274,7 +300,7 @@ local function commit_customization(src, patch, expected_revision, operation_id)
         audit_conflict('commit_no_row', { after_revision = prepared.after_revision,
             before_revision = prepared.before_revision })
         State.abort_customization(prepared)
-        return { ok = false, err = 'conflict' }
+        return { ok = false, err = 'conflict', reason = 'commit_no_row' }
     end
     if tonumber(row.digest_ok) ~= 1
         or tonumber(row.char_id) ~= char_id
@@ -288,7 +314,7 @@ local function commit_customization(src, patch, expected_revision, operation_id)
             expected_after = prepared.after_revision,
         })
         State.abort_customization(prepared)
-        return { ok = false, err = 'conflict' }
+        return { ok = false, err = 'conflict', reason = 'commit_row_mismatch' }
     end
     if not State.confirm_customization(prepared) then
         return { ok = false, err = GetPlayerName(src) and 'storage' or 'offline' }

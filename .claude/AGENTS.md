@@ -6,7 +6,9 @@
 
 ```
 CLAUDE.md                      ← leis L-01..L-19, Registro de Ownership, Orçamentos, FASE ATUAL (descongelamento)
-.claude/contexto.md            ← SOMENTE índice + seções citadas pela tarefa (cap 20 KB)
+vhub-rag.consultar_projeto      ← evidências citadas; manutenção/CLI em CLAUDE.md → RAG obrigatório
+.claude/contexto.md            ← SOMENTE índice + seções citadas pela tarefa (não reler inteiro)
+.claude/skills/INDEX.md        ← índice de skills — abrir só o skill pertinente à tarefa
 .claude/skills/*.md            ← padrões já validados — aplicar, não reinventar
 arquivos reais tocados         ← código > qualquer documento
 plano_core_v2/frozen_core_2.md ← só quando a tarefa toca CORE/veículos (roteiro FASE 0→8, regras R1..R15)
@@ -19,13 +21,25 @@ Hierarquia de verdade: **1) código/manifests atuais → 2) CLAUDE.md → 3) con
 ## Fluxo multi-agente
 
 ```
+0. vhub-rag — ANTES de grep extensivo; seguir CLAUDE.md → RAG obrigatório:
+     consultar_projeto(consulta, recurso?) → fontes atuais com arquivo/linha
+     status_base()                        → defasagem; reindexação explícita pela CLI
+   repowise — complemento de grafo SOMENTE quando disponível:
+     get_overview()                        → sessão nova / repo desconhecido
+     get_context(arquivos_tocados)         → callers + callees + decisões + hotspot
+     get_why(dúvida_arquitetural)          → ADR + evidência antes de reprovar
+     get_risk(targets)                     → impacto e dependentes
+     get_change_risk("HEAD")               → score do commit (gate revisao)
+     get_dead_code()                       → código morto por tier (gate simplicidade)
+     get_health(targets)                   → saúde e trends (gate performance)
 1. contexto.md (índice) + mapear arquivos tocados
 2. vhub_arquiteto → ownership, placement, fase (linha no Registro se dado novo)
 3. Guardiões PERTINENTES em PARALELO (matriz de invocação no CLAUDE.md):
    persistencia | contrato | seguranca | natives | performance |
    simplicidade | designer | runtime
 4. Worker executa SOMENTE com forma aprovada
-5. vhub_guardiao_revisao → gate final + (se durável) atualiza contexto.md
+5. vhub_guardiao_revisao → gate final + severidade (P0–P3) + (se durável) atualiza contexto.md
+6. vhub_skills → se o ciclo validou/tocou um padrão reutilizável: cria/atualiza/poda skill + INDEX.md
 ```
 
 ## Gestão de sessão — `/clear` vs `/compact` (julgamento obrigatório, não automático)
@@ -82,7 +96,7 @@ LEIS: <leis tocadas, ex.: L-13, L-16; ou —>
 MEMÓRIA_RECOMENDADA: <opcional — só fato durável novo>
 ```
 
-Campos extras por agente (quando o frontmatter do agente exigir): `CAMADA/OWNERSHIP/PLACEMENT/FASE` (arquiteto); `RISCOS_RESIDUAIS/TESTES_FALTANTES/MEMÓRIA_ATUALIZADA` (revisão); `VETOR/CONTENÇÃO` (segurança).
+Campos extras por agente (quando o frontmatter do agente exigir): `CAMADA/OWNERSHIP/PLACEMENT/FASE` (arquiteto); `SEVERIDADE_MÁX/RISCOS_RESIDUAIS/TESTES_FALTANTES/CONTEXTO_ATUALIZADO/MEMÓRIA_ATUALIZADA` (revisão — severidade P0–P3, ver `.claude/GUARDIAO_VHUB.md`); `VETOR/CONTENÇÃO` (segurança); `SKILL/JUSTIFICATIVA/ÍNDICE_ATUALIZADO` (skills).
 
 ## Regras anti-alucinação (globais)
 
@@ -118,11 +132,12 @@ Cada guardião, no seu domínio, procura PRIMEIRO os padrões que já furaram es
 | `vhub_guardiao_simplicidade` | Anti-inflação; L-15 código morto; ownership único |
 | `vhub_guardiao_designer` / `vhub_designer` | NUI/CEF/identidade visual |
 | `vhub_guardiao_runtime` | Engine NUI, lifecycle A-01..A-08 |
-| `vhub_guardiao_revisao` | Gate final; único escritor de `contexto.md` |
+| `vhub_guardiao_revisao` | Gate final; severidade P0–P3; único escritor de `contexto.md` |
+| `vhub_skills` | Fábrica de skills: captura padrão validado, poda skill morto (L-15), mantém `INDEX.md` |
 
 ## Memória institucional
 
-- Escritor único: `vhub_guardiao_revisao`. Cap 20 KB; estrutura fixa (ver CLAUDE.md → Política de Memória); excedente → `.claude/contexto_arquivo/AAAA-MM.md`.
+- Escritor único: `vhub_guardiao_revisao` (o `settings.json` dá `deny` a todos; ele é a exceção operacional, destravada pelo dono no ato). **Sem cap de tamanho** (autonomia do dono: `contexto.md` é o 2º cérebro COMPLETO; deduplicar stale/contraditório é correção, encolher por tamanho não); excedente histórico → `.claude/contexto_arquivo/AAAA-MM.md`.
 - Registrar apenas: ownership, contrato, risco ativo, decisão congelada, fluxo validado, lacuna real.
 - Nunca: secrets, logs brutos, stacktrace, especulação.
 

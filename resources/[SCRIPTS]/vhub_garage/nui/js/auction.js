@@ -1,96 +1,67 @@
-// nui/js/auction.js — view "Leilões" (tema vHub)
 (() => {
   const App = window.vhubApp;
-  const $list = document.getElementById('a-list');
-  const $new  = document.getElementById('a-new');
-
-  let snapshot = null;
-  let timerId  = null;
+  const list = document.getElementById('a-list');
+  const create = document.getElementById('a-new');
+  let snapshot = {};
+  let timer = null;
 
   function renderList() {
-    $list.innerHTML = '';
-    const items = snapshot?.auctions || [];
-    if (!items.length) {
-      $list.innerHTML = `<div style="grid-column:1/-1; padding:60px 0; text-align:center; color:var(--vh-text-dim2);">
-        <i class="fa-solid fa-gavel" style="font-size:48px; display:block; margin-bottom:8px; color:rgba(243,181,58,0.25);"></i>
-        Nenhum leilão ativo no momento.
-      </div>`;
-      return;
+    App.clear(list);
+    const auctions = Array.isArray(snapshot.auctions) ? snapshot.auctions : [];
+    if (!auctions.length) return App.empty(list, 'gavel', 'Nenhum leilao ativo.');
+    for (const auction of auctions) {
+      const card = App.el('div', 'card auc-card');
+      const left = App.el('div', 'left');
+      left.append(App.vehicleVisual(auction.vtype), App.el('h4', '', auction.nome || auction.model || 'Veiculo'));
+      const meta = App.el('div', 'meta');
+      meta.append(App.el('span', '', `Placa: ${auction.plate || '—'}`), App.el('span', '', auction.vtype || '—'));
+      left.append(meta, App.infoLine('Referencia', App.fmtMoney(auction.preco_ref)),
+        App.infoLine('Lance minimo', App.fmtMoney(auction.min_bid)));
+      if (auction.buyout) left.append(App.infoLine('Compra direta', App.fmtMoney(auction.buyout)));
+
+      const current = Number(auction.current_bid || auction.min_bid) || 0;
+      const increment = Math.max(1, Math.floor(current * (1 + (Number(snapshot.cfg?.increment) || 0.05))));
+      const right = App.el('div', 'right');
+      const countdown = App.el('div', 'timer', App.fmtDur(Number(auction.ends_at) - Math.floor(Date.now() / 1000)));
+      countdown.dataset.ends = String(Number(auction.ends_at) || 0);
+      const row = App.el('div', 'row');
+      const input = App.el('input');
+      input.type = 'number'; input.min = String(increment); input.value = String(increment);
+      const bid = App.button('Dar Lance', 'primary', 'gavel');
+      bid.onclick = () => App.post('auctionBid', { id:Number(auction.id), amount:Number(input.value) });
+      row.append(input, bid);
+      right.append(App.el('div', 'lance', App.fmtMoney(current)), countdown, row);
+      card.append(left, right);
+      list.append(card);
     }
-    items.forEach((a) => {
-      const c = document.createElement('div');
-      c.className = 'card auc-card';
-      const lance = a.current_bid || a.min_bid;
-      const incr  = Math.floor(lance * (1 + (snapshot.cfg?.increment || 0.05)));
-      c.innerHTML = `
-        <div class="left">
-          <div class="thumb" style="aspect-ratio:21/9;">
-            <i class="fa-solid fa-car"></i>
-            <img onerror="this.style.display='none'" src="${App.imgFor(a.model) || ''}">
-          </div>
-          <h4 style="margin-top:8px;">${a.nome || a.model}</h4>
-          <div class="meta">
-            <span>Placa: ${a.plate}</span>
-            <span>${a.vtype}</span>
-          </div>
-          <div class="info-line"><span class="k">Referência</span><span class="v">${App.fmtMoney(a.preco_ref)}</span></div>
-          <div class="info-line"><span class="k">Lance mínimo</span><span class="v">${App.fmtMoney(a.min_bid)}</span></div>
-          ${a.buyout ? `<div class="info-line"><span class="k">Compra direta</span><span class="v">${App.fmtMoney(a.buyout)}</span></div>` : ''}
-        </div>
-        <div class="right">
-          <div class="lance">${App.fmtMoney(lance)}</div>
-          <div class="timer" data-ends="${a.ends_at}">${App.fmtDur(a.ends_at - Math.floor(Date.now()/1000))}</div>
-          <div class="row">
-            <input type="number" min="${incr}" value="${incr}" data-bid="${a.id}">
-            <button class="btn primary" data-act="bid" data-id="${a.id}"><i class="fa-solid fa-gavel"></i> Dar Lance</button>
-          </div>
-        </div>`;
-      $list.appendChild(c);
-    });
-    $list.querySelectorAll('[data-act="bid"]').forEach((btn) => {
-      btn.onclick = () => {
-        const id = +btn.dataset.id;
-        const input = $list.querySelector(`input[data-bid="${id}"]`);
-        const amount = +input.value;
-        App.post('auctionBid', { id, amount });
-      };
-    });
     startTimer();
   }
 
   function startTimer() {
-    if (timerId) clearInterval(timerId);
-    timerId = setInterval(() => {
+    clearInterval(timer);
+    timer = setInterval(() => {
       const now = Math.floor(Date.now() / 1000);
-      $list.querySelectorAll('.timer').forEach((t) => {
-        const ends = +t.dataset.ends;
-        t.textContent = App.fmtDur(ends - now);
-        if (ends - now <= 0) t.style.color = 'var(--vh-danger)';
+      list.querySelectorAll('.timer').forEach((node) => {
+        const remaining = Number(node.dataset.ends) - now;
+        node.textContent = App.fmtDur(remaining);
+        node.classList.toggle('danger-text', remaining <= 0);
       });
     }, 1000);
   }
 
-  $new.onclick = async () => {
-    const r = await App.modal({
-      title: 'Criar Leilão',
-      html: `<label>Placa do seu veículo</label><input data-field="plate" maxlength="8">
-             <label>Lance mínimo (R$)</label><input data-field="min_bid" type="number" min="1">
-             <label>Compra direta (R$) — opcional</label><input data-field="buyout" type="number" min="0">
-             <label>Duração (minutos)</label><input data-field="dur_min" type="number" value="60" min="5" max="1440">
-             <p>Taxa de listagem não-reembolsável: ${App.fmtMoney(snapshot?.cfg?.fee || 100)}</p>`,
-      okText: 'Criar Leilão',
+  create.onclick = async () => {
+    const result = await App.modal({ title:'Criar Leilao',
+      text:`Taxa nao reembolsavel: ${App.fmtMoney(snapshot.cfg?.fee || 100)}.`,
+      fields:[
+        { label:'Placa do veiculo', name:'plate', maxLength:8 },
+        { label:'Lance minimo (R$)', name:'min_bid', type:'number', min:1 },
+        { label:'Compra direta (R$) — opcional', name:'buyout', type:'number', min:0 },
+        { label:'Duracao (minutos)', name:'dur_min', type:'number', value:60, min:5, max:1440 },
+      ], okText:'Criar Leilao' });
+    if (result.ok) App.post('auctionNew', {
+      plate:String(result.fields.plate || '').toUpperCase(), min_bid:+result.fields.min_bid,
+      buyout:+result.fields.buyout || null, dur_min:+result.fields.dur_min,
     });
-    if (r.ok) {
-      App.post('auctionNew', {
-        plate: (r.fields.plate || '').toUpperCase(),
-        min_bid: +r.fields.min_bid,
-        buyout:  +(r.fields.buyout || 0) || null,
-        dur_min: +r.fields.dur_min,
-      });
-    }
   };
-
-  App.views.auction = {
-    render(data) { snapshot = data || {}; renderList(); },
-  };
+  App.views.auction = { render(data) { snapshot = data || {}; renderList(); } };
 })();

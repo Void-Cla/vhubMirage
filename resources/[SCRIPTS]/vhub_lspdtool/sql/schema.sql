@@ -53,8 +53,9 @@ CREATE TABLE IF NOT EXISTS `vhub_lspd_bolos` (
 
 CREATE TABLE IF NOT EXISTS `vhub_lspd_accounts` (
   `char_id`     INT UNSIGNED  NOT NULL,
-  `pass_hash`   CHAR(64)      NOT NULL,
+  `pass_hash`   VARCHAR(255) NOT NULL,
   `salt`        CHAR(32)      NOT NULL,
+  `hash_version` SMALLINT UNSIGNED NOT NULL DEFAULT 2,
   `must_change` TINYINT(1)    NOT NULL DEFAULT 1,
   `created_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

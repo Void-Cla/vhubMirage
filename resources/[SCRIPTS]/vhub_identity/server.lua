@@ -14,17 +14,15 @@ end
 local function apply_schema()
     local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
     if type(schema) ~= 'string' or schema == '' then return false end
-    local ok = pcall(function()
-        for statement in schema:gmatch('([^;]+);') do
-            if statement:match('%S') then MySQL.query.await(statement, {}) end
-        end
+    local ok = VHubSQLScript.aplicar(schema, function(statement)
+        MySQL.query.await(statement, {})
     end)
     return ok
 end
 
 local function get_identity(char_id)
     return MySQL.single.await([[
-        SELECT `firstname`, `lastname`, `age`, `registration`, `phone`
+        SELECT `firstname`, `lastname`, `age`, `registration`, `phone`, `role`, `backstory`
           FROM `vh_identity` WHERE `char_id` = ? LIMIT 1
     ]], { char_id })
 end
@@ -32,11 +30,13 @@ end
 local function copy_identity(identity)
     if type(identity) ~= 'table' then return nil end
     return {
-        firstname = identity.firstname,
-        lastname = identity.lastname,
-        age = tonumber(identity.age),
+        firstname    = identity.firstname,
+        lastname     = identity.lastname,
+        age          = tonumber(identity.age),
         registration = identity.registration,
-        phone = identity.phone,
+        phone        = identity.phone,
+        role         = type(identity.role) == 'string' and identity.role or nil,
+        backstory    = type(identity.backstory) == 'string' and identity.backstory or nil,
     }
 end
 
@@ -71,10 +71,18 @@ local function sanitize_name(value)
     return trimmed
 end
 
+local VALID_ROLES = {
+    legal = true, ilegal = true, mecanica = true,
+    hospital = true, policia = true, livre = true,
+}
+
 local function sanitize_identity(data)
     if type(data) ~= 'table' then return nil end
     for key in pairs(data) do
-        if key ~= 'firstname' and key ~= 'lastname' and key ~= 'age' then return nil end
+        if key ~= 'firstname' and key ~= 'lastname' and key ~= 'age'
+            and key ~= 'role' and key ~= 'backstory' then
+            return nil
+        end
     end
     local firstname = sanitize_name(data.firstname)
     local lastname = sanitize_name(data.lastname)
@@ -82,7 +90,15 @@ local function sanitize_identity(data)
     if not firstname or not lastname or not age or age % 1 ~= 0 or age < 16 or age > 120 then
         return nil
     end
-    return { firstname = firstname, lastname = lastname, age = math.floor(age) }
+    local role = type(data.role) == 'string' and data.role or nil
+    if role and not VALID_ROLES[role] then return nil end
+    local backstory = nil
+    if type(data.backstory) == 'string' then
+        backstory = data.backstory:match('^%s*(.-)%s*$'):sub(1, 1000)
+        if backstory == '' then backstory = nil end
+    end
+    return { firstname = firstname, lastname = lastname, age = math.floor(age),
+             role = role, backstory = backstory }
 end
 
 local function valid_operation_id(value)
@@ -213,7 +229,9 @@ exports('setIdentity', function(src, data, operation_id)
             and current_identity.lastname == replay_identity.lastname
             and current_identity.age == replay_identity.age
             and current_identity.registration == replay_identity.registration
-            and current_identity.phone == replay_identity.phone then
+            and current_identity.phone == replay_identity.phone
+            and current_identity.role == replay_identity.role
+            and current_identity.backstory == replay_identity.backstory then
             TriggerClientEvent('vhub_identity:load', src, current_identity)
         end
         return { ok = true, identity = replay_identity, replayed = true }
@@ -224,8 +242,8 @@ exports('setIdentity', function(src, data, operation_id)
             {
                 query = [[
                     INSERT IGNORE INTO `vh_identity`
-                      (`char_id`, `firstname`, `lastname`, `age`, `registration`, `phone`)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                      (`char_id`, `firstname`, `lastname`, `age`, `registration`, `phone`, `role`, `backstory`)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ]],
                 values = {
                     char_id,
@@ -234,6 +252,8 @@ exports('setIdentity', function(src, data, operation_id)
                     clean.age,
                     registration,
                     phone,
+                    clean.role,
+                    clean.backstory,
                 },
             },
             {
@@ -253,7 +273,8 @@ exports('setIdentity', function(src, data, operation_id)
                      AND o.`char_id` = i.`char_id`
                      AND o.`digest` = SHA2(?, 256)
                      AND o.`state` = 'pending'
-                       SET i.`firstname` = ?, i.`lastname` = ?, i.`age` = ?
+                       SET i.`firstname` = ?, i.`lastname` = ?, i.`age` = ?,
+                           i.`role` = ?, i.`backstory` = ?
                      WHERE i.`char_id` = ?
                 ]],
                 values = {
@@ -262,6 +283,8 @@ exports('setIdentity', function(src, data, operation_id)
                     clean.firstname,
                     clean.lastname,
                     clean.age,
+                    clean.role,
+                    clean.backstory,
                     char_id,
                 },
             },
@@ -271,7 +294,8 @@ exports('setIdentity', function(src, data, operation_id)
                     JOIN `vh_identity` i ON i.`char_id` = o.`char_id`
                        SET o.`result_identity` = JSON_OBJECT(
                              'firstname', i.`firstname`, 'lastname', i.`lastname`, 'age', i.`age`,
-                             'registration', i.`registration`, 'phone', i.`phone`
+                             'registration', i.`registration`, 'phone', i.`phone`,
+                             'role', i.`role`, 'backstory', i.`backstory`
                            ),
                            o.`state` = 'committed'
                      WHERE o.`operation_id` = ?

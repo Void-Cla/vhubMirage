@@ -14,9 +14,13 @@ WOW_Provider_InnerTube = {}
 -- CONSTANTES (contexto de cliente exigido pelo InnerTube)
 -- ============================================================
 
--- chave publica do InnerTube (nao e segredo — vai embutida no proprio site do YouTube).
-local INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
-local SEARCH_ENDPOINT = 'https://www.youtube.com/youtubei/v1/search?key=' .. INNERTUBE_KEY
+-- A chave do cliente, quando exigida pelo endpoint, fica somente em convar server-only.
+-- O provider continua funcional sem chave; nenhum literal de credencial fica no repositório.
+local INNERTUBE_KEY = GetConvar('wow_innertube_key', '')
+local SEARCH_ENDPOINT = 'https://www.youtube.com/youtubei/v1/search'
+if INNERTUBE_KEY ~= '' then
+  SEARCH_ENDPOINT = SEARCH_ENDPOINT .. '?key=' .. INNERTUBE_KEY
+end
 local MAX_BODY = 4 * 1024 * 1024   -- teto de resposta (anti-payload gigante); 4 MB
 
 -- corpo base da requisicao: identifica um cliente WEB valido para o InnerTube

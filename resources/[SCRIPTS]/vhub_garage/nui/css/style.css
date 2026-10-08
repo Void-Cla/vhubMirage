@@ -219,6 +219,15 @@ html, body {
   font-family: var(--g-font-title); text-transform: uppercase; letter-spacing: 1px;
 }
 .vhub-detail .empty i { font-size: 64px; margin-bottom: 10px; display: block; color: rgba(243,181,58,0.25); }
+.empty-state {
+  grid-column: 1 / -1; display: grid; place-items: center; gap: 10px;
+  min-height: 160px; color: var(--g-text-dim2); text-align: center;
+  font-family: var(--g-font-title); text-transform: uppercase; letter-spacing: 1px;
+}
+.empty-state i { font-size: 48px; color: rgba(243,181,58,0.25); }
+.vhub-detail .empty-state { flex: 1; }
+.ok-text { color: var(--g-ok); }
+.danger-text { color: var(--g-danger); }
 .vhub-detail .head { display: flex; align-items: center; justify-content: space-between; }
 .vhub-detail .head h2 {
   font-family: var(--g-font-title); margin: 0; font-size: 26px;

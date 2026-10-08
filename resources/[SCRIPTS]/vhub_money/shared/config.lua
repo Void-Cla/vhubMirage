@@ -59,6 +59,7 @@ VHubMoneyCfg = {
     BY_REGISTRATION   = true,
     BY_PHONE          = true,
   },
+  GIVE_RADIUS = 3.0,
 
   -- ─── Auditoria ──────────────────────────────────────────────────────────
   AUDIT = {
@@ -87,6 +88,7 @@ VHubMoneyCfg = {
     ['vhub_garage']  = true,
     ['vhub_ferinha'] = true,   -- leilao: payout/refund offline por char_id (giveBankChar)
     ['vhub_custom']  = true,   -- oficina: estorno do kit nitro (giveBank) se installKit falhar (#29)
+    ['vhub_inventory'] = true, -- lojas genéricas: compra idempotente + estorno de entrega
     ['vhub_legacyfuel'] = true, -- compensação de pagamento quando o commit de fuel falha
   },
 

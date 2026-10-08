@@ -65,6 +65,16 @@ local function authorizeService(src, domain, zoneId, plate, netId)
     }
   end
 
+  local materiais
+  if domain == 'mec' then
+    materiais = {}
+    local porReparo = { tyre = 'kit_pneus', engine = 'kit_chave_nivel_1', body = 'martelinho_ouro' }
+    for reparo, item in pairs(porReparo) do
+      local ok, possui = pcall(function() return exports.vhub_inventory:hasItem(src, item, 1) end)
+      materiais[reparo] = ok and possui == true
+    end
+  end
+
   local lease = Core.issueLease(context)
   local meta = Core.vehicleMeta(context.vehicle)
   return true, nil, {
@@ -78,6 +88,7 @@ local function authorizeService(src, domain, zoneId, plate, netId)
     installed_parts = installedParts,
     parts_status = partsStatus,   -- ADR #85 D1: estados honestos por peça (juízo único server-side)
     saved = saved,
+    materiais = materiais,
   }
 end
 

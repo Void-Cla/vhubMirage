@@ -28,6 +28,15 @@ call :validar_recurso_core oxmysql      || exit /b 1
 call :validar_recurso_core vhub_oxmysql || exit /b 1
 call :validar_recurso_core vhub         || exit /b 1
 
+:: Banco indisponivel = servidor nao sobe em modo volatil.
+:: Baseline atual de config/database.cfg: 127.0.0.1:3306.
+set "DB_READY="
+for /f %%R in ('powershell -NoProfile -Command "if (Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue) { 'OK' }"') do set "DB_READY=%%R"
+if /I not "%DB_READY%"=="OK" (
+  echo [ERRO] MariaDB indisponivel em 127.0.0.1:3306. FXServer nao sera iniciado.
+  exit /b 1
+)
+
 :: ── [2] Porta 30120 ───────────────────────────────────────────────────────────
 
 set "PORTPID="
@@ -55,22 +64,20 @@ if defined NPCAI_PID (
   echo [npcai] Sidecar autorizado ja ativo na porta 7513 ^(PID %NPCAI_PID%^).
 ) else (
   if exist "%NPCAI_DIR%\start_npcai.bat" (
-    echo [npcai] Iniciando sidecar de IA ^(porta 7513, carrega Whisper ~10s^)...
+    echo [npcai] Iniciando sidecar de IA ^(porta 7513, carrega faster-whisper 'small' ~10-15s^)...
     start "vHub NPCAI Sidecar" /min /D "%NPCAI_DIR%" cmd /c start_npcai.bat
-    call :aguardar_sidecar 300
+    call :aguardar_sidecar 30
     if errorlevel 1 (
-      echo [ERRO] Sidecar NPCAI nao ficou pronto em 300 segundos.
-      exit /b 1
+      echo [AVISO] Sidecar NPCAI ainda nao respondeu. FXServer iniciara; o recurso de IA tentara reconectar.
     )
   ) else (
-    echo [ERRO] start_npcai.bat ausente.
-    exit /b 1
+    echo [AVISO] start_npcai.bat ausente. FXServer iniciara sem IA.
   )
 )
 
 :: ── [4] FXServer ──────────────────────────────────────────────────────────────
 
-start "FXSERVER" /min /D "%BASE_DIR%" ".\build\FXServer.exe" +exec "%SERVER_CFG%"
+start "FXSERVER" /D "%BASE_DIR%" ".\build\FXServer.exe" +exec "%SERVER_CFG%"
 exit /b 0
 
 :: aguarda o sidecar autenticado responder /health

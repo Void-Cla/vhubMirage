@@ -12,10 +12,13 @@ window.vhubSims = window.vhubSims || {};
       submitHandler = (event) => {
         event.preventDefault();
         const data = new FormData(form);
+        const backstoryRaw = String(data.get('backstory') || '').trim().slice(0, 1000);
         const identity = {
           firstname: String(data.get('firstname') || ''),
           lastname: String(data.get('lastname') || ''),
           age: Number(data.get('age')),
+          role: String(data.get('role') || 'livre'),
+          backstory: backstoryRaw.length > 0 ? backstoryRaw : undefined,
         };
         vhubSims.store.set({ busy: true });
         vhubSims.wizardService.submit(identity);

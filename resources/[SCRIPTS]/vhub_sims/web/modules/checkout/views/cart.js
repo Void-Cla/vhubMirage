@@ -5,6 +5,26 @@ window.vhubSims = window.vhubSims || {};
 (() => {
   let root = null;
   let clickHandler = null;
+  let resultTimer = null;
+
+  // Janela máxima de espera pelo resultado do servidor. Se estourar, reabilita o botão e mostra
+  // erro recuperável — SEM re-disparar sozinho (evita multiplicar checkout sagas órfãs no servidor).
+  const RESULT_TIMEOUT_MS = 15000;
+
+  // Habilita/desabilita o botão "Pagar" — a barreira client contra double-click que gerava várias
+  // checkout sagas 'prepared' para o mesmo char. A verdade continua server-side (rate + idempotência).
+  function setConfirmBusy(busy) {
+    if (!root) return;
+    const button = root.querySelector('[data-action="confirm"]');
+    if (button) {
+      button.disabled = busy;
+      button.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+  }
+
+  function clearResultTimer() {
+    if (resultTimer) { clearTimeout(resultTimer); resultTimer = null; }
+  }
 
   function estimate(state) {
     const patch = state.patch || {};
@@ -65,7 +85,22 @@ window.vhubSims = window.vhubSims || {};
         if (!button) return;
         if (button.dataset.action === 'back') vhub.router.close();
         if (button.dataset.action === 'confirm') {
+          // Guarda de reentrada: se já há um checkout em voo (busy), ignora o clique. Sem isto, cada
+          // clique repetido dispara outro SRV_CHECKOUT e, se o patch mudou, cria nova saga órfã.
+          if (vhubSims.store.get().busy) return;
           vhubSims.store.set({ busy: true });
+          setConfirmBusy(true);
+          clearResultTimer();
+          resultTimer = setTimeout(() => {
+            resultTimer = null;
+            vhubSims.store.set({ busy: false });
+            setConfirmBusy(false);
+            const status = root && root.querySelector('[data-checkout-status]');
+            if (status) {
+              status.dataset.kind = 'error';
+              status.textContent = 'Sem resposta do servidor. Tente novamente.';
+            }
+          }, RESULT_TIMEOUT_MS);
           vhubSims.checkoutService.confirm();
         }
       };
@@ -73,6 +108,10 @@ window.vhubSims = window.vhubSims || {};
       render();
     },
     result(result) {
+      // Todo resultado (ok ou erro) encerra a espera e reabilita o botão. Só o sucesso fecha a NUI
+      // por outro caminho; em erro o jogador pode tentar de novo com o botão de volta ativo.
+      clearResultTimer();
+      setConfirmBusy(false);
       if (!root || !result || result.ok) return;
       const status = root.querySelector('[data-checkout-status]');
       const errors = {
@@ -84,6 +123,7 @@ window.vhubSims = window.vhubSims || {};
       status.textContent = errors[result.err] || 'Não foi possível concluir.';
     },
     destroy() {
+      clearResultTimer();
       if (root && clickHandler) root.removeEventListener('click', clickHandler);
       root = null;
       clickHandler = null;

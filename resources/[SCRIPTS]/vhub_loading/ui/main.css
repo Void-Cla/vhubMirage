@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&display=swap');
 
 .galleryBig {
 	width: 100vw;
@@ -10,7 +9,6 @@
 	background: rgba(0, 0, 0, 0.034);
 	display: none;
 }
-
 .galleryBig img {
 	position: absolute;
 	top: 50%;
@@ -19,7 +17,6 @@
 	max-width: 60vw;
 	max-height: 60vh;
 }
-
 * {
 	margin: 0;
 	padding: 0;
@@ -1086,4 +1083,4 @@ body {
 		radial-gradient(96.55% 96.5% at 97.97% 1.25%, rgba(204, 131, 10, 0.2) 0%, rgba(0, 0, 0, 0) 100%),
 		radial-gradient(50% 50% at 50% 50%, rgba(12, 16, 23, 0.8) 0%, rgba(0, 0, 0, 0.7) 0.01%, rgba(0, 0, 0, 0.88) 100%);
 }
-	
+

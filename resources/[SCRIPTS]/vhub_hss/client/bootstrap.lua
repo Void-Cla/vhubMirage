@@ -13,6 +13,10 @@ local start_runtime = nil
 -- Sem este gate, STATE_INIT com blood=0 (char novo) dispara DeathFailOut antes do
 -- mundo aparecer, resultando em tela preta permanente.
 local _effects_active = false
+-- Supressão da NUI fisiológica pelo gate de entrada (vhub_login). Espelha o supressor de HUD
+-- nativo: enquanto o player está no login/seleção/criação, as barras (vida/fome/sede/colete) não
+-- aparecem, mesmo com o char já carregado (STATE_INIT chega antes do spawn real no mundo).
+local _hud_suppressed = false
 
 local SERVER_FIELDS = {
     'food', 'water', 'energy', 'blood', 'bleeding', 'pain',
@@ -30,9 +34,27 @@ RegisterNetEvent(VHubHSS.E.STATE_INIT, function(snapshot)
     local start = not _ready
     _ready = true
 
-    SendNUIMessage({ type = 'hss:update', data = snapshot })
+    -- Sob o gate de entrada, o estado é armazenado mas NÃO revelado: as barras aparecem só quando
+    -- o supressor cai (HUD_GATE false = spawn real no mundo). Fora do gate, revela normalmente.
+    if _hud_suppressed then
+        SendNUIMessage({ type = 'hss:hide' })
+    else
+        SendNUIMessage({ type = 'hss:update', data = snapshot })
+    end
     for _, field in ipairs(SERVER_FIELDS) do _nui_previous[field] = snapshot[field] end
     if start and start_runtime then start_runtime() end
+end)
+
+-- Espelha o supressor de HUD do gate de entrada: esconde/mostra a NUI fisiológica SEM desligar o
+-- runtime (o estado continua chegando; só a apresentação é suprimida). Revela com o estado atual
+-- quando o gate libera (spawn real). Reforça o fim do vazamento vida/fome/sede/colete na entrada.
+AddEventHandler(VHubHSS.E.HUD_GATE, function(on)
+    _hud_suppressed = on == true
+    if _hud_suppressed then
+        SendNUIMessage({ type = 'hss:hide' })
+    elseif _ready then
+        SendNUIMessage({ type = 'hss:update', data = _state })
+    end
 end)
 
 -- Libera efeitos visuais (morte/dano) apenas após o ped sair do hold.
@@ -170,7 +192,7 @@ start_runtime = function()
             if tick % 8 == 0 then RestorePlayerStamina(player_id, 0.0099) end
             sync_control_lock()
             if _effects_active and VHubHSS_UpdateEffects then VHubHSS_UpdateEffects(_state) end
-            if dirty then SendNUIMessage({ type = 'hss:update', data = delta }) end
+            if dirty and not _hud_suppressed then SendNUIMessage({ type = 'hss:update', data = delta }) end
             ::continue::
         end
     end)

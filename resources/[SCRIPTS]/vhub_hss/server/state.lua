@@ -564,18 +564,20 @@ function State.register(src, char_id, legacy, on_loaded)
             return
         end
 
+        -- Outbox SEM linha SQL correspondente = órfão por construção. No fluxo normal a linha
+        -- canônica é criada por insert_if_absent ANTES de qualquer save (que é quem escreve o
+        -- outbox), então crash-recovery legítimo SEMPRE coexiste com a linha (tratado abaixo em
+        -- outbox.revision > row_revision). "not row and outbox" só ocorre quando a linha foi
+        -- apagada (wipe SQL) e o KVP sobreviveu — reinstalar aqui era a raiz do "aparência de
+        -- char anterior vazando para char_id reusado pós-wipe". Descarta o KVP órfão e trata como
+        -- char novo (aparência default). Zero perda de recuperação real (L-04).
         if not row and outbox then
-            install_entry(
-                src,
-                char_id,
-                outbox.state,
-                outbox.profile,
-                outbox.revision,
-                outbox.customization_revision,
-                true,
-                on_loaded
-            )
-            return
+            log_error('Outbox HSS órfão (sem linha SQL) descartado — char tratado como novo.', {
+                char_id = char_id,
+                outbox_revision = outbox.revision,
+            })
+            delete_outbox(char_id)
+            outbox = nil
         end
 
         if not row then
@@ -992,6 +994,27 @@ function State.shutdown()
     State.flush_emergency()
     _worker_running = false
     _worker_scheduled = false
+end
+
+-- Remove TODO KVP de outbox (hss_outbox:*). O KVP sobrevive ao wipe SQL relacional (é interno do
+-- runtime FiveM, inacessível a scripts externos como o limpardadossql.ps1) — sem esta limpeza, um
+-- char_id reusado pós-wipe reinstalaria aparência de outra "era". Enumera por prefixo (StartFindKvp)
+-- e apaga cada chave. Retorna a contagem removida. Idempotente (re-rodar = 0). Não toca _entries de
+-- chars online (esses re-salvam no próximo flush); é uma limpeza de LIXO persistido, não de estado
+-- vivo. Chamador único: export gated wipeOutboxAll (testrunner/admin) + comando sob vhub_test_mode.
+function State.wipe_all_outbox()
+    local removed = 0
+    local handle = StartFindKvp('hss_outbox:')
+    if not handle or handle == -1 then return 0 end
+    while true do
+        local key = FindKvp(handle)
+        if not key then break end
+        pcall(DeleteResourceKvp, key)
+        removed = removed + 1
+    end
+    EndFindKvp(handle)
+    if Logger then Logger('warn', 'Outbox HSS: wipe total de KVP.', { removed = removed }) end
+    return removed
 end
 
 -- Exercita retry, ACK SQL, reload/digest e outbox somente sob test mode.

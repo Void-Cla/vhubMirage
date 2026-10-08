@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_garage'
 author      'vHub Mirage'
-version     '2.0.1'
+version     '2.2.1'
 description 'Garagem centralizada: garage + concession ria + leil o + p tio + aluguel + IPVA + chave. Fonte de verdade dos ve culos.'
 
 dependencies {
@@ -20,6 +20,7 @@ dependencies {
 }
 
 shared_scripts {
+  '@vhub/shared/logger.lua',
   'shared/config.lua',
   'shared/events.lua',
   'shared/types.lua',
@@ -27,8 +28,11 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',
   'server/core.lua',
+  'server/vehicles.lua', -- entidade persistente OneSync e posição de baixa frequência
   'server/init.lua',
   'server/garage.lua',
   'server/dealership.lua',
@@ -61,4 +65,5 @@ files {
   'nui/js/impound.js',
   'nui/assets/bg.png',
   'nui/assets/logo.png',
+  'nui/vendor/**/*',
 }

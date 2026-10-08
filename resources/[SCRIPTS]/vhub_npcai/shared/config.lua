@@ -32,8 +32,6 @@ cfg.debug   = false  -- logs verbosos (intenção, stage, latência) — desliga
 -- ============================================================
 
 cfg.sidecar = {
-    host    = '127.0.0.1',
-    port    = 7513,
     timeout = 45000,  -- ms: STT 15s + LLM 10s + TTS 10s + margem
 }
 
@@ -52,17 +50,18 @@ cfg.ai = {
     llm = {
         provider = 'gemini',              -- 'gemini' | 'openai' | 'none' (none = só respostas de cache/config)
 
-        -- Gemini: modelo mais básico e rápido (economia de token/latência)
+        -- Gemini: alias '-latest' NUNCA fica obsoleto (modelos datados são
+        -- descontinuados e passam a dar 404 → todo LLM cairia em fallback).
         gemini = {
-            model       = 'gemini-2.0-flash-lite',
-            max_tokens  = 120,            -- resposta de NPC é curta (2 frases) — teto duplo: token + TTS curto
+            model       = 'gemini-flash-lite-latest',
+            max_tokens  = 80,             -- teto curto: 2 frases e no máximo 240 caracteres no sidecar
             temperature = 0.7,
         },
 
         -- OpenAI: pronto para o futuro (GPT). Ativar trocando provider='openai'
         openai = {
             model       = 'gpt-4o-mini',  -- mais barato/rápido da família; trocar quando quiser
-            max_tokens  = 120,
+            max_tokens  = 80,
             temperature = 0.7,
         },
 
@@ -73,7 +72,14 @@ cfg.ai = {
 
     -- ── VOZ (TTS) — sintetiza a resposta do NPC em áudio ────────────────────
     voice = {
-        provider = 'sapi',                -- 'sapi' (local Windows) | 'openai' | 'none' (só legenda, sem áudio)
+        provider = 'pocket',              -- 'pocket' (local/CPU) | 'sapi' | 'openai' | 'none'
+
+        -- Pocket-TTS local: modelo PT-BR persistente, quantizado e serial.
+        pocket = {
+            model    = 'portuguese_24l',
+            voice    = 'rafael',
+            quantize = true,
+        },
 
         -- SAPI local (subprocess isolado — já validado, 0 erros, sem custo de nuvem)
         sapi = {
@@ -93,8 +99,8 @@ cfg.ai = {
 
     -- ── FALA (STT) — transcreve o microfone do jogador (SEMPRE local) ───────
     stt = {
-        provider    = 'faster-whisper',   -- 'faster-whisper' (int8, 3-5x) | 'whisper' (fallback)
-        model       = 'base',             -- 'tiny' (rápido/impreciso) | 'base' (equilíbrio) | 'small' (preciso/lento)
+        provider    = 'faster-whisper',   -- 'faster-whisper' (int8+VAD+beam1) | 'whisper' (fallback)
+        model       = 'small',            -- 'tiny'|'base'|'small' (preciso p/ PT; env NPCAI_WHISPER_MODEL sobrescreve)
         language    = 'pt',
         max_seconds = 5,                  -- teto de duração por fala (VAD corta silêncio) — mantém STT curto
     },
@@ -148,6 +154,14 @@ cfg.world = {
 cfg.talk_max_ms       = 5000  -- gravação máxima (ms) — alinhar com cfg.ai.stt.max_seconds
 cfg.talk_audio_format = 'audio/webm'
 cfg.talk_samplerate   = 16000 -- Hz (ideal para Whisper)
+
+-- VAD no CEF encerra a captura cedo; o sidecar revalida duração e aplica Silero VAD.
+cfg.talk_vad = {
+    enabled       = true,
+    threshold     = 0.020,
+    silence_ms    = 650,
+    min_speech_ms = 250,
+}
 
 
 -- ============================================================
@@ -258,7 +272,8 @@ cfg.npcs = {
         talk_anim = { dict = 'mp_facial', name = 'mic_chatter' },
         idle_face = 'mood_happy_1',
         murmurs   = nil,  -- herda cfg.murmurs (global). Override por-NPC opcional.
-        ai        ={},  -- herda cfg.ai (Gemini + SAPI). Ex. futuro: { voice='openai', voice_id='onyx' }
+        thinking_count = 10,
+        ai        ={},  -- herda cfg.ai (Gemini + Pocket-TTS).
         target_options = {
             { name = 'ver_carro',       label = 'Pedir para ver o carro',       direct_text = 'pode dar uma olhada no meu carro' },
             { name = 'tuning_corrida',  label = 'Solicitar tuning para corrida', direct_text = 'quero fazer tuning para corrida' },
@@ -286,6 +301,7 @@ cfg.npcs = {
         talk_anim = { dict = 'mp_facial', name = 'mic_chatter' },
         idle_face = 'mood_normal_1',
         murmurs   = nil,  -- herda cfg.murmurs (global). Override por-NPC opcional.
+        thinking_count = 10,
         ai        ={},
         target_options = {
             { name = 'pedir_tratamento',  label = 'Pedir um tratamento',           direct_text = 'preciso de tratamento' },
@@ -314,6 +330,7 @@ cfg.npcs = {
         talk_anim = { dict = 'mp_facial', name = 'mic_chatter' },
         idle_face = 'mood_angry_1',
         murmurs   = nil,  -- herda cfg.murmurs (global). Override por-NPC opcional.
+        thinking_count = 10,
         ai        ={},
         target_options = {
             { name = 'reportar_crime',  label = 'Reportar um crime',          direct_text = 'quero reportar um crime' },
@@ -342,6 +359,7 @@ cfg.npcs = {
         talk_anim = { dict = 'mp_facial', name = 'mic_chatter' },
         idle_face = 'mood_happy_1',
         murmurs   = nil,  -- herda cfg.murmurs (global). Override por-NPC opcional.
+        thinking_count = 4,
         ai        ={},
         target_options = {
             { name = 'novidades',      label = 'Perguntar sobre novidades',  direct_text = 'tem alguma novidade?' },
@@ -388,6 +406,7 @@ function VHubNpcAI.resolveAI(npcId)
             voice    = o.voice_id or ttsDefaults.voice or ttsDefaults.name,
             rate     = o.voice_rate or ttsDefaults.rate,
             format   = ttsDefaults.format or 'wav',
+            quantize = ttsDefaults.quantize == true,
         },
         stt = {
             provider    = g.stt.provider,

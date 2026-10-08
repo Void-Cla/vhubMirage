@@ -126,3 +126,36 @@ function Queue.recover()
     end
     Core.log(('Queue: %d pedidos pendentes recuperados pós-restart'):format(#rows))
 end
+
+
+-- Reentrega orders 'approved' que ficaram sem credited_at (FIN-001, ADR #94).
+-- Fecha o GAP RESIDUAL 1: crash entre o lock pending→approved e o handler confirmar
+-- deixa a order paga-porém-não-entregue, e verifyAndSettle a ignora (status ≠ pending).
+-- Aqui varremos essas orders presas e chamamos Payments.redeliver — a idempotência
+-- de crédito (inbox do consumidor) torna a reentrega segura mesmo se já tinha creditado.
+-- Custo O(n_presas), tipicamente 0; roda uma vez no boot logo após Queue.recover().
+function Queue.recoverStuck()
+    local rows = SQL.query(
+        [[SELECT id, txid, char_id, src, product_key, product_desc, amount_brl, metadata,
+                 status, credited_at
+          FROM vhub_df_orders WHERE status = 'approved' AND credited_at IS NULL]])
+    if not rows or #rows == 0 then
+        Core.log('Queue: nenhuma order approved-sem-crédito para reentregar')
+        return
+    end
+
+    Core.logErr(('Queue: %d order(s) approved SEM crédito — reentregando (recovery)'):format(#rows))
+    for i = 1, #rows do
+        local order = rows[i]
+        Payments.redeliver(order, 'boot', function(ok, msg)
+            if ok then
+                Core.log(('Queue.recoverStuck: order #%s ok (%s)'):format(tostring(order.id), tostring(msg)))
+            else
+                -- sem_handler/erro: segue approved-sem-crédito; próximo boot re-tenta
+                Core.logErr(('Queue.recoverStuck: order #%s pendente de reentrega (%s)'):format(
+                    tostring(order.id), tostring(msg)))
+            end
+        end)
+        if i % (VHubDF.cfg.polling.batchYield or 10) == 0 then Citizen.Wait(0) end
+    end
+end

@@ -38,9 +38,9 @@ function M:initSchema()
   -- para vhub_conce (escritor unico de vh_vehicles desde a FASE 1).
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if not schema then return false end
-  local p = promise.new()
-  ox():execute(schema, {}, function() p:resolve(true) end)
-  return Citizen.Await(p)
+  return VHubSQLScript.aplicar(schema, function(instrucao)
+    MySQL.query.await(instrucao, {})
+  end)
 end
 
 -- ----------------------------------------------------------------------------
@@ -60,6 +60,9 @@ function M:listByStatus(status)             return exports.vhub_conce:listByStat
 function M:createVehicle(row)               return exports.vhub_conce:createVehicle(row) end
 -- muda status (garage/out/impound/auction/rental/sold)
 function M:updateStatus(plate, status)      return exports.vhub_conce:updateStatus(plate, status) end
+-- CAS e compensação usam exclusivamente o escritor canônico do registro.
+function M:confirmarRetirada(plate, anterior, posJson) return exports.vhub_conce:confirmarRetirada(plate, anterior, posJson) end
+function M:cancelarRetirada(plate, anterior, posJson) return exports.vhub_conce:cancelarRetirada(plate, anterior, posJson) end
 -- atualiza ultima posicao conhecida
 function M:updatePosition(plate, posJson)   return exports.vhub_conce:updatePosition(plate, posJson) end
 -- atualiza estetica + trava
@@ -68,8 +71,6 @@ function M:updateCustomization(plate, custJson, locked)
 end
 -- atualiza vencimento de IPVA
 function M:updateIpva(plate, paidUntil)     return exports.vhub_conce:updateIpva(plate, paidUntil) end
--- atualiza vencimento de aluguel
-function M:updateRental(plate, rentedUntil) return exports.vhub_conce:updateRental(plate, rentedUntil) end
 -- remove veiculo + espelho vh_vehicles (feito no conce)
 function M:deleteVehicle(plate)             return exports.vhub_conce:deleteVehicle(plate) end
 
@@ -84,17 +85,9 @@ end
 function M:revokeKey(plate, char_id, kind)
   return exports.vhub_conce:revokeKey(plate, char_id, kind)
 end
--- char_id tem autorizacao valida (nao expirada) para a placa?
-function M:hasValidKey(plate, char_id)
-  return exports.vhub_conce:hasValidKey(plate, char_id)
-end
 -- lista autorizacoes de uma placa
 function M:listKeys(plate)
   return exports.vhub_conce:listKeys(plate)
-end
--- lista autorizacoes validas de um char_id
-function M:listKeysOfChar(char_id)
-  return exports.vhub_conce:listKeysOfChar(char_id)
 end
 -- remove autorizacoes expiradas
 function M:purgeExpiredKeys()
@@ -117,8 +110,9 @@ end
 function M:impoundPut(plate, reason, fee, by)
   return pexec([[
     INSERT INTO vhub_impound (plate, reason, fee, impounded_by, impounded_at)
-    VALUES (?, ?, ?, ?, ?)
-  ]], { plate, reason or 'apreendido', fee or 0, by, os.time() })
+    SELECT ?, ?, ?, ?, ? FROM DUAL
+     WHERE NOT EXISTS (SELECT 1 FROM vhub_impound WHERE plate = ? AND released_at IS NULL)
+  ]], { plate, reason or 'apreendido', fee or 0, by, os.time(), plate })
 end
 
 function M:impoundGetActive(plate)
@@ -153,8 +147,6 @@ end
 function M:stockGet(model)               return exports.vhub_conce:stockGet(model) end
 -- define estoque/preco custom do modelo
 function M:stockSet(model, qty, price)   return exports.vhub_conce:stockSet(model, qty, price) end
--- decrementa estoque ao vender (se limitado)
-function M:stockDecrement(model)         return exports.vhub_conce:stockDecrement(model) end
 
 -- ----------------------------------------------------------------------------
 -- vhub_vehicle_log

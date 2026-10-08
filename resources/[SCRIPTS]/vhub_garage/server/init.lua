@@ -58,6 +58,8 @@ end
 -- ----------------------------------------------------------------------------
 AddEventHandler('onResourceStart', function(res)
   if res ~= GetCurrentResourceName() then return end
+  -- GlobalState sobrevive a restart do resource, mas não ao processo FXServer.
+  local primeiroBoot = GlobalState['vhub_garage:boot_reconciled'] ~= true
 
   -- PULL síncrono de zonas (config estática, zero SQL — getZones não usa Citizen.Await).
   -- Feito ANTES do CreateThread para que VHubGarage.concessionarias/leilao já estejam
@@ -83,30 +85,40 @@ AddEventHandler('onResourceStart', function(res)
     -- Todos os read-sites de VHubGarage.catalog passam a ler este cache.
     VHubGarage.catalog = exports.vhub_conce:getCatalog() or VHubGarage.catalog
 
-    -- ── Boot-scan do patio (IT.3 / Void-Zero) ───────────────────────────────
-    -- Só roda em BOOT REAL do servidor (0 players). Em restart do resource com
-    -- players online as entidades ainda existem — recolher seria roubo de carro.
-    -- Auditoria por veiculo via Core:log (persistida em vhub_vehicle_log).
-    if CFG.patio_boot_scan ~= false and #GetPlayers() == 0 then
+    -- Reconciliação por processo: restart da garagem vazia também preserva a rua.
+    if CFG.patio_boot_scan ~= false and primeiroBoot then
       local destino = CFG.patio_boot_destino or 'impound'
-      for _, v in ipairs(SQL:listByStatus('out') or {}) do
-        if destino == 'garage' then
-          SQL:updateStatus(v.plate, 'garage')
-        else
-          SQL:updateStatus(v.plate, 'impound')
-          SQL:impoundPut(v.plate, 'recolhido (queda do servidor)', CFG.patio_taxa or 0, nil)
+      local vivas = {}
+      for _, ent in ipairs(GetAllVehicles()) do
+        local placa = U.normalizePlate(GetVehicleNumberPlateText(ent))
+        if placa then vivas[placa] = GetEntityModel(ent) end
+      end
+      for i, v in ipairs(SQL:listByStatus('out') or {}) do
+        -- Primeiro ensure em servidor vivo não recolhe entidades já existentes.
+        if vivas[U.normalizePlate(v.plate)] ~= GetHashKey(v.model) then
+          if destino == 'garage' then
+            local ok = SQL:updateStatus(v.plate, 'garage')
+            if ok == nil or ok == false then error('boot_status_failed') end
+          else
+            -- Journal primeiro. Crash entre writes converge no próximo boot sem duplicar taxa.
+            local ok = SQL:impoundPut(v.plate, 'recolhido (reinício do servidor)', CFG.patio_taxa or 0, nil)
+            if ok == nil or ok == false or not SQL:impoundGetActive(v.plate) then error('boot_impound_failed') end
+            ok = SQL:updateStatus(v.plate, 'impound')
+            if ok == nil or ok == false then error('boot_status_failed') end
+          end
+          Core:log(v.plate, 'boot_scan', nil, { destino = destino })
         end
-        Core:log(v.plate, 'boot_scan', nil, { destino = destino })
+        if i % 50 == 0 then Citizen.Wait(0) end
       end
     end
-
-    print('[vhub_garage] schema verificado')
+    VHubGarage.Veiculos.reanexar()
+    GlobalState['vhub_garage:boot_reconciled'] = true
+    VHubGarage.Veiculos.pronto = true
     -- envia setup a quem est  online (resource restart em produ  o)
     local setup = buildSetup()
     for _, src in ipairs(GetPlayers()) do
       TriggerClientEvent(E.SETUP, tonumber(src), setup)
     end
-    print('[vhub_garage] pronto')
   end)
 end)
 

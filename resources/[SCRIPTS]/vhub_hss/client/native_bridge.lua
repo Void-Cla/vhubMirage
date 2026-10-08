@@ -99,6 +99,9 @@ local _ped_running = true
 local _hold = false
 local _first_spawn = false
 local _visual_scene = false
+local _ped_apply_active = 0
+
+function VHubHSS_IsPedApplyActive() return _ped_apply_active > 0 end
 
 local function current_ped()
     local ped = PlayerPedId()
@@ -339,12 +342,18 @@ end
 
 RegisterNetEvent(VHubHSS.E.PED_APPLY, function(payload)
     if type(payload) ~= 'table' then return end
+    -- O estágio do criador já possui o ped. Um apply tardio do load não pode recolocá-lo no spawn.
+    if VHubHSS_IsCustomizationStageActive and VHubHSS_IsCustomizationStageActive() then return end
+    _ped_apply_active = _ped_apply_active + 1
     Citizen.CreateThread(function()
         local deadline = GetGameTimer() + 10000
         while _ped_running and not NetworkIsPlayerActive(PlayerId()) and GetGameTimer() < deadline do
             Citizen.Wait(100)
         end
-        if not _ped_running or not NetworkIsPlayerActive(PlayerId()) then return end
+        if not _ped_running or not NetworkIsPlayerActive(PlayerId()) then
+            _ped_apply_active = _ped_apply_active - 1
+            return
+        end
 
         _hold = payload.hold == true
         _first_spawn = payload.first_spawn == true
@@ -380,6 +389,7 @@ RegisterNetEvent(VHubHSS.E.PED_APPLY, function(payload)
         else
             finish_spawn(_first_spawn)
         end
+        _ped_apply_active = _ped_apply_active - 1
     end)
 end)
 
@@ -441,6 +451,8 @@ RegisterNetEvent(VHubHSS.E.PED_KILL, function()
 end)
 
 RegisterNetEvent(VHubHSS.E.PED_SET_CUSTOMIZATION, function(custom)
+    -- O preview do criador já exibe a aparência; o encerramento aplica a versão persistida.
+    if VHubHSS_IsCustomizationStageActive and VHubHSS_IsCustomizationStageActive() then return end
     Citizen.CreateThread(function() VHubHSS_ApplyModelAndCustomization(custom) end)
 end)
 

@@ -18,6 +18,9 @@ local Cam = VHubCustom.Cam
 local _snapshot    = nil
 -- stance persistido no momento da abertura — rollback do preview volta ao SALVO, não ao stock
 local _savedStance = nil
+local _pedido = nil
+local _veiculoSnapshot = nil
+local _previewAnterior = nil
 
 -- coerção INT: natives de índice (tint/placa/livery/xenon) são int; float do
 -- msgpack/JSON (ex.: 3.0) pode ser bit-reinterpretado pelo native → valor errado.
@@ -85,6 +88,7 @@ local KIT_TYPES = {
 
 -- retorna { kits={[idx]=count}, liveryCount=n, wheelMods=n, extras={[idx]=true} } só com o que existe
 local function enumerateAvailable(veh)
+  SetVehicleModKit(veh, 0)
   local avail = { kits = {}, liveryCount = -1, wheelMods = 0, extras = {} }
   for _, k in ipairs(KIT_TYPES) do
     local n = GetNumVehicleMods(veh, k.idx)
@@ -151,8 +155,8 @@ local function snapshotVeh(veh)
     mods          = mods,
     colours       = { p, s },
     extra_colours = { pearl, wheel },
-    custom_primary   = primCustom and { cpr, cpg, cpb } or nil,
-    custom_secondary = secCustom  and { csr, csg, csb } or nil,
+    custom_primary   = primCustom and { cpr, cpg, cpb } or false,
+    custom_secondary = secCustom  and { csr, csg, csb } or false,
     neons         = neons,
     neon_colour   = { nr, ng, nb },
     tyre_smoke_color = { sr, sg, sb },
@@ -190,6 +194,19 @@ end
 -- aplica um patch cosmético no veículo vivo. SÓ toca chaves presentes (patch parcial seguro).
 function VHubCustom.applyCosmetic(veh, c)
   if not DoesEntityExist(veh) or veh == 0 or type(c) ~= 'table' then return end
+  local entrada = c
+  c = {}
+  for chave, valor in pairs(entrada) do c[chave] = valor end
+  for _, chave in ipairs({ 'colours', 'extra_colours', 'custom_primary', 'custom_secondary', 'neon_colour', 'tyre_smoke_color' }) do
+    if type(c[chave]) == 'table' then
+      local original, inteiro = c[chave], {}
+      for i = 1, 3 do
+        local valor = original[i] or original[tostring(i)]
+        if valor ~= nil then inteiro[i] = math.max(0, math.min(255, toint(valor, 0))) end
+      end
+      c[chave] = inteiro
+    end
+  end
   SetVehicleModKit(veh, 0)
 
   -- pintura: índice como base, custom RGB sobrepõe (ordem importa)
@@ -201,12 +218,14 @@ function VHubCustom.applyCosmetic(veh, c)
     SetVehicleExtraColours(veh, tonumber(c.extra_colours[1] or c.extra_colours['1']) or 0,
                                 tonumber(c.extra_colours[2] or c.extra_colours['2']) or 0)
   end
-  if type(c.custom_primary) == 'table' then
+  if c.custom_primary == false then ClearVehicleCustomPrimaryColour(veh)
+  elseif type(c.custom_primary) == 'table' then
     SetVehicleCustomPrimaryColour(veh, tonumber(c.custom_primary[1] or c.custom_primary['1']) or 255,
                                        tonumber(c.custom_primary[2] or c.custom_primary['2']) or 255,
                                        tonumber(c.custom_primary[3] or c.custom_primary['3']) or 255)
   end
-  if type(c.custom_secondary) == 'table' then
+  if c.custom_secondary == false then ClearVehicleCustomSecondaryColour(veh)
+  elseif type(c.custom_secondary) == 'table' then
     SetVehicleCustomSecondaryColour(veh, tonumber(c.custom_secondary[1] or c.custom_secondary['1']) or 255,
                                          tonumber(c.custom_secondary[2] or c.custom_secondary['2']) or 255,
                                          tonumber(c.custom_secondary[3] or c.custom_secondary['3']) or 255)
@@ -247,9 +266,11 @@ function VHubCustom.applyCosmetic(veh, c)
   -- kits cosméticos (nunca performance — defesa em profundidade)
   if type(c.mods) == 'table' then
     for k, lvl in pairs(c.mods) do
-      local idx = tonumber(k)
-      if idx and not CFG.performance_mods[idx] then
-        SetVehicleMod(veh, idx, tonumber(lvl) or -1, false)
+      local idx = VHubCustom.U.integer(k, 0, 49)
+      local nivel = VHubCustom.U.integer(lvl, -1, 255)
+      if idx and nivel and CFG.cosmetic_mods[idx] and not CFG.performance_mods[idx]
+          and (nivel == -1 or nivel < GetNumVehicleMods(veh, idx)) then
+        SetVehicleMod(veh, idx, nivel, false)
       end
     end
   end
@@ -257,8 +278,8 @@ function VHubCustom.applyCosmetic(veh, c)
   -- acessórios extras do modelo (SetVehicleExtra: 3º param = "disable", não "enable")
   if type(c.extras) == 'table' then
     for k, enabled in pairs(c.extras) do
-      local idx = tonumber(k)
-      if idx and DoesExtraExist(veh, idx) then
+      local idx = VHubCustom.U.integer(k, 0, (CFG.extras_max or 14) - 1)
+      if idx and type(enabled) == 'boolean' and DoesExtraExist(veh, idx) then
         SetVehicleExtra(veh, idx, not enabled)
       end
     end
@@ -292,6 +313,7 @@ local function snapshotToCurrent(snap)
   for i = 0, 3 do neons[i + 1] = (snap.neons or {})[i] == true end  -- array p/ JSON
   return {
     colours          = snap.colours,
+    extra_colours    = snap.extra_colours,
     custom_primary   = snap.custom_primary,
     custom_secondary = snap.custom_secondary,
     extra_on         = snap.extra_colours ~= nil,
@@ -341,6 +363,18 @@ function VHubCustom.openBennys(auth)
   if VHubCustom.inMenu then return end
   if type(auth) ~= 'table' or not VHubCustom.service or VHubCustom.service.domain ~= 'bennys' then return end
 
+  local prazo = GetGameTimer() + 1500
+  while DoesEntityExist(veh) and not NetworkHasControlOfEntity(veh) and GetGameTimer() < prazo do
+    NetworkRequestControlOfEntity(veh)
+    Citizen.Wait(50)
+  end
+  if not DoesEntityExist(veh) or not NetworkHasControlOfEntity(veh) then
+    VHubCustom.endService('bennys')
+    VHubCustom.notify('Sem controle de rede para personalizar.', 'error'); return
+  end
+  SetVehicleModKit(veh, 0)
+  _veiculoSnapshot, _pedido, _previewAnterior = veh, nil, nil
+
   -- snapshot ANTES de qualquer preview (rollback + estado inicial real)
   _snapshot = snapshotVeh(veh)
   Cam.start(veh)
@@ -375,6 +409,7 @@ function VHubCustom.openBennys(auth)
       stance             = CFG.stance,
       glass_armor_tiers  = CFG.glass_armor_tiers,
       paint_palettes     = CFG.paint_palettes,
+      exhaust_rgb        = VHubCustom.Exhaust.supportsRGB(),
     },
   })
 
@@ -386,7 +421,7 @@ end
 -- backfire não-loopado (auto-extingue) → nada a parar. No CONFIRMAR: mantém o preview (o servidor
 -- persiste e o State Bag reafirma stance/escapamento p/ TODOS os clientes).
 function VHubCustom.closeBennys(confirmed)
-  local veh = VHubCustom.activeVeh
+  local veh = _veiculoSnapshot
   if not confirmed then
     if veh and _snapshot then VHubCustom.applyCosmetic(veh, _snapshot) end
     if veh and veh ~= 0 and DoesEntityExist(veh) and VHubCustom.Stance then
@@ -396,6 +431,9 @@ function VHubCustom.closeBennys(confirmed)
   Cam.stop()
   _snapshot = nil
   _savedStance = nil
+  _pedido = nil
+  _veiculoSnapshot = nil
+  _previewAnterior = nil
   VHubCustom.inMenu = false
   VHubCustom.endService('bennys')
   SetNuiFocus(false, false)
@@ -407,9 +445,12 @@ end
 -- ============================================================
 
 RegisterNetEvent(E.BENNYS_CONFIRM)
-AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch, netId)
+AddEventHandler(E.BENNYS_CONFIRM, function(plate, ok, custPatch, netId, leaseId, requestId)
+  local servico = VHubCustom.service
+  if not servico or servico.domain ~= 'bennys' or leaseId ~= servico.lease_id
+      or requestId ~= _pedido or (plate and plate ~= servico.plate) then return end
   local veh = VHubCustom.activeVeh
-  if not veh or not DoesEntityExist(veh) or NetworkGetNetworkIdFromEntity(veh) ~= tonumber(netId) then
+  if not veh or not DoesEntityExist(veh) or (netId and NetworkGetNetworkIdFromEntity(veh) ~= tonumber(netId)) then
     VHubCustom.closeBennys(false)
     SendNUIMessage({ action = 'fecharBennys' })
     return
@@ -417,7 +458,7 @@ AddEventHandler(E.BENNYS_CONFIRM, function(_, ok, custPatch, netId)
 
   if ok and type(custPatch) == 'table' then
     VHubCustom.applyCosmetic(veh, custPatch)   -- estado definitivo confirmado pelo servidor
-  elseif _snapshot then
+  elseif not ok and _snapshot then
     VHubCustom.applyCosmetic(veh, _snapshot)   -- rollback
   end
 
@@ -432,6 +473,7 @@ end)
 
 -- NUI → fecha sem aplicar (botão Cancelar/✕ ou ESC). NUNCA por timeout (removido).
 RegisterNUICallback('bennys:fechar', function(_, cb)
+  if _pedido then cb({ ok = false }); return end
   VHubCustom.closeBennys(false)
   cb('ok')
 end)
@@ -439,21 +481,42 @@ end)
 -- NUI → aplica preview efêmero local a cada seleção (sem custo, sem persistência)
 RegisterNUICallback('bennys:preview', function(patch, cb)
   local veh = VHubCustom.activeVeh
-  if DoesEntityExist(veh) and veh ~= 0 and type(patch) == 'table' then
+  if VHubCustom.inMenu and VHubCustom.service and VHubCustom.service.domain == 'bennys'
+      and not _pedido and DoesEntityExist(veh) and veh ~= 0 and type(patch) == 'table' then
+    local restaurar = {}
+    for chave, anterior in pairs(_previewAnterior or {}) do
+      if chave == 'mods' or chave == 'extras' then
+        local novos = type(patch[chave]) == 'table' and patch[chave] or {}
+        for indice in pairs(anterior) do
+          if novos[indice] == nil and novos[tostring(indice)] == nil then
+            local base = _snapshot[chave] or {}
+            restaurar[chave] = restaurar[chave] or {}
+            local original = base[indice]
+            if original == nil then original = base[tonumber(indice)] end
+            restaurar[chave][indice] = original
+          end
+        end
+      elseif patch[chave] == nil then restaurar[chave] = _snapshot[chave] end
+    end
+    if _previewAnterior and _previewAnterior.stance and not patch.stance and VHubCustom.Stance then
+      VHubCustom.Stance.apply(veh, _savedStance)
+    end
+    VHubCustom.applyCosmetic(veh, restaurar)
     VHubCustom.applyCosmetic(veh, patch)
+    _previewAnterior = patch
   end
   cb('ok')
 end)
 
 -- NUI → arrasto do mouse no palco central orbita a câmera
 RegisterNUICallback('bennys:orbit', function(d, cb)
-  Cam.orbit(d and d.dx, d and d.dy)
+  if _snapshot and type(d) == 'table' then Cam.orbit(d.dx, d.dy) end
   cb('ok')
 end)
 
 -- NUI → scroll do mouse no palco aplica zoom
 RegisterNUICallback('bennys:zoom', function(d, cb)
-  Cam.zoom(d and d.delta)
+  if _snapshot and type(d) == 'table' then Cam.zoom(d.delta) end
   cb('ok')
 end)
 
@@ -461,16 +524,17 @@ end)
 RegisterNUICallback('bennys:focus', function(d, cb)
   local part = type(d) == 'table' and d.part or 'geral'
   -- categoria de kit manda idx → resolve a parte da câmera
-  if d and d.kitIdx ~= nil then part = _kitPart[tostring(d.kitIdx)] or part end
-  Cam.focus(part)
+  if type(d) == 'table' and d.kitIdx ~= nil then part = _kitPart[tostring(d.kitIdx)] or part end
+  if _snapshot then Cam.focus(part) end
   cb('ok')
 end)
 
 -- NUI → re-enumera as rodas após troca de tipo de roda (a lista 23 muda com o tipo)
 RegisterNUICallback('bennys:rescanWheels', function(d, cb)
   local veh = VHubCustom.activeVeh
-  if DoesEntityExist(veh) and veh ~= 0 and d and d.wheel_type ~= nil then
-    SetVehicleWheelType(veh, tonumber(d.wheel_type) or 0)
+  local tipo = type(d) == 'table' and VHubCustom.U.integer(d.wheel_type, 0, 12)
+  if _snapshot and not _pedido and veh ~= 0 and DoesEntityExist(veh) and tipo then
+    SetVehicleWheelType(veh, tipo)
     cb({ count = GetNumVehicleMods(veh, 23) or 0 })
     return
   end
@@ -479,6 +543,7 @@ end)
 
 -- NUI → envia patch final ao servidor (validação, cobrança e persistência server-side)
 RegisterNUICallback('bennys:aplicar', function(data, cb)
+  if _pedido or type(data) ~= 'table' then cb({ ok = false }); return end
   local plate   = type(data.plate)   == 'string' and data.plate   or ''
   local payload = type(data.payload) == 'table'  and data.payload or {}
   local veh     = VHubCustom.activeVeh
@@ -492,7 +557,8 @@ RegisterNUICallback('bennys:aplicar', function(data, cb)
 
   local service = VHubCustom.service
   if not service or service.domain ~= 'bennys' then cb({ ok = false }); return end
-  TriggerServerEvent(E.BENNYS_APPLY, service.lease_id, VHubCustom.nextRequestId(), payload)
+  _pedido = VHubCustom.nextRequestId()
+  TriggerServerEvent(E.BENNYS_APPLY, service.lease_id, _pedido, payload)
   cb({ ok = true })
 end)
 
@@ -503,8 +569,5 @@ end)
 
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
-  local veh = VHubCustom.activeVeh
-  if VHubCustom.inMenu and veh and veh ~= 0 and DoesEntityExist(veh) and VHubCustom.Stance then
-    VHubCustom.Stance.apply(veh, _savedStance)   -- volta ao stance salvo (não deixa preview vazar)
-  end
+  if _snapshot then VHubCustom.closeBennys(false) end
 end)

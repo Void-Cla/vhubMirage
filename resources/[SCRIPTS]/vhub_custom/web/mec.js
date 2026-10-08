@@ -11,9 +11,9 @@ let _module = null;
 // ============================================================
 
 const REPAIR_OPTIONS = [
-  { type: 'tyre',   icon: '🛞', name: 'Pneus',   desc: 'Repara todos os pneus furados',        healthKey: null },
-  { type: 'engine', icon: '⚙️', name: 'Motor',   desc: 'Restaura a saúde do motor',             healthKey: 'engine_health' },
-  { type: 'body',   icon: '🔧', name: 'Lataria', desc: 'Restaura a saúde da carroceria',         healthKey: 'body_health' },
+  { type: 'tyre',   icon: '01', name: 'Pneus',   desc: 'Recuperação de pneus e aros', healthKey: null },
+  { type: 'engine', icon: '02', name: 'Motor',   desc: 'Manutenção com registro persistente', healthKey: 'engine_health' },
+  { type: 'body',   icon: '03', name: 'Lataria', desc: 'Deformação, portas e vidros · tarifa mínima', healthKey: 'body_health' },
 ];
 
 
@@ -32,6 +32,8 @@ let _busyTimer = null;
 
 function setBusy(v) {
   _busy = v;
+  window.vhub.ocupado(v);
+  document.getElementById('mc-btn-close').disabled = v;
   document.querySelectorAll('.mc-opt').forEach((el) => el.classList.toggle('mc-opt-disabled', v));
   document.getElementById('mc-btn-tow').disabled = v;
 }
@@ -45,7 +47,7 @@ function armBusyTimeout() {
   _busyTimer = setTimeout(() => {
     _busyTimer = null;
     if (_data) setBusy(false);
-  }, 6000);
+  }, 32000);
 }
 
 // retorna percentual de saúde (0..100) dado valor 0..1000
@@ -120,7 +122,14 @@ function renderOptions() {
     const price = document.createElement('span');
     price.className = 'mc-opt-price';
     const priceVal = prices[opt.type];
-    if (priceVal != null) {
+    const estimativa = _data?.estimates?.[opt.type];
+    if (_data?.materiais?.[opt.type] === true) {
+      price.textContent = 'KIT PRÓPRIO';
+      price.title = 'O item será validado e consumido pelo servidor quando o reparo for concluído.';
+    } else if (estimativa != null) {
+      price.textContent = fmtMoney(estimativa);
+      price.title = 'Estimativa local. Diagnóstico e cobrança validados pelo servidor.';
+    } else if (priceVal != null) {
       price.textContent = opt.type === 'tyre'
         ? fmtMoney(priceVal) + '/pneu'
         : fmtMoney(priceVal) + '/100hp';
@@ -155,6 +164,7 @@ function requestTow() {
 }
 
 function fecharMec() {
+  if (_busy) return;
   _module.hide();
   window.vhub.request('mec:fechar', {}).catch(() => {});
 }
@@ -167,6 +177,7 @@ function fecharMec() {
 function openMec(data) {
   _data = data;
   _busy = false;
+  setBusy(false);
 
   document.getElementById('mc-veh-sub').textContent =
     (data.nome || '—') + '  ·  ' + (data.plate || '—');

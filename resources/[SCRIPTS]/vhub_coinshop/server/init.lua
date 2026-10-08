@@ -150,6 +150,23 @@ local function applySchema()
             KEY idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
+
+    -- Inbox de entrega Pix (FIN-001, ADR #94): idempotência de CRÉDITO por order_id.
+    -- Um order_id do vhub_df credita ESTE saldo no MÁXIMO uma vez, mesmo que o df
+    -- re-chame deliverCoins (rollback approved→pending→approved, recovery pós-crash).
+    -- order_id = vhub_df_orders.id (chave LÓGICA, sem FK física — cross-resource).
+    -- state='crediting' gravado antes do credit; 'credited' após o Coins.set confirmar.
+    SQL.execute([[
+        CREATE TABLE IF NOT EXISTS vhub_coinshop_delivery (
+            order_id    INT UNSIGNED  NOT NULL,
+            char_id     INT UNSIGNED  NOT NULL,
+            amount      INT UNSIGNED  NOT NULL,
+            state       ENUM('crediting','credited') NOT NULL DEFAULT 'crediting',
+            created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            credited_at DATETIME      NULL DEFAULT NULL,
+            PRIMARY KEY (order_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]])
 end
 
 

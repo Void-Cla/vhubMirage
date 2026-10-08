@@ -163,7 +163,10 @@ function S.apply_schema()
   if type(schema) ~= 'string' or schema == '' then
     return false, 'schema_file_missing'
   end
-  S.execute_raw(schema)
+  local ok, erro = VHubSQLScript.aplicar(schema, function(instrucao)
+    MySQL.query.await(instrucao, {})
+  end)
+  if not ok then return false, erro end
   S.ready = true
   return true
 end

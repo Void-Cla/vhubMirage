@@ -5,12 +5,13 @@ lua54      'yes'
 
 name        'vhub_inventory'
 author      'vHub Mirage'
-version     '2.9.2'
+version     '2.9.5'
 description 'Inventário server-authoritative: mochila, baús, drops e Player Hub. NUI remaster (areia dourada + liquid glass + partículas), ícones SVG locais, painel de detalhe.'
 
 -- Hard deps: core + driver SQL. Identity/Survival sao SOFT (via exports com pcall).
 dependencies {
   'vhub',
+  'vhub_money',
   'oxmysql',
 }
 
@@ -21,6 +22,8 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',            -- exports.oxmysql wrappers + schema
   'server/migrations.lua',     -- runner forward-only (corre sempre no boot, independente de vnext)
   'server/state.lua',          -- kernel VRAM F2: singleflight load, CAS flush, drain (gated por vnext)
@@ -28,6 +31,7 @@ server_scripts {
   'server/items.lua',          -- catalogo: def/peso/serial/validacao
   'server/backpack.lua',       -- mochila: cache VRAM (online) + slots + delta + flush triplo
   'server/item_use.lua',       -- dispatcher de handlers de uso (registrados por terceiros)
+  'server/stores.lua',         -- lojas genéricas: sessão, cobrança e entrega autoritativas
   'server/containers.lua',     -- baús: cache + mutex + open-guard + viewers + flush triplo
   'server/transfer.lua',       -- transferencias atomicas mochila <-> baú
   'server/drops.lua',          -- itens no chão: CAS pickup, TTL, bucket-scoped
@@ -55,4 +59,5 @@ files {
   'web/modules/hotbar/*',
   'web/modules/backpack/*',
   'web/modules/container/*',
+  'web/modules/store/*',
 }

@@ -1,7 +1,7 @@
 ---
 name: vhub_designer
 description: Use when proposing a new NUI interface or redesigning an existing one in the vHub Mirage project. Plans UI architecture, data contracts between server and NUI, and validates FiveM CEF constraints before implementation begins.
-model: claude-opus-4-7
+model: claude-opus-4-8
 effort: high
 ---
 
@@ -12,7 +12,7 @@ LEITURA OBRIGATÓRIA:
 2. `.claude/AGENTS.md` → L-02 e L-12
 3. Arquivos da NUI analisada: HTML, CSS, JS, `client/*.lua`
 
-> MCPs úteis: `figma` (referência visual e tokens de cor — habilitar no `enabledMcpjsonServers`), `codegraph` (mapa de módulos JS/TS — não usar para Lua).
+> MCPs: `repowise` (always-on) — `get_overview()` entender arquitetura NUI existente antes de propor nova UI; `get_context(modules)` módulos relacionados e decisões; `get_why(query)` ADRs de design. `figma` (referência visual — habilitar antes de sprint UI), `codegraph` (mapa módulos JS/TS).
 
 PRINCÍPIOS:
 - NUI é borda de UX — toda lógica crítica permanece server-side

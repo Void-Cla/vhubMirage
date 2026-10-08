@@ -3,13 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https://raw.githubusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
   <title>vHub Custom</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="bennys.css">
   <link rel="stylesheet" href="mec.css">
+  <link rel="stylesheet" href="shop.css">
+  <link rel="stylesheet" href="design.css">
 </head>
 <body>
+<div id="service-chrome" class="service-chrome hidden" aria-hidden="true">
+  <span class="service-wordmark">MIRAGE <i>GARAGE</i></span>
+  <span id="service-domain"></span>
+  <span id="service-status">VEÍCULO CONECTADO</span>
+</div>
+<div id="service-notice" class="service-notice hidden" role="status" aria-live="polite"></div>
 
 <div id="overlay" class="overlay hidden mod-oficina">
 
@@ -53,7 +61,7 @@
 
       <div class="hdr-score">
         <div class="score-row">
-          <span class="score-lbl">PERFORMANCE SCORE</span>
+          <span class="score-lbl">ÍNDICE DE DESEMPENHO</span>
           <span id="score-base" class="score-val">0</span>
           <span class="score-max">/ 1000</span>
         </div>
@@ -321,7 +329,11 @@
       <button id="mc-btn-close" class="btn-close" title="Fechar">✕</button>
     </header>
 
-    <div id="mc-veh-sub" class="mc-veh-sub">—</div>
+    <div class="mc-hero">
+      <span class="mc-hero-kicker">DIAGNÓSTICO / REPARO</span>
+      <strong>BAIA DE SERVIÇO</strong>
+      <div id="mc-veh-sub" class="mc-veh-sub">—</div>
+    </div>
 
     <div id="mc-options" class="mc-options"></div>
 

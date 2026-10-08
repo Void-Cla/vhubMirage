@@ -25,7 +25,6 @@
     const e = document.createElement(tag);
     if (attrs) for (const [k, v] of Object.entries(attrs)) {
       if (k === 'class') e.className = v;
-      else if (k === 'html') e.innerHTML = v;
       else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
       else if (k.startsWith('data-')) e.setAttribute(k, v);
       else e[k] = v;
@@ -36,9 +35,6 @@
     }
     return e;
   };
-
-  const escape = (s) => String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const fmtDate = (unix) => {
     if (!unix) return '—';
@@ -96,7 +92,7 @@
     }
     $('#players-count').textContent = list.length;
     $('#hdr-online').textContent = state.players.length;
-    grid.innerHTML = '';
+    grid.replaceChildren();
 
     if (list.length === 0) {
       grid.appendChild(el('div', { class: 'vh-empty' },
@@ -189,7 +185,7 @@
       );
     }
     $('#catalog-count').textContent = list.length;
-    grid.innerHTML = '';
+    grid.replaceChildren();
 
     if (list.length === 0) {
       grid.appendChild(el('div', { class: 'vh-empty' },
@@ -237,7 +233,7 @@
 
   function renderAudit(rows) {
     const tbody = $('#audit-tbody');
-    tbody.innerHTML = '';
+    tbody.replaceChildren();
     if (!Array.isArray(rows) || rows.length === 0) {
       const tr = el('tr', null,
         el('td', { class: 'vh-table-empty', colspan: 7 }, 'Nenhum registro encontrado.'));
@@ -275,7 +271,7 @@
 
   function fillGroupSelect() {
     const sel = $('#modal-group');
-    sel.innerHTML = '';
+    sel.replaceChildren();
     for (const g of state.catalog) {
       const opt = el('option', { value: g.id }, `${g.label}  [${g.type}]`);
       sel.appendChild(opt);
@@ -284,7 +280,7 @@
 
   function fillLevelSelect(group_id) {
     const sel = $('#modal-level');
-    sel.innerHTML = '';
+    sel.replaceChildren();
     const def = state.catalogById[group_id];
     if (!def) return;
     for (const l of def.levels || []) {

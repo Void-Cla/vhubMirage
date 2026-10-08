@@ -89,7 +89,7 @@ local MERGE_SPARSE = { mods = true, extras = true, parts = true }
 
 local function mergeCust(base, patch)
   if type(patch) ~= 'table' then return base end
-  if type(base) ~= 'table' then return patch end
+  if type(base) ~= 'table' then base = {} end
 
   local out = {}
   for k, v in pairs(base) do out[k] = v end       -- cópia rasa da base
@@ -102,9 +102,9 @@ local function mergeCust(base, patch)
     if type(patch[key]) == 'table' then
       local m = {}
       if type(base[key]) == 'table' then
-        for i, val in pairs(base[key]) do m[i] = val end
+        for i, val in pairs(base[key]) do m[tostring(i)] = val end
       end
-      for i, val in pairs(patch[key]) do m[i] = val end
+      for i, val in pairs(patch[key]) do m[tostring(i)] = val end
       out[key] = m
     end
   end
@@ -113,11 +113,12 @@ local function mergeCust(base, patch)
 end
 
 -- array de índices inteiros 0..maxIdx, dedup, cap de tamanho — ou nil se vazio
-local function sanitizeIdxArray(t, maxIdx, cap)
+local function sanitizeIdxArray(t, maxIdx, cap, pneus)
   if type(t) ~= 'table' then return nil end
   local out, seen, n = {}, {}, 0
   for _, v in pairs(t) do
-    if type(v) == 'number' and v == math.floor(v) and v >= 0 and v <= maxIdx and not seen[v] then
+    if type(v) == 'number' and v == math.floor(v) and v >= 0
+        and (v <= maxIdx or (pneus and (v == 45 or v == 47))) and not seen[v] then
       seen[v] = true; n = n + 1; out[n] = v
       if n > cap then return nil end   -- payload acima do plausível = hostil, descarta
     end
@@ -132,8 +133,8 @@ local function sanitizeDamageJson(d)
   local out = {
     doors     = sanitizeIdxArray(d.doors, 5, 6),
     windows   = sanitizeIdxArray(d.windows, 7, 8),
-    tyres     = sanitizeIdxArray(d.tyres, 7, 8),
-    tyres_rim = sanitizeIdxArray(d.tyres_rim, 7, 8),
+    tyres     = sanitizeIdxArray(d.tyres, 7, 10, true),
+    tyres_rim = sanitizeIdxArray(d.tyres_rim, 7, 10, true),
   }
   local j = U.jenc(out)
   if not j or #j > 2048 then return nil end
@@ -147,6 +148,60 @@ end
 -- ============================================================
 
 local _cache = {}   -- [plate] = state decodificado
+local versoesCache = {}
+local fisica = {}
+
+-- Epoch/barreira são privados. State Bag replicável pelo owner é somente espelho.
+local function registroFisico(plate, netId)
+  local p = U.normalizePlate(plate)
+  if not p or type(netId) ~= 'number' or netId < 1 or netId > 65535 or netId % 1 ~= 0 then return nil end
+  local entidade = NetworkGetEntityFromNetworkId(netId)
+  if not entidade or entidade == 0 or not DoesEntityExist(entidade)
+      or GetEntityType(entidade) ~= 2 or U.normalizePlate(GetVehicleNumberPlateText(entidade)) ~= p then return nil end
+  local registro = fisica[p]
+  if not registro or registro.entidade ~= entidade or registro.netId ~= netId then
+    if registro and registro.token then return nil end
+    registro = { entidade = entidade, netId = netId, revisao = registro and registro.revisao + 1 or 0 }
+    fisica[p] = registro
+    Entity(entidade).state:set('vhub_custom:physicalRevision', registro.revisao, true)
+    Entity(entidade).state:set('vhub_custom:repair', nil, true)
+  end
+  return registro, p
+end
+
+function M:obterRevisaoFisica(plate, netId)
+  local p = U.normalizePlate(plate)
+  if not p or (not fisica[p] and ss('SELECT 1 FROM vhub_vehicles WHERE plate = ? LIMIT 1', { p }) == nil) then return nil end
+  local registro = registroFisico(plate, netId)
+  if not registro then return nil end
+  return registro.revisao, registro.token ~= nil
+end
+
+function M:iniciarManutencao(plate, netId, token)
+  if type(token) ~= 'string' or #token < 8 or #token > 64 then return nil end
+  local registro = registroFisico(plate, netId)
+  if not registro or registro.token then return nil end
+  registro.revisao, registro.token = registro.revisao + 1, token
+  local bags = Entity(registro.entidade).state
+  bags:set('vhub_custom:physicalRevision', registro.revisao, true)
+  bags:set('vhub_custom:repair', token, true)
+  return registro.revisao
+end
+
+function M:encerrarManutencao(plate, token)
+  local p = U.normalizePlate(plate)
+  local registro = p and fisica[p]
+  if not registro or registro.token ~= token then return false end
+  registro.revisao, registro.token = registro.revisao + 1, nil
+  if DoesEntityExist(registro.entidade)
+      and NetworkGetEntityFromNetworkId(registro.netId) == registro.entidade
+      and U.normalizePlate(GetVehicleNumberPlateText(registro.entidade)) == p then
+    local bags = Entity(registro.entidade).state
+    bags:set('vhub_custom:physicalRevision', registro.revisao, true)
+    bags:set('vhub_custom:repair', nil, true)
+  end
+  return true
+end
 
 -- remove a placa do cache (chamado por deleteVehicle)
 function M:evict(plate)
@@ -238,9 +293,10 @@ end
 
 -- estado físico da placa: linha decodificada, ou estado de fábrica se a placa é
 -- registrada mas nunca persistiu, ou nil se a placa NÃO existe no negócio
-function M:get(plate)
+function M:get(plate, tentativa)
   local p = U.normalizePlate(plate); if not p then return nil end
   if _cache[p] then return _cache[p] end
+  local versao = versoesCache[p] or 0
 
   local rows = sq('SELECT * FROM vhub_vehicle_state WHERE plate = ? LIMIT 1', { p })
   local st
@@ -259,6 +315,14 @@ function M:get(plate)
   else
     if ss('SELECT 1 FROM vhub_vehicles WHERE plate = ? LIMIT 1', { p }) == nil then return nil end
     st = factoryState()
+  end
+  if versao ~= (versoesCache[p] or 0) then
+    if (tentativa or 0) >= 2 then return nil end
+    return self:get(p, (tentativa or 0) + 1)
+  end
+  st.damage = type(st.damage) == 'table' and st.damage or {}
+  for _, chave in ipairs({ 'doors', 'windows', 'tyres', 'tyres_rim' }) do
+    if type(st.damage[chave]) ~= 'table' then st.damage[chave] = {} end
   end
   _cache[p] = st
   return st
@@ -291,7 +355,32 @@ end
 -- patch: { engine_health, body_health, odometer_add (DELTA km),
 --          customization (tabela), damage (tabela; {} = limpa) }
 -- source: 'telemetry' | 'store' | 'seed' | 'repair' | 'cosmetic' | 'tune' | 'handling' | 'system'
+local gravacoes = {}
+
+local function telemetriaAtual(plate, patch)
+  local netId = patch._physical_net_id
+  if type(netId) ~= 'number' then return false end
+  local registro = registroFisico(plate, netId)
+  return registro ~= nil and not registro.token and (patch._physical_revision or 0) == registro.revisao
+end
+
+-- Serialização por placa: merges concorrentes não perdem peças; reparo vence snapshots anteriores.
 function M:save(plate, patch, source)
+  local p = U.normalizePlate(plate)
+  if not p or type(patch) ~= 'table' then return false end
+  local prazo = GetGameTimer() + 3000
+  while gravacoes[p] do
+    if GetGameTimer() >= prazo then return false end
+    Citizen.Wait(10)
+  end
+  gravacoes[p] = true
+  local ok, resultado = pcall(self.salvarSerializado, self, p, patch, source)
+  gravacoes[p] = nil
+  if not ok then print('[vhub_conce] Falha de persistência veicular: ' .. p); return false end
+  return resultado
+end
+
+function M:salvarSerializado(plate, patch, source)
   local p = U.normalizePlate(plate)
   if not p or type(patch) ~= 'table' then return false end
   source = source or 'system'
@@ -347,7 +436,10 @@ function M:save(plate, patch, source)
   if dmgJson then setcol('damage', dmgJson) end
 
   -- histórico de dano: append interno em queda brusca de health (telemetria) ou reparo
-  local log = (cur and type(cur.damage_log) == 'table') and cur.damage_log or {}
+  local log = {}
+  if cur and type(cur.damage_log) == 'table' then
+    for i, evento in ipairs(cur.damage_log) do log[i] = evento end
+  end
   local logChanged = false
   if source == 'telemetry' and cur and (eng or body) then
     local dEng  = eng  and ((cur.engine_health or 1000.0) - eng)  or 0
@@ -358,7 +450,9 @@ function M:save(plate, patch, source)
       logChanged = true
     end
   elseif source == 'repair' then
-    log[#log+1] = { t = os.time(), repair = true }
+    local operacao = type(patch._repair_operation_id) == 'string' and #patch._repair_operation_id <= 64
+      and patch._repair_operation_id or nil
+    log[#log+1] = { t = os.time(), repair = true, operation_id = operacao }
     logChanged = true
   end
   if logChanged then
@@ -374,7 +468,9 @@ function M:save(plate, patch, source)
     :format(table.concat(cols, ', '), (', ?'):rep(#cols), table.concat(upds, ', '))
   table.insert(vals, 1, p)
 
+  if source == 'telemetry' and not telemetriaAtual(p, patch) then return false end
   local ok = se(sql, vals)
+  versoesCache[p] = (versoesCache[p] or 0) + 1
   _cache[p] = nil   -- invalidação no write (read-through repõe)
 
   return ok ~= nil
@@ -416,6 +512,7 @@ function M:seed(plate, custJson)
     INSERT IGNORE INTO vhub_vehicle_state (plate, customization, updated_at)
     VALUES (?, ?, ?)
   ]], { p, custJson, os.time() })
+  versoesCache[p] = (versoesCache[p] or 0) + 1
   _cache[p] = nil
   return ok ~= nil
 end
@@ -424,6 +521,8 @@ end
 function M:delete(plate)
   local p = U.normalizePlate(plate); if not p then return false end
   se('DELETE FROM vhub_vehicle_state WHERE plate = ?', { p })
+  fisica[p] = nil
+  versoesCache[p] = (versoesCache[p] or 0) + 1
   _cache[p] = nil
   return true
 end

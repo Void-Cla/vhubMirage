@@ -132,3 +132,39 @@ exports("getPersistenceTest", function(token)
   if result and result.done then _testResults[token] = nil end
   return result
 end)
+
+-- Inicia carga descartável de 70 cadastros somente pelo testrunner em modo de teste.
+exports("runRegistrationLoadTest", function()
+  if GetConvar("vhub_test_mode", "0") ~= "1"
+    or GetInvokingResource() ~= "vhub_testrunner"
+    or _testRunning then
+    return nil
+  end
+
+  _testRunning = true
+  _testSeq = _testSeq + 1
+  local token = ("login-load:%d:%d"):format(GetGameTimer(), _testSeq)
+  _testResults[token] = { done = false }
+  Citizen.CreateThread(function()
+    local ok, result = pcall(C.testarCargaCadastro, 70)
+    local completed = { done = true, result = ok and result or false }
+    _testResults[token] = completed
+    _testRunning = false
+    Citizen.SetTimeout(60000, function()
+      if _testResults[token] == completed then _testResults[token] = nil end
+    end)
+  end)
+  return token
+end)
+
+-- Consulta e consome o resultado da carga de cadastro controlada.
+exports("getRegistrationLoadTest", function(token)
+  if GetConvar("vhub_test_mode", "0") ~= "1"
+    or GetInvokingResource() ~= "vhub_testrunner"
+    or type(token) ~= "string" then
+    return nil
+  end
+  local result = _testResults[token]
+  if result and result.done then _testResults[token] = nil end
+  return result
+end)

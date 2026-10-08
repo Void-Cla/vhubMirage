@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_money'
 author      'vHub Mirage'
-version     '2.3.0'
+version     '2.4.1'
 description 'Fleeca Camell — carteira, banco, ATMs, transferencias P2P e auditoria.'
 
 dependencies {
@@ -21,6 +21,7 @@ shared_scripts {
 
 server_scripts {
   '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',
   'server/core.lua',
   'server/transfer.lua',

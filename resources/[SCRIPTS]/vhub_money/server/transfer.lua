@@ -1,242 +1,162 @@
--- server/transfer.lua — vhub_money (Fleeca Camell)
--- Transferencia P2P (chave Pix). Aceita identificadores:
---   - char_id direto (numero)
---   - registration (registro civil — via exports.vhub_identity:getCharByRegistration)
---   - phone (telefone — via exports.vhub_identity:getCharByPhone)
---
--- Regras:
---   - server-side total: validacao de saldo, taxa, limites
---   - actor e target podem ser o mesmo char (deposito proprio noop — bloqueado)
---   - target online: atualiza VRAM + state bag
---   - target offline: aplica direto no SQL (UPDATE atomic + INSERT tx)
+-- server/transfer.lua — transferencias P2P atomicas e idempotentes.
 
 VHubMoneyTransfer = {}
 local T = VHubMoneyTransfer
-local Cfg  = VHubMoneyCfg
-local H    = VHubMoneyH
+local Cfg = VHubMoneyCfg
+local H = VHubMoneyH
 local Core = VHubMoneyCore
-local SQL  = VHubMoneySQL
+local SQL = VHubMoneySQL
 
--- ── Resolucao de identificador ──────────────────────────────────────────────
+local sequence = 0
 
--- Resolve char_id a partir de qualquer identificador suportado
+local function clean_reason(value, fallback)
+  if type(value) ~= 'string' then return fallback end
+  local clean = value:gsub('[%c]', ''):sub(1, 180)
+  return clean ~= '' and clean or fallback
+end
+
+local function operation_id(prefix, actor_char_id, supplied)
+  if supplied ~= nil then
+    if type(supplied) ~= 'string' or #supplied < 8 or #supplied > 48
+        or not supplied:match('^[%w:_%-]+$') then
+      return nil
+    end
+    return ('%s:%d:%s'):format(prefix, actor_char_id, supplied)
+  end
+  sequence = (sequence + 1) % 1000000
+  return ('%s:%d:%d:%d:%d'):format(prefix, actor_char_id, os.time(), GetGameTimer(), sequence)
+end
+
+function T.new_operation_id(prefix)
+  return operation_id(tostring(prefix or 'operation'), 0, nil)
+end
+
+local function lock_pair(actor_char_id, target_char_id, token)
+  if Core._operation_locks[actor_char_id] or Core._operation_locks[target_char_id] then return false end
+  Core._operation_locks[actor_char_id] = token
+  Core._operation_locks[target_char_id] = token
+  return true
+end
+
+local function unlock_pair(actor_char_id, target_char_id, token)
+  if Core._operation_locks[actor_char_id] == token then Core._operation_locks[actor_char_id] = nil end
+  if Core._operation_locks[target_char_id] == token then Core._operation_locks[target_char_id] = nil end
+end
+
+local function preflush(entry)
+  if not entry or not entry.dirty then return true end
+  local ok = SQL.save_account(entry.char_id, entry.wallet, entry.bank, entry.total_in, entry.total_out)
+  if ok == true then
+    entry.dirty = false
+    entry.last_save_ms = GetGameTimer()
+  end
+  return ok == true
+end
+
+local function apply_snapshot(entry, snapshot)
+  if not entry or not snapshot or Core._by_char[entry.char_id] ~= entry then return end
+  entry.wallet = snapshot.wallet
+  entry.bank = snapshot.bank
+  entry.total_in = snapshot.total_in
+  entry.total_out = snapshot.total_out
+  entry.dirty = false
+  entry.revision = entry.revision + 1
+  entry.last_save_ms = GetGameTimer()
+  pcall(Core.sync_state_bag, entry)
+end
+
 function T.resolve_target_char(raw)
   local kind, value = H.detect_target_kind(raw)
   if not kind then return nil, 'identificador_invalido' end
+  if kind == 'char_id' then return tonumber(value), nil end
 
-  if kind == 'char_id' then
-    return tonumber(value), nil
-  end
-
+  local char_id
   if kind == 'phone' and Cfg.TRANSFER.BY_PHONE then
-    local cid = nil
-    pcall(function() cid = exports.vhub_identity:getCharByPhone(value) end)
-    return cid, cid and nil or 'telefone_nao_encontrado'
+    pcall(function() char_id = exports.vhub_identity:getCharByPhone(value) end)
+    return char_id, char_id and nil or 'telefone_nao_encontrado'
   end
-
   if kind == 'registration' and Cfg.TRANSFER.BY_REGISTRATION then
-    local cid = nil
-    pcall(function() cid = exports.vhub_identity:getCharByRegistration(value) end)
-    return cid, cid and nil or 'registro_nao_encontrado'
+    pcall(function() char_id = exports.vhub_identity:getCharByRegistration(value) end)
+    return char_id, char_id and nil or 'registro_nao_encontrado'
   end
-
   return nil, 'tipo_de_chave_desabilitado'
 end
 
--- ── Operacao com target offline ─────────────────────────────────────────────
+local function execute(actor_entry, target_entry, target_char_id, amount, fee, kind, reason, request_id)
+  local prefix = kind == 'cash_give' and 'give' or 'transfer'
+  local op = operation_id(prefix, actor_entry.char_id, request_id)
+  if not op then return false, 'conflict' end
+  local token = op
+  if not lock_pair(actor_entry.char_id, target_char_id, token) then return false, 'busy' end
 
--- Atualiza saldo de uma conta offline no SQL diretamente. Retorna ok, new_bank.
-local function update_offline_bank(char_id, delta)
-  -- Carrega conta (cria se nao existir) — VRAM se ja estiver, senao SQL
-  local entry = Core.by_char(char_id)
-  if entry then
-    if Core.is_operation_locked(entry) then return false, 'busy' end
-    -- Online: usa caminho de VRAM normal
-    Core.apply_mutation(entry, 0, delta)
-    return true, entry.bank
+  local called, outcome = pcall(function()
+    if not preflush(actor_entry) or not preflush(target_entry) then return { err = 'storage' } end
+    return SQL.transfer_atomic(actor_entry.char_id, target_char_id, amount, fee, kind, op, reason)
+  end)
+
+  if called and outcome and outcome.ok then
+    apply_snapshot(actor_entry, outcome.actor)
+    apply_snapshot(target_entry, outcome.target)
   end
+  unlock_pair(actor_entry.char_id, target_char_id, token)
 
-  -- Offline: UPDATE atomic com check de saldo
-  if delta < 0 then
-    -- Saca offline: verifica saldo antes
-    local rows = SQL.query("SELECT bank FROM vh_money_accounts WHERE char_id = ?", { char_id })
-    if not rows[1] then return false, 'conta_inexistente' end
-    local current = tonumber(rows[1].bank) or 0
-    if current + delta < 0 then return false, 'saldo_insuficiente_offline' end
+  if not called or not outcome or not outcome.ok then
+    return false, outcome and outcome.err or 'storage'
   end
-
-  local rows = SQL.query([[
-    UPDATE vh_money_accounts
-    SET bank = GREATEST(0, bank + ?),
-        total_in  = total_in  + IF(? > 0, ?, 0),
-        total_out = total_out + IF(? < 0, ABS(?), 0)
-    WHERE char_id = ?
-  ]], { delta, delta, delta, delta, delta, char_id })
-
-  -- Le saldo atualizado
-  local r = SQL.query("SELECT bank FROM vh_money_accounts WHERE char_id = ? LIMIT 1", { char_id })
-  return true, r[1] and tonumber(r[1].bank) or 0
+  if outcome.replayed ~= true then
+    Core.metrics.transactions = (Core.metrics.transactions or 0) + (fee > 0 and 3 or 2)
+  end
+  return true, outcome
 end
 
--- ── Transferencia bank→bank P2P ─────────────────────────────────────────────
-
--- Transfere `amount` do banco do `actor_src` para o banco de `target_raw`.
--- target_raw pode ser char_id|registration|phone.
--- Retorna ok, payload_or_err
-function T.try_transfer(actor_src, target_raw, amount, reason)
+function T.try_transfer(actor_src, target_raw, amount, reason, request_id)
   local cfg = Cfg.TRANSFER
   local actor_entry = Core.by_src(tonumber(actor_src) or 0)
   if not actor_entry then return false, 'sem_sessao' end
-  if Core.is_operation_locked(actor_entry) then return false, 'busy' end
 
   local n = H.amount(amount)
   if n < (cfg.MIN_AMOUNT or 1) then return false, 'valor_abaixo_do_minimo' end
   if cfg.MAX_AMOUNT > 0 and n > cfg.MAX_AMOUNT then return false, 'valor_acima_do_maximo' end
 
-  -- Resolve target
   local target_char_id, err = T.resolve_target_char(target_raw)
   if not target_char_id then return false, err or 'destino_invalido' end
   if target_char_id == actor_entry.char_id then return false, 'autotransferencia' end
 
-  -- Calcula taxa
-  local fee = H.transfer_fee(n, cfg.FEE_PERCENT, cfg.FEE_FIXED)
-  if actor_entry.owner then fee = 0 end   -- owner bypass
-
-  local total_debit = n + fee
-  if actor_entry.bank < total_debit then return false, 'saldo_insuficiente' end
-
-  -- Target online?
   local target_entry = Core.by_char(target_char_id)
-  if target_entry and Core.is_operation_locked(target_entry) then return false, 'busy' end
-  if cfg.REQUIRE_TARGET_ONLINE and not target_entry then
-    return false, 'destinatario_offline'
-  end
+  if cfg.REQUIRE_TARGET_ONLINE and not target_entry then return false, 'destinatario_offline' end
+  local fee = actor_entry.owner and 0 or H.transfer_fee(n, cfg.FEE_PERCENT, cfg.FEE_FIXED)
+  if actor_entry.bank < n + fee then return false, 'saldo_insuficiente' end
 
-  -- Debita actor
-  Core.apply_mutation(actor_entry, 0, -total_debit)
-  -- Nao conta total_out: foi mudanca interna (entre banco e fee). Vai pra log.
-  actor_entry.total_out = actor_entry.total_out - total_debit
-  actor_entry.total_in  = actor_entry.total_in  -- nada
+  local ok, result = execute(actor_entry, target_entry, target_char_id, n, fee, 'bank_transfer',
+    clean_reason(reason, 'transfer_p2p'), request_id)
+  if not ok then return false, result end
 
-  -- Credita target
-  local ok_credit, target_balance_or_err
-  if target_entry then
-    Core.apply_mutation(target_entry, 0, n)
-    target_entry.total_in = target_entry.total_in - n   -- compensa apply
-    target_balance_or_err = target_entry.bank
-    ok_credit = true
-  else
-    ok_credit, target_balance_or_err = update_offline_bank(target_char_id, n)
-    if not ok_credit then
-      -- Rollback do actor
-      Core.apply_mutation(actor_entry, 0, total_debit)
-      actor_entry.total_out = actor_entry.total_out + total_debit
-      return false, target_balance_or_err or 'falha_credito_destino'
-    end
-  end
-
-  -- Log: 2 entradas (saida do actor, entrada do target) + 1 entrada se houver taxa
-  local now_entries = {
-    {
-      actor_char_id  = actor_entry.char_id,
-      target_char_id = target_char_id,
-      kind           = H.KIND.TRANSFER_OUT,
-      amount         = n,
-      source_account = H.ACCOUNT.BANK,
-      target_account = H.ACCOUNT.BANK,
-      balance_wallet = actor_entry.wallet,
-      balance_bank   = actor_entry.bank,
-      reason         = tostring(reason or 'transfer_p2p'),
-    },
-    {
-      actor_char_id  = actor_entry.char_id,
-      target_char_id = target_char_id,
-      kind           = H.KIND.TRANSFER_IN,
-      amount         = n,
-      source_account = H.ACCOUNT.BANK,
-      target_account = H.ACCOUNT.BANK,
-      balance_wallet = target_entry and target_entry.wallet or 0,
-      balance_bank   = target_balance_or_err or 0,
-      reason         = tostring(reason or 'transfer_p2p'),
-    },
-  }
-  if fee > 0 then
-    now_entries[#now_entries + 1] = {
-      actor_char_id  = actor_entry.char_id,
-      target_char_id = actor_entry.char_id,
-      kind           = H.KIND.PAYMENT,
-      amount         = fee,
-      source_account = H.ACCOUNT.BANK,
-      target_account = H.ACCOUNT.NONE,
-      balance_wallet = actor_entry.wallet,
-      balance_bank   = actor_entry.bank,
-      reason         = 'transfer_fee',
-    }
-  end
-  SQL.tx_insert_batch(now_entries)
-  Core.metrics.transactions = (Core.metrics.transactions or 0) + #now_entries
-
-  -- Notifica target online
-  if target_entry and target_entry.src and target_entry.src > 0 then
+  if target_entry and target_entry.src and target_entry.src > 0 and result.replayed ~= true then
     TriggerClientEvent('vhub_money:notify', target_entry.src,
-      ('Transferencia recebida: %s'):format(H.fmt(n)),
-      'success')
+      ('Transferencia recebida: %s'):format(H.fmt(n)), 'success')
   end
-
   return true, {
-    amount       = n,
-    fee          = fee,
-    new_bank     = actor_entry.bank,
-    target_char  = target_char_id,
+    amount = n,
+    fee = fee,
+    new_bank = result.actor.bank,
+    target_char = target_char_id,
+    replayed = result.replayed == true,
   }
 end
 
--- ── Doacao em mao (carteira → carteira, player perto) ───────────────────────
-
--- Entrega `amount` da carteira de actor para a carteira de target (online).
-function T.try_give(actor_src, target_src, amount, reason)
-  local actor_entry  = Core.by_src(tonumber(actor_src) or 0)
+function T.try_give(actor_src, target_src, amount, reason, request_id)
+  local actor_entry = Core.by_src(tonumber(actor_src) or 0)
   local target_entry = Core.by_src(tonumber(target_src) or 0)
-  if not actor_entry  then return false, 'sem_sessao' end
+  if not actor_entry then return false, 'sem_sessao' end
   if not target_entry then return false, 'destino_offline' end
-  if Core.is_operation_locked(actor_entry) or Core.is_operation_locked(target_entry) then
-    return false, 'busy'
-  end
   if actor_entry.char_id == target_entry.char_id then return false, 'autotransferencia' end
 
   local n = H.amount(amount)
   if n <= 0 then return false, 'valor_invalido' end
   if actor_entry.wallet < n then return false, 'saldo_insuficiente' end
 
-  Core.apply_mutation(actor_entry, -n, 0)
-  Core.apply_mutation(target_entry, n, 0)
-  actor_entry.total_out  = actor_entry.total_out  - n
-  target_entry.total_in  = target_entry.total_in  - n
-
-  SQL.tx_insert_batch({
-    {
-      actor_char_id  = actor_entry.char_id,
-      target_char_id = target_entry.char_id,
-      kind           = H.KIND.GIVE,
-      amount         = n,
-      source_account = H.ACCOUNT.WALLET,
-      target_account = H.ACCOUNT.WALLET,
-      balance_wallet = actor_entry.wallet,
-      balance_bank   = actor_entry.bank,
-      reason         = tostring(reason or 'cash_give'),
-    },
-    {
-      actor_char_id  = actor_entry.char_id,
-      target_char_id = target_entry.char_id,
-      kind           = H.KIND.GIVE,
-      amount         = n,
-      source_account = H.ACCOUNT.WALLET,
-      target_account = H.ACCOUNT.WALLET,
-      balance_wallet = target_entry.wallet,
-      balance_bank   = target_entry.bank,
-      reason         = tostring(reason or 'cash_give_received'),
-    },
-  })
-
-  return true, { amount = n, target_char = target_entry.char_id }
+  local ok, result = execute(actor_entry, target_entry, target_entry.char_id, n, 0, 'cash_give',
+    clean_reason(reason, 'cash_give'), request_id)
+  if not ok then return false, result end
+  return true, { amount = n, target_char = target_entry.char_id, replayed = result.replayed == true }
 end

@@ -102,6 +102,10 @@
       head.appendChild(htext);
       _el.appendChild(head);
 
+      if (typeof def.descricao === 'string' && def.descricao.length > 0) {
+        _el.appendChild(node('p', 'insp-description', def.descricao));
+      }
+
       // ---- grade de propriedades ----
       const grid = node('div', 'insp-meta');
 

@@ -1,7 +1,7 @@
 ---
 name: vhub_arquiteto
 description: Use for architectural decisions in the vHub Mirage FiveM project: ownership questions, placement of new modules or resources, new rows in the Ownership Registry, phase assignments, or reviewing any structural change. Invoke before any worker executes a structural change.
-model: claude-opus-4-7
+model: claude-opus-4-8
 effort: xhigh
 ---
 
@@ -28,6 +28,8 @@ REPROVAR IMEDIATO:
 
 VERIFICAR ANTES DE APROVAR:
 □ Camada (L1–L4) e ownership único declarados? □ Linha do Registro escrita? □ Lifecycle definido (L4)? □ Contrato de escrita para terceiros definido (commit/export), nunca acesso interno? □ Replay-safe se escuta eventos institucionais (L-17)? □ Deleções acompanham criações (L-15)?
+
+> MCPs: `repowise` (always-on) — `get_overview()` em sessão nova; `get_context(arquivos_tocados, include=['callers','callees'])` antes de propor placement; `get_why(dúvida_ADR)` antes de reprovar decisão existente; `get_risk(targets)` para avaliar impacto estrutural. `git` (histórico/blame). Chamar repowise ANTES de grep extensivo.
 
 FORMATO (único + campos do arquiteto):
 VEREDITO: APROVAR | REPROVAR | REDUZIR_ESCOPO

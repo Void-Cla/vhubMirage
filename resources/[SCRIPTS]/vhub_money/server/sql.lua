@@ -136,6 +136,171 @@ end
 -- ── Transactions (log auditavel) ─────────────────────────────────────────────
 
 -- Append-only. Fire-and-forget: nao bloqueia o caller.
+-- Move valor entre duas contas e grava ledger no mesmo commit SQL.
+-- operation_id torna retries seguros; payload divergente falha fechado.
+function S.transfer_atomic(actor_char_id, target_char_id, amount, fee, kind, operation_id, reason)
+  local outcome = { err = 'storage' }
+  local source_column = kind == 'cash_give' and 'wallet' or 'bank'
+  local total_debit = amount + fee
+
+  local called, committed = pcall(MySQL.startTransaction, function(query)
+    local prior_rows = query([[
+      SELECT * FROM vh_money_transfers WHERE operation_id = ? FOR UPDATE
+    ]], { operation_id })
+    local prior = prior_rows and prior_rows[1]
+    if prior then
+      if tonumber(prior.actor_char_id) ~= actor_char_id
+        or tonumber(prior.target_char_id) ~= target_char_id
+        or tonumber(prior.amount) ~= amount
+        or tonumber(prior.fee) ~= fee
+        or tostring(prior.kind) ~= kind
+        or tostring(prior.reason) ~= reason then
+        outcome = { err = 'conflict' }
+        return false
+      end
+      local current_rows = query([[
+        SELECT char_id, wallet, bank, total_in, total_out
+        FROM vh_money_accounts
+        WHERE char_id IN (?, ?)
+        ORDER BY char_id
+        FOR UPDATE
+      ]], { actor_char_id, target_char_id })
+      if not current_rows or #current_rows ~= 2 then
+        outcome = { err = 'storage' }
+        return false
+      end
+      local current = {}
+      for _, account in ipairs(current_rows) do current[tonumber(account.char_id)] = account end
+      local current_actor = current[actor_char_id]
+      local current_target = current[target_char_id]
+      if not current_actor or not current_target then
+        outcome = { err = 'storage' }
+        return false
+      end
+      outcome = {
+        ok = true,
+        replayed = true,
+        actor = {
+          wallet = tonumber(current_actor.wallet) or 0,
+          bank = tonumber(current_actor.bank) or 0,
+          total_in = tonumber(current_actor.total_in) or 0,
+          total_out = tonumber(current_actor.total_out) or 0,
+        },
+        target = {
+          wallet = tonumber(current_target.wallet) or 0,
+          bank = tonumber(current_target.bank) or 0,
+          total_in = tonumber(current_target.total_in) or 0,
+          total_out = tonumber(current_target.total_out) or 0,
+        },
+      }
+      return true
+    end
+
+    local rows = query([[
+      SELECT char_id, wallet, bank, total_in, total_out
+      FROM vh_money_accounts
+      WHERE char_id IN (?, ?)
+      ORDER BY char_id
+      FOR UPDATE
+    ]], { actor_char_id, target_char_id })
+    if not rows or #rows ~= 2 then
+      outcome = { err = 'conta_inexistente' }
+      return false
+    end
+
+    local actor, target
+    for _, row in ipairs(rows) do
+      if tonumber(row.char_id) == actor_char_id then actor = row end
+      if tonumber(row.char_id) == target_char_id then target = row end
+    end
+    if not actor or not target then
+      outcome = { err = 'conta_inexistente' }
+      return false
+    end
+
+    local actor_wallet = tonumber(actor.wallet) or 0
+    local actor_bank = tonumber(actor.bank) or 0
+    local target_wallet = tonumber(target.wallet) or 0
+    local target_bank = tonumber(target.bank) or 0
+    local available = source_column == 'wallet' and actor_wallet or actor_bank
+    if available < total_debit then
+      outcome = { err = 'saldo_insuficiente' }
+      return false
+    end
+
+    if source_column == 'wallet' then
+      actor_wallet = actor_wallet - total_debit
+      target_wallet = target_wallet + amount
+    else
+      actor_bank = actor_bank - total_debit
+      target_bank = target_bank + amount
+    end
+    local actor_total_in = tonumber(actor.total_in) or 0
+    local actor_total_out = (tonumber(actor.total_out) or 0) + total_debit
+    local target_total_in = (tonumber(target.total_in) or 0) + amount
+    local target_total_out = tonumber(target.total_out) or 0
+
+    local actor_updated = query([[
+      UPDATE vh_money_accounts SET wallet = ?, bank = ?, total_in = ?, total_out = ?
+      WHERE char_id = ?
+    ]], { actor_wallet, actor_bank, actor_total_in, actor_total_out, actor_char_id })
+    local target_updated = query([[
+      UPDATE vh_money_accounts SET wallet = ?, bank = ?, total_in = ?, total_out = ?
+      WHERE char_id = ?
+    ]], { target_wallet, target_bank, target_total_in, target_total_out, target_char_id })
+    if not actor_updated or tonumber(actor_updated.affectedRows) ~= 1
+      or not target_updated or tonumber(target_updated.affectedRows) ~= 1 then
+      outcome = { err = 'conflict' }
+      return false
+    end
+
+    query([[
+      INSERT INTO vh_money_transfers
+        (operation_id, actor_char_id, target_char_id, kind, amount, fee, reason,
+         actor_wallet, actor_bank, actor_total_in, actor_total_out,
+         target_wallet, target_bank, target_total_in, target_total_out)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ]], {
+      operation_id, actor_char_id, target_char_id, kind, amount, fee, reason,
+      actor_wallet, actor_bank, actor_total_in, actor_total_out,
+      target_wallet, target_bank, target_total_in, target_total_out,
+    })
+
+    local actor_kind = kind == 'cash_give' and 'give' or 'transfer_out'
+    local target_kind = kind == 'cash_give' and 'give' or 'transfer_in'
+    query([[
+      INSERT INTO vh_money_transactions
+        (actor_char_id, target_char_id, kind, amount, source_account, target_account,
+         balance_wallet, balance_bank, reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ]], {
+      actor_char_id, target_char_id, actor_kind, amount, source_column, source_column,
+      actor_wallet, actor_bank, reason,
+      actor_char_id, target_char_id, target_kind, amount, source_column, source_column,
+      target_wallet, target_bank, reason,
+    })
+    if fee > 0 then
+      query([[
+        INSERT INTO vh_money_transactions
+          (actor_char_id, target_char_id, kind, amount, source_account, target_account,
+           balance_wallet, balance_bank, reason)
+        VALUES (?, ?, 'payment', ?, 'bank', 'none', ?, ?, 'transfer_fee')
+      ]], { actor_char_id, actor_char_id, fee, actor_wallet, actor_bank })
+    end
+
+    outcome = {
+      ok = true,
+      replayed = false,
+      actor = { wallet = actor_wallet, bank = actor_bank, total_in = actor_total_in, total_out = actor_total_out },
+      target = { wallet = target_wallet, bank = target_bank, total_in = target_total_in, total_out = target_total_out },
+    }
+    return true
+  end)
+
+  if not called or committed ~= true then return outcome end
+  return outcome
+end
+
 function S.tx_insert(tx)
   exports.oxmysql:execute([[
     INSERT INTO vh_money_transactions
@@ -418,12 +583,134 @@ function S.refund_payment(operation_id)
   return outcome
 end
 
+-- Debito, credito, reserva idempotente e ledger no mesmo commit InnoDB.
+-- source_account/target_account sao constantes internas: nunca entram como SQL dinamico.
+function S.commit_transfer(actor_char_id, target_char_id, amount, fee, source_account, target_account,
+                           operation_id, reason, kind_out, kind_in)
+  local outcome = { err = 'storage' }
+  if source_account ~= 'wallet' and source_account ~= 'bank' then return { err = 'invalid_account' } end
+  if target_account ~= 'wallet' and target_account ~= 'bank' then return { err = 'invalid_account' } end
+
+  local called, committed = pcall(MySQL.startTransaction, function(query)
+    -- Cria a conta destino somente se o personagem existir; FK impede char_id fantasma.
+    query([[INSERT IGNORE INTO vh_money_accounts (char_id, wallet, bank)
+      SELECT id, 0, 0 FROM vh_characters WHERE id = ?]], { target_char_id })
+
+    -- A PK reserva a operacao antes de alterar saldo. Concorrentes aguardam e viram replay.
+    local inserted = query([[
+      INSERT IGNORE INTO vh_money_transfers
+        (operation_id, actor_char_id, target_char_id, amount, fee, source_account, target_account, reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ]], { operation_id, actor_char_id, target_char_id, amount, fee, source_account, target_account, reason })
+
+    local prior = query([[SELECT actor_char_id, target_char_id, amount, fee, source_account, target_account, reason
+      FROM vh_money_transfers WHERE operation_id = ? FOR UPDATE]], { operation_id })
+    local transfer = prior and prior[1]
+    if not transfer then outcome = { err = 'storage' }; return false end
+    if tonumber(transfer.actor_char_id) ~= actor_char_id
+      or tonumber(transfer.target_char_id) ~= target_char_id
+      or tonumber(transfer.amount) ~= amount
+      or tonumber(transfer.fee) ~= fee
+      or tostring(transfer.source_account) ~= source_account
+      or tostring(transfer.target_account) ~= target_account
+      or tostring(transfer.reason) ~= reason then
+      outcome = { err = 'conflict' }
+      return false
+    end
+
+    local accounts = query([[SELECT char_id, wallet, bank, total_in, total_out
+      FROM vh_money_accounts WHERE char_id IN (?, ?) ORDER BY char_id FOR UPDATE]],
+      { actor_char_id, target_char_id })
+    if not accounts or #accounts ~= 2 then outcome = { err = 'destino_invalido' }; return false end
+
+    local by_char = {}
+    for _, account in ipairs(accounts) do by_char[tonumber(account.char_id)] = account end
+    local actor = by_char[actor_char_id]
+    local target = by_char[target_char_id]
+    if not actor or not target then outcome = { err = 'destino_invalido' }; return false end
+
+    local replayed = not inserted or tonumber(inserted.affectedRows) ~= 1
+    if replayed then
+      outcome = { ok = true, replayed = true, actor = actor, target = target }
+      return true
+    end
+
+    local actor_wallet = tonumber(actor.wallet) or 0
+    local actor_bank = tonumber(actor.bank) or 0
+    local target_wallet = tonumber(target.wallet) or 0
+    local target_bank = tonumber(target.bank) or 0
+    local total_debit = amount + fee
+    local source_balance = source_account == 'wallet' and actor_wallet or actor_bank
+    if source_balance < total_debit then outcome = { err = 'saldo_insuficiente' }; return false end
+
+    if source_account == 'wallet' then actor_wallet = actor_wallet - total_debit else actor_bank = actor_bank - total_debit end
+    if target_account == 'wallet' then target_wallet = target_wallet + amount else target_bank = target_bank + amount end
+    local actor_total_out = (tonumber(actor.total_out) or 0) + total_debit
+    local target_total_in = (tonumber(target.total_in) or 0) + amount
+
+    local actor_updated = query([[UPDATE vh_money_accounts
+      SET wallet = ?, bank = ?, total_out = ?
+      WHERE char_id = ? AND wallet = ? AND bank = ?]],
+      { actor_wallet, actor_bank, actor_total_out, actor_char_id, actor.wallet, actor.bank })
+    local target_updated = query([[UPDATE vh_money_accounts
+      SET wallet = ?, bank = ?, total_in = ?
+      WHERE char_id = ? AND wallet = ? AND bank = ?]],
+      { target_wallet, target_bank, target_total_in, target_char_id, target.wallet, target.bank })
+    if not actor_updated or tonumber(actor_updated.affectedRows) ~= 1
+      or not target_updated or tonumber(target_updated.affectedRows) ~= 1 then
+      outcome = { err = 'conflict' }
+      return false
+    end
+
+    query([[INSERT INTO vh_money_transactions
+      (actor_char_id, target_char_id, kind, amount, source_account, target_account, balance_wallet, balance_bank, reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)]], {
+      actor_char_id, target_char_id, kind_out, amount, source_account, target_account, actor_wallet, actor_bank, reason,
+      actor_char_id, target_char_id, kind_in, amount, source_account, target_account, target_wallet, target_bank, reason,
+    })
+    if fee > 0 then
+      query([[INSERT INTO vh_money_transactions
+        (actor_char_id, target_char_id, kind, amount, source_account, target_account, balance_wallet, balance_bank, reason)
+        VALUES (?, ?, 'payment', ?, ?, 'none', ?, ?, 'transfer_fee')]],
+        { actor_char_id, actor_char_id, fee, source_account, actor_wallet, actor_bank })
+    end
+
+    outcome = {
+      ok = true, replayed = false,
+      actor = { wallet = actor_wallet, bank = actor_bank, total_in = tonumber(actor.total_in) or 0, total_out = actor_total_out },
+      target = { wallet = target_wallet, bank = target_bank, total_in = target_total_in, total_out = tonumber(target.total_out) or 0 },
+    }
+    return true
+  end)
+
+  if not called or committed ~= true then return outcome end
+  return outcome
+end
+
 function S.apply_schema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if type(schema) ~= 'string' or schema == '' then
     return false, 'schema_file_missing'
   end
-  S.execute_raw(schema)
+  local ok, erro = VHubSQLScript.aplicar(schema, function(instrucao)
+    MySQL.query.await(instrucao, {})
+  end)
+  if not ok then return false, erro end
+  -- Ledger deve sobreviver a exclusao de personagem. Remove FKs de uma versao
+  -- inicial que bloqueava o ciclo de vida canonico de vh_characters.
+  local constraints = S.query([[
+    SELECT CONSTRAINT_NAME
+    FROM information_schema.TABLE_CONSTRAINTS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'vh_money_transfers'
+      AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+  ]])
+  for _, row in ipairs(constraints or {}) do
+    local name = tostring(row.CONSTRAINT_NAME or '')
+    if name:match('^fk_money_transfer_') then
+      S.execute('ALTER TABLE vh_money_transfers DROP FOREIGN KEY `' .. name .. '`')
+    end
+  end
   S.ready = true
   return true
 end

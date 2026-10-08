@@ -7,12 +7,20 @@ CREATE TABLE IF NOT EXISTS `vh_identity` (
   `age`          TINYINT UNSIGNED NOT NULL DEFAULT 25,
   `registration` VARCHAR(20)      NOT NULL DEFAULT '',
   `phone`        VARCHAR(20)      NOT NULL DEFAULT '',
+  `role`         ENUM('legal','ilegal','mecanica','hospital','policia','livre') NULL DEFAULT NULL,
+  `backstory`    TEXT             NULL DEFAULT NULL,
   PRIMARY KEY (`char_id`),
   UNIQUE KEY `uk_registration` (`registration`),
   UNIQUE KEY `uk_phone` (`phone`),
   CONSTRAINT `fk_identity_char` FOREIGN KEY (`char_id`)
     REFERENCES `vh_characters` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `vh_identity`
+  ADD COLUMN IF NOT EXISTS `role`
+    ENUM('legal','ilegal','mecanica','hospital','policia','livre') NULL DEFAULT NULL;
+ALTER TABLE `vh_identity`
+  ADD COLUMN IF NOT EXISTS `backstory` TEXT NULL DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS `vh_identity_operations` (
   `operation_id`   VARCHAR(96)  NOT NULL,

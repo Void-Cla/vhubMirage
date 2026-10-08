@@ -145,17 +145,36 @@ end)
 local SYNC_MIN_MS  = 14000   -- gate temporal: telemetria legítima é 15s (L-18)
 local FINAL_MIN_MS = 2000    -- snapshot final (sair do banco) tem gate próprio
 local _syncAt, _finalAt, _reqAt = {}, {}, {}
+local motoristas = {}
 
 -- valida netId→entidade→placa→motorista (FAIL-CLOSED, OneSync Infinity)
 local function resolveDriven(src, netId, plate)
   netId = tonumber(netId)
-  if not (netId and netId > 0 and netId == math.floor(netId)) then return nil end
+  if not (netId and netId > 0 and netId <= 65535 and netId == math.floor(netId)) then return nil end
   local p = normPlate(plate); if p == '' then return nil end
   local ent = NetworkGetEntityFromNetworkId(netId)
-  if not ent or ent == 0 then return nil end
+  if not ent or ent == 0 or not DoesEntityExist(ent) or GetEntityType(ent) ~= 2
+      or GetEntityRoutingBucket(ent) ~= GetPlayerRoutingBucket(src) then return nil end
   if normPlate(GetVehicleNumberPlateText(ent) or '') ~= p then return nil end
   if GetPedInVehicleSeat(ent, -1) ~= GetPlayerPed(src) then return nil end
+  motoristas[src] = { entidade = ent, netId = netId, placa = p, instante = GetGameTimer() }
   return p
+end
+
+local function resolverSaida(src, netId, plate)
+  local vinculo = motoristas[src]
+  local entidade = vinculo and vinculo.entidade
+  if not vinculo or tonumber(netId) ~= vinculo.netId or normPlate(plate) ~= vinculo.placa
+      or GetGameTimer() - vinculo.instante > 20000 or not DoesEntityExist(entidade)
+      or NetworkGetEntityFromNetworkId(vinculo.netId) ~= entidade
+      or normPlate(GetVehicleNumberPlateText(entidade)) ~= vinculo.placa
+      or GetEntityRoutingBucket(entidade) ~= GetPlayerRoutingBucket(src) then return nil end
+  local ped, motorista = GetPlayerPed(src), GetPedInVehicleSeat(entidade, -1)
+  if not ped or ped == 0 or (motorista ~= 0 and motorista ~= ped) then return nil end
+  local a, b = GetEntityCoords(ped), GetEntityCoords(entidade)
+  if #(a - b) > 10.0 then return nil end
+  motoristas[src] = nil -- autorização final de uso único, baseada no vínculo anterior.
+  return vinculo.placa
 end
 
 -- número finito clampado, ou nil (rejeita NaN/±inf ANTES do clamp)
@@ -182,6 +201,7 @@ AddEventHandler(E.STATE_SYNC, function(netId, plate, snap)
   end
 
   local p = resolveDriven(src, netId, plate)
+  if not p and snap.final == true then p = resolverSaida(src, netId, plate) end
   if not p then return end   -- silencioso (L-01)
 
   -- odômetro: delta negativo/NaN = payload hostil → dropa o snapshot INTEIRO
@@ -195,6 +215,8 @@ AddEventHandler(E.STATE_SYNC, function(netId, plate, snap)
     body_health   = finiteNum(snap.body_health, 0.0, 1000.0),
     odometer_add  = odo and math.min(odo, 2.0) or nil,
     damage        = (type(snap.damage) == 'table') and snap.damage or nil,
+    _physical_net_id = tonumber(netId),
+    _physical_revision = finiteNum(snap.physical_revision, 0, 2147483647),
   }
 
   -- escrita imediata no escritor único (re-sanitiza/clampa lá — defesa em
@@ -214,14 +236,24 @@ AddEventHandler(E.REQUEST_STATE, function(netId, plate)
   _reqAt[src] = now
   local p = resolveDriven(src, netId, plate)
   if not p then return end
+  local entidade = NetworkGetEntityFromNetworkId(tonumber(netId))
+  local lido, revisao, manutencao = pcall(function()
+    return exports.vhub_conce:obterRevisaoFisica(p, tonumber(netId))
+  end)
+  if not lido or revisao == nil or manutencao then return end
   Citizen.CreateThread(function()
     local ok, st = pcall(function() return exports.vhub_conce:getVehicleState(p) end)
-    if ok and type(st) == 'table' then
+    local atualOk, atual, bloqueado = pcall(function()
+      return exports.vhub_conce:obterRevisaoFisica(p, tonumber(netId))
+    end)
+    if ok and type(st) == 'table' and DoesEntityExist(entidade)
+        and atualOk and not bloqueado and revisao == atual then
       TriggerClientEvent(E.APPLY_STATE, src, p, {
         engine_health = st.engine_health,
         body_health   = st.body_health,
         odometer_km   = st.odometer_km,
         damage        = st.damage,
+        physical_revision = revisao,
       })
     end
   end)
@@ -237,10 +269,11 @@ end)
 -- (sem buffer server-side) — garantia mais forte que flush-em-stop.
 AddEventHandler('onResourceStop', function(res)
   if res ~= GetCurrentResourceName() then return end
-  _controlAt, _syncAt, _finalAt, _reqAt = {}, {}, {}, {}
+  _controlAt, _syncAt, _finalAt, _reqAt, motoristas = {}, {}, {}, {}, {}
 end)
 
 -- evita crescimento dos mapas de rate-limit quando o jogador sai
 AddEventHandler('playerDropped', function()
   _controlAt[source], _syncAt[source], _finalAt[source], _reqAt[source] = nil, nil, nil, nil
+  motoristas[source] = nil
 end)

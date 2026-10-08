@@ -128,8 +128,7 @@ ortogonais na mesma placa, um único escritor (`vhub_custom`).** Instalar "Turbo
 ---
 
 ## multipleStatements (warning oxmysql)
-Warning de infra (oxmysql upstream). Benigno enquanto o CORE usa apenas `S:prepare()`/`S:query()`
-parametrizados (sem concatenação). **Não bloqueia a sprint.** Endereçar isolado se causar problema real.
+Resolvido pela ADR #98: schemas executam instruções isoladas e a opção foi removida da conexão.
 
 ## Leis invocadas
 L-04 (mod visual vs peça física = ortogonais), L-13 (escritor único), L-15 (código morto: handling_ext,

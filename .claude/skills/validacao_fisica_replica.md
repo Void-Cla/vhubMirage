@@ -40,6 +40,17 @@ end
 --    criado aqui (vd.driver == src) — nunca re-validam do zero por evento.
 ```
 
+## Confirmação de retirada — garagem 2.2.1
+Fonte: `resources/[SCRIPTS]/vhub_garage/server/vehicles.lua` (`retirar`, `contextoAtual`, evento `SPAWN_READY`).
+- Servidor cria a entidade; `resources/[SCRIPTS]/vhub_garage/client/vehicles.lua:spawnVehicle` coloca o motorista antes do controle e repete durante sua espera (≤5 s); confirma/repete assento após estado (≤1,5 s). Não força proprietário nem relaxa filtro de controle.
+- Cliente mantém modelo carregado até finalizar ou falhar; solicita colisão antes da espera (≤4 s). `placeOnSurface` retenta solo ≤2 s com `SetVehicleOnGroundProperly(veh, 5.0)`; água/aeronaves conservam posição autoritativa.
+- ACK aceita apenas origem, token e netId do pedido pendente; resposta booleana única. Fase vem de lista fechada, só para diagnóstico; exceção do `pcall` é registrada no cliente. ACK não substitui prova física.
+- Antes de promover a retirada, corroborar personagem/sessão, entidade veicular, placa/modelo, netId, proprietário de rede == origem, motorista e buckets do jogador/entidade == pedido.
+- Servidor espera ACK ≤25 s e réplica ≤5 s; após espera/`Await`, repete validação antes dos efeitos. Falha não confirma retirada nem cobra; diagnóstico distingue fase cliente, tempo esgotado, proprietário e motorista da réplica.
+- CAS no conce confirma status+posição; compensação só restaura a linha ainda identificada pela posição exata da operação. Serialização por placa permanece durante SQL em andamento.
+- `removerPendente` retenta exclusão ≤1 s, com modelo/netId corroborados. Resíduo permanece rastreado e impede nova criação até remoção; ACK tardio não revive pedido cancelado.
+- Verificação: `tools/test_garage_persistencia.lua`, 92 verificações com nativas/SQL simulados. Causa da falha em execução real ainda não comprovada; exige fase/log e retirada em FiveM. [Native primária](https://raw.githubusercontent.com/citizenfx/natives/master/VEHICLE/SetVehicleOnGroundProperly.md) confirma parâmetro adicional `float p1`, não sua semântica nem garantia para `5.0`.
+
 ## Lado client (espelho obrigatório do lag de réplica)
 - **Estabilidade de 2 passadas** antes de anunciar vEnter (≈500ms no loop adaptativo):
   dá tempo da réplica refletir o ped no assento — sem isso o server rejeita o legítimo.
@@ -55,8 +66,8 @@ end
 1. Rejeição silenciosa para o client (nunca avisar o atacante), com `warn` no log.
 2. `vLeave` só de quem tem `occupants[src]` registrado por vEnter validado — sem estado
    prévio, sem efeito.
-3. Superfícies que o client não pode provar fisicamente (spawn/despawn) NÃO ganham net
-   event — entram por export gated do dono server-side.
+3. Cliente pode solicitar/confirmar inicialização; não declara spawn/despawn como verdade.
+   Entidade e registro pertencem ao servidor, com export autorizado e prova na réplica.
 4. Rate-limit continua por cima (o gate físico não substitui o `Kernel:net` rate).
 
 ## Checklist de runtime (antes de confiar)

@@ -7,8 +7,8 @@ lua54      'yes'
 
 name        'vhub_coinshop'
 author      'vHub Mirage'
-version     '2.4.2'
-description 'Loja de moedas, itens, veículos e ofertas — server-authoritative, integrada ao core vHub.'
+version     '2.5.0'
+description 'Loja de moedas, itens, veículos e ofertas — server-authoritative, integrada ao core vHub. v2.5.0: idempotência de crédito Pix por order (inbox vhub_coinshop_delivery, FIN-001/ADR #94).'
 
 -- Dependências do core vHub Mirage (exports.vhub:* são a única fronteira)
 dependencies {

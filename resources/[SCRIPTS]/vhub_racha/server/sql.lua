@@ -398,7 +398,10 @@ end
 function S.apply_schema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if type(schema) ~= 'string' or schema == '' then return false, 'schema_missing' end
-  S.execute_raw(schema)
+  local ok, erro = VHubSQLScript.aplicar(schema, function(instrucao)
+    MySQL.query.await(instrucao, {})
+  end)
+  if not ok then return false, erro end
 
   -- Compat (upgrades de schema sem migracao destrutiva)
   ensure_column('vh_race_history', 'mode', [[

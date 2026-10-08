@@ -21,6 +21,8 @@ VERIFICAR:
 
 GREP DE FECHAMENTO (exigir no PR): `grep -rn "set[UVCG]Data" resources/[SCRIPTS] resources/[CORE]/vhub_*` ⇒ zero fora do CORE.
 
+> MCPs: `repowise` (always-on) — `get_context(files, include=['callers'])` rastrear call-sites de set*Data/commitVehicleState antes de qualquer grep; `get_why(query)` confirmar contrato existente; `get_risk(targets)` impacto de mudança em dado crítico. `filesystem` (path dinâmico).
+
 FORMATO:
 VEREDITO: APROVAR | REPROVAR
 ACHADOS: <máx 4, arquivo:linha — vetor de perda de dado>

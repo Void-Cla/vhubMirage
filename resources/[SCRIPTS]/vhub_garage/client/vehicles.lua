@@ -29,12 +29,20 @@ end
 
 local function placeOnSurface(veh, surface)
   if surface == 'water' then
-    SetEntityCoordsNoOffset(veh, GetEntityCoords(veh), false, false, false)
+    -- Barco conserva a posição/orientação autoritativa do server setter.
   elseif surface == 'pad' or surface == 'runway' then
     -- aeronaves: deixa na altura recebida do servidor
   else
-    SetVehicleOnGroundProperly(veh)
+    local limite = GetGameTimer() + 2000
+    repeat
+      if SetVehicleOnGroundProperly(veh, 5.0) then return true end
+      local c = GetEntityCoords(veh)
+      RequestCollisionAtCoord(c.x + 0.0, c.y + 0.0, c.z + 0.0)
+      Citizen.Wait(50)
+    until not DoesEntityExist(veh) or GetGameTimer() >= limite
+    return false
   end
+  return true
 end
 
 local function applyCustomization(veh, c)
@@ -138,24 +146,49 @@ local function applyPhysicalState(veh, st)
 end
 
 -- ----------------------------------------------------------------------------
--- SPAWN  apaga duplicata local + scan global antes de criar
+-- SPAWN: cliente inicializa uma entidade existente; nunca cria veículo persistente.
 -- ----------------------------------------------------------------------------
-local function spawnVehicle(snap, pos, entrar)
-  -- defesa: apaga qualquer inst ncia anterior dessa placa
-  if state.veiculos[snap.plate] then despawnLocal(snap.plate) end
-  scanAndDeleteByPlate(snap.plate)
-
+local function spawnVehicle(snap, pos, entrar, progresso)
+  progresso.fase = 'payload'
+  if type(snap) ~= 'table' or type(pos) ~= 'table' or type(snap.net_id) ~= 'number'
+      or snap.net_id % 1 ~= 0 or snap.net_id < 1 or snap.net_id > 65535
+      or type(snap.pedido) ~= 'string' or not VHubGarage.U.validCoords(pos) then return false end
+  progresso.fase = 'modelo'
   local hash = loadModel(snap.model)
   if not hash then return false end
-  local x, y, z = pos.x, pos.y, pos.z + 0.5
-  local h = pos.h or 0.0
-  local veh = CreateVehicle(hash, x, y, z, h, true, false)
-  SetModelAsNoLongerNeeded(hash)
-  if not DoesEntityExist(veh) then return false end
+  progresso.hash = hash
+  progresso.fase = 'rede'
+  local veh, limite = 0, GetGameTimer() + 5000
+  repeat
+    if NetworkDoesEntityExistWithNetworkId(snap.net_id) then veh = NetToVeh(snap.net_id) end
+    if veh ~= 0 and DoesEntityExist(veh) then break end
+    Citizen.Wait(50)
+  until GetGameTimer() >= limite
+  if veh == 0 or not DoesEntityExist(veh) or GetEntityModel(veh) ~= hash then return false end
+  -- Motorista induz a migração nativa do owner antes do gate de controle.
+  if entrar then SetPedIntoVehicle(PlayerPedId(), veh, -1) end
+  progresso.fase = 'controle'
+  limite = GetGameTimer() + 5000
+  while DoesEntityExist(veh) and not NetworkHasControlOfEntity(veh) and GetGameTimer() < limite do
+    if entrar and GetPedInVehicleSeat(veh, -1) ~= PlayerPedId() then SetPedIntoVehicle(PlayerPedId(), veh, -1) end
+    NetworkRequestControlOfEntity(veh); Citizen.Wait(50)
+  end
+  if not DoesEntityExist(veh) or not NetworkHasControlOfEntity(veh) then return false end
+  FreezeEntityPosition(veh, true)
+  progresso.fase = 'colisao'
+  RequestCollisionAtCoord(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
+  limite = GetGameTimer() + 4000
+  while DoesEntityExist(veh) and not HasCollisionLoadedAroundEntity(veh) and GetGameTimer() < limite do
+    RequestCollisionAtCoord(pos.x + 0.0, pos.y + 0.0, pos.z + 0.0)
+    Citizen.Wait(50)
+  end
+  if not DoesEntityExist(veh) or not HasCollisionLoadedAroundEntity(veh) then return false end
   SetVehicleNumberPlateText(veh, snap.plate)
-  placeOnSurface(veh, snap.surface)
-  SetEntityAsMissionEntity(veh, true, true)
+  progresso.fase = 'solo'
+  if not placeOnSurface(veh, snap.surface) then return false end
+  -- Mission ownership fica no servidor; cliente só inicializa física/cosmético.
   SetVehicleHasBeenOwnedByPlayer(veh, true)
+  progresso.fase = 'tuning'
   applyCustomization(veh, snap.customization)
   -- reidrata os State Bags visuais (stance/escapamento) da placa — dono = vhub_custom. Zero-trust:
   -- passa só o netId; o servidor deriva a placa da entidade. Atraso p/ o netId propagar ao servidor.
@@ -165,28 +198,38 @@ local function spawnVehicle(snap, pos, entrar)
       SetTimeout(600, function() TriggerServerEvent('vhub_custom:server:requestVisual', _nid) end)
     end
   end
+  progresso.fase = 'estado'
   applyPhysicalState(veh, snap.state)   -- PRONTU RIO: fuel/health/dano (p s-customization)
+  progresso.fase = 'motorista'
+  if entrar then
+    local ped = PlayerPedId()
+    limite = GetGameTimer() + 1500
+    while DoesEntityExist(veh) and GetPedInVehicleSeat(veh, -1) ~= ped and GetGameTimer() < limite do
+      SetPedIntoVehicle(ped, veh, -1); Citizen.Wait(50)
+    end
+    if not DoesEntityExist(veh) or GetPedInVehicleSeat(veh, -1) ~= ped then return false end
+  end
   if snap.locked then
     SetVehicleDoorsLocked(veh, 2)
     SetVehicleDoorsLockedForAllPlayers(veh, true)
   end
-  if entrar then SetPedIntoVehicle(PlayerPedId(), veh, -1) end
   state.veiculos[snap.plate] = veh
+  progresso.fase = 'pronto'
   return true, veh
 end
 
 RegisterNetEvent(E.DO_SPAWN)
 AddEventHandler(E.DO_SPAWN, function(snap, pos)
-  Citizen.CreateThread(function() spawnVehicle(snap, pos, true) end)
-end)
-
-RegisterNetEvent(E.SPAWN_OUT)
-AddEventHandler(E.SPAWN_OUT, function(list)
-  if type(list) ~= 'table' then return end
+  if source ~= 65535 or type(snap) ~= 'table' then return end
   Citizen.CreateThread(function()
-    for _, snap in ipairs(list) do
-      spawnVehicle(snap, snap.position or { x = 0, y = 0, z = 0, h = 0 }, false)
+    local progresso = {}
+    local ok, resultado = pcall(spawnVehicle, snap, pos, true, progresso)
+    if progresso.hash then SetModelAsNoLongerNeeded(progresso.hash) end
+    if not ok then
+      vHub.Logger:error('garage', 'Falha nativa na retirada', {fase=progresso.fase, erro=tostring(resultado)})
     end
+    TriggerServerEvent(E.SPAWN_READY, snap.plate, snap.pedido, snap.net_id,
+      ok and resultado == true, progresso.fase)
   end)
 end)
 
@@ -234,6 +277,12 @@ local function normPlate(p)
   return p:upper():gsub('%s+', '')
 end
 
+-- Handles locais podem ser reciclados após culling; existência sozinha não prova identidade.
+local function corresponde(veh, plate)
+  return veh and veh ~= 0 and DoesEntityExist(veh) and IsEntityAVehicle(veh)
+    and normPlate(GetVehicleNumberPlateText(veh)) == normPlate(plate)
+end
+
 -- procura QUALQUER ve culo no mundo com placa == plate e apaga
 -- Usa SOMENTE placa nativa do GTA (DecorSetString foi removido do FiveM).
 scanAndDeleteByPlate = function(plate)
@@ -253,7 +302,7 @@ end
 
 despawnLocal = function(plate)
   local veh = state.veiculos[plate]
-  if veh and DoesEntityExist(veh) then
+  if corresponde(veh, plate) then
     local ped = PlayerPedId()
     if GetVehiclePedIsIn(ped, false) == veh then
       TaskLeaveVehicle(ped, veh, 16)  -- flag 16 = warp out (sem anima  o)
@@ -336,7 +385,7 @@ end)
 AddEventHandler('vhub_garage:collectClientState', function(plate, cb)
   if type(cb) ~= 'function' then return end
   local veh = state.veiculos[plate]
-  if not veh or not DoesEntityExist(veh) then
+  if not corresponde(veh, plate) then
     -- handle pode ficar stale (migracao de ownership/cull): re-resolve pela placa
     -- para nao guardar SILENCIOSAMENTE sem customization (mods sumiam no restart)
     veh = findByPlate(plate)
@@ -354,7 +403,7 @@ AddEventHandler('vhub_garage:collectClientState', function(plate, cb)
     end
   end
   if GetVehicleTyresCanBurst(veh) then
-    for i = 0, 7 do
+    for _, i in ipairs({0, 1, 2, 3, 4, 5, 6, 7, 45, 47}) do
       if IsVehicleTyreBurst(veh, i, true) then dmg.tyres_rim[#dmg.tyres_rim+1] = i
       elseif IsVehicleTyreBurst(veh, i, false) then dmg.tyres[#dmg.tyres+1] = i end
     end
@@ -375,7 +424,8 @@ end)
 RegisterNetEvent(E.DO_REPAIR)
 AddEventHandler(E.DO_REPAIR, function(plate)
   Citizen.CreateThread(function()
-    local veh = state.veiculos[plate] or findByPlate(plate)
+    local veh = state.veiculos[plate]
+    if not corresponde(veh, plate) then veh = findByPlate(plate) end
     if not veh or not DoesEntityExist(veh) then return end
     NetworkRequestControlOfEntity(veh)
     local t = 0
@@ -389,25 +439,8 @@ AddEventHandler(E.DO_REPAIR, function(plate)
 end)
 
 -- ----------------------------------------------------------------------------
--- Reporte peri dico ao servidor (n o-cr tico: posi  o + customization)
+-- Posição é coletada pelo servidor, inclusive com motorista offline/fora do streaming.
 -- ----------------------------------------------------------------------------
-Citizen.CreateThread(function()
-  local cfg = VHubGarage.cfg
-  while true do
-    Citizen.Wait((cfg.report_intervalo_s or 30) * 1000)
-    for plate, veh in pairs(state.veiculos) do
-      if DoesEntityExist(veh) and IsEntityAVehicle(veh) then
-        local c = GetEntityCoords(veh, true)
-        TriggerServerEvent(E.REPORT_STATE, plate, {
-          position = { x = c.x, y = c.y, z = c.z, h = GetEntityHeading(veh) },
-          locked   = GetVehicleDoorLockStatus(veh) >= 2,
-        })
-      else
-        state.veiculos[plate] = nil
-      end
-    end
-  end
-end)
 
 -- ----------------------------------------------------------------------------
 -- Helpers expostos a outros m dulos do client
@@ -418,7 +451,7 @@ function VHubGarage.veiculoMaisProximo(raio)
   local origin = GetEntityCoords(ped)
   local best, best_d = nil, raio
   for plate, veh in pairs(state.veiculos) do
-    if DoesEntityExist(veh) then
+    if corresponde(veh, plate) then
       local d = #(origin - GetEntityCoords(veh))
       if d < best_d then best, best_d = plate, d end
     end

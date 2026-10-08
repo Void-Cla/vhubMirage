@@ -21,6 +21,7 @@
       fee_percent: 0, fee_fixed: 0,
     },
     activeTab: 'ops',
+    transferPending: false,
   };
 
   // ─── Util ──────────────────────────────────────────────────────────────────
@@ -81,6 +82,18 @@
       body: JSON.stringify(data || {}),
     }).then((r) => r.json().catch(() => ({}))).catch(() => ({}));
 
+  const operationId = () => {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      return `nui:${globalThis.crypto.randomUUID()}`;
+    }
+    const bytes = new Uint8Array(16);
+    if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+      globalThis.crypto.getRandomValues(bytes);
+      return `nui:${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+    }
+    return `nui:${Date.now().toString(16)}:${Math.random().toString(16).slice(2)}`;
+  };
+
   function toast(message, kind = 'info') {
     const icon = kind === 'success' ? 'fa-circle-check'
               : kind === 'error'   ? 'fa-triangle-exclamation'
@@ -126,6 +139,10 @@
       conta_inexistente:     'Conta do destinatário não existe.',
       falha_credito_destino: 'Falha ao creditar o destinatário.',
       forbidden:             'Operação não permitida por este resource.',
+      busy:                  'Operação em andamento. Aguarde.',
+      storage:               'Falha de persistência. Nenhum saldo foi alterado.',
+      operacao_invalida:     'Identificador da operação inválido.',
+      destino_distante:      'O destinatário está distante.',
     };
     return map[s] || `Falha: ${s || 'erro desconhecido'}.`;
   }
@@ -267,6 +284,7 @@
   }
 
   function doTransfer() {
+    if (state.transferPending) return;
     const target = ($('#tr-target').value || '').trim();
     const amount = readInput('#tr-amount');
     const reason = ($('#tr-reason').value || '').trim();
@@ -276,7 +294,8 @@
       toast('Transferências apenas em agências físicas.', 'error');
       return;
     }
-    POST('transfer', { target, amount, reason });
+    state.transferPending = true;
+    POST('transfer', { target, amount, reason, operation_id: operationId() });
     $('#tr-amount').value = '';
     $('#tr-reason').value = '';
   }
@@ -314,6 +333,7 @@
         break;
       }
       case 'result': {
+        state.transferPending = false;
         const r = msg.data || {};
         if (r.ok) {
           toast('Operação concluída com sucesso.', 'success');

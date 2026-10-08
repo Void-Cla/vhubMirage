@@ -21,6 +21,7 @@ end
 local PAYMENT_SAGA_CALLERS = {
   vhub_sims   = { reason_prefix = 'sims:', digest_operation = true },
   vhub_custom = { reason_prefix = 'custom.', operation_prefix = 'vc:', request_conflict = true },
+  vhub_inventory = { reason_prefix = 'inventory.store:', operation_prefix = 'vi:', request_conflict = true },
 }
 
 local function _payment_saga_scope()
@@ -139,14 +140,14 @@ end)
 
 -- ── Transferencia P2P ───────────────────────────────────────────────────────
 
-exports('tryTransfer', function(actor_src, target_raw, valor, reason)
+exports('tryTransfer', function(actor_src, target_raw, valor, reason, operation_id)
   if not _invoker_allowed() then return false, 'forbidden' end
-  return T.try_transfer(actor_src, target_raw, valor, reason or 'export_transfer')
+  return T.try_transfer(actor_src, target_raw, valor, reason or 'export_transfer', operation_id)
 end)
 
-exports('tryGive', function(actor_src, target_src, valor, reason)
+exports('tryGive', function(actor_src, target_src, valor, reason, operation_id)
   if not _invoker_allowed() then return false, 'forbidden' end
-  return T.try_give(actor_src, target_src, valor, reason or 'export_give')
+  return T.try_give(actor_src, target_src, valor, reason or 'export_give', operation_id)
 end)
 
 -- ── ATM helpers (para futuros resources de pacotes/multas) ──────────────────
@@ -182,4 +183,61 @@ exports('Status', function()
     sessions = sessions,
     metrics  = Core.metrics,
   }
+end)
+
+-- Exclusivo do ambiente de teste. Exercita o commit SQL real sem tocar contas reais.
+exports('runAtomicTransferTest', function()
+  if GetConvar('vhub_test_mode', '0') ~= '1' or GetInvokingResource() ~= 'vhub_testrunner' then
+    return { ok = false, err = 'forbidden' }
+  end
+
+  local created_users, created_chars = {}, {}
+  local operation_id = ('test:atomic:%d'):format(GetGameTimer())
+  local function cleanup()
+    for _, char_id in ipairs(created_chars) do
+      SQL.execute('DELETE FROM vh_money_transactions WHERE reason = ?', { 'test_atomic_transfer' })
+      SQL.execute('DELETE FROM vh_money_transfers WHERE operation_id = ?', { operation_id })
+      SQL.execute('DELETE FROM vh_money_accounts WHERE char_id = ?', { char_id })
+      SQL.execute('DELETE FROM vh_characters WHERE id = ?', { char_id })
+    end
+    for _, user_id in ipairs(created_users) do
+      SQL.execute('DELETE FROM vh_users WHERE id = ?', { user_id })
+    end
+  end
+
+  local called, result = pcall(function()
+    for _ = 1, 2 do
+      local user = SQL.execute('INSERT INTO vh_users () VALUES ()')
+      local user_id = tonumber(user and user.insertId)
+      if not user_id then error('user_insert_failed') end
+      created_users[#created_users + 1] = user_id
+      local char = SQL.execute('INSERT INTO vh_characters (user_id) VALUES (?)', { user_id })
+      local char_id = tonumber(char and char.insertId)
+      if not char_id then error('char_insert_failed') end
+      created_chars[#created_chars + 1] = char_id
+    end
+
+    local actor, target = created_chars[1], created_chars[2]
+    SQL.execute('INSERT INTO vh_money_accounts (char_id, wallet, bank) VALUES (?, 0, 1000), (?, 0, 100)',
+      { actor, target })
+    local first = SQL.transfer_atomic(actor, target, 125, 10, 'bank_transfer', operation_id,
+      'test_atomic_transfer')
+    local replay = SQL.transfer_atomic(actor, target, 125, 10, 'bank_transfer', operation_id,
+      'test_atomic_transfer')
+    local conflict = SQL.transfer_atomic(actor, target, 126, 10, 'bank_transfer', operation_id,
+      'test_atomic_transfer')
+    local accounts = SQL.query('SELECT char_id, bank FROM vh_money_accounts WHERE char_id IN (?, ?) ORDER BY char_id',
+      { actor, target })
+    local logs = SQL.query('SELECT COUNT(*) AS total FROM vh_money_transactions WHERE reason = ?',
+      { 'test_atomic_transfer' })
+    local balance = {}
+    for _, row in ipairs(accounts or {}) do balance[tonumber(row.char_id)] = tonumber(row.bank) end
+    return first.ok == true and first.replayed ~= true
+      and replay.ok == true and replay.replayed == true
+      and conflict.ok ~= true and conflict.err == 'conflict'
+      and balance[actor] == 865 and balance[target] == 225
+      and tonumber(logs[1] and logs[1].total) == 2
+  end)
+  cleanup()
+  return { ok = called and result == true, err = called and nil or 'storage' }
 end)

@@ -365,20 +365,15 @@ exports('adminSpawnTo', function(src, plate, pos, actor_src)
   local pp = U.normalizePlate(plate); if not pp then return false end
   src = tonumber(src); if not src then return false end
   inThread(function()
-    local v = SQL:getVehicle(pp); if not v then return end
-    local p = pos or { x = 0, y = 0, z = 50, h = 0 }
-    SQL:updateStatus(pp, 'out')
-    SQL:updatePosition(pp, U.jenc(p))
-    -- PRONTU RIO: fonte  nica do f sico+cosm tico (fallback coluna legada)
-    local st
-    pcall(function() st = exports.vhub_conce:getVehicleState(pp) end)
-    TriggerClientEvent(E.DO_SPAWN, src, {
-      plate = pp, model = v.model, vtype = v.vtype,
-      customization = (st and st.customization) or U.jdec(v.customization),
-      state = st, locked = v.locked == 1,
-      surface = VHubGarage.types.surface[v.vtype] or 'ground',
-    }, p)
-    Core:log(pp, 'admin_spawn_to', actorOf(actor_src), { src = src })
+    VHubGarage.Veiculos.executar(pp, src, function()
+      local v = SQL:getVehicle(pp); if not v then return end
+      local ped = GetPlayerPed(src); if not ped or ped == 0 then return end
+      local c = GetEntityCoords(ped)
+      local p = pos or { x = c.x, y = c.y, z = c.z, h = GetEntityHeading(ped) }
+      local ok, erro = VHubGarage.Veiculos.retirar(src, v, p, 0)
+      if not ok then Core.notify(src, erro); return end
+      Core:log(pp, 'admin_spawn_to', actorOf(actor_src), { src = src })
+    end)
   end)
   return true
 end)

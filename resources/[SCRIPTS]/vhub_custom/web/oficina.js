@@ -19,6 +19,7 @@
 (function () {
 
 let _module = null;
+let _mutacao = false;
 
 
 // ============================================================
@@ -530,13 +531,18 @@ function cancelarCalibragem() {
 }
 
 function salvarCalibragem() {
-  if (!_draftAlloc || !_data) return;
+  if (!_draftAlloc || !_data || _mutacao) return;
+  _mutacao = true;
+  window.vhub.ocupado(true);
   document.getElementById('btn-calib-save').disabled = true;
   window.vhub.request('oficina:recalibrar', { plate: _data.plate, alloc: _draftAlloc })
-    .catch(() => { if (_data) document.getElementById('btn-calib-save').disabled = false; });
+    .then((resposta) => { if (resposta?.ok === false) onRecalibrarResultado(false, null); })
+    .catch(() => window.vhub.aviso('Aguardando confirmação do servidor.', 'warning'));
 }
 
 function onRecalibrarResultado(ok, sheet) {
+  _mutacao = false;
+  window.vhub.ocupado(false);
   document.getElementById('btn-calib-save').disabled = false;
   if (ok && sheet && _data) {
     _data.sheet     = sheet;
@@ -566,19 +572,25 @@ function setActiveFam(famId) {
 }
 
 function installPart(partId, btn) {
-  if (_installing || !_data || !partId) return;
+  if (_mutacao || _installing || !_data || !partId) return;
+  _mutacao = true;
   _installing = true;
+  window.vhub.ocupado(true);
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   window.vhub.request('oficina:instalarParte', { part_id: partId })
-    .catch(() => { _installing = false; renderTray(); });
+    .then((resposta) => { if (resposta?.ok === false) onParteResultado(false, null); })
+    .catch(() => window.vhub.aviso('Aguardando confirmação do servidor.', 'warning'));
 }
 
 function removePart(partId, btn) {
-  if (_installing || !_data || !partId) return;
+  if (_mutacao || _installing || !_data || !partId) return;
+  _mutacao = true;
   _installing = true;
+  window.vhub.ocupado(true);
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   window.vhub.request('oficina:removerParte', { part_id: partId })
-    .catch(() => { _installing = false; renderTray(); });
+    .then((resposta) => { if (resposta?.ok === false) onParteResultado(false, null); })
+    .catch(() => window.vhub.aviso('Aguardando confirmação do servidor.', 'warning'));
 }
 
 // aplica estado fresco AUTORITATIVO — nunca 2ª fonte de verdade (A-04, skill nui_fresh_state_rerender)
@@ -591,8 +603,10 @@ function applyFresh(data) {
 }
 
 function onParteResultado(ok, data) {
+  _mutacao = false;
   _installing = false;
-  if (ok && applyFresh(data)) renderEngEffect();
+  window.vhub.ocupado(false);
+  if (applyFresh(data)) renderEngEffect();
   renderDiagram();
   renderTray();
   renderStats();
@@ -765,6 +779,7 @@ function renderCapInfo() {
 // ============================================================
 
 function openOficina(data) {
+  _mutacao = false;
   _data           = data;
   _activeFamId    = null;
   _installing     = false;
@@ -787,9 +802,11 @@ function openOficina(data) {
 
   document.getElementById('overlay').classList.remove('hidden');
   document.getElementById('btn-cancel').disabled = false;
+  if (_btnNitro) _btnNitro.disabled = false;
 }
 
 function closeNUI() {
+  _mutacao = false;
   clearTimeout(_previewTimer);
   _previewTimer = null;
   cancelDrag();  // cleanup ghost mid-drag (A-07)
@@ -804,6 +821,7 @@ function closeNUI() {
 }
 
 function cancelarOficina() {
+  if (_mutacao) return;
   _module.hide();
   window.vhub.request('oficina:fechar', {}).catch(() => {});
 }
@@ -816,10 +834,13 @@ function cancelarOficina() {
 const _btnNitro = document.getElementById('btn-nitro-kit');
 
 function instalarNitro() {
-  if (!_data || !_data.plate) return;
+  if (!_data || !_data.plate || _mutacao) return;
+  _mutacao = true;
+  window.vhub.ocupado(true);
   _btnNitro.disabled = true;
   window.vhub.request('oficina:instalarKitNitro', { plate: _data.plate })
-    .catch(() => { if (_data) _btnNitro.disabled = false; });
+    .then((resposta) => { if (resposta?.ok === false) { _mutacao = false; window.vhub.ocupado(false); _btnNitro.disabled = false; } })
+    .catch(() => window.vhub.aviso('Aguardando confirmação do servidor.', 'warning'));
 }
 
 
@@ -839,7 +860,7 @@ _module = window.vhub.createModule('oficina', {
     removerParteResultado:   (message) => onParteResultado(message.ok === true, message.data || null),
     recalibrarResultado:     (message) => onRecalibrarResultado(message.ok === true, message.data || null),
     previewCalibrarResultado:(message) => onPreviewCalibrarResultado(message.data || null),
-    nitroKitResultado:       () => { if (_btnNitro) _btnNitro.disabled = false; },
+    nitroKitResultado:       () => { _mutacao = false; window.vhub.ocupado(false); if (_btnNitro) _btnNitro.disabled = false; },
   },
 
   onInit() {

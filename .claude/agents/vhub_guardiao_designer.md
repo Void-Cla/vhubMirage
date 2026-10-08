@@ -13,7 +13,7 @@ LEITURA OBRIGATÓRIA:
 1. `.claude/contexto.md` → padrão cliente-servidor, decisões congeladas
 2. Arquivos tocados: `client/`, NUI `index.html`, CSS, JS
 
-> MCPs úteis: `figma` (tokens de cor/layout — habilitar no `enabledMcpjsonServers` antes de sprint UI), `codegraph` (dependências JS/TS — Lua via Grep).
+> MCPs: `repowise` (always-on) — `get_context(files)` resumo+decisões do módulo NUI antes de auditar; `get_health(files)` saúde antes de propor refactor visual. `figma` (tokens de cor/layout — habilitar antes de sprint UI), `codegraph` (deps JS/TS — Lua via Grep).
 
 ---
 

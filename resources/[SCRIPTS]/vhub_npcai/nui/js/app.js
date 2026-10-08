@@ -21,11 +21,8 @@ const $capText = document.getElementById('caption-text');
 // ESTADO LOCAL
 // ============================================================
 
-let _recorder      = null;   // MediaRecorder ativo
-let _recChunks     = [];     // chunks do MediaRecorder
-let _recTimerId    = null;   // setTimeout de timeout máximo
-let _recStart      = 0;      // timestamp de início
-let _vuRaf         = null;   // requestAnimationFrame do VU meter
+let _capture       = null;   // sessão única de captura
+let _captureSeq    = 0;      // invalida callbacks de sessões obsoletas
 let _audioCtx      = null;   // AudioContext (criado na interação)
 let _pannerNode    = null;   // PannerNode atual
 let _gainNode      = null;   // GainNode de volume
@@ -143,29 +140,65 @@ function _stopCurrentAudio() {
 // VU METER
 // ============================================================
 
-function _startVU(stream) {
-    const ctx      = _getCtx();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    const src      = ctx.createMediaStreamSource(stream);
-    src.connect(analyser);
-
-    const buf = new Uint8Array(analyser.frequencyBinCount);
-
-    function _tick() {
-        analyser.getByteFrequencyData(buf);
-        let sum = 0;
-        for (const v of buf) sum += v;
-        const level = Math.min(1, (sum / buf.length) / 80);
-        $vuFill.style.width = (level * 100).toFixed(1) + '%';
-        _vuRaf = requestAnimationFrame(_tick);
-    }
-    _vuRaf = requestAnimationFrame(_tick);
+function _cleanupCapture(session) {
+    if (session.timeout) { clearTimeout(session.timeout); session.timeout = null; }
+    if (session.raf) { cancelAnimationFrame(session.raf); session.raf = null; }
+    try { session.source.disconnect(); } catch (_) {}
+    try { session.analyser.disconnect(); } catch (_) {}
+    session.stream.getTracks().forEach(track => track.stop());
+    $vuFill.style.width = '0%';
 }
 
-function _stopVU() {
-    if (_vuRaf) { cancelAnimationFrame(_vuRaf); _vuRaf = null; }
-    $vuFill.style.width = '0%';
+function _finishCapture(session, publish) {
+    if (!session || session.finalized) return;
+    session.finalized = true;
+    session.publish = publish;
+
+    if (session.timeout) { clearTimeout(session.timeout); session.timeout = null; }
+    if (session.raf) { cancelAnimationFrame(session.raf); session.raf = null; }
+    try { session.source.disconnect(); } catch (_) {}
+    try { session.analyser.disconnect(); } catch (_) {}
+
+    try {
+        if (session.recorder.state !== 'inactive') session.recorder.stop();
+    } catch (_) {
+        session.publish = false;
+    }
+    session.stream.getTracks().forEach(track => track.stop());
+}
+
+function _runCaptureLoop(session) {
+    const now = performance.now();
+    const delta = Math.min(100, now - session.lastTick);
+    session.lastTick = now;
+    session.analyser.getFloatTimeDomainData(session.samples);
+
+    let energy = 0;
+    for (const sample of session.samples) energy += sample * sample;
+    const rms = Math.sqrt(energy / session.samples.length);
+    const level = Math.min(1, rms / 0.15);
+    $vuFill.style.width = (level * 100).toFixed(1) + '%';
+    $recTime.textContent = ((now - session.startedAt) / 1000).toFixed(1) + 's';
+
+    if (session.vadEnabled) {
+        const gate = session.speechSeen ? session.threshold * 0.70 : session.threshold;
+        if (rms >= gate) {
+            session.speechSeen = true;
+            session.voiceMs += delta;
+            session.lastVoiceAt = now;
+        } else if (
+            session.speechSeen &&
+            session.voiceMs >= session.minSpeechMs &&
+            now - session.lastVoiceAt >= session.silenceMs
+        ) {
+            _finishCapture(session, true);
+            return;
+        }
+    }
+
+    if (!session.finalized) {
+        session.raf = requestAnimationFrame(() => _runCaptureLoop(session));
+    }
 }
 
 
@@ -173,55 +206,124 @@ function _stopVU() {
 // MEDIA RECORDER — captura de microfone
 // ============================================================
 
-async function _startRecording(maxMs) {
+async function _startRecording(options) {
+    _cancelRecording();
+    const token = ++_captureSeq;
+    const maxMs = Math.max(1000, Math.min(Number(options.max_ms) || 5000, 5000));
     let stream;
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                sampleRate: 16000,
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            },
+            video: false,
+        });
     } catch (e) {
-        _luaCallback('micError', { err: 'getUserMedia: ' + e.message });
+        if (token === _captureSeq) {
+            _luaCallback('micError', { err: 'getUserMedia: ' + e.message });
+        }
         return;
     }
 
-    _recChunks = [];
-    _recorder  = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    if (token !== _captureSeq) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+    }
+    if (!MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        stream.getTracks().forEach(track => track.stop());
+        _luaCallback('micError', { err: 'webm_opus_unsupported' });
+        return;
+    }
 
-    _recorder.ondataavailable = e => { if (e.data.size > 0) _recChunks.push(e.data); };
+    let recorder;
+    try {
+        recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    } catch (e) {
+        stream.getTracks().forEach(track => track.stop());
+        _luaCallback('micError', { err: 'MediaRecorder: ' + e.message });
+        return;
+    }
 
-    _recorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        _stopVU();
-        const blob   = new Blob(_recChunks, { type: 'audio/webm' });
+    const ctx = _getCtx();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    const source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    const session = {
+        token,
+        stream,
+        recorder,
+        source,
+        analyser,
+        samples: new Float32Array(analyser.fftSize),
+        chunks: [],
+        timeout: null,
+        raf: null,
+        startedAt: performance.now(),
+        lastTick: performance.now(),
+        lastVoiceAt: 0,
+        voiceMs: 0,
+        speechSeen: false,
+        finalized: false,
+        published: false,
+        publish: false,
+        vadEnabled: options.vad_enabled !== false,
+        threshold: Math.max(0.005, Math.min(Number(options.vad_threshold) || 0.020, 0.20)),
+        silenceMs: Math.max(300, Math.min(Number(options.silence_ms) || 650, 1500)),
+        minSpeechMs: Math.max(100, Math.min(Number(options.min_speech_ms) || 250, 1000)),
+    };
+    _capture = session;
+
+    recorder.ondataavailable = event => {
+        if (event.data.size > 0) session.chunks.push(event.data);
+    };
+
+    recorder.onerror = event => {
+        if (session.token !== _captureSeq) return;
+        _finishCapture(session, false);
+        _luaCallback('micError', { err: 'MediaRecorder: ' + (event.error?.message || 'erro') });
+    };
+
+    recorder.onstop = () => {
+        _cleanupCapture(session);
+        if (_capture === session) _capture = null;
+        if (!session.publish || session.published || session.token !== _captureSeq) return;
+        session.published = true;
+        const blob = new Blob(session.chunks, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.onloadend = () => {
-            // extrai somente a parte base64 do data URL
-            const b64 = reader.result.split(',')[1];
-            _luaCallback('micAudioReady', { audio: b64 });
+            if (session.token !== _captureSeq || typeof reader.result !== 'string') return;
+            const b64 = reader.result.split(',')[1] || '';
+            if (b64) _luaCallback('micAudioReady', { audio: b64 });
+        };
+        reader.onerror = () => {
+            if (session.token === _captureSeq) _luaCallback('micError', { err: 'FileReader' });
         };
         reader.readAsDataURL(blob);
     };
 
-    _recorder.start();
-    _startVU(stream);
-    _recStart = Date.now();
-
-    // timer de tempo na UI
-    const _tick = () => {
-        if (!_recorder || _recorder.state === 'inactive') return;
-        $recTime.textContent = ((Date.now() - _recStart) / 1000).toFixed(1) + 's';
-        setTimeout(_tick, 100);
-    };
-    _tick();
-
-    // timeout máximo (corte automático)
-    _recTimerId = setTimeout(() => { _stopRecording(); }, maxMs || 5000);
+    try {
+        recorder.start(100);
+    } catch (e) {
+        _finishCapture(session, false);
+        _luaCallback('micError', { err: 'MediaRecorder.start: ' + e.message });
+        return;
+    }
+    session.timeout = setTimeout(() => _finishCapture(session, true), maxMs);
+    session.raf = requestAnimationFrame(() => _runCaptureLoop(session));
 }
 
 function _stopRecording() {
-    if (_recTimerId) { clearTimeout(_recTimerId); _recTimerId = null; }
-    if (_recorder && _recorder.state !== 'inactive') {
-        _recorder.stop();
-    }
-    _recorder = null;
+    _finishCapture(_capture, true);
+}
+
+function _cancelRecording() {
+    _finishCapture(_capture, false);
 }
 
 

@@ -16,11 +16,11 @@ O driver se registra automaticamente quando ambos (`vhub` e `vhub_oxmysql`) esti
 ## String de conexão (oxmysql)
 
 ```
-set mysql_connection_string "mysql://usuario:senha@localhost/banco?multipleStatements=true&connectionLimit=20&waitForConnections=true&queueLimit=200"
+set mysql_connection_string "mysql://usuario:senha@localhost/banco?connectionLimit=20&waitForConnections=true&queueLimit=200"
 ```
 
 Parâmetros importantes:
-- `multipleStatements=true` — obrigatório para queries com `;SELECT LAST_INSERT_ID()`
+- `multipleStatements` — proibido; use `insertId` nativo ou instruções isoladas (ADR #98)
 - `connectionLimit` — número de conexões simultâneas ao MySQL (recomendado: 15–25)
 - `waitForConnections=true` — aguarda conexão livre ao invés de rejeitar
 - `queueLimit` — limite de espera interno do mysql2

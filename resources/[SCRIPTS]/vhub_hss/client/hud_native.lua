@@ -36,6 +36,18 @@ local function apply_native_visibility()
     end
 end
 
+-- Espelha o supressor de HUD para a NUI fisiológica (barras vida/fome/sede/colete). O supressor
+-- nativo só cobre minimapa/HUD do jogo; sem isto as barras da NUI vazavam na seleção/criação de
+-- personagem (STATE_INIT re-mostra a NUI mesmo com o player ainda isolado no gate de entrada).
+local _nui_gate
+local function broadcast_nui_gate()
+    local suppressed = next(SUPPRESSORS.hud) ~= nil
+    if suppressed ~= _nui_gate then
+        _nui_gate = suppressed
+        TriggerEvent(VHubHSS.E.HUD_GATE, suppressed)
+    end
+end
+
 -- Recursos confiáveis declaram intenção; somente o HSS executa natives de HUD/radar.
 exports('setNativeHudSuppressed', function(scope, suppressed)
     local invoker = GetInvokingResource()
@@ -47,6 +59,7 @@ exports('setNativeHudSuppressed', function(scope, suppressed)
 
     SUPPRESSORS[scope][invoker] = suppressed and true or nil
     apply_native_visibility()
+    broadcast_nui_gate()
     return true
 end)
 
@@ -54,7 +67,10 @@ AddEventHandler('onClientResourceStop', function(resource)
     local changed = SUPPRESSORS.hud[resource] or SUPPRESSORS.radar[resource]
     SUPPRESSORS.hud[resource] = nil
     SUPPRESSORS.radar[resource] = nil
-    if changed then apply_native_visibility() end
+    if changed then
+        apply_native_visibility()
+        broadcast_nui_gate()
+    end
 end)
 
 

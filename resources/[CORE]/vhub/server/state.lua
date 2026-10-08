@@ -5,7 +5,9 @@ local S = {}; S.__index = S; vHub.State = S
 
 S._mem        = {}    -- VRAM { [etype][eid][key] = value }
 S._touch      = {}    -- { [etype][eid] = epoch do último acesso } (eviction, ADR #40)
-S._snap       = {}    -- snapshots de TX para rollback
+S._snap       = {}    -- snapshots de TX para rollback de VRAM (mapa dedup por chave)
+S._txops      = {}    -- write-set SQL DIFERIDO por TX (lista ordenada; CORE-001/ADR #95)
+S._txpoison   = {}    -- { [tx] = motivo } — TX envenenada (ex.: blob overflow) aborta no commit
 S._batch      = {}    -- ops SQL pendentes
 S._batchN     = 0
 S._flushing   = false -- guard contra re-entrância de flush
@@ -182,15 +184,32 @@ end
 
 -- ── Transações ────────────────────────────────────────────────────────
 
+-- Chave "quente" (ban, whitelist, permissões): fica viva na VRAM sem round-trip
+-- ao banco. As demais são invalidadas após persistir p/ evitar acúmulo de
+-- referência (ver "CORREÇÃO DO BUG DE DATATABLE CRESCENDO" mais abaixo).
+local function _isHotKey(key)
+  return key == "ban.active" or key == "whitelist" or key == "permissions"
+end
+
 local _txc = 0
 
 function S:begin()
   _txc = _txc + 1
-  self._snap[_txc] = {}
+  self._snap[_txc]  = {}   -- rollback de VRAM
+  self._txops[_txc] = {}   -- write-set SQL diferido (drenado só no commit)
   return _txc
 end
 
+-- Confirma a TX: valida, drena o write-set SQL para o batch e SÓ ENTÃO invalida a
+-- VRAM das chaves não-quentes. Nada tocou o banco antes deste ponto (CORE-001).
 function S:commit(tx, sql_ops)
+  -- TX envenenada (ex.: blob overflow em _set) aborta inteira — nunca persiste parcial
+  local poison = self._txpoison[tx]
+  if poison then
+    self:rollback(tx)
+    return false, poison
+  end
+
   local snap = self._snap[tx] or {}
   for _, v in ipairs(self._validators) do
     local ok, err = v(tx, snap, self._mem)
@@ -199,21 +218,38 @@ function S:commit(tx, sql_ops)
       return false, err or "validation_failed"
     end
   end
+
+  -- Drena o write-set diferido → batch. A invalidação das não-quentes migra p/ cá:
+  -- com o dado já a caminho do banco, a próxima leitura deve reler limpo (l.400).
+  for _, w in ipairs(self._txops[tx] or {}) do
+    self:_queue(w.op)
+    if not _isHotKey(w.key) then self:invalidate(w.et, w.eid, w.key) end
+  end
+  -- Retrocompat: ops SQL explícitas (nenhum call-site atual usa; contrato público)
   if sql_ops then
     for _, op in ipairs(sql_ops) do self:_queue(op) end
   end
-  self._snap[tx] = nil
+
+  self._snap[tx]    = nil
+  self._txops[tx]   = nil
+  self._txpoison[tx] = nil
   return true
 end
 
+-- Aborta a TX: restaura a VRAM e DESCARTA o write-set SQL diferido → zero efeito no
+-- banco (era o defeito P0: antes o SQL já estava enfileirado e persistia mesmo assim).
 function S:rollback(tx)
-  local snap = self._snap[tx]; if not snap then return end
-  for _, s in pairs(snap) do
-    if self._mem[s.et] and self._mem[s.et][s.eid] then
-      self._mem[s.et][s.eid][s.key] = s.prev
+  local snap = self._snap[tx]
+  if snap then
+    for _, s in pairs(snap) do
+      if self._mem[s.et] and self._mem[s.et][s.eid] then
+        self._mem[s.et][s.eid][s.key] = s.prev
+      end
     end
   end
-  self._snap[tx] = nil
+  self._snap[tx]    = nil
+  self._txops[tx]   = nil   -- write-set diferido descartado: nada vai ao batch
+  self._txpoison[tx] = nil
   vHub.Logger:warn("state", "ROLLBACK tx=" .. tostring(tx))
 end
 
@@ -423,26 +459,37 @@ local function _get(et, eid, key, sql, idf)
   return val
 end
 
+-- Persiste uma chave. Sem tx: caminho write-through atual (VRAM → batch → invalida).
+-- Com tx (CORE-001, ADR #95): write-set DIFERIDO — nada toca o banco antes do commit.
+--   A VRAM recebe o valor (com snapshot p/ rollback) e a op SQL fica acumulada em
+--   S._txops[tx]; commit drena, rollback descarta. Estouro de 60 KB envenena a tx
+--   (S._txpoison[tx]) para o commit abortar inteiro em vez de persistir parcial.
 local function _set(et, eid, key, val, sql, idf, tx)
-  -- Atualiza VRAM com o valor atual
-  S:set(et, eid, key, val, tx)
-  -- Enfileira escrita no banco com cópia serializada
+  -- Serializa e valida tamanho ANTES de mutar a VRAM (corrige bug pré-existente:
+  -- antes a VRAM era mutada e só então o guard rodava, deixando VRAM aceitar o
+  -- que o banco rejeitaria). 61440 = 60 KB (4 KB abaixo do limite de 64 KB do BLOB).
   local packed = _pack(val)
-  -- Guarda de tamanho: BLOB > 60 KB envenena toda a SQL transaction do batch.
-  -- 61440 = 60 KB (4 KB abaixo do limite de 64 KB do tipo BLOB).
   if type(packed) == "string" and #packed > 61440 then
+    local fate = tx and "aborta a tx" or "op descartada"
     vHub.Logger:error("state",
-      ("BLOB overflow — op descartada et=%s eid=%s key=%s size=%d"):format(
-        et, tostring(eid), tostring(key), #packed))
-    return
+      ("BLOB overflow (%s) — et=%s eid=%s key=%s size=%d"):format(
+        fate, et, tostring(eid), tostring(key), #packed))
+    if tx then S._txpoison[tx] = ("blob_overflow:%s"):format(key) end
+    return  -- sem tx: descarta a op; VRAM NÃO é mutada (fail-safe)
   end
-  S:_queue({ sql, { [idf]=eid, key=key, value=packed } })
-  -- IMPORTANTE: invalida a VRAM logo após para que a próxima leitura
-  --   vá ao banco e receba o dado limpo (evita acúmulo de referências)
-  -- Exceção: não invalida se for uma chave "quente" (ban, whitelist)
-  --   que precisa de acesso rápido sem round-trip
-  if key ~= "ban.active" and key ~= "whitelist" and key ~= "permissions" then
-    S:invalidate(et, eid, key)
+
+  -- Só agora muta a VRAM (com snapshot de rollback quando em tx)
+  S:set(et, eid, key, val, tx)
+
+  local op = { sql, { [idf]=eid, key=key, value=packed } }
+  if tx then
+    -- diferido: acumula op + o alvo de invalidação (et,eid,key) para o commit drenar;
+    -- NÃO enfileira nem invalida agora (o valor vivo da tx é a verdade até o commit)
+    local ops = S._txops[tx]; if not ops then ops = {}; S._txops[tx] = ops end
+    ops[#ops+1] = { op = op, et = et, eid = eid, key = key }
+  else
+    S:_queue(op)
+    if not _isHotKey(key) then S:invalidate(et, eid, key) end
   end
 end
 

@@ -14,6 +14,15 @@
 | Aplicação física no carro (natives) | `vhub_vehcontrol` (requestState) | CORE `vehicleStateLoad` (flag `vhub_veh_state_apply`) |
 | Fuel | CORE (`vhub_core_fuel 1` + bag `vh_fuel`); legacyfuel só orquestra abastecimento | permanece |
 | Spawn/despawn de veículo | garage/conce server-side; CORE via exports `registerVehicleSpawn/Despawn` | permanece |
+| Posição durável | `vhub_conce`; garage coleta a réplica apenas por alteração | permanece |
+
+## Garagem 2.2 — entidade e persistência
+- `resources/[SCRIPTS]/vhub_garage/server/vehicles.lua:retirar` cria com `CreateVehicleServerSetter` e `SetEntityOrphanMode(ent, 2)` (`KeepEntity`): conserva órfãos, não força simulação nem recria entidade excluída.
+- `contextoAtual` corrobora sessão, entidade, placa/modelo, netId, proprietário de rede, motorista e bucket após esperas. ACK correlaciona origem/token/netId; não prova retirada (ver [[validacao_fisica_replica]]).
+- `salvarPosicoes`: coleta global ≥30 s, uma lista SQL `out`, O(veículos rastreados), pausa por 50; escreve só deslocamento >1 m ou giro >5°. Referência só avança após sucesso; posição é do conce, sem sobrescrever saúde/combustível.
+- `resources/[SCRIPTS]/vhub_conce/server/sql.lua:confirmarRetirada` confirma status+posição por CAS de placa/status/modelo/personagem; `cancelarRetirada` exige também a posição exata da operação.
+- `resources/[SCRIPTS]/vhub_garage/server/init.lua:onResourceStart`: sentinela `GlobalState['vhub_garage:boot_reconciled']` só após reconciliação completa; reinício do recurso reanexa entidades vivas. Primeiro início com varredura habilitada e sem entidade manda `out` ao destino configurado (padrão: pátio), com diário prévio no caso do pátio.
+- Verificação: `tools/test_garage_persistencia.lua` usa nativas simuladas; não certifica MySQL, migração de proprietário de rede ou execução real FiveM.
 
 ## Interruptores (convars no `config/server.cfg`)
 - `vhub_trusted_resources` (CSV) — allowlist dos exports sensíveis do CORE. **Vazio = CORE

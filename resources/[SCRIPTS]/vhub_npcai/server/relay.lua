@@ -6,6 +6,7 @@ VHubNpcAI.Relay = {}
 local Relay     = VHubNpcAI.Relay
 local cfg       = VHubNpcAI.cfg
 local _token    = nil
+local SIDECAR_URL = 'http://127.0.0.1:7513'
 
 
 -- ============================================================
@@ -13,7 +14,7 @@ local _token    = nil
 -- ============================================================
 
 local function _url(path)
-    return ('http://%s:%d%s'):format(cfg.sidecar.host, cfg.sidecar.port, path)
+    return SIDECAR_URL .. path
 end
 
 -- carrega o segredo compartilhado gerado pelo bootstrap

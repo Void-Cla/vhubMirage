@@ -1,8 +1,22 @@
 # vhub_garage — Garagem Centralizada
 
-**Versão:** 2.0.1 | **Owner:** vhub_garage
+**Versão:** 2.2.1 | **Owner:** vhub_garage
 
 Garagem server-authoritative: spawn/guarda de veículos persistentes, pátio de apreensão, aluguel, IPVA e integração com concessionária e leilão. Consome o prontuário do `vhub_conce` e o contrato de spawn do CORE.
+
+## Persistência na rua
+
+- Entidade criada por `CreateVehicleServerSetter` e retida com `SetEntityOrphanMode(2)`. OneSync continua fazendo streaming/culling; fora do alcance não há simulação por um cliente. Não aumenta raio de streaming nem cria keepalive por jogador.
+- Cliente somente inicializa a entidade recebida por netId, com controle e colisão carregados; confirma/reafirma motorista e retenta o assentamento por até 2 s. Modelo permanece carregado até finalizar. ACK vincula source/token/netId e fase diagnóstica allowlist (nunca autoridade). Timeout servidor de 25 s cobre gates cumulativos; réplica tem tolerância de 5 s. Não assume mission ownership do servidor nem relaxa filtro de controle.
+- Falha mostra etapa (`cliente_solo`, `cliente_controle`, `replica_owner` etc.), registra diagnóstico e não confirma status/débito. Exceção nativa aparece no F8 com a fase. Cleanup exato entidade/modelo/netId retenta por 1 s; resíduo permanece privado/cancelado, rejeita ACK tardio e exige remoção confirmada no próximo pedido antes de recriar.
+- Retirada/guarda serializadas por placa. Sessão, motorista, owner, bucket, modelo e netId são corroborados após Await. `conce:confirmarRetirada` faz CAS de status+posição por identidade persistida; compensação exige a posição exata da operação. Taxa de recuperação mantém carteira e valor anteriores, cobrada após gates; `tryPayment` legado é cache sem Await, não saga durável.
+- Uma coleta global a cada `persist_intervalo_s` (mínimo/padrão 30 s), uma lista SQL de `out`, O(veículos rastreados), yield por 50. Salva apenas deslocamento >1 m ou giro >5°. Baseline só avança após sucesso; lista vazia/falha não descarta referências vivas. Posição canônica continua em `vhub_conce`; health/fuel não são sobrescritos.
+- Restart somente do resource reanexa entidades vivas e não recolhe carros, inclusive sem jogadores. No primeiro boot do FXServer, os `out` sem entidade seguem `patio_boot_destino='impound'`: journal idempotente antes da mudança de status, com retry convergente. Sentinel efêmero só é marcado ao concluir. Não respawna carros do boot antigo nas ruas.
+- Veículo vivo não é apagado por force-out; o jogador deve buscá-lo. Exclusões deliberadas (guardar, polícia/admin, venda) continuam permitidas. KeepEntity não bloqueia solicitação de delete de clientes; exclusão externa/maliciosa requer investigação, não ressuscitação automática.
+
+Validação offline: `lua tools/test_garage_persistencia.lua`. Natives/SQL simulados não substituem FiveM/DB real. Reiniciar conjuntamente `vhub_conce`, `vhub_garage` e `vhub_custom` em teste; sem migração SQL nova. Guardião e suites sintáticas/offline aprovados; gate em jogo ainda pendente.
+
+Smoke obrigatório: retirar/guardar carro, moto, barco e aeronave; afastar-se >500 m e retornar; desconectar o último jogador e reconectar; restart somente da garagem vazia/ocupada; restart FXServer → pátio/liberação; posição/giro e custom/health preservados; duplicata, bucket/sessão alterados durante SQL, timeout ACK, falha SQL; bindings NULL e affectedRows no MySQL/MariaDB real. Não promover sem esse gate.
 
 ---
 

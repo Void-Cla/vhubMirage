@@ -57,6 +57,7 @@ window.onerror = function (msg, src, line, col) {
     bloqueado_temporario: 'Muitas tentativas. Aguarde um momento.',
     rate_limit: 'Muitas tentativas. Aguarde um momento.',
     operacao_em_andamento: 'Aguarde a operação atual.',
+    rollback_pendente: 'Não foi possível cancelar a criação anterior. Tente novamente antes de continuar.',
     char_invalido: 'Personagem inválido.',
     dependency: 'Criador indisponível. Tente novamente.',
     already_created: 'Este personagem já concluiu a criação.',

@@ -7,6 +7,29 @@ local _submitting = false
 local _accepted = false
 local _physicalReady = false
 
+-- Reforça o cursor por uma janela curta após abrir (budget bounded, L-18): no handoff
+-- login→selector o foco pode ser transitoriamente sobrescrito por outro resource fechando
+-- a própria NUI no mesmo tick, deixando o CEF sem cursor. O callback 'ready' reasserta 1×;
+-- este watchdog cobre a corrida vencendo a sobrescrita por ~1,2s (8 × 150ms), e para no
+-- instante em que a NUI fecha. Gera nova geração a cada abertura (não acumula threads).
+local _focusGuard = 0
+local function guardCursor()
+  _focusGuard = _focusGuard + 1
+  local generation = _focusGuard
+  Citizen.CreateThread(function()
+    for _, delay in ipairs({ 0, 80, 260, 700 }) do
+      Citizen.Wait(delay)
+      if not _open or generation ~= _focusGuard then return end
+      SetNuiFocus(false, false)
+      Citizen.Wait(0)
+      if not _open or generation ~= _focusGuard then return end
+      if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
+      if SetNuiFocusKeepInput then SetNuiFocusKeepInput(false) end
+      SetNuiFocus(true, true)
+    end
+  end)
+end
+
 local function openUI(payload)
   if type(payload) ~= "table" or type(payload.data) ~= "table" or #payload.data == 0 then return end
   _payload = payload
@@ -18,6 +41,7 @@ local function openUI(payload)
   if SetNuiFocusKeepInput then SetNuiFocusKeepInput(false) end
   if SetCursorLocation then SetCursorLocation(0.5, 0.5) end
   SetNuiFocus(true, true)
+  guardCursor()
   SendNUIMessage({
     action = "open",
     data = payload.data,
@@ -35,6 +59,7 @@ local function closeUI(preserveFocus, completed)
   _submitting = false
   _accepted = false
   _physicalReady = false
+  _focusGuard = _focusGuard + 1
   _payload = nil
   if not preserveFocus then
     SetNuiFocus(false, false)
@@ -58,6 +83,7 @@ AddEventHandler(E.RESULT, function(result)
   if result.ok == true then
     _accepted = true
     SendNUIMessage({ action = "accepted" })
+    -- O HSS revela o mundo no SPAWNED; aceitar depois não pode escurecer novamente.
     completeWhenReady()
     return
   end
@@ -82,7 +108,7 @@ end)
 
 AddEventHandler("onClientResourceStart", function(resource)
   if resource ~= GetCurrentResourceName() then return end
-  Citizen.SetTimeout(750, function()
+  Citizen.SetTimeout(250, function()
     TriggerServerEvent(E.REQUEST_OPEN)
   end)
 end)

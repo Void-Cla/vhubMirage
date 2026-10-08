@@ -546,6 +546,15 @@ local function operationApplied(row)
     return dx * dx + dy * dy + dz * dz <= 4.0
   end
   local state = Core.getVehicleState(row.plate)
+  if type(row.action) == 'string' and row.action:match('^repair_') then
+    -- Estado igual ao patch não prova reparo (lataria pode ter health 1000 já antes).
+    -- O marker é gravado atomicamente pelo conce somente após confirmação física.
+    local confirmado = false
+    for _, evento in ipairs(state and state.damage_log or {}) do
+      if evento.repair == true and evento.operation_id == row.operation_id then confirmado = true; break end
+    end
+    if not confirmado then return false end
+  end
   return type(state) == 'table' and sameSubset(state, after, 0)
 end
 
@@ -564,6 +573,13 @@ local function recoverOperation(row)
   if not SQL.claim(row.operation_id, claimToken) then return end
   if row.state == 'charged' and operationApplied(row) then
     if SQL.markApplied(row.operation_id, claimToken) then auditRecovery(row, 'recovered_applied') end
+    return
+  end
+
+  if row.state == 'charged' and type(row.action) == 'string' and row.action:match('^repair_') then
+    -- Perda de ACK/queda após native é ambígua. Estornar sem prova daria reparo gratuito.
+    -- Mantém claim e guarda da placa; auditoria expõe a reconciliação física necessária.
+    auditRecovery(row, 'repair_requires_physical_reconciliation')
     return
   end
 

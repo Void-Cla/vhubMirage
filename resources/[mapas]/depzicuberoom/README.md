@@ -7,7 +7,7 @@ Mapa Cuberoom Showroom com cinco salas alinhadas no eixo X.
 | Sala | Centro |
 |------|--------|
 | Central | `vec3(0.0, 0.0, 0.0)` |
-| Leste 1 | `vec3(40.0, 0.0, 0.0)` |
+| Leste 1 | `vec3(  )` |
 | Leste 2 | `vec3(80.0, 0.0, 0.0)` |
 | Oeste 1 | `vec3(-40.0, 0.0, 0.0)` |
 | Oeste 2 | `vec3(-80.0, 0.0, 0.0)` |

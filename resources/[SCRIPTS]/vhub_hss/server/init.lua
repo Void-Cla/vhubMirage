@@ -97,12 +97,28 @@ local function remove_session(src)
     _loading[src] = nil
 end
 
+-- Liga a fisiologia (Engine) e o observador de dano SOMENTE quando o char está VIVO NO MUNDO.
+-- Gate único: `not Ped.is_suspended(src)`. `_suspended`/`_dead` (ped.lua) são true em todo estado
+-- de rascunho/hold/criação/selector/morte, e release_spawn os limpa EXATAMENTE no ponto de entrada
+-- no mundo (ped.lua) — cobrindo naturalmente o pós-selector, que Buckets.is_creation não pegava no
+-- fast-path. Antes, o char em criação tinha fisiologia ligada cedo (no characterLoad): o Engine
+-- rodava ticks de fome/sede sobre um rascunho, gerando saves de hss_state; se a criação era
+-- cancelada (discardDraft apaga vh_characters), um save atrasado batia na FK fk_hss_char. Agora a
+-- "vida" só liga no mundo. Idempotente (Engine.add varre slots; Damage.register só reseta baseline)
+-- → replay-safe (L-17), sem guard externo. Único escritor do Engine é o init.lua (L-07/A1).
+local function activate_life(src, char_id)
+    if Ped.is_suspended(src) then return end
+    Engine.add(char_id)
+    Damage.register(src, char_id)
+end
+
 local function register_session(src, char_id)
     src, char_id = tonumber(src), tonumber(char_id)
     if not _state_ready or not src or not char_id or resolve_character(src) ~= char_id then return false end
 
     if _seen[src] == char_id and State.is_loaded(char_id) then
         Ped.handle_profile_loaded(src, char_id)
+        activate_life(src, char_id)   -- fast-path: char já carregado (ex.: pós-selector) — era o gap
         send_snapshot(src, char_id)
         return true
     end
@@ -126,8 +142,7 @@ local function register_session(src, char_id)
             notify(src, 'error', 'Estado fisiológico indisponível. Tente reconectar.')
             return
         end
-        Engine.add(char_id)
-        Damage.register(src, char_id)
+        activate_life(src, char_id)   -- só liga a vida se o char está no mundo (not is_suspended)
         Ped.handle_profile_loaded(src, char_id)
         send_snapshot(src, char_id)
     end)
@@ -326,7 +341,10 @@ AddEventHandler(VHubHSS.E.PLAYER_SPAWN, function(user, first_spawn)
     if _state_ready then
         register_session(src, char_id)
         if State.is_loaded(char_id) then
-            Damage.register(src, char_id)
+            -- Transição criação/selector→mundo: o char spawnou de verdade. Liga a vida pelo gate
+            -- único (activate_life → not Ped.is_suspended): cobre spawn direto, pós-selector e char
+            -- existente logando; recusa char ainda suspenso/morto. Replay-safe (idempotente).
+            activate_life(src, char_id)
             Engine.clear_bags(char_id)
             send_snapshot(src, char_id)
         end

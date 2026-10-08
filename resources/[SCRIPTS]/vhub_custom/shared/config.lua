@@ -11,6 +11,19 @@ VHubCustom.cfg = {
 
   debug = false,
 
+  -- Um único efeito RGB neutro para oficina/preview/nitro, isolado dos assets globais.
+  -- Trocar asset/effect/resource somente na configuração; nunca no bag ou na NUI.
+  exhaust_fx = {
+    asset = 'mirage_backfire_rgb', effect = 'chama_rgb', colour_mode = 'rgb',
+    resource = nil, -- recurso de assets externo, se usado (sem script emissor)
+    scale_factor = 0.5, max_scale = 1.5, interval_ms = 450,
+    outlet_push = 0.12, -- metros para fora da boca, no eixo -Y rotacionado do efeito
+    -- Exceções medidas para modelos/mods com bones incorretos. Lista substitui os bones.
+    -- [joaat('modelo')] = { [-1] = { { pos=vec3(0,-2,0), rot=vec3(0,0,0) } } },
+    -- -1 = escapamento original; 0..N = mod slot 4; default = demais mods; {} = sem saídas.
+    model_outlets = {},
+  },
+
 
   -- ============================================================
   -- PALETAS DE TINTA (índices GTA 0-222 por tipo de acabamento)
@@ -117,6 +130,8 @@ VHubCustom.cfg = {
     oficina_install_part = { max = 5, window = 60000 },  -- instalar peça de inventário
     oficina_remove_part  = { max = 5, window = 60000 },  -- remover peça (ADR #85 F2.5-A — remoção 1ª classe)
     engine_bay_inspect   = { max = 15, window = 10000 }, -- leitura do motor (ADR #82 F2.2) — anti-enumeração
+    shop_open            = { max = 6, window = 10000 },
+    shop_buy             = { max = 5, window = 30000 },
   },
 
   service_lease_ms       = 600000,
@@ -124,6 +139,33 @@ VHubCustom.cfg = {
   max_vehicle_zone_dist  = 10.0,
   max_player_vehicle_dist= 10.0,
   max_service_speed      = 1.5,
+
+  -- Lojas físicas. Preço, item e validação continuam exclusivamente no servidor.
+  lojas = {
+    performance = {
+      model = 's_m_y_xmech_02',
+      x = -365.28, y = -136.92, z = 38.51, h = 70.0, raio = 3.0,
+      max_quantidade = 5,
+      titulo = 'PEÇAS DE PERFORMANCE',
+      subtitulo = 'Componentes para instalação na oficina',
+      alvo = 'Comprar Peças de Performance',
+    },
+    mecanica = {
+      model = 's_m_y_xmech_02',
+      x = 128.91, y = -1082.10, z = 29.19, h = 0.0, raio = 3.0,
+      max_quantidade = 5,
+      titulo = 'SUPRIMENTOS DA MECÂNICA',
+      subtitulo = 'Materiais e ferramentas para manutenção',
+      alvo = 'Comprar Suprimentos da Mecânica',
+    },
+  },
+
+  -- Catálogo da mecânica. A definição visual/peso é do vhub_inventory.
+  loja_mecanica_itens = {
+    { id = 'kit_pneus',         preco = 750 },
+    { id = 'kit_chave_nivel_1', preco = 1450 },
+    { id = 'martelinho_ouro',   preco = 1100 },
+  },
 
 
   -- ============================================================

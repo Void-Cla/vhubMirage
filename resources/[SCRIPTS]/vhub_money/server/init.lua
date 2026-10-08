@@ -222,7 +222,7 @@ RegisterNetEvent('vhub_money:nui:transfer', function(payload)
   -- Transferencia requer estar em banco fisico (mais seguranca / brand)
   if not near_bank(src) then return end
 
-  local ok, data_or_err = T.try_transfer(src, payload.target, payload.amount, payload.reason)
+  local ok, data_or_err = T.try_transfer(src, payload.target, payload.amount, payload.reason, payload.operation_id)
   op_response(src, ok, ok and data_or_err or { err = data_or_err })
 end)
 

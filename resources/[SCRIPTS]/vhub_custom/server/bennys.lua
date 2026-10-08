@@ -31,10 +31,12 @@ local function buildPatch(payload)
   if payload.extra_colours ~= nil then patch.extra_colours = pair(payload.extra_colours, 0, 222) end
   -- custom RGB: tabela {r,g,b} aplica; `false` explícito LIMPA (volta ao índice de paleta)
   if payload.custom_primary ~= nil then
-    patch.custom_primary = (payload.custom_primary == false) and false or rgb(payload.custom_primary)
+    if payload.custom_primary == false then patch.custom_primary = false
+    else patch.custom_primary = rgb(payload.custom_primary) end
   end
   if payload.custom_secondary ~= nil then
-    patch.custom_secondary = (payload.custom_secondary == false) and false or rgb(payload.custom_secondary)
+    if payload.custom_secondary == false then patch.custom_secondary = false
+    else patch.custom_secondary = rgb(payload.custom_secondary) end
   end
   if payload.tyre_smoke_color ~= nil then patch.tyre_smoke_color = rgb(payload.tyre_smoke_color) end
   if payload.neon_colour ~= nil then patch.neon_colour = rgb(payload.neon_colour) end
@@ -62,7 +64,7 @@ local function buildPatch(payload)
   if type(payload.extras) == 'table' then
     local extras, max = {}, CFG.extras_max or 14
     for k, v in pairs(payload.extras) do
-      local idx = tonumber(k)
+      local idx = U.integer(k, 0, max - 1)
       if idx and idx >= 0 and idx < max and type(v) == 'boolean' then
         extras[tostring(idx)] = v
       end
@@ -122,6 +124,7 @@ local function costOf(patch)
   if patch.smoke ~= nil then total = total + price.fumaca end
   if patch.tyre_smoke_color then total = total + price.fumaca_cor end
   if patch.xenon ~= nil then total = total + price.xenon end
+  if patch.xenon == nil and patch.xenon_color ~= nil then total = total + price.xenon end
   if patch.window_tint ~= nil then total = total + price.tint end
   if patch.interior_color  ~= nil then total = total + (price.interior_color or 500) end
   if patch.dashboard_color ~= nil then total = total + (price.dashboard_color or 500) end
@@ -172,22 +175,38 @@ local function sameValue(current, expected, depth)
   return true
 end
 
+local function somenteAlteracoes(current, patch)
+  local out = {}
+  for key, value in pairs(patch) do
+    if key == 'mods' or key == 'extras' then
+      local base, mapa = type(current[key]) == 'table' and current[key] or {}, {}
+      for indice, novo in pairs(value) do
+        local anterior = base[indice]
+        if anterior == nil then anterior = base[tostring(indice)] end
+        if not sameValue(anterior, novo, 0) then mapa[indice] = novo end
+      end
+      if next(mapa) then out[key] = mapa end
+    elseif not sameValue(current[key], value, 0) then out[key] = value end
+  end
+  return out
+end
+
 RegisterNetEvent(E.BENNYS_APPLY)
 AddEventHandler(E.BENNYS_APPLY, function(leaseId, requestId, payload)
   local src = source
   if not Core.rateOK(src, 'bennys_apply') then
     Core.notify(src, 'Aguarde antes de aplicar outro item.', 'error')
-    TriggerClientEvent(E.BENNYS_CONFIRM, src, nil, false, nil, nil); return
+    TriggerClientEvent(E.BENNYS_CONFIRM, src, nil, false, nil, nil, leaseId, requestId); return
   end
 
   local context, lock, why = Core.beginMutation(src, 'bennys', leaseId)
   if not context then
     Core.notify(src, why == 'busy' and 'Veículo em outra operação.' or 'Sessão inválida.', 'error')
-    TriggerClientEvent(E.BENNYS_CONFIRM, src, nil, false, nil, nil); return
+    TriggerClientEvent(E.BENNYS_CONFIRM, src, nil, false, nil, nil, leaseId, requestId); return
   end
   local function finish(ok, patch)
     Core.releaseLock(src, context.plate, lock)
-    TriggerClientEvent(E.BENNYS_CONFIRM, src, context.plate, ok == true, patch, context.net_id)
+    TriggerClientEvent(E.BENNYS_CONFIRM, src, context.plate, ok == true, patch, context.net_id, leaseId, requestId)
   end
 
   local patch = buildPatch(payload)
@@ -195,12 +214,14 @@ AddEventHandler(E.BENNYS_APPLY, function(leaseId, requestId, payload)
   local state = Core.getVehicleState(context.plate)
   if not state then Core.notify(src, 'Prontuário indisponível.', 'error'); return finish(false) end
   local current = type(state.customization) == 'table' and state.customization or {}
-  local alreadyApplied = sameValue(current, patch, 0)
+  local solicitado = patch
+  patch = somenteAlteracoes(current, patch)
+  local alreadyApplied = next(patch) == nil
   local before, cost = beforeOf(state, patch), alreadyApplied and 0 or costOf(patch)
   local after = { customization = patch }
 
   local paid, operationId, paymentErr, replayed, charged, operation =
-    Core.commitPayment(context, 'cosmetic', requestId, cost, patch,
+    Core.commitPayment(context, 'cosmetic', requestId, cost, solicitado,
       { customization = before }, after)
   if not paid then
     local msg = paymentErr == 'insufficient' and ('Saldo insuficiente. Custo: R$ %d.'):format(cost)
@@ -210,14 +231,14 @@ AddEventHandler(E.BENNYS_APPLY, function(leaseId, requestId, payload)
 
   if replayed then
     Core.notify(src, 'Operação já concluída.', 'info')
-    return finish(true)
+    return finish(true, current)
   end
   cost = tonumber(operation and operation.amount) or cost
   if alreadyApplied then
     Core.completeOperation(operationId)
     Core.auditVehicle(context, 'cosmetic', operationId, before, patch, 'recovered_applied')
     Core.notify(src, 'Configuração já aplicada.', 'info')
-    return finish(true)
+    return finish(true, solicitado)
   end
 
   if not Core.lockValid(context, lock) or not Core.refreshOperation(operationId) then
@@ -248,5 +269,5 @@ AddEventHandler(E.BENNYS_APPLY, function(leaseId, requestId, payload)
   end
 
   Core.notify(src, ('Estética aplicada! R$ %d cobrados.'):format(cost), 'success')
-  finish(true, patch)
+  finish(true, solicitado)
 end)

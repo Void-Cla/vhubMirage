@@ -1,0 +1,8 @@
+# Integração local: ao mover o repositório, ajuste cwd.
+[mcp_servers.vhub-rag]
+command = "python"
+args = ["tools/rag/rag.py", "mcp"]
+cwd = "C:/vHUB Mirage/vhubMirage"
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+enabled = true

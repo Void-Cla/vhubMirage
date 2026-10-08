@@ -16,6 +16,9 @@
 (function () {
 
 let _module = null;
+let _aplicando = false;
+let _geracao = 0;
+let _rescan = 0;
 
 // ============================================================
 // CONFIG ESTÁTICA (rótulos; disponibilidade vem do servidor/cliente)
@@ -360,7 +363,7 @@ function swatchGrid(root, indices, selected, onPick) {
 // devolve o par [primária, secundária] atual (pendente > real > preto)
 function curColourPair() {
   const src = _pending.colours || _cur.colours || [0, 0];
-  return [Number(src[0] || src['1'] || 0), Number(src[1] || src['2'] || 0)];
+  return [Number(src[0] ?? 0), Number(src[1] ?? 0)];
 }
 
 // aplica um índice de paleta ao slot (0=primária, 1=secundária) e limpa o custom do slot
@@ -432,7 +435,7 @@ function renderPintura(root) {
 // aplica índice ao par extra_colours (0=perolado, 1=cor de aro)
 function setExtraColour(slot, idx) {
   const src = _pending.extra_colours || _cur.extra_colours || [0, 0];
-  const pair = [Number(src[0] || src['1'] || 0), Number(src[1] || src['2'] || 0)];
+  const pair = [Number(src[0] ?? 0), Number(src[1] ?? 0)];
   pair[slot] = idx;
   _pending.extra_colours = pair;
   pushPreview();
@@ -462,12 +465,15 @@ function renderRodas(root) {
   const curType = (_pending.wheel_type != null) ? _pending.wheel_type : _cur.wheel_type;
   chips(bt, WHEEL_TYPES, curType, (v) => {
     _pending.wheel_type = v;
+    const geracao = _geracao;
+    const rescan = ++_rescan;
     // re-enumera as rodas do novo tipo (a lista 23 muda com o tipo) — anti-fantasma
     post('bennys:rescanWheels', { wheel_type: v }).then(d => {
+      if (!_data || _aplicando || geracao !== _geracao || rescan !== _rescan) return;
       _wheelCount = (d && d.count) || 0;
       pushPreview();
       renderControls();
-    }).catch(() => { pushPreview(); renderControls(); });
+    }).catch(() => { if (_data && geracao === _geracao && rescan === _rescan) { pushPreview(); renderControls(); } });
   });
 
   if (_wheelCount > 0) {
@@ -608,18 +614,22 @@ function renderVisual(root) {
 
   if ((_pending.exhaust_fx || fx).enabled) {
     const cur = _pending.exhaust_fx || fx;
-    const bfc = block(root, 'Cor das chamas', 'Gradiente RGB contínuo');
-    mountPicker(bfc, [cur.r != null ? cur.r : 255, cur.g != null ? cur.g : 90, cur.b != null ? cur.b : 0], rgb => {
-      _pending.exhaust_fx = _pending.exhaust_fx || { enabled: true };
-      _pending.exhaust_fx.enabled = true;
-      _pending.exhaust_fx.r = rgb[0]; _pending.exhaust_fx.g = rgb[1]; _pending.exhaust_fx.b = rgb[2];
-      pushPreview();
-    });
-    const bfs = block(root, 'Densidade das chamas', 'Escala do efeito');
+    if (_data && _data.exhaust_rgb === true) {
+      const bfc = block(root, 'Cor das chamas', 'PTFX RGB externo · mesma cor ao usar nitro');
+      mountPicker(bfc, [cur.r != null ? cur.r : 255, cur.g != null ? cur.g : 90, cur.b != null ? cur.b : 0], rgb => {
+        _pending.exhaust_fx = _pending.exhaust_fx || Object.assign({}, cur);
+        _pending.exhaust_fx.enabled = true;
+        _pending.exhaust_fx.r = rgb[0]; _pending.exhaust_fx.g = rgb[1]; _pending.exhaust_fx.b = rgb[2];
+        pushPreview();
+      });
+    } else {
+      block(root, 'Cor original do efeito', 'RGB requer um asset de partículas externo compatível.');
+    }
+    const bfs = block(root, 'Tamanho das chamas', 'Mesma escala no escapamento e no nitro');
     const curScale = cur.scale != null ? cur.scale : 1.0;
     chips(bfs, [{ v: 0.6, label: 'Sutil' }, { v: 1.0, label: 'Normal' }, { v: 1.8, label: 'Forte' }, { v: 3.0, label: 'Brutal' }],
           curScale, (v) => {
-      _pending.exhaust_fx = _pending.exhaust_fx || { enabled: true };
+      _pending.exhaust_fx = _pending.exhaust_fx || Object.assign({}, cur);
       _pending.exhaust_fx.enabled = true; _pending.exhaust_fx.scale = v;
       pushPreview(); renderControls();
     });
@@ -649,13 +659,12 @@ function renderExtras(root) {
 
 function setMod(idx, lvl) {
   _pending.mods = _pending.mods || {};
-  if (lvl < 0) delete _pending.mods[String(idx)];
-  else _pending.mods[String(idx)] = lvl;
-  if (Object.keys(_pending.mods).length === 0) delete _pending.mods;
+  _pending.mods[String(idx)] = lvl;
   pushPreview();
 }
 
 function renderControls() {
+  if (_aplicando) return;
   const root = document.getElementById('bn-controls');
   detachPickers();
   root.innerHTML = '';
@@ -686,9 +695,9 @@ function calcTotal() {
   if (p.custom_secondary) t += priceFor('cor_custom');
   if (p.neons)            t += priceFor('neon');
   if (p.neon_colour)      t += priceFor('neon_cor');
-  if (p.smoke)            t += priceFor('fumaca');
+  if (p.smoke !== undefined) t += priceFor('fumaca');
   if (p.tyre_smoke_color) t += priceFor('fumaca_cor');
-  if (p.xenon)            t += priceFor('xenon');
+  if (p.xenon !== undefined || p.xenon_color !== undefined) t += priceFor('xenon');
   if (p.window_tint   !== undefined) t += priceFor('tint');
   if (p.interior_color  !== undefined) t += priceFor('interior_color');
   if (p.dashboard_color !== undefined) t += priceFor('dashboard_color');
@@ -710,7 +719,7 @@ function calcTotal() {
 function renderFooter() {
   const total = calcTotal();
   document.getElementById('bn-total-cost').textContent = fmtMoney(total);
-  document.getElementById('bn-btn-apply').disabled = (total === 0);
+  document.getElementById('bn-btn-apply').disabled = _aplicando || Object.keys(_pending).length === 0;
 }
 
 function flushPreview() {
@@ -721,6 +730,15 @@ function flushPreview() {
 
 // coalesce chamadas durante drag do picker (A-08 — máximo 10 Hz)
 function pushPreview() {
+  if (_aplicando) return;
+  for (const [chave, valor] of Object.entries(_pending)) {
+    if (chave === 'mods' || chave === 'extras') {
+      for (const [indice, novo] of Object.entries(valor)) {
+        if (JSON.stringify(novo) === JSON.stringify((_cur[chave] || {})[indice])) delete valor[indice];
+      }
+      if (Object.keys(valor).length === 0) delete _pending[chave];
+    } else if (JSON.stringify(valor) === JSON.stringify(_cur[chave])) delete _pending[chave];
+  }
   if (!_previewTimer) _previewTimer = setTimeout(flushPreview, 100);
 }
 
@@ -782,6 +800,9 @@ function unbindStage() {
 // ============================================================
 
 function openBennys(data) {
+  _geracao++;
+  _aplicando = false;
+  document.getElementById('bn-btn-cancel').disabled = false;
   _data    = data || {};
   _cur     = _data.current || {};
   _pending = {};
@@ -803,6 +824,7 @@ function openBennys(data) {
 }
 
 function closeNUI() {
+  _geracao++;
   if (_orbitTimer) { clearTimeout(_orbitTimer); _orbitTimer = null; }
   if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null; }
   if (_zoomTimer) { clearTimeout(_zoomTimer); _zoomTimer = null; }
@@ -814,17 +836,28 @@ function closeNUI() {
 }
 
 function cancelar() {
+  if (_aplicando) return;
   _module.hide();
   post('bennys:fechar', {}).catch(() => {});
 }
 
 function aplicar() {
-  if (!_data || calcTotal() === 0) return;
+  if (!_data || _aplicando || Object.keys(_pending).length === 0) return;
+  _aplicando = true;
+  window.vhub.ocupado(true);
+  if (_previewTimer) { clearTimeout(_previewTimer); _previewTimer = null; }
   document.getElementById('bn-btn-apply').disabled  = true;
   document.getElementById('bn-btn-cancel').disabled = true;
-  post('bennys:aplicar', { plate: _data.plate, payload: _pending }).catch(() => {
-    document.getElementById('bn-btn-apply').disabled = false;
-    document.getElementById('bn-btn-cancel').disabled = false;
+  post('bennys:aplicar', { plate: _data.plate, payload: _pending }).then((resposta) => {
+    if (resposta && resposta.ok === false) {
+      _aplicando = false;
+      window.vhub.ocupado(false);
+      document.getElementById('bn-btn-cancel').disabled = false;
+      renderFooter();
+    }
+  }).catch(() => {
+    // Timeout de transporte não autoriza cancelar uma transação já enviada.
+    window.vhub.aviso('Aguardando confirmação do servidor.', 'warning');
   });
   // a NUI fecha ao receber action='fecharBennys' (BENNYS_CONFIRM → SendNUIMessage)
 }

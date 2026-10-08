@@ -3,7 +3,7 @@ game 'gta5'
 
 author 'vHub Mirage'
 description 'Outdoors administrativos com imagem ou video remoto'
-version '3.1.0'
+version '3.1.1'
 
 lua54 'yes'
 
@@ -30,6 +30,8 @@ client_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/media.lua',
   'server/sql.lua',
   'server/core.lua',

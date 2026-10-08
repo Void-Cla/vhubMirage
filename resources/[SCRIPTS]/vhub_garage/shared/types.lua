@@ -10,17 +10,6 @@ VHubGarage.catalog  = VHubGarage.catalog or {}   -- cache: preenchido no boot vi
 
 VHubGarage.types.list = { 'car', 'bike', 'plane', 'heli', 'boat', 'truck', 'trailer' }
 
--- markers no NUI por tipo
-VHubGarage.types.markers = {
-  car     = 36,
-  bike    = 37,
-  truck   = 39,
-  plane   = 33,
-  heli    = 34,
-  boat    = 35,
-  trailer = 39,
-}
-
 -- spawn surface por tipo
 VHubGarage.types.surface = {
   car     = 'ground',

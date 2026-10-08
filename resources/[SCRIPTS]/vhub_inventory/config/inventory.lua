@@ -331,6 +331,27 @@ Inventory.Items = {
     permitido_bau = true, serial = true, categoria = 'ferramenta', consume_policy = 'never',
   },
 
+  -- MANUTENÇÃO VEICULAR ----------------------------------------
+  -- Materiais de manutenção; o domínio mecânico controla a aplicação.
+  ['kit_pneus'] = {
+    nome = 'Kit de Pneus', descricao = 'Consumido pela mecânica no reparo de pneus e aros.',
+    peso = 6.00, stack = true, max = 5,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, serial = false, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['kit_chave_nivel_1'] = {
+    nome = 'Kit Chave Nível 1', descricao = 'Consumido pela mecânica na manutenção básica do motor.',
+    peso = 1.20, stack = true, max = 5,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, serial = false, categoria = 'ferramenta', consume_policy = 'never',
+  },
+  ['martelinho_ouro'] = {
+    nome = 'Martelinho de Ouro', descricao = 'Consumido pela mecânica no reparo da carroceria.',
+    peso = 1.80, stack = true, max = 5,
+    legalidade = 'legal', negociavel = true, perdivel = true,
+    permitido_bau = true, serial = false, categoria = 'ferramenta', consume_policy = 'never',
+  },
+
   -- DOCUMENTOS / CHAVES (nao perdiveis, nao negociaveis) -------
   ['rg'] = {
     nome = 'Carteira de Identidade', peso = 0.05, stack = false,

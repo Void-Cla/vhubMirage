@@ -18,6 +18,8 @@ VHubInvE = {
   DROP_DEL       = 'vhub_inventory:drop_del',
   HUD            = 'vhub_inventory:hud',         -- { charId } -> Player Info HUD
   HOTBAR         = 'vhub_inventory:hotbar',      -- binds da hotbar (lista {slot,id})
+  STORE_OPEN     = 'vhub_inventory:store_open',
+  STORE_RESULT   = 'vhub_inventory:store_result',
 
   -- cliente -> servidor (INTENCAO — nunca verdade)
   USE            = 'vhub_inventory:use',         -- usar item do slot
@@ -33,4 +35,6 @@ VHubInvE = {
   HUD_REQ        = 'vhub_inventory:hud_req',     -- cliente pede o char_id do HUD
   SET_BIND       = 'vhub_inventory:set_bind',    -- vincula item a um slot da hotbar
   USE_HOTBAR     = 'vhub_inventory:use_hotbar',  -- usa item do slot da hotbar
+  STORE_OPEN_REQ = 'vhub_inventory:store_open_req',
+  STORE_BUY      = 'vhub_inventory:store_buy',
 }

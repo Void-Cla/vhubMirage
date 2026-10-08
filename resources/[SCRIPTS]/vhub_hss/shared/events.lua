@@ -10,6 +10,10 @@ VHubHSS.E = {
 
     CRITICAL = 'vhub_hss:critical',
     STATE_CHANGED = 'vhub_hss:stateChanged',
+    -- Interno client→client: espelha o supressor de HUD nativo para a NUI fisiológica.
+    -- Quando o gate de entrada (vhub_login) suprime o HUD, as barras (vida/fome/sede/colete)
+    -- também somem — antes só o minimapa nativo era coberto, e as barras vazavam na seleção/criação.
+    HUD_GATE = 'vhub_hss:hudGate',
 
     CHARACTER_LOAD = 'vHub:characterLoad',
     PLAYER_SPAWN = 'vHub:playerSpawn',

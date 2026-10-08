@@ -9,6 +9,7 @@ local Containers  = Inventory.Containers
 local Transfer    = Inventory.Transfer
 local DropSystem  = Inventory.DropSystem
 local P2PSystem   = Inventory.P2PSystem
+local Stores      = Inventory.Stores
 local U           = Inventory.Utils
 local E           = VHubInvE
 
@@ -62,6 +63,18 @@ AddEventHandler('onResourceStart', function(res)
 
     TriggerEvent('vhub_inventory:server:ready')
   end)
+end)
+
+RegisterNetEvent(E.STORE_OPEN_REQ)
+AddEventHandler(E.STORE_OPEN_REQ, function(id)
+  if not cooled(source, 'store_open') then return end
+  Stores.open(source, id)
+end)
+
+RegisterNetEvent(E.STORE_BUY)
+AddEventHandler(E.STORE_BUY, function(token, item, amount, requestId)
+  if not cooled(source, 'store_buy') then return end
+  Stores.buy(source, token, item, amount, requestId)
 end)
 
 

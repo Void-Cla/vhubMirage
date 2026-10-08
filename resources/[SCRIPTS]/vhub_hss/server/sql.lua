@@ -59,7 +59,11 @@ local function run_await(operation, cb, timeout_ms)
         local ok, result = pcall(operation)
         if completed then return end
         completed = true
-        cb(ok, ok and result or tostring(result))
+        if ok then
+            cb(true, result) -- nil/false são resultados válidos de leitura
+        else
+            cb(false, tostring(result))
+        end
     end)
 end
 
@@ -120,9 +124,10 @@ function SQL.apply_schema(cb)
     end
 
     run_await(function()
-        for statement in schema:gmatch('([^;]+);') do
-            if statement:match('%S') then MySQL.query.await(statement, {}) end
-        end
+        local applied, applyError = VHubSQLScript.aplicar(schema, function(statement)
+            MySQL.query.await(statement, {})
+        end)
+        if not applied then error(applyError) end
 
         local found = verify_columns()
         if not found.ped_state then
@@ -206,6 +211,22 @@ function SQL.load(char_id, cb)
             'SELECT * FROM `vhub_hss_state` WHERE `char_id` = ?',
             { char_id }
         )
+    end, cb, TIMEOUT_MS)
+end
+
+-- Confirma se o personagem AINDA existe na tabela-mãe vh_characters (a verdade do CORE, lida —
+-- nunca espelhada, L-04). Guard do "vetor 2" do FK fk_hss_char: o SIMS pode commitar aparência de
+-- um char que foi cancelado/deletado (discardDraft) entre a edição e o commit → INSERT em
+-- vhub_hss_state ressuscitaria a FK. Retorna true (existe), false (deletado → no-op idempotente
+-- legítimo) via cb(ok, exists). ok=false = falha de leitura real (NÃO tratar como ausência: char
+-- presente + write vazio é perda de dado, deve virar erro no chamador — anti-mascaramento L-17/R12).
+function SQL.character_exists(char_id, cb)
+    run_await(function()
+        local row = MySQL.single.await(
+            'SELECT 1 AS `ok` FROM `vh_characters` WHERE `id` = ? LIMIT 1',
+            { char_id }
+        )
+        return row ~= nil and tonumber(row.ok) == 1
     end, cb, TIMEOUT_MS)
 end
 

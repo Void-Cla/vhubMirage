@@ -13,8 +13,8 @@ lua54     'yes'
 
 name        'vhub'
 author      'vHub Mirage'
-version     '2.0.0-alpha.9'
-description 'Core autoritativo vHub Mirage — VRAM-first, thread-safe (ADR #82: fix FK stale-anchor + unregisterVehicle).'
+version     '2.0.0-alpha.12'
+description 'Core autoritativo vHub Mirage — scripts SQL isolados sem multipleStatements (ADR #98).'
 
 dependency 'oxmysql'
 
@@ -32,6 +32,7 @@ shared_scripts {
 -- spawn.lua é carregado pelo server/init.lua (via loadmod) — NÃO aqui,
 -- para garantir que só roda após vHub estar completamente inicializado.
 server_scripts {
+  'shared/sql_script.lua',
   'bootstrap.lua',
 }
 

@@ -1,6 +1,6 @@
 # vhub_login — Gate de Entrada (Login + Seleção de Personagem)
 
-**Versão:** 0.6.1 | **Owner:** vhub_login
+**Versão:** 0.6.5 | **Owner:** vhub_login
 
 Gate de entrada do servidor: login, seleção, criação autoritativa no CORE e handoff ao `vhub_sims`. O HSS mantém o bucket-base 999 e aloca uma subinstância privada após autenticação; previews locais usam o mapa `depzitamadasptlnd`.
 
@@ -75,6 +75,23 @@ Sem entrada na lista, o export retorna o valor de negação (`false`/`nil`) — 
 ```
 
 Runbook pré-enable: validar o fail-open do selector antes de ligar `enabled=true` (passo do dono, pós runtime-validate).
+
+## Falha ou cancelamento da criação
+
+O CORE continua sendo o único responsável por descartar rascunhos. Se `discardDraftCharacter`
+falhar, a sessão do login preserva `rascunho_pendente` e `create_request_id`, retorna
+`rollback_pendente` à interface e registra a causa canônica. Selecionar/criar novamente
+retenta a compensação antes de avançar; somente `ok=true` libera essas referências.
+`not_draft` permanece erro: personagem concluído nunca é tratado como descarte confirmado.
+
+Cancelar pelo SIMS devolve a seleção isolada com o erro visível. Voltar enquanto o criador
+ainda está ativo preserva sua sessão se o descarte for recusado. Token da operação e
+identidade da sessão impedem que uma resposta atrasada limpe uma tentativa mais recente.
+Compensação é efêmera, até confirmação ou desconexão. Um eventual rascunho restante
+continua no CORE; reconexão/restart não garante descarte automático.
+
+Validação offline: `lua tools/test_login_rollback.lua` e `lua tools/test_fluxo_entrada.lua`
+na raiz do projeto. Confirmar transições/cursor/HUD no FiveM antes de promover o patch.
 
 ## Identificadores e privacidade
 

@@ -281,6 +281,38 @@ end)
 
 
 -- ============================================================
+-- MANUTENÇÃO / WIPE
+-- ============================================================
+
+-- Wipe de LIXO persistido: apaga todo KVP de outbox (hss_outbox:*). O wipe SQL relacional NÃO
+-- alcança o KVP (interno do runtime), então char_id reusado pós-wipe reinstalaria aparência de
+-- outra era. Gated default-deny para as ferramentas de manutenção. NÃO afeta estado de char online.
+local function wipe_invoker_ok()
+    if not State then return false end
+    local caller = GetInvokingResource()
+    return caller == 'vhub_testrunner' or caller == 'vhub_admin'
+end
+
+exports('wipeOutboxAll', function()
+    if not wipe_invoker_ok() then return { ok = false, err = 'forbidden' } end
+    local removed = State.wipe_all_outbox()
+    return { ok = true, removed = tonumber(removed) or 0 }
+end)
+
+-- Comando manual server-side, só sob test mode (mesmo gate do testrunner). Uso: complementa o
+-- limpardadossql.ps1 (relacional) formando o "wipe real" — PS1 zera SQL, este comando zera o KVP.
+RegisterCommand('vhub_hss_wipe_outbox', function(source)
+    if source ~= 0 then return end -- console apenas
+    if GetConvar('vhub_test_mode', '0') ~= '1' or not State then
+        print('[vhub_hss] wipe_outbox negado: exige vhub_test_mode=1.')
+        return
+    end
+    local removed = State.wipe_all_outbox()
+    print(('[vhub_hss] Outbox KVP wipe: %d chave(s) removida(s).'):format(tonumber(removed) or 0))
+end, true)
+
+
+-- ============================================================
 -- SETUP
 -- ============================================================
 

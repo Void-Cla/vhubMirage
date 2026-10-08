@@ -83,6 +83,40 @@ exports('listByStatus', function(status)       if not _invoker_allowed() then re
 
 exports('createVehicle',       function(row)               if not _invoker_allowed() then return false end return SQL:createVehicle(row)                       end)
 exports('updateStatus',        function(plate, status)     if not _invoker_allowed() then return false end return SQL:updateStatus(plate, status)             end)
+
+local function contratoRetirada(plate, anterior, posJson)
+  if GetInvokingResource() ~= 'vhub_garage' then return nil end
+  local p = U.normalizePlate(plate)
+  local status = { garage = true, out = true, impound = true, auction = true, rental = true, sold = true }
+  if not p or type(anterior) ~= 'table' or not status[anterior.status]
+      or type(anterior.model) ~= 'string' or #anterior.model < 1 or #anterior.model > 64
+      or (anterior.position ~= nil and (type(anterior.position) ~= 'string' or #anterior.position > 8192))
+      or type(posJson) ~= 'string' or #posJson > 512 then return nil end
+  local cid = anterior.char_id
+  if cid ~= nil and (type(cid) ~= 'number' or cid ~= cid or cid % 1 ~= 0 or cid < 1 or cid > 4294967295) then return nil end
+  local pos = U.jdec(posJson)
+  if type(pos) ~= 'table' then return nil end
+  for _, chave in ipairs({'x', 'y', 'z', 'h'}) do
+    local n = pos[chave]
+    if type(n) ~= 'number' or n ~= n or math.abs(n) == math.huge then return nil end
+  end
+  if math.abs(pos.x) > 9000 or math.abs(pos.y) > 9000 or pos.z < -300 or pos.z > 3500
+      or pos.h < 0 or pos.h > 360 then return nil end
+  return p
+end
+
+-- Exclusivo do garage: confirma retirada somente se identidade/status anteriores ainda conferem.
+exports('confirmarRetirada', function(plate, anterior, posJson)
+  local p = contratoRetirada(plate, anterior, posJson); if not p then return false end
+  return SQL:confirmarRetirada(p, anterior, posJson)
+end)
+
+-- Exclusivo do garage: rollback CAS da retirada não cobrada/confirmada fisicamente.
+exports('cancelarRetirada', function(plate, anterior, posJson)
+  local p = contratoRetirada(plate, anterior, posJson); if not p then return false end
+  return SQL:cancelarRetirada(p, anterior, posJson)
+end)
+
 exports('updatePosition',      function(plate, posJson)    if not _invoker_allowed() then return false end return SQL:updatePosition(plate, posJson)           end)
 exports('updateCustomization', function(plate, cj, locked) if not _invoker_allowed() then return false end return SQL:updateCustomization(plate, cj, locked)   end)
 exports('updateIpva',          function(plate, until_ts)   if not _invoker_allowed() then return false end return SQL:updateIpva(plate, until_ts)              end)
@@ -164,6 +198,21 @@ exports('migrateFuelToCore', function()
 end)
 
 -- reparo trusted (manutenção/admin): único caminho que ELEVA health e limpa dano
+exports('iniciarManutencaoVeicular', function(plate, netId, token)
+  if GetInvokingResource() ~= 'vhub_custom' then return nil end
+  return VHubConce.VState:iniciarManutencao(plate, netId, token)
+end)
+
+exports('encerrarManutencaoVeicular', function(plate, token)
+  if GetInvokingResource() ~= 'vhub_custom' then return false end
+  return VHubConce.VState:encerrarManutencao(plate, token)
+end)
+
+exports('obterRevisaoFisica', function(plate, netId)
+  if GetInvokingResource() ~= 'vhub_vehcontrol' then return nil end
+  return VHubConce.VState:obterRevisaoFisica(plate, netId)
+end)
+
 exports('repairVehicleState', function(plate)
   if not _invoker_allowed() then return false end
   return VHubConce.VState:repair(plate)

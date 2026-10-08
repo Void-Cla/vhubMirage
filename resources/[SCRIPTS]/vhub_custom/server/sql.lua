@@ -69,7 +69,10 @@ function SQL.applySchema()
   local schema = LoadResourceFile(GetCurrentResourceName(), 'sql/schema.sql')
   if type(schema) ~= 'string' or schema == '' then return false, 'schema_missing' end
   local called, err = pcall(function()
-    MySQL.query.await(schema)
+    local applied, applyError = VHubSQLScript.aplicar(schema, function(statement)
+      MySQL.query.await(statement, {})
+    end)
+    if not applied then error(applyError) end
     ensureColumn('claim_token', 'VARCHAR(32) NULL AFTER `state`')
     ensureColumn('claim_until', 'TIMESTAMP NULL AFTER `claim_token`')
     migratePendingGuards()

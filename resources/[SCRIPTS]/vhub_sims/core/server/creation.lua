@@ -11,7 +11,12 @@ local Pricing = VHubSimsPricing
 local AP = VHubSims.APShape
 local E = VHubSims.E
 local Catalog = VHubSims.catalog
-local recovering = {}
+local Creator = VHubSimsCreator
+local recovering = {}  -- guard anti-reentrada de resumeCharacter (fluxo PAGO); ver ADR #97
+
+-- ATENÇÃO (ADR #97): este arquivo cuida SÓ do checkout PAGO (barbearia/tattoo/roupas/cirurgião),
+-- onde dinheiro justifica saga durável + compensação. A CRIAÇÃO INICIAL (grátis) vive em creator.lua
+-- por um caminho direto sem saga. Não reintroduzir modo 'creator' aqui.
 
 local function isCheckoutSaga(saga)
   return type(saga) == 'table' and type(saga.operation_id) == 'string'
@@ -20,44 +25,8 @@ end
 
 
 -- ============================================================
--- VALIDAÇÃO E PAYLOAD DE ABERTURA
+-- PAYLOAD DE ABERTURA (vitrine paga)
 -- ============================================================
-
-local function validId(value, maximum)
-  return type(value) == 'string' and #value >= 8 and #value <= maximum
-    and value:match('^[%w_:%-%.]+$') ~= nil
-end
-
-local function sanitizeName(value)
-  if type(value) ~= 'string' then return nil end
-  value = value:match('^%s*(.-)%s*$'):gsub('[^%a%sÀ-ÿ%-]', ''):gsub('%s+', ' '):sub(1, 50)
-  if #value < 2 then return nil end
-  return value
-end
-
-local VALID_ROLES = {
-  legal = true, ilegal = true, mecanica = true,
-  hospital = true, policia = true, livre = true,
-}
-
-local function sanitizeIdentity(payload)
-  if type(payload) ~= 'table' then return nil end
-  local firstname = sanitizeName(payload.firstname)
-  local lastname = sanitizeName(payload.lastname)
-  local age = tonumber(payload.age)
-  if not firstname or not lastname or not age or age ~= math.floor(age) or age < 16 or age > 120 then
-    return nil
-  end
-  local role = type(payload.role) == 'string' and payload.role or nil
-  if role and not VALID_ROLES[role] then return nil end
-  local backstory = nil
-  if type(payload.backstory) == 'string' then
-    backstory = payload.backstory:match('^%s*(.-)%s*$'):sub(1, 1000)
-    if backstory == '' then backstory = nil end
-  end
-  return { firstname = firstname, lastname = lastname, age = age,
-           role = role, backstory = backstory }
-end
 
 local function getCustomization(src)
   local ok, result = Core.call('vhub_hss', 'getCustomization', src)
@@ -67,36 +36,6 @@ local function getCustomization(src)
   local normalized = AP.profile(result.customization)
   if not normalized then return nil, 'dependency' end
   return normalized, tonumber(result.revision) or 0
-end
-
--- Budget da espera do owner físico (HSS): 120 × 50ms = 6s máximo por chamada (L-18), 1 por handoff.
--- Elevado de 2s→6s (2026-07-22): o 1º char de um boot frio pode levar mais que 2s no round-trip
--- inicial do HSS (load + insert_if_absent + digest). Continua bounded e 1× por handoff.
-local READY_ATTEMPTS = 120
-local READY_POLL_MS = 50
-
--- Aguarda (bounded) o owner físico (HSS) concluir o load ASSÍNCRONO do char recém-selecionado e
--- devolve (aparência, revisão). 'recovering' e 'not_ready' são transitórios (reespera); qualquer
--- outro erro é terminal. Timeout → 'not_ready' (o gate de login reexibe e permite retry idempotente).
-local function waitOwnerReady(src, charId)
-  local lastErr = 'not_ready'
-  for _ = 1, READY_ATTEMPTS do
-    if not recovering[charId] then
-      local current, revisionOrErr = getCustomization(src)
-      if current then return current, tonumber(revisionOrErr) or 0 end
-      lastErr = revisionOrErr or 'dependency'
-      if lastErr ~= 'not_ready' then return nil, nil, lastErr end
-    end
-    Citizen.Wait(READY_POLL_MS)
-  end
-  -- Diagnóstico: o owner físico (HSS) NÃO ficou pronto dentro do budget. Se isto aparecer de forma
-  -- persistente, o char não é carregado pelo HSS (State.is_loaded=false) — investigar _state_ready
-  -- do vhub_hss (boot em duas fases) OU falha de State.register do char recém-criado.
-  Core.log('error', 'Owner físico HSS não ficou pronto no budget — criação abortada (not_ready).', {
-    src = src, char_id = charId, last_err = lastErr,
-    hint = 'checar log do vhub_hss: "Falha ao carregar estado do personagem" OU _state_ready=false',
-  })
-  return nil, nil, lastErr
 end
 
 local function openingPayload(session)
@@ -165,31 +104,23 @@ end
 
 
 -- ============================================================
--- CRIADOR
+-- PRONTIDÃO DE CRIAÇÃO (consultada pelo login)
 -- ============================================================
 
 -- consulta no CORE se o personagem atual exige criação
+-- A criação em si não usa mais saga durável (ADR #97 — caminho direto em creator.lua). Aqui só
+-- restam duas coisas: (1) a verdade do CORE sobre 'created'; (2) o gate de dinheiro preso — uma
+-- saga PAGA (barber/tattoo/…) em 'manual_reconcile' significa reconciliação financeira pendente e
+-- deve bloquear até o admin resolver. Saga de criador não existe mais para bloquear nada.
 function Creation.needsCreation(src)
-  if not Core.ready then return { ok = false, err = 'storage' } end
+  if not Core.ready then return { ok = false, err = 'not_ready' } end
   local user, charId = Core.getUser(src)
   if not user then return { ok = false, err = 'offline' } end
 
-  -- recuperação em voo para este char = transitório (o gate reespera), não conflito terminal.
-  if recovering[charId] then
-    Core.log('warn', 'needsCreation: recuperação em voo bloqueou (not_ready).', { src = src, char_id = charId })
-    return { ok = false, err = 'not_ready' }
-  end
+  -- Gate de dinheiro preso: só saga PAGA em manual_reconcile bloqueia (proteção financeira).
   local saga = SQL.getRecoverableSaga(charId)
-  if saga and saga.mode == 'creator' and saga.state == 'manual_reconcile' then
+  if saga and saga.mode ~= 'creator' and saga.state == 'manual_reconcile' then
     return { ok = false, err = 'conflict' }
-  end
-  local checkoutPending = isCheckoutSaga(saga) and saga.mode == 'creator'
-    and (saga.state == 'prepared' or saga.state == 'charged' or saga.state == 'customized')
-  if checkoutPending then
-    if not Creation.resumeCharacter(src, charId) then
-      return { ok = false, err = 'conflict' }
-    end
-    return { ok = true, needed = false }
   end
 
   local ok, result = Core.call('vhub', 'getSimsCreation', src)
@@ -199,147 +130,14 @@ function Creation.needsCreation(src)
   return { ok = true, needed = result.created ~= true }
 end
 
--- abre o criador mantendo o personagem no estágio pending do HSS
+-- abre o criador (delegação ao caminho direto de creator.lua — sem saga durável)
 function Creation.beginCreation(src, requestId)
-  if not Core.ready then return { ok = false, err = 'storage' } end
-  if not validId(requestId, 64) then return { ok = false, err = 'invalid_request' } end
-  if not Core.rate(src, 'begin') then return { ok = false, err = 'rate_limited' } end
-
-  local user, charId = Core.getUser(src)
-  if not user then return { ok = false, err = 'offline' } end
-  -- recuperação em voo para este char = transitório (o gate reespera), não conflito terminal.
-  if recovering[charId] then
-    Core.log('warn', 'beginCreation: recuperação em voo bloqueou (not_ready).', { src = src, char_id = charId })
-    return { ok = false, err = 'not_ready' }
-  end
-  local recoverable = SQL.getRecoverableSaga(charId)
-  local checkoutRecovery = isCheckoutSaga(recoverable) and recoverable.mode == 'creator'
-  if recoverable and recoverable.mode == 'creator'
-    and (recoverable.state == 'manual_reconcile' or (checkoutRecovery
-      and (recoverable.state == 'prepared' or recoverable.state == 'charged'
-        or recoverable.state == 'customized'))) then
-    return { ok = false, err = 'conflict' }
-  end
-
-  local active = Session.get(src)
-  if active then
-    if active.mode == 'creator' and active.request_id == requestId then
-      sendOpen(src, active)
-      return { ok = true, session_id = active.session_id, replayed = true }
-    end
-    -- Self-heal: sessão creator órfã em 'studio' sem checkout saga bloqueante.
-    -- Happens quando Session.retry deixou sessão em memória mas a saga de stage ficou em 'prepared'.
-    -- Só heala se 'studio' (não 'committing') — nunca interrompe um commit em voo.
-    -- endPendingStage deve ter êxito; falha = stage físico duplo (P1) → abortar sem cleanup.
-    if active.mode == 'creator' and active.state == 'studio' and active.stage_token
-      and not checkoutRecovery then
-      local endOk, endResult = Core.call('vhub_hss', 'endPendingStage', src, active.stage_token)
-      if not endOk or not Core.resultOk(endResult) then
-        Core.log('warn', 'beginCreation: self-heal abortado — endPendingStage falhou.', {
-          src = src, char_id = charId, stage_token = active.stage_token,
-        })
-        return { ok = false, err = 'not_ready' }
-      end
-      SQL.transitionSaga(active.stage_saga_id, { 'prepared' }, 'refunded', 'orphan_selfheal')
-      Core.log('info', 'beginCreation: sessão creator órfã limpa (self-heal).', {
-        src = src, char_id = charId, old_session = active.session_id,
-      })
-      Session.cleanup(src)
-      -- prossegue para nova criação abaixo
-    else
-      return { ok = false, err = 'conflict' }
-    end
-  end
-
-  local needed = Creation.needsCreation(src)
-  if not needed.ok then return needed end
-  if not needed.needed then return { ok = false, err = 'already_created' } end
-
-  -- Barreira de prontidão: o owner físico (HSS) carrega o estado do char recém-selecionado de
-  -- forma ASSÍNCRONA. Prosseguir antes disso devolvia conflict/dependency e deixava saga órfã.
-  -- Espera bounded pelo owner ficar pronto e já traz a aparência atual; transitório NÃO persiste.
-  local current, revision, readyErr = waitOwnerReady(src, charId)
-  if not current then return { ok = false, err = readyErr or 'not_ready' } end
-
-  -- session_id estável por request (replay via request memoizado no login).
-  local existing = SQL.getSagaByRequest(requestId)
-  if existing and existing.state == 'completed' then
-    return { ok = true, session_id = existing.session_id, replayed = true }
-  end
-  local sessionId = existing and existing.session_id or Core.token('creation', src)
-
-  if not SQL.closeStaleCreationStages(charId, requestId) then
-    return { ok = false, err = 'storage' }
-  end
-
-  -- Estágio físico do criador — owner já pronto. Falha aqui NÃO deixa saga órfã (nada persistido).
-  local okStage, stageResult = Core.call('vhub_hss', 'beginPendingStage', src, sessionId)
-  if not okStage or not Core.resultOk(stageResult) or type(stageResult.stage_token) ~= 'string' then
-    return { ok = false, err = Core.resultError(stageResult, 'dependency') }
-  end
-  local stageToken = stageResult.stage_token
-
-  -- Só agora persiste a saga (handoff garantido); qualquer falha adiante reverte o estágio físico.
-  local stageDigest, stagePayload = AP.digest({ char_id = charId, request_id = requestId })
-  local stageSaga, sagaErr = SQL.createSaga({
-    char_id = charId,
-    request_id = requestId,
-    session_id = sessionId,
-    mode = 'creator',
-    payload = stagePayload,
-    digest = stageDigest,
-    amount = 0,
-  })
-  if not stageSaga then
-    Core.call('vhub_hss', 'endPendingStage', src, stageToken)
-    return { ok = false, err = sagaErr }
-  end
-  if stageSaga.state == 'completed' then
-    Core.call('vhub_hss', 'endPendingStage', src, stageToken)
-    return { ok = true, session_id = sessionId, replayed = true }
-  end
-
-  local session = Session.start(src, {
-    mode = 'creator',
-    char_id = charId,
-    request_id = requestId,
-    session_id = sessionId,
-    stage_token = stageToken,
-    stage_saga_id = tonumber(stageSaga.id),
-    current = current,
-    revision = revision,
-  })
-  if not session then
-    Core.call('vhub_hss', 'endPendingStage', src, stageToken)
-    SQL.transitionSaga(tonumber(stageSaga.id), { 'prepared' }, 'refunded', 'session_conflict')
-    return { ok = false, err = 'conflict' }
-  end
-
-  sendOpen(src, session)
-  Core.log('info', 'Criador aberto.', { src = src, char_id = charId, session_id = sessionId })
-  return { ok = true, session_id = sessionId }
-end
-
--- valida e guarda identidade efêmera da sessão de criação
-function Creation.submitWizard(src, payload)
-  if type(payload) ~= 'table' or not Core.rate(src, 'wizard') then return false end
-  local session = Session.require(src, payload.session_id, 'studio')
-  if not session or session.mode ~= 'creator' then return false end
-
-  local identity = sanitizeIdentity(payload)
-  if not identity then
-    sendResult(src, { ok = false, err = 'invalid_identity' })
-    return false
-  end
-
-  session.identity = identity
-  sendResult(src, { ok = true, wizard = true })
-  return true
+  return Creator.begin(src, requestId)
 end
 
 
 -- ============================================================
--- CHECKOUT E SAGA
+-- CHECKOUT E SAGA (paga)
 -- ============================================================
 
 local function createCheckoutSaga(session, patch, digest, canonical)
@@ -398,35 +196,6 @@ local function transitionWithRetry(sagaId, expected, nextState, err)
   return false
 end
 
-local function finalizeCreation(src, session, saga, customization)
-  local identityOk, identityResult = Core.call('vhub_identity', 'setIdentity', src,
-    session.identity, saga.digest)
-  if not identityOk or not Core.resultOk(identityResult) then
-    Session.retry(src)
-    return false, Core.resultError(identityResult, 'dependency')
-  end
-
-  local endOk, endResult = Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
-  if not endOk or not Core.resultOk(endResult) then
-    Session.retry(src)
-    return false, Core.resultError(endResult, 'dependency')
-  end
-
-  local commitOk, commitResult = Core.call('vhub', 'commitSimsCreation', src, saga.digest, 2)
-  if not commitOk or not Core.resultOk(commitResult) then
-    Session.retry(src)
-    return false, Core.resultError(commitResult, 'storage')
-  end
-
-  if not transitionWithRetry(tonumber(saga.id), { 'customized' }, 'completed', nil) then
-    Core.log('error', 'Saga finalizada externamente aguarda fechamento SQL.', {
-      saga_id = tonumber(saga.id),
-    })
-  end
-  transitionWithRetry(session.stage_saga_id, { 'prepared' }, 'completed', nil)
-  return true
-end
-
 local function commitCustomization(src, session, saga, patch)
   local expectedRevision = session.revision
   local decodedOk, persisted = pcall(json.decode, saga.payload or '{}')
@@ -436,12 +205,30 @@ local function commitCustomization(src, session, saga, patch)
   local ok, result = Core.call('vhub_hss', 'commitCustomization', src, patch,
     expectedRevision, saga.digest)
   -- 'busy' é transitório; retenta uma vez preservando a MESMA revisão CAS.
-  -- Nunca adota revisão fresca para aplicar patch antigo: conflito exige rebase explícito.
-  if ok and type(result) == 'table' and result.ok ~= true
-    and result.err == 'busy' then
+  if ok and type(result) == 'table' and result.ok ~= true and result.err == 'busy' then
     Citizen.Wait(50)
     ok, result = Core.call('vhub_hss', 'commitCustomization', src, patch,
       expectedRevision, saga.digest)
+  end
+  -- 'conflict' no checkout PAGO indica drift de revisão entre o snapshot capturado em
+  -- openPaidStudio e a revisão viva do HSS — causado por flush fisiológico assíncrono que
+  -- avançou customization_revision antes de o commit ser processado. O SIMS garante exclusão
+  -- mútua (uma sessão paga ativa por jogador), então não há edição concorrente real.
+  -- Rebase seguro: relê a revisão viva e retenta uma vez.
+  if ok and type(result) == 'table' and result.ok ~= true and result.err == 'conflict' then
+    local freshCurrent, freshRevision = getCustomization(src)
+    if freshCurrent and freshRevision ~= nil then
+      Core.log('info', 'commitCustomization conflict — rebase para revisão viva.', {
+        src = src, char_id = session.char_id, mode = session.mode,
+        stale_revision = expectedRevision, live_revision = freshRevision,
+      })
+      expectedRevision = freshRevision
+      session.current = freshCurrent
+      session.revision = freshRevision
+      Citizen.Wait(25)
+      ok, result = Core.call('vhub_hss', 'commitCustomization', src, patch,
+        expectedRevision, saga.digest)
+    end
   end
   if not ok or not Core.resultOk(result) then
     return nil, Core.resultError(result, 'dependency')
@@ -459,11 +246,9 @@ local function prepareCheckout(src, payload, forcedPatch)
   local active = Session.get(src)
   if not active or active.session_id ~= payload.session_id then return nil, 'invalid_session' end
   if Session.expired(active) then return nil, 'expired' end
-  if active.mode ~= 'creator' and (not VHubSimsShops
-    or not VHubSimsShops.validate(src, active.shop_id, active.mode)) then
+  if not VHubSimsShops or not VHubSimsShops.validate(src, active.shop_id, active.mode) then
     return nil, 'invalid_context'
   end
-  if active.mode == 'creator' and not active.identity then return nil, 'identity_required' end
 
   local patch, patchError = Core.sanitizePatch(forcedPatch or payload.patch, active.mode)
   if not patch then return nil, patchError end
@@ -525,8 +310,7 @@ local function customizeSaga(src, session, saga, patch, amount)
   return customization
 end
 
-local function completeSaga(src, session, saga, customization)
-  if session.mode == 'creator' then return finalizeCreation(src, session, saga, customization) end
+local function completeSaga(saga)
   if not transitionWithRetry(tonumber(saga.id), { 'customized' }, 'completed', nil) then
     Core.log('error', 'Checkout aplicado aguarda fechamento SQL.', { saga_id = tonumber(saga.id) })
   end
@@ -540,17 +324,12 @@ function Creation.checkout(src, payload, forcedPatch)
   if not prepared then
     sendResult(src, { ok = false, err = prepareError })
     if prepareError == 'expired' or prepareError == 'invalid_context' then
-      local rejected = Session.cleanup(src)
+      Session.cleanup(src)
       TriggerClientEvent(E.CLI_STUDIO_CLOSE, src, { reason = prepareError, restore = true })
-      if rejected and rejected.mode == 'creator' and rejected.stage_token then
-        Core.call('vhub_hss', 'endPendingStage', src, rejected.stage_token)
-        SQL.transitionSaga(rejected.stage_saga_id, { 'prepared' }, 'refunded', prepareError)
-        TriggerEvent(E.CREATION_CANCELLED, rejected.char_id)
-      end
     end
     return false
   end
-  if prepared.active.mode ~= 'creator' and #prepared.changed == 0 then
+  if #prepared.changed == 0 then
     local unchanged = { ok = true, charged = 0, changed = {} }
     closeSession(src, unchanged, 'completed')
     return true
@@ -592,16 +371,11 @@ function Creation.checkout(src, payload, forcedPatch)
       Session.cleanup(src)
       sendResult(src, { ok = false, err = customizationError })
       TriggerClientEvent(E.CLI_STUDIO_CLOSE, src, { reason = customizationError, restore = false })
-      if session.mode == 'creator' then
-        Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
-        SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', customizationError)
-        TriggerEvent(E.CREATION_CANCELLED, session.char_id)
-      end
       return false
     end
     Session.retry(src); sendResult(src, { ok = false, err = customizationError }); return false
   end
-  local completed, completeError = completeSaga(src, session, saga, customization)
+  local completed, completeError = completeSaga(saga)
   if not completed then sendResult(src, { ok = false, err = completeError }); return false end
 
   local result = { ok = true, charged = prepared.amount, changed = prepared.changed }
@@ -609,10 +383,7 @@ function Creation.checkout(src, payload, forcedPatch)
     src = src, char_id = session.char_id, mode = session.mode,
     amount = prepared.amount, session_id = session.session_id,
   })
-  local creationCompleted = session.mode == 'creator'
-  local completedCharId = session.char_id
-  closeSession(src, result, creationCompleted and 'creation_completed' or 'completed')
-  if creationCompleted then TriggerEvent(E.CREATION_DONE, completedCharId) end
+  closeSession(src, result, 'completed')
   return true
 end
 
@@ -621,42 +392,27 @@ end
 -- CANCELAMENTO E RETOMADA
 -- ============================================================
 
--- cancela sessão após restaurar o estágio físico pelo owner HSS
+-- cancela sessão de vitrine paga (criação tem seu próprio cancel em creator.lua)
 function Creation.cancel(src, payload)
   if type(payload) ~= 'table' or not Core.rate(src, 'cancel') then return false end
   local session = Session.require(src, payload.session_id, 'studio')
   if not session then return false end
 
-  if session.mode == 'creator' then
-    local ok, result = Core.call('vhub_hss', 'endPendingStage', src, session.stage_token)
-    if not ok or not Core.resultOk(result) then
-      sendResult(src, { ok = false, err = Core.resultError(result, 'dependency') })
-      return false
-    end
-    SQL.transitionSaga(session.stage_saga_id, { 'prepared' }, 'refunded', 'cancelled')
-  end
-
   Session.cancel(src, payload.session_id)
   TriggerClientEvent(E.CLI_STUDIO_CLOSE, src, { reason = 'cancelled', restore = true })
-  if session.mode == 'creator' then TriggerEvent(E.CREATION_CANCELLED, session.char_id) end
   return true
 end
 
--- retoma saga online após reconnect sem duplicar débito ou customização
+-- retoma saga PAGA (barbearia/tattoo/…) interrompida por reconnect sem duplicar débito nem aparência.
+-- Criação (grátis) não gera saga (ADR #97) → nada a retomar aqui para modo criador.
 function Creation.resumeCharacter(src, charId)
   if not Core.ready then return false end
   if recovering[charId] then return false end
 
-  -- Só reivindica 'recovering' quando há DE FATO uma saga de checkout a retomar. Marcar antes do
-  -- getRecoverableSaga (async) fazia TODO char recém-carregado — inclusive um NOVO, sem saga —
-  -- segurar recovering=true durante o await do SQL. O fluxo de criação do login roda logo após o
-  -- characterLoad (mesmo tick) e batia nesse recovering em needsCreation/beginCreation, devolvendo
-  -- 'not_ready' SILENCIOSO ("preparando seu piloto") e deixando o char órfão. Sem saga → nada a
-  -- retomar → não toca recovering → o criador abre normalmente.
   local saga = SQL.getRecoverableSaga(charId)
   if not isCheckoutSaga(saga) then return false end
-  local checkoutSession = saga.session_id:match('^(.*):[%x]+$')
-  if not checkoutSession then return false end
+  -- Saga de criador não existe mais; se aparecer uma antiga, ignore (o boot one-shot a fecha).
+  if saga.mode == 'creator' then return false end
 
   recovering[charId] = true
   local function done(result)
@@ -686,8 +442,20 @@ function Creation.resumeCharacter(src, charId)
   end
 
   if (saga.state == 'prepared' or saga.state == 'charged') and next(payload.patch) ~= nil then
+    local resumeRevision = tonumber(payload.expected_revision)
     local customOk, custom = Core.call('vhub_hss', 'commitCustomization', src, payload.patch,
-      tonumber(payload.expected_revision), saga.digest)
+      resumeRevision, saga.digest)
+    -- rebase no resume: revisão pode ter avançado por flush fisiológico durante a interrupção
+    if customOk and type(custom) == 'table' and custom.ok ~= true and custom.err == 'conflict' then
+      local _, liveRevision = getCustomization(src)
+      if liveRevision ~= nil and liveRevision ~= resumeRevision then
+        Core.log('info', 'resumeCharacter conflict — rebase para revisão viva.', {
+          src = src, char_id = charId, stale = resumeRevision, live = liveRevision,
+        })
+        customOk, custom = Core.call('vhub_hss', 'commitCustomization', src, payload.patch,
+          liveRevision, saga.digest)
+      end
+    end
     if not customOk or not Core.resultOk(custom) then
       if saga.state == 'charged' then refundSaga(src, saga, Core.resultError(custom, 'dependency')) end
       return done(false)
@@ -705,36 +473,10 @@ function Creation.resumeCharacter(src, charId)
 
   if saga.state ~= 'customized' then return done(false) end
 
-  if saga.mode ~= 'creator' then
-    if not transitionWithRetry(tonumber(saga.id), { 'customized' }, 'completed', nil) then
-      return done(false)
-    end
-    Session.cleanup(src)
-    return done(true)
-  end
-
-  if type(payload.identity) ~= 'table' then
-    SQL.transitionSaga(tonumber(saga.id), { 'customized' }, 'manual_reconcile', 'invalid_identity')
-    return done(false)
-  end
-
-  local okIdentity, identity = Core.call('vhub_identity', 'setIdentity', src, payload.identity, saga.digest)
-  if not okIdentity or not Core.resultOk(identity) then return done(false) end
-
-  local current = getCustomization(src)
-  if type(current) ~= 'table' then return done(false) end
-  local okCommit, committed = Core.call('vhub', 'commitSimsCreation', src, saga.digest, 2)
-  if not okCommit or not Core.resultOk(committed) then return done(false) end
-
   if not transitionWithRetry(tonumber(saga.id), { 'customized' }, 'completed', nil) then
     return done(false)
   end
-  local stageSaga = SQL.getSagaBySession(charId, checkoutSession)
-  if stageSaga then
-    transitionWithRetry(tonumber(stageSaga.id), { 'prepared' }, 'completed', nil)
-  end
   Session.cleanup(src)
-  TriggerEvent(E.CREATION_DONE, charId)
   return done(true)
 end
 
@@ -743,14 +485,29 @@ end
 -- EVENTOS
 -- ============================================================
 
+-- roteia por modo da sessão ativa: 'creator' → caminho direto (creator.lua); pago → saga (aqui).
+local function isCreatorSession(src)
+  local session = Session.get(src)
+  return session ~= nil and session.mode == 'creator'
+end
+
 RegisterNetEvent(E.SRV_CHECKOUT, function(payload)
-  Creation.checkout(source, payload)
+  if isCreatorSession(source) then
+    Creator.checkout(source, payload)
+  else
+    Creation.checkout(source, payload)
+  end
 end)
 
 RegisterNetEvent(E.SRV_WIZARD_SUBMIT, function(payload)
-  Creation.submitWizard(source, payload)
+  -- wizard só existe no modo criador; sessão paga não tem identidade a submeter.
+  Creator.submitWizard(source, payload)
 end)
 
 RegisterNetEvent(E.SRV_CANCEL, function(payload)
-  Creation.cancel(source, payload)
+  if isCreatorSession(source) then
+    Creator.cancel(source, payload)
+  else
+    Creation.cancel(source, payload)
+  end
 end)

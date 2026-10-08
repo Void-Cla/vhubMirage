@@ -19,9 +19,6 @@ function M:dropSession(src)      self.sessions[tonumber(src)] = nil end
 function M:getCharId(src)
   local u = self:getSession(src); return u and u.char_id or nil
 end
-function M:getUid(src)
-  local u = self:getSession(src); return u and u.id or nil
-end
 
 -- ----------------------------------------------------------------------------
 -- Despawn server-side por placa (ADR #48 — substitui broadcast -1 do F-043)
@@ -35,6 +32,7 @@ function M.despawnByPlate(plate)
   for _, veh in ipairs(GetAllVehicles()) do
     local raw = VHubGarage.U.normalizePlate(GetVehicleNumberPlateText(veh) or '')
     if raw == alvo and DoesEntityExist(veh) then
+      if VHubGarage.Veiculos then VHubGarage.Veiculos.esquecer(alvo) end
       DeleteEntity(veh)
       return true
     end

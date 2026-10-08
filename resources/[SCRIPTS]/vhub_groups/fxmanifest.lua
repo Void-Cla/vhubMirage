@@ -5,7 +5,7 @@ lua54      'yes'
 
 name        'vhub_groups'
 author      'vHub Mirage'
-version     '2.0.0'
+version     '2.0.2'
 description 'Sistema de grupos, niveis hierarquicos e permissoes por personagem. VRAM-first com painel NUI.'
 
 dependencies {
@@ -20,6 +20,8 @@ shared_scripts {
 }
 
 server_scripts {
+  '@oxmysql/lib/MySQL.lua',
+  '@vhub/shared/sql_script.lua',
   'server/sql.lua',
   'server/cache.lua',
   'server/core.lua',
@@ -43,4 +45,5 @@ files {
   'nui/js/sand.js',
   'nui/assets/bg.png',
   'nui/assets/logo.png',
+  'nui/vendor/**/*',
 }

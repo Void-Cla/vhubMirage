@@ -10,32 +10,11 @@ local CFG  = VHubGarage.cfg
 local E    = VHubGarage.E
 
 -- ----------------------------------------------------------------------------
--- REPORT do cliente (apenas dados N O cr ticos: posi  o, customization, locked)
--- Cr ticos (fuel/odometer/health) fluem pelo CORE.
+-- REPORT legado desativado: posição vem da réplica, nunca da alegação do portador de chave.
 -- ----------------------------------------------------------------------------
 RegisterNetEvent(E.REPORT_STATE)
 AddEventHandler(E.REPORT_STATE, function(plate, payload)
-  local src = source
-  local cid = Core:getCharId(src); if not cid then return end
-  local p   = U.normalizePlate(plate); if not p then return end
-  if type(payload) ~= 'table' then return end
-  Citizen.CreateThread(function()
-    local v = SQL:getVehicle(p); if not v then return end
-    -- s  driver autoriza  o (proxy: tem chave-item)
-    if not Core.hasKeyItem(src, p) then return end
-
-    if type(payload.position) == 'table' and U.validCoords(payload.position) then
-      SQL:updatePosition(p, U.jenc({
-        x = payload.position.x, y = payload.position.y, z = payload.position.z,
-        h = tonumber(payload.position.h) or 0.0,
-      }))
-    end
-    -- payload do cliente e hostil → whitelist de chaves + cap de tamanho
-    local cust = U.sanitizeCustomization(payload.customization)
-    if cust then
-      SQL:updateCustomization(p, U.jenc(cust), payload.locked == true)
-    end
-  end)
+  -- Caminho mantido para clientes antigos em trânsito; nenhuma escrita nem SQL.
 end)
 
 -- ----------------------------------------------------------------------------

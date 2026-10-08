@@ -57,6 +57,19 @@ AddEventHandler(E.NOTIFY, function(msg)
   SendNUIMessage({ action = 'notify', msg = msg })
 end)
 
+RegisterNetEvent(E.STORE_OPEN)
+AddEventHandler(E.STORE_OPEN, function(data)
+  if type(data) ~= 'table' then return end
+  _open = true
+  SetNuiFocus(true, true)
+  SendNUIMessage({ action = 'store_open', data = data })
+end)
+
+RegisterNetEvent(E.STORE_RESULT)
+AddEventHandler(E.STORE_RESULT, function(data)
+  SendNUIMessage({ action = 'store_result', data = data })
+end)
+
 
 -- ============================================================
 -- NUI -> SERVIDOR (intencao) / handshake
@@ -77,6 +90,23 @@ end)
 RegisterNUICallback('close', function(_, cb)
   closeBackpack()
   cb('ok')
+end)
+
+RegisterNUICallback('store_close', function(_, cb)
+  closeBackpack()
+  cb('ok')
+end)
+
+RegisterNUICallback('store_buy', function(data, cb)
+  if type(data) ~= 'table' then cb({ ok = false }); return end
+  TriggerServerEvent(E.STORE_BUY, data.token, data.item, data.amount, data.request_id)
+  cb({ ok = true })
+end)
+
+exports('openStore', function(id)
+  if type(id) ~= 'string' or id == '' or IsNuiFocused() then return false end
+  TriggerServerEvent(E.STORE_OPEN_REQ, id)
+  return true
 end)
 
 -- abre o iPad na loja (fecha a mochila primeiro para não acumular foco NUI)
